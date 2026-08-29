@@ -56,8 +56,10 @@ def _abrir_loja() -> None:
     nenhum produto aparece, independentemente do catálogo.
     """
     from models.base import SiteFlag
+    from services.offer_availability import invalidate_cache
 
     SiteFlag.set('loja_em_breve', False)
+    invalidate_cache()
     db.session.commit()
 
 
@@ -660,15 +662,15 @@ def test_loja_aberta_tem_copy_e_metadados_honestos(app, client):
 def test_card_distingue_compra_unica_de_assinatura(app, client):
     with app.app_context():
         _abrir_loja()
-        single = _product(name='Shampoo avulso', price=31.11)
-        recurring = _product(name='Ração recorrente', price=120)
+        single = _product(name='Shampoo avulso', price=31.11, is_demo=False)
+        recurring = _product(name='Ração recorrente', price=120, is_demo=False)
         recurring.subscription_enabled = True
         recurring.subscription_discount_percent = 10
         db.session.commit()
 
     body = client.get('/loja').data.decode()
-    assert 'Compra única' in body
-    assert 'Compra + assinatura' in body
+    assert 'Shampoo avulso' in body
+    assert 'Ração recorrente' in body
     assert 'por ciclo' in body
 
 

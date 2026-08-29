@@ -1,5 +1,6 @@
 """Application factory for PetOrlandia."""
 import importlib
+import sys
 
 from flask import Flask
 
@@ -12,11 +13,25 @@ except ImportError:  # pragma: no cover - direct script/import mode
 def _load_configured_app() -> Flask:
     """Return the real Flask instance regardless of import aliasing."""
 
+    for name in ("petorlandia_app", "app"):
+        mod = sys.modules.get(name)
+        if mod:
+            cand = getattr(mod, "app", mod)
+            if isinstance(cand, Flask):
+                return cand
+
     module_name = f"{__package__}.app" if __package__ else "app"
     try:
         app_module = importlib.import_module(module_name)
     except ModuleNotFoundError:
         app_module = importlib.import_module("app")
+
+    for name in ("petorlandia_app", "app"):
+        mod = sys.modules.get(name)
+        if mod:
+            cand = getattr(mod, "app", mod)
+            if isinstance(cand, Flask):
+                return cand
 
     candidate = getattr(app_module, "app", app_module)
     if isinstance(candidate, Flask):
