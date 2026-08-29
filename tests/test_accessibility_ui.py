@@ -354,6 +354,28 @@ class TestARIAAttributes:
                 
                 assert aria_label or title, \
                     "Icon button should have aria-label or title"
+
+    def test_vet_schedule_icon_buttons_have_aria_labels(self):
+        """Schedule edit and delete icon buttons must have descriptive aria-labels."""
+        template_path = Path('templates/agendamentos/edit_vet_schedule.html')
+        assert template_path.exists(), "vet schedule template should exist"
+        content = template_path.read_text(encoding='utf-8')
+        soup = BeautifulSoup(content, 'html.parser')
+
+        # Check edit buttons
+        edit_btn = soup.find('button', class_=re.compile('edit-btn'))
+        assert edit_btn is not None, "Edit button should exist in schedule template"
+        assert edit_btn.get('aria-label'), "Schedule edit button must have aria-label"
+        assert edit_btn.get('title'), "Schedule edit button must have title"
+
+        # Check week navigation buttons
+        prev_btn = soup.find('button', attrs={'data-schedule-week-prev': True})
+        assert prev_btn is not None, "Week prev button should exist"
+        assert prev_btn.get('aria-label'), "Week prev button must have aria-label"
+
+        next_btn = soup.find('button', attrs={'data-schedule-week-next': True})
+        assert next_btn is not None, "Week next button should exist"
+        assert next_btn.get('aria-label'), "Week next button must have aria-label"
     
     def test_form_errors_have_aria_live(self, client):
         """Form error messages should have aria-live for screen readers."""
