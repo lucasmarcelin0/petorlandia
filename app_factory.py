@@ -12,6 +12,16 @@ except ImportError:  # pragma: no cover - direct script/import mode
 def _load_configured_app() -> Flask:
     """Return the real Flask instance regardless of import aliasing."""
 
+    import importlib
+    import sys
+
+    for mod_name in ("petorlandia_app", "app"):
+        mod = sys.modules.get(mod_name)
+        if mod:
+            cand = getattr(mod, "app", mod)
+            if isinstance(cand, Flask) or type(cand).__name__ == "Flask":
+                return cand
+
     module_name = f"{__package__}.app" if __package__ else "app"
     try:
         app_module = importlib.import_module(module_name)
@@ -19,12 +29,26 @@ def _load_configured_app() -> Flask:
         app_module = importlib.import_module("app")
 
     candidate = getattr(app_module, "app", app_module)
-    if isinstance(candidate, Flask):
+    if isinstance(candidate, Flask) or type(candidate).__name__ == "Flask":
         return candidate
 
     nested = getattr(candidate, "app", None)
-    if isinstance(nested, Flask):
+    if isinstance(nested, Flask) or type(nested).__name__ == "Flask":
         return nested
+
+    import importlib.util
+    import pathlib
+
+    app_py = pathlib.Path(__file__).resolve().parent / "app.py"
+    if app_py.exists():
+        spec = importlib.util.spec_from_file_location("petorlandia_app", app_py)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules.setdefault("petorlandia_app", mod)
+            spec.loader.exec_module(mod)
+            cand = getattr(mod, "app", None)
+            if isinstance(cand, Flask) or type(cand).__name__ == "Flask":
+                return cand
 
     raise RuntimeError("Could not resolve Flask app instance")
 
