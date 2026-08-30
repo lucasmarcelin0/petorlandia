@@ -17,7 +17,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="modalBularioPrescricao" tabindex="-1" aria-labelledby="modalBularioPrescricaoLabel" aria-hidden="true">
+<div class="modal fade" id="modalBularioPrescricao" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalBularioPrescricaoLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
@@ -102,7 +102,7 @@ function renderListaEdicao() {
         <span><strong>Medicamento ${i + 1}</strong></span>
         <div class="d-flex align-items-center gap-2">
           <small class="text-muted">Arraste para reordenar</small>
-          <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})" aria-label="Remover medicamento" title="Remover medicamento"><i class="fa fa-trash" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="card-body">
@@ -115,7 +115,7 @@ function renderListaEdicao() {
           <div class="input-group">
             <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${escapeHtml(m.medicamento)}" oninput="medicamentos[${i}].medicamento = this.value">
             <button type="button" class="btn btn-outline-primary" onclick="abrirBulario(${i})">
-              <i class="fa fa-book-medical me-1"></i>Escolher do bulario
+              <i class="fa fa-book-medical me-1" aria-hidden="true"></i>Escolher do bulario
             </button>
           </div>
           <small class="form-text text-muted">Digite para buscar sugestoes ou escolha um item do bulario cadastrado.</small>
