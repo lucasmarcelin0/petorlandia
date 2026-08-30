@@ -804,6 +804,10 @@ def bake_image_rotation(image_url: str, degrees, folder: str = "uploads") -> str
             src = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT)) / image_url.lstrip("/")
             source_image = Image.open(src)
         else:
+            from security.url_safe import is_url_ssrf_safe
+            if not is_url_ssrf_safe(image_url):
+                app.logger.warning("URL de imagem rejeitada por validação SSRF: %s", image_url)
+                return image_url
             response = requests.get(image_url, timeout=10)
             response.raise_for_status()
             source_image = Image.open(BytesIO(response.content))
