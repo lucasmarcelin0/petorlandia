@@ -9,6 +9,8 @@ class _User:
 
 
 def test_authz_denial_metrics_group_by_route_user_ip(app):
+    from authz import _DENY_EVENTS_WINDOW
+    _DENY_EVENTS_WINDOW.clear()
     with app.test_request_context(
         "/rota-protegida/12345678901", headers={"User-Agent": "pytest-agent", "X-Forwarded-For": "203.0.113.10"}
     ):
