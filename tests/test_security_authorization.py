@@ -128,6 +128,39 @@ def login(client, user_id):
         sess['_fresh'] = True
 
 
+class TestUrlSanitization:
+    """Test login redirect URL sanitization against Open Redirect vulnerabilities."""
+
+    def test_sanitize_login_next_url(self, app):
+        """Test _sanitize_login_next_url with safe and malicious inputs."""
+        from app import _sanitize_login_next_url
+        from flask import url_for
+
+        with app.test_request_context():
+            default_url = url_for('index')
+
+            # Valid relative URLs
+            assert _sanitize_login_next_url('/dashboard') == '/dashboard'
+            assert _sanitize_login_next_url('/profile?tab=1') == '/profile?tab=1'
+            assert _sanitize_login_next_url('/servicos') == '/servicos'
+
+            # Empty or None
+            assert _sanitize_login_next_url(None) == default_url
+            assert _sanitize_login_next_url('') == default_url
+            assert _sanitize_login_next_url('   ') == default_url
+
+            # Open Redirect payloads
+            assert _sanitize_login_next_url('//attacker.com') == default_url
+            assert _sanitize_login_next_url('///attacker.com') == default_url
+            assert _sanitize_login_next_url('/\\attacker.com') == default_url
+            assert _sanitize_login_next_url('/\\\\attacker.com') == default_url
+            assert _sanitize_login_next_url('\\attacker.com') == default_url
+            assert _sanitize_login_next_url('https://attacker.com') == default_url
+            assert _sanitize_login_next_url('http://attacker.com') == default_url
+            assert _sanitize_login_next_url('javascript:alert(1)') == default_url
+            assert _sanitize_login_next_url('/vacina-pmo/c/token123/pet/456') == default_url
+
+
 class TestAuthentication:
     """Test authentication mechanisms."""
     

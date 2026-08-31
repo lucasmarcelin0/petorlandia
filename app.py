@@ -4839,9 +4839,20 @@ def _preencher_idade_form(form, animal=None):
 
 
 def _sanitize_login_next_url(next_url):
-    next_url = next_url or url_for('index')
+    """Sanitizes user-supplied post-login redirect URL to prevent Open Redirect vulnerabilities.
+
+    Ensures the target is strictly a local relative path, disallowing schema, netloc,
+    protocol-relative URLs (// or /\\), and backslash-based domain tricks.
+    """
+    next_url = (next_url or '').strip()
+    if not next_url:
+        return url_for('index')
+    if not next_url.startswith('/') or next_url.startswith('//') or next_url.startswith('/\\'):
+        return url_for('index')
+    if '\\' in next_url:
+        return url_for('index')
     parsed_next = urlparse(next_url)
-    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
+    if parsed_next.netloc or parsed_next.scheme:
         return url_for('index')
     if re.fullmatch(r'/vacina-pmo/c/[^/]+/pet/\d+/?', parsed_next.path or ''):
         return url_for('index')
