@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from extensions import db
 from models import ApresentacaoMedicamento, DoseMedicamento, Medicamento, User
 
@@ -83,3 +85,52 @@ def test_buscar_medicamentos_autocomplete_leve_e_detalhe_sob_demanda(client, app
     assert detail["id"] == med_id
     assert detail["apresentacoes"]
     assert "monografia_estruturada" in detail
+
+
+def test_busca_prioriza_nome_cadastrado_sobre_alias_comercial_generico(client, app):
+    with app.app_context():
+        user = User(name="Vet", email="vet-med-name@example.com", worker="veterinario")
+        user.set_password("x")
+        db.session.add(user)
+        db.session.flush()
+        med = Medicamento(
+            nome="Sulfadiazina de Prata 10mg/g Creme Dermatologico",
+            principio_ativo="Sulfadiazina de Prata",
+            conteudo_estruturado={
+                "produtos_vetsmart": [
+                    {
+                        "nome": "Sulfadiazina de prata Animalia Farma",
+                        "fabricante": "Animalia Farma",
+                        "vetsmart_produto_id": 98765,
+                    }
+                ]
+            },
+            created_by=user.id,
+        )
+        db.session.add(med)
+        db.session.commit()
+        med_id = med.id
+
+    resp = client.get("/buscar_medicamentos?q=sulfadiazina")
+
+    assert resp.status_code == 200
+    item = next(entry for entry in resp.get_json() if entry["id"] == med_id)
+    assert item["nome_exibicao_busca"] == "Sulfadiazina de Prata 10mg/g Creme Dermatologico"
+    assert "produto_match_nome" not in item
+
+    alias_resp = client.get("/buscar_medicamentos?q=animalia")
+    assert alias_resp.status_code == 200
+    alias_item = next(entry for entry in alias_resp.get_json() if entry["id"] == med_id)
+    assert alias_item["nome_exibicao_busca"] == "Sulfadiazina de prata Animalia Farma"
+    assert alias_item["produto_match_nome"] == "Sulfadiazina de prata Animalia Farma"
+
+
+def test_edicao_usa_nome_persistido_e_descarta_alias_visual_desatualizado():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "templates/partials/prescricao_form.html").read_text(encoding="utf-8")
+
+    assert "med?.nome || _nomeVisivelMedicamento(med)" in template
+    assert "medicamentoSelecionado.nome_exibicao_busca = nome" in template
+    assert "medicamentoSelecionado.produto_match_nome = null" in template
+    assert "_medicationSearchCache.clear()" in template
+    assert "_medicationDetailCache.clear()" in template

@@ -1001,7 +1001,10 @@
     }
 
     document.getElementById('buscar-medicamento-nova').value = _nomeVisivelMedicamento(med) || '';
-    document.getElementById('nova-medicacao-nome').value = _nomeVisivelMedicamento(med) || '';
+    // O titulo visivel pode ser um alias comercial vindo do VetSmart. O campo
+    // editavel, porem, persiste Medicamento.nome; carregar o alias aqui fazia o
+    // usuario editar um valor diferente daquele que a API realmente grava.
+    document.getElementById('nova-medicacao-nome').value = med?.nome || _nomeVisivelMedicamento(med) || '';
     document.getElementById('nova-medicacao-principio').value = med?.principio_ativo || '';
     document.getElementById('nova-medicacao-classificacao').value = med?.classificacao || '';
     document.getElementById('nova-medicacao-via').value = med?.via_administracao || '';
@@ -1133,6 +1136,7 @@
     };
 
     const id = medicamentoSelecionado?.id;
+    const nomeOriginal = String(medicamentoSelecionado?.nome || '').trim();
     const url = id ? `/medicamento/${id}` : '/medicamento';
     const method = id ? 'PUT' : 'POST';
 
@@ -1151,6 +1155,17 @@
 
       if (id) {
         medicamentoSelecionado = { ...medicamentoSelecionado, ...payload };
+        if (nome !== nomeOriginal) {
+          // A busca pode ter selecionado o registro por um nome comercial. Ao
+          // renomear o cadastro, descarte esse titulo antigo apenas do estado da
+          // tela para que o usuario veja imediatamente o valor que foi salvo.
+          medicamentoSelecionado.nome_exibicao_busca = nome;
+          medicamentoSelecionado.produto_match_nome = null;
+          medicamentoSelecionado.produto_match_fabricante = null;
+          document.getElementById('nome-medicamento').value = nome;
+        }
+        _medicationSearchCache.clear();
+        _medicationDetailCache.clear();
         preencherCardMedicamento(medicamentoSelecionado);
       } else {
         medicamentoSelecionado = data;

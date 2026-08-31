@@ -1672,6 +1672,22 @@ def buscar_medicamentos():
                 return prod
         return None
 
+    def _busca_casa_no_nome_canonico(m):
+        """Evita substituir um nome cadastrado por um alias comercial arbitrario.
+
+        Produtos VetSmart continuam aparecendo quando a busca e especifica da
+        marca/fabricante. Quando o texto ja encontra o nome canonico ou o
+        principio ativo, o cadastro e a fonte principal exibida ao usuario.
+        """
+        campos = (m.nome, m.principio_ativo)
+        campos_norm = [_norm_busca(valor) for valor in campos if valor]
+        if any(q_norm in valor for valor in campos_norm):
+            return True
+        return bool(
+            tokens_busca
+            and any(all(token in valor for token in tokens_busca) for valor in campos_norm)
+        )
+
     def _haystack_medicamento(m):
         partes = [
             m.nome,
@@ -1721,7 +1737,7 @@ def buscar_medicamentos():
     for med in filtrados[:limit]:
         item = serializar_medicamento_autocomplete(med)
         produto_match = _produto_vetsmart_match_info(med)
-        if produto_match:
+        if produto_match and not _busca_casa_no_nome_canonico(med):
             item["produto_match_nome"] = produto_match.get("nome")
             item["produto_match_fabricante"] = produto_match.get("fabricante")
             item["produto_match_vetsmart_id"] = produto_match.get("vetsmart_produto_id")
