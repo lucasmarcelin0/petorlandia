@@ -164,24 +164,73 @@
       </div>
 
       <!-- Seleção de apresentação — obrigatória pra prescrição ter valor:
-           250 mg comprimido ≠ 250 mg/5 mL suspensão.  Aparece sempre que o
-           medicamento tem apresentações cadastradas, logo após a escolha do
-           medicamento (não fica escondida atrás da dose pré-calculada). -->
+           250 mg comprimido ≠ 250 mg/5 mL suspensão. Aparece após a escolha do medicamento. -->
       <div id="presc-apresentacao-wrap" class="mb-2 d-none prescription-presentation-box"
            style="border:1px solid #c3e6cb;border-left:3px solid #198754;border-radius:7px;padding:10px 12px;background:#f3fbf5;">
-        <label for="presc-apresentacao" class="form-label small fw-semibold mb-1 d-flex align-items-center gap-1"
-               style="color:#0f5132;">
-          <i class="bi bi-capsule"></i>
-          Apresentação <span class="text-danger" aria-hidden="true">*</span>
-          <span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— obrigatória para prescrever</span>
-        </label>
-        <select id="presc-apresentacao" class="form-select form-select-sm"
-                onchange="onApresentacaoPrescricaoChange()">
-          <option value="">— escolha a apresentação dispensada —</option>
-        </select>
-        <small class="text-muted d-block mt-1" id="presc-apresentacao-hint" style="font-size:.72rem;">
-          Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).
-        </small>
+        <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+          <label for="presc-apresentacao" class="form-label small fw-semibold mb-0 d-flex align-items-center gap-1"
+                 style="color:#0f5132;">
+            <i class="bi bi-capsule"></i>
+            Apresentação <span class="text-danger" aria-hidden="true">*</span>
+            <span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— obrigatória para prescrever</span>
+          </label>
+          <button type="button" class="btn btn-xs btn-outline-success py-0 px-2 fw-semibold"
+                  id="btn-toggle-quick-apres"
+                  style="font-size:.75rem; border-radius:20px;"
+                  onclick="toggleFormNovaApresentacao()">
+            <i class="bi bi-plus-lg me-1"></i>Nova apresentação
+          </button>
+        </div>
+
+        <div id="presc-apresentacao-select-row">
+          <select id="presc-apresentacao" class="form-select form-select-sm"
+                  onchange="onApresentacaoPrescricaoChange()">
+            <option value="">— escolha a apresentação dispensada —</option>
+          </select>
+          <small class="text-muted d-block mt-1" id="presc-apresentacao-hint" style="font-size:.72rem;">
+            Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).
+          </small>
+        </div>
+
+        <!-- Formulário rápido para incluir nova apresentação inline -->
+        <div id="quick-add-apresentacao-form" class="mt-2 p-2 border rounded bg-white shadow-sm d-none" style="border-color:#b9e2c6 !important;">
+          <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+            <span class="small fw-bold text-success" style="font-size:.8rem;">
+              <i class="bi bi-plus-circle-fill me-1"></i>Cadastrar Nova Apresentação
+            </span>
+            <button type="button" class="btn-close btn-close-sm" style="font-size:.65rem;" aria-label="Fechar" onclick="toggleFormNovaApresentacao(false)"></button>
+          </div>
+          <div class="row g-2">
+            <div class="col-sm-4">
+              <label for="quick-apres-forma" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Forma <span class="text-danger">*</span></label>
+              <input type="text" id="quick-apres-forma" class="form-control form-control-sm" list="quick-apres-forma-list" placeholder="Ex: comprimido, cápsula...">
+              <datalist id="quick-apres-forma-list">
+                <option value="comprimido">
+                <option value="cápsula">
+                <option value="suspensão oral">
+                <option value="solução oral">
+                <option value="gotas">
+                <option value="solução injetável">
+                <option value="pomada">
+                <option value="pasta oral">
+              </datalist>
+            </div>
+            <div class="col-sm-4">
+              <label for="quick-apres-conc" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Concentração <span class="text-danger">*</span></label>
+              <input type="text" id="quick-apres-conc" class="form-control form-control-sm" placeholder="Ex: 500 mg, 50 mg/mL...">
+            </div>
+            <div class="col-sm-4">
+              <label for="quick-apres-fab" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Fabricante / Marca <span class="text-muted fw-normal">(opcional)</span></label>
+              <input type="text" id="quick-apres-fab" class="form-control form-control-sm" placeholder="Ex: Medicamento Genérico...">
+            </div>
+            <div class="col-12 d-flex justify-content-end gap-2 mt-2 pt-1 border-top">
+              <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:.78rem;" onclick="toggleFormNovaApresentacao(false)">Cancelar</button>
+              <button type="button" class="btn btn-sm btn-success py-1 px-3 fw-semibold" style="font-size:.78rem;" id="btn-salvar-quick-apres" onclick="salvarNovaApresentacaoQuick()">
+                <i class="bi bi-check-lg me-1"></i>Salvar e Usar
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <hr>
@@ -2551,18 +2600,140 @@
     return fallbackLabel || (ap.descricao || 'Apresentação');
   }
 
+  function toggleFormNovaApresentacao(forceState) {
+    const form = document.getElementById('quick-add-apresentacao-form');
+    if (!form) return;
+    const shouldShow = typeof forceState === 'boolean' ? forceState : form.classList.contains('d-none');
+    form.classList.toggle('d-none', !shouldShow);
+    if (shouldShow) {
+      setTimeout(() => document.getElementById('quick-apres-forma')?.focus(), 50);
+    }
+  }
+
+  async function salvarNovaApresentacaoQuick() {
+    const medId = medicamentoSelecionado?.id;
+    if (!medId) {
+      mostrarFeedback('Selecione um medicamento antes de adicionar uma apresentação.', 'warning');
+      return;
+    }
+    const forma = document.getElementById('quick-apres-forma')?.value?.trim();
+    const conc = document.getElementById('quick-apres-conc')?.value?.trim();
+    const fab = document.getElementById('quick-apres-fab')?.value?.trim();
+
+    if (!forma || !conc) {
+      mostrarFeedback('Informe a forma e a concentração da apresentação.', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-quick-apres');
+    const originalText = btn ? btn.innerHTML : 'Salvar e Usar';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando...';
+    }
+
+    try {
+      const payload = {
+        medicamento_id: medId,
+        forma: forma,
+        concentracao: conc,
+        fabricante: fab || null
+      };
+
+      const { resp, data } = await fetchMedicamentoComCsrf('/apresentacao_medicamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok || data.success === false) {
+        throw new Error(data.message || 'Erro ao cadastrar apresentação.');
+      }
+
+      mostrarFeedback(data.message || 'Apresentação adicionada com sucesso!', 'success');
+
+      // Limpa campos do formulário rápido
+      const inputForma = document.getElementById('quick-apres-forma');
+      const inputConc = document.getElementById('quick-apres-conc');
+      const inputFab = document.getElementById('quick-apres-fab');
+      if (inputForma) inputForma.value = '';
+      if (inputConc) inputConc.value = '';
+      if (inputFab) inputFab.value = '';
+      toggleFormNovaApresentacao(false);
+
+      // Invalida caches locais
+      if (typeof _medicationSearchCache !== 'undefined' && _medicationSearchCache?.clear) {
+        _medicationSearchCache.clear();
+      }
+      if (typeof _medicationDetailCache !== 'undefined' && _medicationDetailCache?.clear) {
+        _medicationDetailCache.clear();
+      }
+
+      // Atualiza a lista de apresentações disponíveis
+      if (Array.isArray(data.apresentacoes) && data.apresentacoes.length > 0) {
+        _apresentacoesDisponiveis = data.apresentacoes;
+      } else if (data.id) {
+        _apresentacoesDisponiveis.push({
+          id: data.id,
+          forma: forma,
+          concentracao_texto: conc,
+          fabricante: fab,
+          categoria_label: 'Outras apresentações'
+        });
+      }
+
+      // Re-renderiza o dropdown com a lista atualizada
+      _renderDropdownApresentacaoPrescricao(_apresentacoesDisponiveis);
+
+      // Seleciona a apresentação recém-criada
+      const select = document.getElementById('presc-apresentacao');
+      if (select && data.id) {
+        select.value = String(data.id);
+        onApresentacaoPrescricaoChange();
+      }
+    } catch (e) {
+      console.error('Erro ao salvar apresentação rápida:', e);
+      mostrarFeedback(e.message || 'Erro ao salvar apresentação.', 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+  }
+
   function _renderDropdownApresentacaoPrescricao(apresentacoes) {
     _apresentacoesDisponiveis = Array.isArray(apresentacoes) ? apresentacoes : [];
     _apresentacaoPrescricao = null;
     const wrap   = document.getElementById('presc-apresentacao-wrap');
     const select = document.getElementById('presc-apresentacao');
+    const hint   = document.getElementById('presc-apresentacao-hint');
     if (!wrap || !select) return;
-    if (!_apresentacoesDisponiveis.length) {
+
+    if (!medicamentoSelecionado && !_apresentacoesDisponiveis.length) {
       wrap.classList.add('d-none');
       select.innerHTML = '<option value="">— sem apresentação cadastrada —</option>';
       atualizarPreviewPrescricao();
       return;
     }
+
+    wrap.classList.remove('d-none');
+
+    if (!_apresentacoesDisponiveis.length) {
+      select.innerHTML = '<option value="">— nenhuma apresentação cadastrada (adicione uma abaixo) —</option>';
+      if (hint) {
+        hint.innerHTML = '<span class="text-warning-emphasis fw-semibold">Nenhuma apresentação cadastrada ainda. Clique em "Nova apresentação" acima para cadastrar a primeira.</span>';
+      }
+      select.classList.remove('is-invalid');
+      atualizarPreviewPrescricao();
+      mostrarEtapaPrescricao('apresentacao');
+      return;
+    }
+
+    if (hint) {
+      hint.textContent = 'Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).';
+    }
+
     // Agrupa por categoria_label (Comprimidos, Suspensões, Líquidos, …)
     const grupos = new Map();
     for (const ap of _apresentacoesDisponiveis) {
@@ -2582,7 +2753,6 @@
     }
     select.innerHTML = html;
     select.classList.remove('is-invalid');
-    wrap.classList.remove('d-none');
     atualizarPreviewPrescricao();
     mostrarEtapaPrescricao('apresentacao');
   }

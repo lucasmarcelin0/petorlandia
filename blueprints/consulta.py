@@ -1513,7 +1513,42 @@ def alterar_medicamento(med_id):
     return jsonify({"success": True})
 
 
+def _parse_concentracao_string(concentracao_str: str):
+    if not concentracao_str:
+        return None, None
+    texto = concentracao_str.strip()
+
+    # Ex: 250 mg / 5 mL or 250 mg/5ml -> 50 mg/ml
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(mg|mcg|g)\s*/\s*(\d+(?:[.,]\d+)?)\s*(ml|l)', texto, re.I)
+    if m:
+        num_m = float(m.group(1).replace(',', '.'))
+        un_m = m.group(2).lower()
+        vol_m = float(m.group(3).replace(',', '.')) or 1.0
+        val = num_m / vol_m
+        return round(val, 4), f"{un_m}/ml"
+
+    # Ex: 50 mg/mL, 100 mcg/ml, 5 %
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(mg/ml|mcg/ml|ug/ml|g/ml|ui/ml|mg/g|%)', texto, re.I)
+    if m:
+        val = float(m.group(1).replace(',', '.'))
+        return val, m.group(2).lower()
+
+    # Ex: 500 mg, 10 mg, 0.5 g, 200 mcg, 5000 UI
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui|ml|l)\b', texto, re.I)
+    if m:
+        val = float(m.group(1).replace(',', '.'))
+        return val, m.group(2).lower()
+
+    # Just number
+    m = re.search(r'^(\d+(?:[.,]\d+)?)$', texto)
+    if m:
+        return float(m.group(1).replace(',', '.')), 'mg'
+
+    return None, None
+
+
 @bp.route("/apresentacao_medicamento", methods=["POST"])
+@login_required
 def criar_apresentacao_medicamento():
     data = request.get_json(silent=True) or {}
     medicamento_id = data.get("medicamento_id")
@@ -1521,18 +1556,72 @@ def criar_apresentacao_medicamento():
     concentracao = (data.get("concentracao") or "").strip()
 
     if not medicamento_id or not forma or not concentracao:
-        return jsonify({"success": False, "message": "Dados obrigatórios ausentes"}), 400
+        return jsonify({"success": False, "message": "Forma e concentração são obrigatórias"}), 400
 
     try:
+        med_id = int(medicamento_id)
+        med = Medicamento.query.get_or_404(med_id)
+
+        fabricante = (data.get("fabricante") or "").strip() or None
+        nome_comercial = (data.get("nome_comercial") or "").strip() or None
+        nome_variante = (data.get("nome_variante") or "").strip() or None
+
+        concentracao_valor = data.get("concentracao_valor")
+        concentracao_unidade = data.get("concentracao_unidade")
+
+        if concentracao_valor is not None and str(concentracao_valor).strip():
+            try:
+                concentracao_valor = float(concentracao_valor)
+            except (ValueError, TypeError):
+                concentracao_valor = None
+        else:
+            concentracao_valor = None
+
+        if not concentracao_valor:
+            parsed_val, parsed_un = _parse_concentracao_string(concentracao)
+            if parsed_val is not None:
+                concentracao_valor = parsed_val
+                concentracao_unidade = concentracao_unidade or parsed_un
+
+        volume_valor = data.get("volume_valor")
+        if volume_valor is not None and str(volume_valor).strip():
+            try:
+                volume_valor = float(volume_valor)
+            except (ValueError, TypeError):
+                volume_valor = None
+        else:
+            volume_valor = None
+
+        volume_unidade = (data.get("volume_unidade") or "").strip() or None
+
         apresentacao = ApresentacaoMedicamento(
-            medicamento_id=int(medicamento_id),
+            medicamento_id=med.id,
             forma=forma,
             concentracao=concentracao,
+            fabricante=fabricante,
+            nome_comercial=nome_comercial,
+            nome_variante=nome_variante,
+            concentracao_valor=concentracao_valor,
+            concentracao_unidade=concentracao_unidade,
+            volume_valor=volume_valor,
+            volume_unidade=volume_unidade,
         )
         db.session.add(apresentacao)
         db.session.commit()
         _clear_medication_search_cache()
-        return jsonify({"success": True, "id": apresentacao.id})
+
+        from services.bulario import listar_apresentacoes_medicamento
+        apresentacoes_atualizadas = listar_apresentacoes_medicamento(med)
+
+        return jsonify({
+            "success": True,
+            "id": apresentacao.id,
+            "forma": apresentacao.forma,
+            "concentracao": apresentacao.concentracao,
+            "fabricante": apresentacao.fabricante,
+            "apresentacoes": apresentacoes_atualizadas,
+            "message": f"Apresentação {apresentacao.forma} ({apresentacao.concentracao}) adicionada com sucesso!",
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
