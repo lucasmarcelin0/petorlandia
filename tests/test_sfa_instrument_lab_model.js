@@ -5,6 +5,7 @@ const vm = require('vm');
 
 const scriptPath = path.join(__dirname, '..', 'static', 'js', 'sfa_instrument_lab.js');
 let source = fs.readFileSync(scriptPath, 'utf8');
+source = source.replace(/\r\n/g, '\n');
 source = source.replace(
   "  const root = document.getElementById('sfa-instrument-lab');\n  if (!root) return;",
   "  const root = {};"
@@ -18,28 +19,32 @@ vm.runInThisContext(source, { filename: scriptPath });
 
 const model = globalThis.__sfaLabModel;
 assert(model, 'O modelo puro do laboratorio nao foi exposto ao teste.');
+assert.strictEqual(model.cohortSize, 100);
 
 const cohort = model.buildSyntheticCohort('detectable');
-assert.strictEqual(cohort.length, 50);
-assert.strictEqual(cohort.filter((record) => record.t10Responded).length, 43);
-assert.strictEqual(cohort.filter((record) => record.t30Responded).length, 38);
+assert.strictEqual(cohort.length, 100);
+assert.strictEqual(cohort.filter((record) => record.t10Responded).length, 86);
+assert.strictEqual(cohort.filter((record) => record.t30Responded).length, 76);
 assert(cohort.every((record) => !record.t30Responded || record.t10Responded), 'T30 deve ser subconjunto de T10.');
 assert(cohort.every((record) => !record.ialSampleCollected || record.ialEligible));
 assert(cohort.every((record) => !record.ialValidResult || record.ialSampleCollected));
 assert(cohort.every((record) => !record.ialEtiologyPositive || record.ialValidResult));
 
 const signals = model.buildSignals(cohort);
-assert.strictEqual(signals.length, 3);
+assert.strictEqual(signals.length, 5);
 const school = signals.find((signal) => signal.key === 'event:escola-aurora');
 assert(school);
 assert.strictEqual(school.stage, 'T10');
-assert.strictEqual(school.directCases, 3, 'O sinal T10 deve usar apenas quem respondeu T10.');
-assert.strictEqual(school.stageCoverage, '3/4');
+assert.strictEqual(school.directCases, 4, 'O sinal T10 deve usar apenas quem respondeu T10.');
+assert.strictEqual(school.stageCoverage, '4/4');
 
-const cheese = signals.find((signal) => signal.key === 'food:queijo-feira-central');
-assert.strictEqual(cheese.finalSourceState, 'Aparentemente interrompida');
-assert.strictEqual(cheese.statusClass, 'is-closed');
-assert(cheese.status.includes('sem novos casos conhecidos'));
+const foodborne = signals.find((signal) => signal.key === 'food:almoco-comunitario');
+assert.strictEqual(foodborne.finalSourceState, 'Aparentemente interrompida');
+assert.strictEqual(foodborne.statusClass, 'is-closed');
+assert(foodborne.status.includes('sem novos casos conhecidos'));
+assert(signals.some((signal) => signal.key === 'environment:lama-roedores-jardim'));
+assert(signals.some((signal) => signal.key === 'animal:fazenda-santa-clara'));
+assert(signals.some((signal) => signal.key === 'vector:mosquitos-jardim-boa-vista'));
 
 function record(overrides) {
   return Object.assign({
@@ -94,25 +99,25 @@ const eventWithoutFollowup = cohort.map((item) => Object.assign({}, item, {
 }));
 assert(!model.buildSignals(eventWithoutFollowup).some((signal) => signal.key === 'event:escola-aurora'));
 
-const [zeroLow, zeroHigh] = model.wilsonInterval(0, 50, 1.96);
-const [halfLow, halfHigh] = model.wilsonInterval(25, 50, 1.96);
-const [allLow, allHigh] = model.wilsonInterval(50, 50, 1.96);
-assert(Math.abs(zeroLow - 0) < 1e-9 && Math.abs(zeroHigh - 0.07135) < 0.001);
-assert(Math.abs(halfLow - 0.3664) < 0.001 && Math.abs(halfHigh - 0.6336) < 0.001);
-assert(Math.abs(allLow - 0.92865) < 0.001 && Math.abs(allHigh - 1) < 1e-9);
+const [zeroLow, zeroHigh] = model.wilsonInterval(0, 100, 1.96);
+const [halfLow, halfHigh] = model.wilsonInterval(50, 100, 1.96);
+const [allLow, allHigh] = model.wilsonInterval(100, 100, 1.96);
+assert(Math.abs(zeroLow - 0) < 1e-9 && Math.abs(zeroHigh - 0.03699) < 0.001);
+assert(Math.abs(halfLow - 0.4038) < 0.001 && Math.abs(halfHigh - 0.5962) < 0.001);
+assert(Math.abs(allLow - 0.96301) < 0.001 && Math.abs(allHigh - 1) < 1e-9);
 
 const decisions = model.registeredDecisions(signals);
-assert.strictEqual(decisions.length, 6);
+assert.strictEqual(decisions.length, 10);
 assert(decisions.every((decision) => decision.id && decision.status && decision.owner && decision.reportContribution));
 
 const expectedScenarios = {
-  semantic: { t10: 45, t30: 41 },
-  falsefriends: { t10: 44, t30: 39 },
-  onehealth: { t10: 46, t30: 42 }
+  semantic: { t10: 90, t30: 82 },
+  falsefriends: { t10: 88, t30: 78 },
+  onehealth: { t10: 92, t30: 84 }
 };
 Object.entries(expectedScenarios).forEach(([scenarioKey, expected]) => {
   const scenarioCohort = model.buildSyntheticCohort(scenarioKey);
-  assert.strictEqual(scenarioCohort.length, 50, `${scenarioKey} deve manter n=50.`);
+  assert.strictEqual(scenarioCohort.length, 100, `${scenarioKey} deve manter n=100.`);
   assert.strictEqual(scenarioCohort.filter((item) => item.t10Responded).length, expected.t10);
   assert.strictEqual(scenarioCohort.filter((item) => item.t30Responded).length, expected.t30);
   assert(scenarioCohort.every((item) => !item.t30Responded || item.t10Responded), `${scenarioKey}: T30 deve estar contido em T10.`);
@@ -153,12 +158,12 @@ assert.deepStrictEqual(funnel.map((step) => step.key), [
   'cohort', 'new-information', 'complete-links', 'candidate-signals',
   'validated-signals', 'actionable-signals', 'decisions'
 ]);
-assert.strictEqual(funnel[0].value, 50);
+assert.strictEqual(funnel[0].value, 100);
 assert.strictEqual(funnel[funnel.length - 1].value, decisions.length);
 assert(funnel.find((step) => step.key === 'complete-links').value <= funnel.find((step) => step.key === 'new-information').value);
 
 const ial = model.buildIalSummary(cohort);
-assert.deepStrictEqual(ial.map((step) => step.value), [36, 31, 29, 12]);
+assert.deepStrictEqual(ial.map((step) => step.value), [72, 62, 58, 24]);
 assert(ial.every((step) => step.value <= step.denominator));
 
 const utility = model.buildQuestionUtility();

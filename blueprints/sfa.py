@@ -1276,7 +1276,7 @@ REVIEW_KIND_LABELS = {
     "t0": "Formulario T0",
     "t10": "Formulario T10",
     "t30": "Formulario T30",
-    "graficos": "Graficos da pesquisa",
+    "graficos": "Resultados possiveis — 100 respostas sinteticas",
 }
 
 
@@ -1885,12 +1885,7 @@ def revisao_formulario(kind: str):
 @bp.route("/revisao/graficos", methods=["GET", "POST"])
 @csrf.exempt
 def revisao_graficos():
-    from models.sfa import SfaPaciente
-    from services.sfa_service import filtrar_pacientes_teste_sfa
-
-    pacientes = filtrar_pacientes_teste_sfa(SfaPaciente.query.all())
-    dashboard_testes = _montar_dashboard_testes_sfa(pacientes)
-    sections = _chart_review_sections(dashboard_testes)
+    sections = _chart_review_sections({})
     if request.method == "POST":
         payload = _collect_chart_review_payload(sections)
         _save_instrument_review("graficos", payload)
@@ -1902,9 +1897,8 @@ def revisao_graficos():
     return render_template(
         "sfa/review_charts.html",
         title=REVIEW_KIND_LABELS["graficos"],
-        dashboard_testes=dashboard_testes,
         sections=sections,
-        has_test_data=bool(pacientes),
+        lab_initial_view="cohort",
     )
 
 

@@ -66,7 +66,8 @@ def test_instrument_lab_frames_ai_as_assistive_and_human_reviewed():
 def test_instrument_lab_is_ephemeral_and_uses_explicit_synthetic_scenarios():
     script = SCRIPT.read_text(encoding="utf-8")
 
-    assert "length: 50" in script
+    assert "const COHORT_SIZE = 100" in script
+    assert "length: COHORT_SIZE" in script
     assert "`sfa-lab-${stageKey}-${item.id}`" in script
     assert "detectable" in script
     assert "sporadic" in script
@@ -81,6 +82,17 @@ def test_instrument_lab_is_ephemeral_and_uses_explicit_synthetic_scenarios():
     assert "XMLHttpRequest" not in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script
+
+
+def test_instrument_lab_default_scenario_covers_priority_sentinel_signals():
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "food:almoco-comunitario" in script
+    assert "environment:lama-roedores-jardim" in script
+    assert "animal:fazenda-santa-clara" in script
+    assert "vector:mosquitos-jardim-boa-vista" in script
+    assert "não diagnósticos" in script
+    assert "a hipótese de leptospirose depende de avaliação epidemiológica e clínica" in script
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js nao esta disponivel")

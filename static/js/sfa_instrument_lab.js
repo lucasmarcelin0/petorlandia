@@ -13,6 +13,7 @@
     .replace(/'/g, '&#039;');
   const percent = (value, total) => total > 0 ? Math.round((value / total) * 100) : 0;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const COHORT_SIZE = 100;
 
   function question(id, label, type, options, extra) {
     return Object.assign({
@@ -626,7 +627,7 @@
       nextButton.innerHTML = 'Ir para T30 <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>';
       nextButton.hidden = false;
     } else {
-      nextButton.innerHTML = 'Ver a coorte de 50 <i class="fas fa-chart-column ms-1" aria-hidden="true"></i>';
+      nextButton.innerHTML = `Ver a coorte de ${COHORT_SIZE} <i class="fas fa-chart-column ms-1" aria-hidden="true"></i>`;
       nextButton.hidden = false;
     }
   }
@@ -715,58 +716,80 @@
 
   const scenarioDefinitions = {
     detectable: {
-      description: 'Três vínculos específicos coexistem; dois não seriam nomeáveis apenas com os campos importados. O seguimento informa fonte ativa e ação percebida.',
-      t10Count: 43,
-      t30Count: 38,
-      ial: { eligible: 36, collected: 31, valid: 29, positive: 12 },
+      description: 'Cinco pistas sentinela coexistem entre 100 respostas: coadoecimento alimentar, lama com sinais de roedores, carrapatos, concentração territorial de mosquitos e um evento coletivo. São hipóteses para verificação humana, não diagnósticos.',
+      t10Count: 86,
+      t30Count: 76,
+      ial: { eligible: 72, collected: 62, valid: 58, positive: 24 },
       clusters: [
         {
-          key: 'food:queijo-feira-central', label: 'Queijo fresco — Feira Central', domain: 'Alimento/água/produto',
-          size: 7, onsetStart: 3, onsetSpan: 4, location: 'Feira Central', potentialExposed: 24,
+          key: 'food:almoco-comunitario', label: 'Alimento compartilhado — almoço comunitário', domain: 'Alimento/água/produto',
+          size: 8, onsetStart: 3, onsetSpan: 3, location: 'Centro comunitário', potentialExposed: 34,
           sinanVisible: false, active: true, sourceStateT30: 'Aparentemente interrompida',
           action: true, postActionCases: false, discoverAt: 'T0', windowDays: 7, reviewStatus: 'accepted',
-          matchReason: 'Mesmo alimento, mesma banca e inícios dentro de quatro dias.', confidence: 0.96,
+          matchReason: 'Mesmo alimento e evento, com oito participantes e inícios concentrados em três dias.', confidence: 0.97,
           decisions: [
-            simulatedDecision('D-SIM-001', 'Inspeção do ponto de venda', 8, 'Executada', 'Vigilância Sanitária', 'Principal', ['T0: item/origem', 'T10: fonte ativa'], ['exposure', 'place', 'date', 'followup'], 7),
-            simulatedDecision('D-SIM-002', 'Orientação aos coexpostos', 9, 'Executada', 'Vigilância Epidemiológica', 'Principal', ['T0: coadoecidos', 'T10: pessoas expostas'], ['exposure', 'place', 'followup', 'active'], 18),
-            simulatedDecision('D-SIM-003', 'Rastreio da origem do produto', 10, 'Em andamento', 'Vigilância Sanitária', 'Contributiva', ['T0: marca/origem/local'], ['exposure', 'place', 'date'], 1)
+            simulatedDecision('D-SIM-001', 'Verificação do preparo e dos alimentos servidos', 8, 'Executada', 'Vigilância Sanitária', 'Principal', ['T0: item/origem', 'T0: coadoecidos'], ['exposure', 'place', 'date'], 8),
+            simulatedDecision('D-SIM-002', 'Orientação aos participantes do evento', 9, 'Executada', 'Vigilância Epidemiológica', 'Principal', ['T0: coadoecidos', 'T10: pessoas expostas'], ['exposure', 'place', 'followup', 'active'], 26),
+            simulatedDecision('D-SIM-003', 'Rastreio de ingredientes e fornecedores', 10, 'Em andamento', 'Vigilância Sanitária', 'Contributiva', ['T0: item/origem/local'], ['exposure', 'place', 'date'], 3)
+          ]
+        },
+        {
+          key: 'environment:lama-roedores-jardim', label: 'Lama e sinais de roedores — após alagamento', domain: 'Ambiente/água',
+          size: 6, onsetStart: 9, onsetSpan: 5, location: 'Jardim das Flores', potentialExposed: 19,
+          sinanVisible: false, active: true, sourceStateT30: 'Ainda ativa',
+          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14, reviewStatus: 'accepted',
+          matchReason: 'Mesmo trecho alagado, contato com lama e sinais de roedores em janela compatível com uma exposição de risco; a hipótese de leptospirose depende de avaliação epidemiológica e clínica.', confidence: 0.93,
+          decisions: [
+            simulatedDecision('D-SIM-004', 'Inspeção ambiental do trecho alagado', 15, 'Em andamento', 'Vigilância Ambiental', 'Principal', ['T0: lama/enchente', 'T0: local e período'], ['exposure', 'place', 'date', 'active'], 6),
+            simulatedDecision('D-SIM-005', 'Orientação sobre contato com lama e roedores', 16, 'Registrada', 'Vigilância Epidemiológica', 'Contributiva', ['T0: pessoas ainda expostas'], ['exposure', 'place', 'active'], 19)
           ]
         },
         {
           key: 'animal:fazenda-santa-clara', label: 'Carrapatos — Fazenda Santa Clara', domain: 'Animal/rural',
-          size: 5, onsetStart: 11, onsetSpan: 4, location: 'Fazenda Santa Clara', potentialExposed: 9,
+          size: 5, onsetStart: 18, onsetSpan: 4, location: 'Fazenda Santa Clara', potentialExposed: 11,
           sinanVisible: false, active: true, sourceStateT30: 'Desconhecida',
           action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14, reviewStatus: 'accepted',
           matchReason: 'Mesma propriedade, mesmo evento com carrapatos e janela compatível.', confidence: 0.91,
           decisions: [
-            simulatedDecision('D-SIM-004', 'Articulação para verificação One Health', 16, 'Registrada', 'Vigilância Epidemiológica', 'Contributiva', ['T0: evento animal e propriedade'], ['exposure', 'place'], 5)
+            simulatedDecision('D-SIM-006', 'Articulação para verificação One Health', 23, 'Registrada', 'Vigilância Epidemiológica', 'Contributiva', ['T0: evento animal e propriedade'], ['exposure', 'place'], 5)
+          ]
+        },
+        {
+          key: 'vector:mosquitos-jardim-boa-vista', label: 'Muitos mosquitos — Jardim Boa Vista', domain: 'Vetor/território',
+          size: 7, onsetStart: 25, onsetSpan: 6, location: 'Jardim Boa Vista', potentialExposed: 42,
+          sinanVisible: true, active: true, sourceStateT30: 'Esclarecida, mas não interrompida',
+          action: true, postActionCases: true, discoverAt: 'T10', windowDays: 14, reviewStatus: 'accepted',
+          matchReason: 'Relatos repetidos de alta presença de mosquitos no mesmo território; o sinal orienta verificação vetorial e não atribui a febre aos mosquitos.', confidence: 0.88,
+          decisions: [
+            simulatedDecision('D-SIM-007', 'Vistoria de possíveis criadouros no território', 31, 'Executada', 'Controle de Vetores', 'Principal', ['T0: vetores/território', 'T10: fonte ativa'], ['exposure', 'place', 'followup', 'active'], 42),
+            simulatedDecision('D-SIM-008', 'Reforço de orientação para eliminação de criadouros', 32, 'Executada', 'Controle de Vetores', 'Contributiva', ['T10: pessoas ainda expostas'], ['exposure', 'place', 'followup'], 42)
           ]
         },
         {
           key: 'event:escola-aurora', label: 'Evento — Escola Municipal Aurora', domain: 'Trabalho/escola/evento',
-          size: 4, onsetStart: 20, onsetSpan: 3, location: 'Escola Municipal Aurora', potentialExposed: 18,
+          size: 4, onsetStart: 36, onsetSpan: 3, location: 'Escola Municipal Aurora', potentialExposed: 18,
           sinanVisible: true, active: false, sourceStateT30: 'Aparentemente interrompida',
           action: true, postActionCases: false, discoverAt: 'T10', windowDays: 7, reviewStatus: 'accepted',
           matchReason: 'Mesma instituição e mesmo evento informados no T10.', confidence: 0.94,
           decisions: [
-            simulatedDecision('D-SIM-005', 'Contato com a instituição', 24, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['SINAN: tempo/território', 'T10: evento específico'], ['exposure', 'place', 'followup'], 4),
-            simulatedDecision('D-SIM-006', 'Orientação ao grupo exposto', 25, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['T10: instituição e coexpostos'], ['exposure', 'place', 'followup'], 18)
+            simulatedDecision('D-SIM-009', 'Contato com a instituição', 40, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['SINAN: tempo/território', 'T10: evento específico'], ['exposure', 'place', 'followup'], 4),
+            simulatedDecision('D-SIM-010', 'Orientação ao grupo exposto', 41, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['T10: instituição e coexpostos'], ['exposure', 'place', 'followup'], 18)
           ]
         }
       ]
     },
     sporadic: {
       description: 'Exposições variadas e pouco específicas, sem duas pessoas diretamente ligadas à mesma fonte. O resultado honesto é não abrir uma fila artificial de sinais.',
-      t10Count: 42,
-      t30Count: 37,
-      ial: { eligible: 34, collected: 28, valid: 26, positive: 8 },
+      t10Count: 84,
+      t30Count: 74,
+      ial: { eligible: 68, collected: 56, valid: 52, positive: 16 },
       clusters: []
     },
     attrition: {
-      description: 'Dois vínculos surgem no T0, mas apenas 29 pessoas respondem ao T10 e 20 ao T30. A detecção permanece; urgência e encerramento ficam incompletos.',
-      t10Count: 29,
-      t30Count: 20,
-      ial: { eligible: 35, collected: 25, valid: 22, positive: 7 },
+      description: 'Dois vínculos surgem no T0, mas apenas 58 pessoas respondem ao T10 e 40 ao T30. A detecção permanece; urgência e encerramento ficam incompletos.',
+      t10Count: 58,
+      t30Count: 40,
+      ial: { eligible: 70, collected: 50, valid: 44, positive: 14 },
       clusters: [
         {
           key: 'water:corrego-bebedouro', label: 'Água — córrego próximo ao bebedouro', domain: 'Ambiente/água',
@@ -788,9 +811,9 @@
     },
     semantic: {
       description: 'Seis participantes descrevem a mesma exposição com grafias diferentes. A normalização apenas sugere a correspondência; a validação continua humana.',
-      t10Count: 45,
-      t30Count: 41,
-      ial: { eligible: 37, collected: 33, valid: 31, positive: 13 },
+      t10Count: 90,
+      t30Count: 82,
+      ial: { eligible: 74, collected: 66, valid: 62, positive: 26 },
       clusters: [
         {
           key: 'food:queijo-minas-banca-primavera', normalizedKey: 'food:queijo-minas-banca-primavera',
@@ -814,9 +837,9 @@
     },
     falsefriends: {
       description: 'Expressões parecidas escondem duas fontes e dois locais distintos. O sistema deve mostrar a dúvida para rejeição humana, não fundir casos automaticamente.',
-      t10Count: 44,
-      t30Count: 39,
-      ial: { eligible: 33, collected: 29, valid: 27, positive: 9 },
+      t10Count: 88,
+      t30Count: 78,
+      ial: { eligible: 66, collected: 58, valid: 54, positive: 18 },
       clusters: [
         {
           key: 'candidate:lanche-primavera', normalizedKey: 'candidate:lanche-primavera',
@@ -837,9 +860,9 @@
     },
     onehealth: {
       description: 'Um evento de adoecimento animal e exposição humana na mesma propriedade permanece ativo. A fila explicita a articulação One Health sem inferir etiologia.',
-      t10Count: 46,
-      t30Count: 42,
-      ial: { eligible: 39, collected: 35, valid: 32, positive: 10 },
+      t10Count: 92,
+      t30Count: 84,
+      ial: { eligible: 78, collected: 70, valid: 64, positive: 20 },
       clusters: [
         {
           key: 'animal:abortos-sitio-boa-esperanca', label: 'Abortos em caprinos — Sítio Boa Esperança',
@@ -859,7 +882,7 @@
   };
 
   function responseSelected(index, count, salt) {
-    return ((index * 17 + salt) % 50) < count;
+    return ((index * 17 + salt) % COHORT_SIZE) < count;
   }
 
   function deterministicSubset(indexes, count, salt) {
@@ -873,7 +896,7 @@
     const assignments = new Map();
     let cursor = 0;
     scenario.clusters.forEach((cluster) => {
-      for (let within = 0; within < cluster.size && cursor < 50; within += 1) {
+      for (let within = 0; within < cluster.size && cursor < COHORT_SIZE; within += 1) {
         assignments.set(cursor, { cluster, within });
         cursor += 1;
       }
@@ -882,7 +905,7 @@
     const neighborhoods = ['Centro', 'Jardim Boa Vista', 'Vila Bucci', 'Jardim Teixeira', 'Zona rural'];
     const diagnoses = ['Dengue', 'Sem definição', 'Dengue', 'Chikungunya', 'Sem definição'];
     const broadDomains = ['Ambiente/água', 'Animal/rural', 'Alimento/água/produto', 'Trabalho/escola/evento'];
-    const participantIndexes = Array.from({ length: 50 }, (_, index) => index);
+    const participantIndexes = Array.from({ length: COHORT_SIZE }, (_, index) => index);
     const t10Indexes = participantIndexes.filter((index) => responseSelected(index, scenario.t10Count, 7));
     const t10Set = new Set(t10Indexes);
     const t30Set = new Set(t10Indexes
@@ -899,7 +922,7 @@
     const ialValidSet = new Set(ialValidIndexes);
     const ialPositiveSet = new Set(ialPositiveIndexes);
 
-    return Array.from({ length: 50 }, (_, index) => {
+    return Array.from({ length: COHORT_SIZE }, (_, index) => {
       const assigned = assignments.get(index);
       const cluster = assigned ? assigned.cluster : null;
       const variant = cluster && Array.isArray(cluster.variants) && cluster.variants.length
@@ -1067,6 +1090,7 @@
       'Alimento/água/produto': 'Verificar item, origem, lote/local e coexpostos',
       'Animal/rural': 'Verificar evento animal, propriedade e pessoas expostas',
       'Ambiente/água': 'Verificar local, água/ambiente e permanência do risco',
+      'Vetor/território': 'Verificar concentração territorial, criadouros e necessidade de ação vetorial',
       'Trabalho/escola/evento': 'Contatar instituição e avaliar busca/orientação'
     };
     return steps[domain] || 'Revisar vínculo, tempo e local';
@@ -1294,11 +1318,11 @@
     const decisions = registeredDecisions(signals).length;
     const t30 = records.filter((record) => record.t30Responded).length;
     const cards = [
-      ['Participantes no T0', '50/50', 'coorte fixa da simulação', false],
-      ['Participantes no T30', `${t30}/50`, 'capacidade de encerrar o sinal', false],
+      ['Participantes no T0', `${COHORT_SIZE}/${COHORT_SIZE}`, 'coorte fixa da simulação', false],
+      ['Participantes no T30', `${t30}/${COHORT_SIZE}`, 'capacidade de encerrar o sinal', false],
       ['Sinais candidatos', String(signals.length), 'regra explícita; revisão humana', false],
       ['Sinais incrementais', String(incremental), 'não nomeáveis só com dados importados', true],
-      ['Casos em vínculo específico', String(linkedCases), `de 50 participantes (${percent(linkedCases, 50)}%)`, false],
+      ['Casos em vínculo específico', String(linkedCases), `de ${COHORT_SIZE} participantes (${percent(linkedCases, COHORT_SIZE)}%)`, false],
       ['Fontes possivelmente ativas', String(active), 'priorizam a verificação', true],
       ['Decisões concretas registradas', String(decisions), 'camada separada das sugestões', true],
       ['Divergências diagnósticas', String(discordant), 'entendido versus registrado', false]
@@ -1351,9 +1375,9 @@
     const t10 = records.filter((record) => record.t10Responded).length;
     const t30 = records.filter((record) => record.t30Responded).length;
     byId('sfa-lab-followup').innerHTML = [
-      barRow('T0', records.length, 50, ''),
-      barRow('T10', t10, 50, 'is-orange'),
-      barRow('T30', t30, 50, 'is-muted')
+      barRow('T0', records.length, COHORT_SIZE, ''),
+      barRow('T10', t10, COHORT_SIZE, 'is-orange'),
+      barRow('T30', t30, COHORT_SIZE, 'is-muted')
     ].join('');
   }
 
@@ -1437,7 +1461,7 @@
       <strong>${urgent}</strong><span>com urgência qualificável</span>
       <strong>${closed}</strong><span>com seguimento de ação</span>
       <strong>${decisions}</strong><span>decisão(ões) rastreável(is) ao relatório</span>
-      <small class="text-muted">Regra reaplicada aos 50 registros sintéticos.</small>`;
+      <small class="text-muted">Regra reaplicada aos ${COHORT_SIZE} registros sintéticos.</small>`;
   }
 
   function renderDataPreview(records) {
@@ -1446,7 +1470,7 @@
     const specific = records.filter((record) => record.specificity === 'specific').length;
     const discordant = records.filter((record) => record.recordedDiagnosis !== record.understoodDiagnosis).length;
     byId('sfa-lab-data-summary').innerHTML = [
-      `50 episódios no T0`, `${t10} linhas T10`, `${t30} linhas T30`,
+      `${COHORT_SIZE} episódios no T0`, `${t10} linhas T10`, `${t30} linhas T30`,
       `${specific} vínculos específicos`, `${discordant} comparações diagnósticas divergentes`
     ].map((label) => `<span>${escapeHtml(label)}</span>`).join('');
 
@@ -1534,7 +1558,7 @@
   function renderPrecision() {
     const events = Number(byId('sfa-lab-events').value);
     const outcome = byId('sfa-lab-precision-outcome').value;
-    const total = 50;
+    const total = COHORT_SIZE;
     const estimate = events / total;
     const [low, high] = wilsonInterval(events, total, 1.96);
     const lowPct = Math.round(low * 1000) / 10;
@@ -1552,6 +1576,7 @@
   }
 
   globalThis.__sfaLabModel = {
+    cohortSize: COHORT_SIZE,
     stages,
     exampleAnswers,
     scenarioDefinitions,
@@ -1624,5 +1649,8 @@
 
   renderStage();
   renderCohort();
+  switchView(['participant', 'cohort', 'utility'].includes(root.dataset.initialView)
+    ? root.dataset.initialView
+    : 'participant');
   window.setInterval(updateTimeBadge, 1000);
 })();

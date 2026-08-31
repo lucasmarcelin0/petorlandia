@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Revisao - {{ title }}</title>
+  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_instrument_lab.css') }}?v=20260831a">
   <style>
     :root {
       --ink: #17313a;
@@ -68,7 +71,9 @@
       background: #fff;
     }
     .guide-card strong { display: block; margin-bottom: .25rem; color: var(--teal); }
-    input, textarea, select {
+    .review-feedback input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    .review-feedback textarea,
+    .review-feedback select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -77,8 +82,8 @@
       color: inherit;
       background: #fff;
     }
-    textarea { min-height: 92px; resize: vertical; }
-    label { font-weight: 800; font-size: .92rem; }
+    .review-feedback textarea { min-height: 92px; resize: vertical; }
+    .review-feedback label { font-weight: 800; font-size: .92rem; }
     .review-block { padding: 1rem; margin-bottom: 1rem; }
     .block-head {
       display: grid;
@@ -193,7 +198,7 @@
     th, td { border: 1px solid var(--line); padding: .45rem; text-align: left; vertical-align: top; }
     th { background: #f6f8fa; }
     .actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
-    button {
+    .review-feedback button {
       border: 0;
       border-radius: 999px;
       padding: .9rem 1.4rem;
@@ -216,21 +221,20 @@
       <div class="kicker">Revisao colaborativa dos graficos</div>
       <h1>{{ title }}</h1>
       <p class="muted">
-        Esta revisao mostra os graficos da visao de testes e abre, logo abaixo,
-        as perguntas reais que alimentam cada leitura. A ideia e descobrir o que
-        e essencial, o que esta redundante e o que pode ser melhor aproveitado.
+        Esta demonstracao usa 100 respostas inteiramente sinteticas para mostrar
+        quais sinais o instrumento poderia tornar visiveis. Os exemplos apoiam
+        triagem e verificacao humana; nao confirmam causa, surto ou diagnostico.
       </p>
-      {% if not has_test_data %}
-      <p class="muted"><strong>Observacao:</strong> ainda nao ha lote de teste carregado. A avaliacao pode ser feita pela estrutura, mas os numeros aparecerao vazios.</p>
-      {% endif %}
     </section>
 
+    {% include "sfa/_instrument_experience_lab.html" %}
+
     <section class="panel">
-      <h2>Como avaliar sem sofrer</h2>
+      <h2>Como avaliar a demonstracao</h2>
       <div class="guide">
         <div class="guide-card">
-          <strong>1. Olhe o bloco</strong>
-          Veja qual grafico, tabela ou leitura aquele bloco tenta responder.
+          <strong>1. Explore os cenarios</strong>
+          Compare pistas detectaveis, casos dispersos, perda de seguimento e eventos One Health.
         </div>
         <div class="guide-card">
           <strong>2. Confira as perguntas</strong>
@@ -243,33 +247,7 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>Resumo visual atual</h2>
-      <div class="cards">
-        {% for card in dashboard_testes.cards %}
-        <div class="card">
-          <div class="label">{{ card.label }}</div>
-          <div class="value">{{ card.value }}</div>
-        </div>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2>Exemplo: comparacao entre grupos</h2>
-      <table>
-        <thead><tr><th>Metrica</th><th>Grupo A</th><th>Grupo B</th></tr></thead>
-        <tbody>
-          {% for row in dashboard_testes.group_comparison %}
-          <tr><td>{{ row.metric }}</td><td>{{ row.a }}</td><td>{{ row.b }}</td></tr>
-          {% else %}
-          <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-
-    <form method="POST">
+    <form method="POST" class="review-feedback">
       <section class="panel">
         <h2>Quem esta avaliando?</h2>
         <div class="identity">
@@ -399,5 +377,7 @@
       <div class="actions"><button type="submit">Enviar avaliacao dos graficos</button></div>
     </form>
   </main>
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/sfa_instrument_lab.js') }}?v=20260831a"></script>
 </body>
 </html>

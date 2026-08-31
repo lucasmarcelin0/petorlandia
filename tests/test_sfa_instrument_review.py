@@ -55,6 +55,7 @@ def test_sfa_review_links_and_qrcode_render(client):
     assert response.status_code == 200
     assert b"/sfa/revisao/t0" in response.data
     assert b"/sfa/revisao/graficos" in response.data
+    assert b"100 respostas sinteticas" in response.data
     assert b"Ver resumo" in response.data
     assert b"/sfa/revisao/resumo?kind=t0" in response.data
     assert b'id="sfa-instrument-lab"' in response.data
@@ -67,8 +68,8 @@ def test_sfa_review_links_and_qrcode_render(client):
     assert b'id="sfa-lab-data-rows"' in response.data
     assert b'id="sfa-lab-decisions"' in response.data
     assert b'id="sfa-lab-question-utility"' in response.data
-    assert b"sfa_instrument_lab.css?v=20260824b" in response.data
-    assert b"sfa_instrument_lab.js?v=20260824b" in response.data
+    assert b"sfa_instrument_lab.css?v=20260831a" in response.data
+    assert b"sfa_instrument_lab.js?v=20260831a" in response.data
     assert "nada é gravado e os formulários reais não são alterados".encode() in response.data
     assert "IA assistiva, não diagnóstica".encode() in response.data
     assert b'value="semantic"' in response.data
@@ -85,7 +86,10 @@ def test_sfa_chart_review_records_feedback(app, client):
     response = client.get("/sfa/revisao/graficos")
     assert response.status_code == 200
     assert b"Revisao colaborativa dos graficos" in response.data
-    assert b"Resumo visual atual" in response.data
+    assert b"100 respostas inteiramente sinteticas" in response.data
+    assert b'data-initial-view="cohort"' in response.data
+    assert "Lama e sinais de roedores".encode() not in response.data
+    assert b"sfa_instrument_lab.js?v=20260831a" in response.data
     assert b"Perguntas reais usadas neste bloco" in response.data
     assert b"Vinculos coletivos e novas pistas" in response.data
     assert b"Exposicoes One Health" in response.data

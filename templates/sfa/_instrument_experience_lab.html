@@ -1,10 +1,11 @@
-<section id="sfa-instrument-lab" class="sfa-lab mt-5" aria-labelledby="sfa-lab-title">
+<section id="sfa-instrument-lab" class="sfa-lab mt-5" aria-labelledby="sfa-lab-title"
+         data-initial-view="{{ lab_initial_view|default('participant') }}">
   <div class="sfa-lab__hero">
     <div>
       <div class="sfa-lab__eyebrow">Laboratório de utilidade do instrumento</div>
       <h4 id="sfa-lab-title" class="mb-2">Da experiência do participante a uma decisão da Vigilância</h4>
       <p class="mb-0">
-        Teste a versão enxuta de T0, T10 e T30 e veja o que uma coorte sintética de 50 participantes
+        Teste a versão enxuta de T0, T10 e T30 e veja o que uma coorte sintética de 100 participantes
         permitiria observar antes de alterar os formulários reais.
       </p>
     </div>
@@ -21,7 +22,7 @@
     </button>
     <button type="button" class="sfa-lab__nav-btn" role="tab" aria-selected="false"
             aria-controls="sfa-lab-cohort" id="sfa-lab-tab-cohort" data-lab-view="cohort">
-      <span>2</span> Simular 50 respostas
+      <span>2</span> Simular 100 respostas
     </button>
     <button type="button" class="sfa-lab__nav-btn" role="tab" aria-selected="false"
             aria-controls="sfa-lab-utility" id="sfa-lab-tab-utility" data-lab-view="utility">
@@ -108,7 +109,7 @@
         <div class="col-lg-8">
           <label for="sfa-lab-scenario" class="form-label fw-semibold">Cenário sintético</label>
           <select id="sfa-lab-scenario" class="form-select">
-            <option value="detectable">A — Exposições coletivas detectáveis</option>
+            <option value="detectable">A — Pistas sentinela diversas</option>
             <option value="sporadic">B — Casos predominantemente dispersos</option>
             <option value="attrition">C — Sinal real com perda de seguimento</option>
             <option value="semantic">D — Mesma exposição descrita de formas diferentes</option>
@@ -119,7 +120,7 @@
         </div>
         <div class="col-lg-4 d-grid">
           <button type="button" class="btn btn-primary" id="sfa-lab-run-cohort">
-            <i class="fas fa-play me-1" aria-hidden="true"></i> Recalcular 50 participantes
+            <i class="fas fa-play me-1" aria-hidden="true"></i> Recalcular 100 participantes
           </button>
         </div>
       </div>
@@ -139,7 +140,7 @@
             Cada degrau mantém seu próprio denominador. Coincidência, sugestão automática e decisão administrativa não são tratadas como a mesma coisa.
           </p>
         </div>
-        <span class="sfa-lab__badge">funil n = 50</span>
+        <span class="sfa-lab__badge">funil n = 100</span>
       </div>
       <div id="sfa-lab-funnel" class="sfa-lab__funnel" aria-live="polite"></div>
     </div>
@@ -253,7 +254,7 @@
       <summary>
         <span>
           <span class="sfa-lab__eyebrow">Matriz analítica</span>
-          <strong>Ver como as 50 linhas de informação poderiam ser trabalhadas</strong>
+          <strong>Ver como as 100 linhas de informação poderiam ser trabalhadas</strong>
         </span>
         <i class="fas fa-chevron-down" aria-hidden="true"></i>
       </summary>
@@ -353,10 +354,10 @@
     <div class="sfa-lab__card">
       <div class="row g-4 align-items-center">
         <div class="col-lg-6">
-          <div class="sfa-lab__eyebrow">Precisão com n = 50</div>
+          <div class="sfa-lab__eyebrow">Precisão com n = 100</div>
           <h5>Explore a incerteza de uma proporção</h5>
           <p class="text-muted small">
-            Escolha um estimando e quantos dos 50 participantes apresentariam o resultado. O intervalo de 95% de Wilson mostra por que esta amostra
+            Escolha um estimando e quantos dos 100 participantes apresentariam o resultado. O intervalo de 95% de Wilson mostra por que esta amostra
             é adequada para um piloto de utilidade, mas limitada para estimar prevalências com grande precisão.
           </p>
           <label for="sfa-lab-precision-outcome" class="form-label">Resultado explorado</label>
@@ -365,8 +366,8 @@
             <option value="forneceram um vínculo específico">Participantes que forneceram vínculo específico</option>
             <option value="tiveram divergência diagnóstica">Participantes com divergência diagnóstica</option>
           </select>
-          <label for="sfa-lab-events" class="form-label">Participantes com o resultado: <strong id="sfa-lab-events-value">10</strong>/50</label>
-          <input id="sfa-lab-events" class="form-range" type="range" min="0" max="50" value="10">
+          <label for="sfa-lab-events" class="form-label">Participantes com o resultado: <strong id="sfa-lab-events-value">20</strong>/100</label>
+          <input id="sfa-lab-events" class="form-range" type="range" min="0" max="100" value="20">
         </div>
         <div class="col-lg-6">
           <div id="sfa-lab-precision" class="sfa-lab__precision" aria-live="polite"></div>
@@ -409,7 +410,7 @@
       <div class="col-xl-5">
         <div class="sfa-lab__card h-100">
           <div class="sfa-lab__eyebrow">Limite de interpretacao</div>
-          <h5>O que 50 respostas não demonstram sozinhas</h5>
+          <h5>O que 100 respostas não demonstram sozinhas</h5>
           <ul class="sfa-lab__limits">
             <li>Prevalência etiológica precisa na população.</li>
             <li>Diagnóstico ou acurácia sem referência laboratorial.</li>
