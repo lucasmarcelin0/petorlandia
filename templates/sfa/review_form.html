@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Revisao - {{ title }}</title>
+  <script>document.documentElement.classList.add("sfa-js");</script>
   <style>
     :root {
       --ink: #17313a;
@@ -13,6 +14,7 @@
       --cream: #fffaf5;
       --line: #d7e1de;
       --warn: #a34728;
+      --amber: #d97817;
     }
     * { box-sizing: border-box; }
     body {
@@ -41,6 +43,28 @@
     h2 { margin: 0 0 .35rem; font-size: 1.15rem; }
     p { line-height: 1.55; }
     .muted { color: rgba(23,49,58,.68); }
+    .path-demo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1rem;
+      padding: .85rem 1rem;
+      border: 1px solid rgba(217,120,23,.32);
+      border-radius: 14px;
+      background: #fff8ed;
+    }
+    .path-demo strong { color: #7d3f0d; }
+    .path-status {
+      flex: 0 0 auto;
+      padding: .45rem .7rem;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid rgba(217,120,23,.35);
+      font-size: .86rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
     .panel { padding: 1.2rem; margin-bottom: 1rem; }
     .identity {
       display: grid;
@@ -67,6 +91,19 @@
       padding: 1rem;
       margin-bottom: .85rem;
     }
+    .question.is-conditional {
+      border-left: 5px solid var(--amber);
+      background: linear-gradient(90deg, #fff9ef 0, rgba(255,255,255,.96) 20%);
+    }
+    .sfa-js .question[data-visible-if]:not([data-condition-ready="true"]) { display: none; }
+    [hidden] { display: none !important; }
+    .question[data-visible-if][data-condition-ready="true"]:not([hidden]) {
+      animation: reveal-question .28s ease-out both;
+    }
+    @keyframes reveal-question {
+      from { opacity: 0; transform: translateY(-7px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     .question-title { font-weight: 800; margin-bottom: .35rem; }
     .meta { display: flex; flex-wrap: wrap; gap: .4rem; margin: .55rem 0; }
     .chip {
@@ -75,6 +112,18 @@
       background: var(--cream);
       border: 1px solid var(--line);
       font-size: .8rem;
+    }
+    .chip.conditional {
+      color: #7d3f0d;
+      background: #fff3df;
+      border-color: rgba(217,120,23,.35);
+      font-weight: 800;
+    }
+    .condition-note {
+      margin: .45rem 0 .7rem;
+      color: #7d3f0d;
+      font-size: .88rem;
+      line-height: 1.45;
     }
     .choices { display: grid; gap: .45rem; margin-top: .45rem; }
     .choice {
@@ -108,6 +157,8 @@
     @media (max-width: 820px) {
       .identity, .question, .review-grid { grid-template-columns: 1fr; }
       .wrap { width: min(100% - 1rem, 100%); margin-top: 1rem; }
+      .path-demo { align-items: flex-start; flex-direction: column; }
+      .path-status { white-space: normal; }
     }
   </style>
 </head>
@@ -120,6 +171,16 @@
         Marque respostas como se estivesse testando o formulario e avalie cada pergunta:
         se ela e necessaria, se parece redundante, se esta clara e como poderia melhorar.
       </p>
+      <div class="path-demo">
+        <div>
+          <strong>Experimente caminhos diferentes.</strong>
+          Perguntas curtas aparecem primeiro. Quando uma resposta indicar algo relevante,
+          novas perguntas de aprofundamento serao abertas logo abaixo.
+        </div>
+        <div class="path-status" data-sfa-condition-summary role="status" aria-live="polite">
+          Preparando o percurso...
+        </div>
+      </div>
     </section>
 
     <form method="POST">
@@ -150,13 +211,22 @@
         </div>
 
         {% for field in section.fields %}
-        <article class="question">
+        <article
+          class="question{% if field.visible_if %} is-conditional{% endif %}"
+          data-review-question
+          data-question-key="{{ field.key }}"
+          {% if field.visible_if %}data-visible-if='{{ field.visible_if | tojson }}'{% endif %}
+        >
           <div>
             <div class="question-title">{{ field.label }}</div>
             <div class="meta">
               <span class="chip">{{ "Obrigatoria" if field.required else "Opcional" }}</span>
               <span class="chip">{{ answer_mode(field) }}</span>
+              {% if field.visible_if %}<span class="chip conditional">Aprofundamento condicional</span>{% endif %}
             </div>
+            {% if field.visible_if %}
+            <p class="condition-note">Esta pergunta apareceu porque uma resposta anterior abriu este aprofundamento.</p>
+            {% endif %}
             {% if field.help_text %}<p class="muted">{{ field.help_text }}</p>{% endif %}
 
             {% if field.type == "textarea" %}
@@ -179,7 +249,14 @@
               {% endfor %}
             </div>
             {% else %}
-            <input name="answer__{{ field.key }}" type="{{ field.type }}" placeholder="Teste uma resposta, se fizer sentido">
+            <input
+              name="answer__{{ field.key }}"
+              type="{{ field.type }}"
+              placeholder="{{ field.placeholder or 'Teste uma resposta, se fizer sentido' }}"
+              {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+              {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+              {% if field.step is defined %}step="{{ field.step }}"{% endif %}
+            >
             {% endif %}
           </div>
 
@@ -232,5 +309,7 @@
       </div>
     </form>
   </main>
+  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20260831b"></script>
+  <script src="{{ url_for('static', filename='js/sfa_review_conditions.js') }}?v=20260831a"></script>
 </body>
 </html>

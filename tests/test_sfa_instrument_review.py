@@ -9,6 +9,14 @@ def test_sfa_review_form_records_question_feedback(app, client):
     assert b"Revisao colaborativa do instrumento" in response.data
     assert b"Necessidade" in response.data
     assert b"Redundancia" in response.data
+    assert b"Experimente caminhos diferentes" in response.data
+    assert b"Aprofundamento condicional" in response.data
+    assert b"data-sfa-condition-summary" in response.data
+    assert b"sfa_form_conditions.js?v=20260831b" in response.data
+    assert b"sfa_review_conditions.js?v=20260831a" in response.data
+    assert b'data-question-key="outras_pessoas_quantidade"' in response.data
+    assert b'data-visible-if=' in response.data
+    assert b'answer__outras_pessoas_com_sintomas' in response.data
 
     response = client.post(
         "/sfa/revisao/t0",

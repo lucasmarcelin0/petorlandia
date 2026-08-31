@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const conditions = require(path.resolve(__dirname, '..', 'static', 'js', 'sfa_form_conditions.js'));
+const reviewConditions = require(path.resolve(__dirname, '..', 'static', 'js', 'sfa_review_conditions.js'));
 
 const answers = {
   houve_gasto: 'Sim',
@@ -151,6 +152,40 @@ assert.equal(
   conditions.evaluateRule(proxyDetailRule, () => 'Pai, mae ou responsavel'),
   true,
   'o detalhe do respondente deve abrir somente para um respondente proxy',
+);
+
+const reviewDocument = {
+  querySelectorAll(selector) {
+    if (selector === '[name="answer__gatilho"]') {
+      return [{ type: 'radio', checked: true, value: 'Sim' }];
+    }
+    return [];
+  },
+};
+assert.equal(
+  conditions.fieldValues(reviewDocument, 'gatilho'),
+  'Sim',
+  'a avaliacao deve usar as respostas de teste prefixadas para abrir aprofundamentos',
+);
+
+const summaryElement = { textContent: '' };
+const reviewQuestions = [
+  { hidden: false, hasAttribute: () => false },
+  { hidden: false, hasAttribute: (name) => name === 'data-visible-if' },
+  { hidden: true, hasAttribute: (name) => name === 'data-visible-if' },
+];
+reviewConditions.updateSummary({
+  querySelector(selector) {
+    return selector === '[data-sfa-condition-summary]' ? summaryElement : null;
+  },
+  querySelectorAll(selector) {
+    return selector === '[data-review-question]' ? reviewQuestions : [];
+  },
+});
+assert.equal(
+  summaryElement.textContent,
+  '2 perguntas agora · 1 aprofundamento aberto · 1 em espera',
+  'o contador deve explicar o tamanho atual e os aprofundamentos do percurso',
 );
 
 console.log('sfa_form_conditions: ok');

@@ -74,8 +74,14 @@
   };
 
   const fieldValues = (documentObj, name) => {
-    const escaped = String(name || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const fields = Array.from(documentObj.querySelectorAll('[name="' + escaped + '"]'));
+    const rawName = String(name || "");
+    const candidateNames = [rawName, "answer__" + rawName];
+    let fields = [];
+    for (const candidateName of candidateNames) {
+      const escaped = candidateName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      fields = Array.from(documentObj.querySelectorAll('[name="' + escaped + '"]'));
+      if (fields.length) break;
+    }
     if (!fields.length) return "";
     const first = fields[0];
     if (first.type === "checkbox") return fields.filter((field) => field.checked).map((field) => field.value);
@@ -105,7 +111,7 @@
 
   const updateSections = (documentObj) => {
     documentObj.querySelectorAll("section.section").forEach((section) => {
-      const fields = Array.from(section.querySelectorAll(".field"));
+      const fields = Array.from(section.querySelectorAll(".field, .question[data-review-question]"));
       if (!fields.length) return;
       const hasVisibleField = fields.some((field) => !field.hidden);
       section.hidden = !hasVisibleField;
