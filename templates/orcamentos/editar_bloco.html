@@ -102,7 +102,7 @@ function renderListaEdicao() {
         <span><strong>Medicamento ${i + 1}</strong></span>
         <div class="d-flex align-items-center gap-2">
           <small class="text-muted">Arraste para reordenar</small>
-          <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})" aria-label="Remover medicamento"><i class="fa fa-trash" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="card-body">
