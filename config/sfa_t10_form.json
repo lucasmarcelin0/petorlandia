@@ -116,6 +116,19 @@
               }
             ]
           }
+        },
+        {
+          "key": "diagnostico_medico_qual_outro",
+          "label": "Qual foi o outro diagnostico ou suspeita?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Escreva o diagnostico ou suspeita informado agora",
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico_qual",
+            "operator": "equals",
+            "value": "Outro"
+          }
         }
       ]
     },

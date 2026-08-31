@@ -167,10 +167,43 @@ def test_diagnostico_medico_permanece_nos_followups_como_atualizacao():
 
     assert "diagnostico_medico" in fields_t10
     assert "diagnostico_medico_qual" in fields_t10
+    assert fields_t10["diagnostico_medico_qual_outro"]["visible_if"] == {
+        "source": "current",
+        "key": "diagnostico_medico_qual",
+        "operator": "equals",
+        "value": "Outro",
+    }
     assert "Depois do T0" in fields_t10["diagnostico_medico"]["label"]
     assert "diagnostico_medico" in fields_t30
     assert "diagnostico_medico_qual" in fields_t30
+    assert fields_t30["diagnostico_medico_qual_outro"]["visible_if"] == {
+        "source": "current",
+        "key": "diagnostico_medico_qual",
+        "operator": "equals",
+        "value": "Outro",
+    }
     assert "Depois do ultimo contato" in fields_t30["diagnostico_medico"]["label"]
+
+
+def test_diagnostico_outro_exige_descricao_por_escrito_no_t0():
+    form_data = _valid_t0_form_data()
+    form_data.setlist("diagnostico_medico", ["Sim"])
+    form_data.setlist("diagnostico_medico_status", ["Confirmacao"])
+    form_data.setlist("diagnostico_medico_qual", ["Outro"])
+
+    dados, errors = coletar_resposta_t0_nativa(
+        carregar_t0_form_schema(), form_data, _paciente_fake()
+    )
+    assert errors["diagnostico_medico_qual_outro"] == "Campo obrigatorio."
+    assert dados["diagnostico_medico_qual_outro"] == ""
+
+    form_data.setlist("diagnostico_medico_qual_outro", ["Leptospirose"])
+    dados, errors = coletar_resposta_t0_nativa(
+        carregar_t0_form_schema(), form_data, _paciente_fake()
+    )
+    assert errors == {}
+    assert dados["diagnostico_medico_qual"] == "Outro"
+    assert dados["diagnostico_medico_qual_outro"] == "Leptospirose"
 
 
 def test_valores_iniciais_nao_reexibem_dados_importados():
