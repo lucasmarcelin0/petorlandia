@@ -36,10 +36,21 @@ def _sa(s: str) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
+# Pre-compiled regexes for performance optimization (avoiding re-compilation on every call)
+_RE_SPACES = re.compile(r"\s+")
+_RE_SAME_SLASH_H = re.compile(r"(?<![\d.,/])(\d{1,3})\s*/\s*\1(?![\d.,/])")
+_RE_SOLO_H = re.compile(r"(?<![\d.,/])(\d{1,2})\s*(?:h|hr|hrs|horas?)\b", re.IGNORECASE)
+
+_RE_NUM_CANON = re.compile(r"\d+\.\d+|\d+")
+_RE_RANGE_HYPHEN = re.compile(r"\s*[-–a]\s*")
+_RE_SLASH = re.compile(r"\s*/\s*")
+_RE_ALL_SPACES = re.compile(r"\s+")
+
+
 def _limpo(texto: Optional[str]) -> str:
     if not texto:
         return ""
-    return re.sub(r"\s+", " ", str(texto)).strip()
+    return _RE_SPACES.sub(" ", str(texto)).strip()
 
 
 # ───────────────────────── FREQUÊNCIA ──────────────────────────────────────
@@ -56,13 +67,13 @@ _RE_PREFIXO_VIA = re.compile(
 
 _H = r"(?:h|hr|hrs|hora|horas)"
 
-# Latim/abreviações veterinárias -> horas
+# Latim/abreviações veterinárias -> horas (pre-compiled regexes)
 _VET_ABBR = [
-    (r"\bsid\b|\bq\s*24\s*h\b|\b1\s*x\s*(?:ao|por|/)?\s*dia\b|uma\s+vez\s+ao\s+dia", 24),
-    (r"\bbid\b|\bq\s*12\s*h\b|\b2\s*x\s*(?:ao|por|/)?\s*dia\b|duas\s+vezes\s+ao\s+dia", 12),
-    (r"\btid\b|\bq\s*8\s*h\b|\b3\s*x\s*(?:ao|por|/)?\s*dia\b|tr[eê]s\s+vezes\s+ao\s+dia", 8),
-    (r"\bqid\b|\bq\s*6\s*h\b|\b4\s*x\s*(?:ao|por|/)?\s*dia\b|quatro\s+vezes\s+ao\s+dia", 6),
-    (r"\beod\b|\bq\s*48\s*h\b|dias?\s+alternad|every\s+other\s+day", 48),
+    (re.compile(r"\bsid\b|\bq\s*24\s*h\b|\b1\s*x\s*(?:ao|por|/)?\s*dia\b|uma\s+vez\s+ao\s+dia", re.IGNORECASE), 24),
+    (re.compile(r"\bbid\b|\bq\s*12\s*h\b|\b2\s*x\s*(?:ao|por|/)?\s*dia\b|duas\s+vezes\s+ao\s+dia", re.IGNORECASE), 12),
+    (re.compile(r"\btid\b|\bq\s*8\s*h\b|\b3\s*x\s*(?:ao|por|/)?\s*dia\b|tr[eê]s\s+vezes\s+ao\s+dia", re.IGNORECASE), 8),
+    (re.compile(r"\bqid\b|\bq\s*6\s*h\b|\b4\s*x\s*(?:ao|por|/)?\s*dia\b|quatro\s+vezes\s+ao\s+dia", re.IGNORECASE), 6),
+    (re.compile(r"\beod\b|\bq\s*48\s*h\b|dias?\s+alternad|every\s+other\s+day", re.IGNORECASE), 48),
 ]
 
 # "N/N h", "N em N h", "N - N h" (intervalo único onde os dois números são iguais)
@@ -102,8 +113,8 @@ def _coletar_intervalos(t: str) -> List[Any]:
     """
     achados: List[Any] = []
 
-    for pat, horas in _VET_ABBR:
-        if re.search(pat, t, re.IGNORECASE):
+    for rx, horas in _VET_ABBR:
+        if rx.search(t):
             achados.append(horas)
 
     # faixa contínua explícita ("a cada 8 a 12h", "8-12h") — só conta como
@@ -139,7 +150,7 @@ def _coletar_intervalos(t: str) -> List[Any]:
     # Ex.: "6/6 ou 8/8 ou 12/12 horas" -> _RE_NN_H pega só "12/12 horas"; este
     # passo adicional captura "6/6" e "8/8" também.
     if achados:
-        for m in re.finditer(r"(?<![\d.,/])(\d{1,3})\s*/\s*\1(?![\d.,/])", t):
+        for m in _RE_SAME_SLASH_H.finditer(t):
             v = int(m.group(1))
             if 1 <= v <= 72:
                 achados.append(v)
@@ -148,7 +159,7 @@ def _coletar_intervalos(t: str) -> List[Any]:
     # Só quando nada mais foi detectado, pega o PRIMEIRO token de horas
     # plausível — evita mostrar a prosa bruta do VetSmart.
     if not achados:
-        m = re.search(r"(?<![\d.,/])(\d{1,2})\s*(?:h|hr|hrs|horas?)\b", t, re.IGNORECASE)
+        m = _RE_SOLO_H.search(t)
         if m:
             v = int(m.group(1))
             if 2 <= v <= 72:
@@ -196,13 +207,13 @@ def intervalos_disponiveis_horas(
     return sorted(v for v in valores if isinstance(v, int) and 1 <= v <= 72)
 
 
-# Frases curtas e legítimas que devem ser preservadas (não têm intervalo).
+# Frases curtas e legítimas que devem ser preservadas (não têm intervalo) — pre-compiled regexes.
 _FREQ_FRASES = (
-    (r"dose\s*[uú]nica", "Dose única"),
-    (r"aplica[cç][aã]o\s*[uú]nica", "Aplicação única"),
-    (r"uso\s+cont[ií]nuo|cont[ií]nuo", "Uso contínuo"),
-    (r"quando\s+necess[aá]rio|se\s+necess[aá]rio|s\.?o\.?s\.?", "Quando necessário"),
-    (r"crit[eé]rio\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)", "A critério do médico-veterinário"),
+    (re.compile(r"dose\s*[uú]nica", re.IGNORECASE), "Dose única"),
+    (re.compile(r"aplica[cç][aã]o\s*[uú]nica", re.IGNORECASE), "Aplicação única"),
+    (re.compile(r"uso\s+cont[ií]nuo|cont[ií]nuo", re.IGNORECASE), "Uso contínuo"),
+    (re.compile(r"quando\s+necess[aá]rio|se\s+necess[aá]rio|s\.?o\.?s\.?", re.IGNORECASE), "Quando necessário"),
+    (re.compile(r"crit[eé]rio\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)", re.IGNORECASE), "A critério do médico-veterinário"),
 )
 
 
@@ -234,8 +245,8 @@ def normalizar_frequencia(
             return _fmt_intervalo(intervalo_min)
         # frases curtas legítimas
         sa = _sa(t)
-        for pat, label in _FREQ_FRASES:
-            if re.search(pat, sa):
+        for rx, label in _FREQ_FRASES:
+            if rx.search(sa):
                 return label
         # texto curto e plausível (sem ser prosa truncada)
         if t and 2 < len(t) <= 40 and not t.endswith("-"):
@@ -275,19 +286,19 @@ _RE_DUR_MES = re.compile(
     re.IGNORECASE,
 )
 
-# prosa sem número -> frase canônica curta
+# prosa sem número -> frase canônica curta (pre-compiled regexes)
 _DUR_FRASES = (
-    (r"crit[eé]rio\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)|crit[eé]rio\s+m[eé]dico",
+    (re.compile(r"crit[eé]rio\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)|crit[eé]rio\s+m[eé]dico", re.IGNORECASE),
      "A critério do médico-veterinário"),
-    (r"protocolo\s+m[eé]dico|de\s+acordo\s+com\s+(?:o\s+)?protocolo",
+    (re.compile(r"protocolo\s+m[eé]dico|de\s+acordo\s+com\s+(?:o\s+)?protocolo", re.IGNORECASE),
      "Conforme protocolo médico"),
-    (r"orienta[cç][aã]o\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)|orienta[cç][aã]o\s+veterin[aá]ria",
+    (re.compile(r"orienta[cç][aã]o\s+(?:do\s+)?(?:m[eé]dico|veterin[aá]rio)|orienta[cç][aã]o\s+veterin[aá]ria", re.IGNORECASE),
      "Conforme orientação veterinária"),
-    (r"uso\s+cont[ií]nuo|tratamento\s+cont[ií]nuo|cont[ií]nuo\s+e\s+ininterrupto",
+    (re.compile(r"uso\s+cont[ií]nuo|tratamento\s+cont[ií]nuo|cont[ií]nuo\s+e\s+ininterrupto", re.IGNORECASE),
      "Uso contínuo"),
-    (r"uso\s+prolongado|longo\s+prazo", "Uso prolongado"),
-    (r"dose\s*[uú]nica|aplica[cç][aã]o\s*[uú]nica", "Dose única"),
-    (r"variar?\b|gravidade|avalia[cç][aã]o\s+cl[ií]nica|depende",
+    (re.compile(r"uso\s+prolongado|longo\s+prazo", re.IGNORECASE), "Uso prolongado"),
+    (re.compile(r"dose\s*[uú]nica|aplica[cç][aã]o\s*[uú]nica", re.IGNORECASE), "Dose única"),
+    (re.compile(r"variar?\b|gravidade|avalia[cç][aã]o\s+cl[ií]nica|depende", re.IGNORECASE),
      "Conforme avaliação clínica"),
 )
 
@@ -322,8 +333,8 @@ def normalizar_duracao(texto: Optional[str]) -> Optional[str]:
 
     # 2) prosa sem número -> frase canônica
     sa = _sa(t)
-    for pat, label in _DUR_FRASES:
-        if re.search(pat, sa):
+    for rx, label in _DUR_FRASES:
+        if rx.search(sa):
             return label
 
     # 3) texto curto e limpo (não truncado mid-word) -> preserva como veio
@@ -357,10 +368,10 @@ def _dose_canonica(dose_txt: Optional[str]) -> str:
     """
     s = _sa(dose_txt or "")
     s = s.replace(",", ".")
-    s = re.sub(r"\d+\.\d+|\d+", _num_canon, s)
-    s = re.sub(r"\s*[-–a]\s*", "-", s)
-    s = re.sub(r"\s*/\s*", "/", s)
-    s = re.sub(r"\s+", "", s)
+    s = _RE_NUM_CANON.sub(_num_canon, s)
+    s = _RE_RANGE_HYPHEN.sub("-", s)
+    s = _RE_SLASH.sub("/", s)
+    s = _RE_ALL_SPACES.sub("", s)
     return s
 
 
