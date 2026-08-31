@@ -1145,6 +1145,37 @@
     ];
   }
 
+  function buildOnsetDistribution(records) {
+    const safeRecords = Array.isArray(records) ? records : [];
+    const maxDay = Math.max(30, ...safeRecords.map((record) => Number(record.onsetDay) || 0));
+    return Array.from({ length: maxDay }, (_, index) => {
+      const day = index + 1;
+      const dayRecords = safeRecords.filter((record) => Number(record.onsetDay) === day);
+      const specific = dayRecords.filter((record) => record.specificity === 'specific').length;
+      return {
+        day,
+        total: dayRecords.length,
+        specific,
+        other: dayRecords.length - specific
+      };
+    });
+  }
+
+  function buildSignalPopulationRows(signals) {
+    return (Array.isArray(signals) ? signals : [])
+      .map((signal) => ({
+        key: signal.key,
+        label: signal.label,
+        domain: signal.domain,
+        stage: signal.stage,
+        directCases: Number(signal.directCases) || 0,
+        potentialExposed: Math.max(Number(signal.directCases) || 0, Number(signal.potentialExposed) || 0)
+      }))
+      .sort((left, right) => right.directCases - left.directCases
+        || right.potentialExposed - left.potentialExposed
+        || String(left.label).localeCompare(String(right.label), 'pt-BR'));
+  }
+
   function renderCohort() {
     const scenarioKey = byId('sfa-lab-scenario').value;
     const scenario = scenarioDefinitions[scenarioKey];
@@ -1155,6 +1186,8 @@
 
     renderFunnel(state.cohort, state.signals);
     renderKpis(state.cohort, state.signals);
+    renderOnsetChart(state.cohort);
+    renderSignalPopulationChart(state.signals);
     renderCounterfactual(state.cohort, state.signals);
     renderFollowup(state.cohort);
     renderDomains(state.cohort);
@@ -1186,6 +1219,104 @@
         <span>${escapeHtml(step.label)} · ${escapeHtml(step.unit)}</span>
       </div>`;
     }).join('');
+  }
+
+  function renderOnsetChart(records) {
+    const host = byId('sfa-lab-onset-chart');
+    if (!host) return;
+    const series = buildOnsetDistribution(records);
+    const width = 760;
+    const height = 260;
+    const margin = { top: 16, right: 14, bottom: 38, left: 34 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const observedMaximum = Math.max(1, ...series.map((point) => point.total));
+    const scaleMaximum = Math.max(4, Math.ceil(observedMaximum / 2) * 2);
+    const slotWidth = plotWidth / Math.max(1, series.length);
+    const barWidth = Math.max(3, slotWidth - 2);
+    const plotBottom = margin.top + plotHeight;
+    const yFor = (value) => plotBottom - ((value / scaleMaximum) * plotHeight);
+    const yTicks = Array.from(new Set([0, Math.ceil(scaleMaximum / 2), scaleMaximum])).sort((a, b) => a - b);
+    const tickDays = new Set([1, series.length]);
+    for (let day = 5; day < series.length; day += 5) tickDays.add(day);
+    const specificTotal = series.reduce((sum, point) => sum + point.specific, 0);
+
+    const grid = yTicks.map((value) => {
+      const y = yFor(value);
+      return `<g aria-hidden="true">
+        <line class="sfa-lab__chart-grid" x1="${margin.left}" x2="${width - margin.right}" y1="${y}" y2="${y}"></line>
+        <text class="sfa-lab__chart-axis-label" x="${margin.left - 8}" y="${y + 4}" text-anchor="end">${value}</text>
+      </g>`;
+    }).join('');
+    const bars = series.map((point, index) => {
+      const x = margin.left + (index * slotWidth) + ((slotWidth - barWidth) / 2);
+      const specificHeight = (point.specific / scaleMaximum) * plotHeight;
+      const otherHeight = (point.other / scaleMaximum) * plotHeight;
+      const specificY = plotBottom - specificHeight;
+      const otherY = specificY - otherHeight;
+      return `<g class="sfa-lab__timeline-bar" tabindex="0" role="graphics-symbol"
+        aria-label="Dia ${point.day}: ${point.total} participante(s), ${point.specific} ligado(s) a vínculo específico">
+        <title>Dia ${point.day}: ${point.total} participante(s); ${point.specific} em vínculos específicos</title>
+        ${point.other ? `<rect class="is-other" x="${x.toFixed(2)}" y="${otherY.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${Math.max(1, otherHeight).toFixed(2)}" rx="1"></rect>` : ''}
+        ${point.specific ? `<rect class="is-specific" x="${x.toFixed(2)}" y="${specificY.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${Math.max(1, specificHeight).toFixed(2)}" rx="1"></rect>` : ''}
+      </g>`;
+    }).join('');
+    const xLabels = Array.from(tickDays).sort((a, b) => a - b).map((day) => {
+      const x = margin.left + ((day - .5) * slotWidth);
+      return `<text class="sfa-lab__chart-axis-label" x="${x.toFixed(2)}" y="${height - 14}" text-anchor="middle">${day}</text>`;
+    }).join('');
+
+    host.innerHTML = `<div class="sfa-lab__chart-legend" aria-hidden="true">
+        <span><i class="is-other"></i> Outros registros</span>
+        <span><i class="is-specific"></i> Vínculo específico (${specificTotal})</span>
+      </div>
+      <div class="sfa-lab__timeline-scroll">
+        <svg class="sfa-lab__timeline-chart" viewBox="0 0 ${width} ${height}" role="graphics-document"
+          aria-label="Histograma dos inícios de sintomas em ${series.length} dias para ${records.length} participantes sintéticos">
+          <title>Inícios de sintomas por dia</title>
+          <desc>Barras empilhadas mostram outros registros e participantes ligados a vínculos específicos.</desc>
+          ${grid}
+          <line class="sfa-lab__chart-axis" x1="${margin.left}" x2="${width - margin.right}" y1="${plotBottom}" y2="${plotBottom}"></line>
+          ${bars}
+          ${xLabels}
+          <text class="sfa-lab__chart-axis-title" x="${margin.left + (plotWidth / 2)}" y="${height - 1}" text-anchor="middle">Dia do início dos sintomas</text>
+        </svg>
+      </div>`;
+  }
+
+  function renderSignalPopulationChart(signals) {
+    const host = byId('sfa-lab-signal-chart');
+    if (!host) return;
+    const rows = buildSignalPopulationRows(signals);
+    if (!rows.length) {
+      host.innerHTML = '<div class="sfa-lab__empty">Nenhum sinal candidato neste cenário. O gráfico permanece vazio para não fabricar agrupamentos.</div>';
+      return;
+    }
+    const maximum = Math.max(1, ...rows.map((row) => row.potentialExposed));
+    host.innerHTML = `<div class="sfa-lab__chart-legend" aria-hidden="true">
+        <span><i class="is-direct"></i> Participantes diretamente ligados</span>
+        <span><i class="is-potential"></i> Pessoas potencialmente expostas</span>
+      </div>
+      <div class="sfa-lab__signal-population" role="list">${rows.map((row) => {
+        const directWidth = (row.directCases / maximum) * 100;
+        const potentialWidth = (row.potentialExposed / maximum) * 100;
+        return `<article class="sfa-lab__signal-population-row" role="listitem"
+          aria-label="${escapeHtml(row.label)}: ${row.directCases} participantes diretamente ligados e ${row.potentialExposed} pessoas potencialmente expostas">
+          <div class="sfa-lab__signal-population-label">
+            <strong>${escapeHtml(row.label)}</strong>
+            <span>${escapeHtml(row.domain)} · ${escapeHtml(row.stage)}</span>
+          </div>
+          <div class="sfa-lab__signal-population-values">
+            <strong>${row.directCases} diretos</strong>
+            <span>${row.potentialExposed} potencialmente expostas</span>
+          </div>
+          <div class="sfa-lab__signal-population-track" aria-hidden="true">
+            <span class="is-potential" style="width:${potentialWidth.toFixed(1)}%"></span>
+            <span class="is-direct" style="width:${directWidth.toFixed(1)}%"></span>
+          </div>
+        </article>`;
+      }).join('')}</div>
+      <div class="sfa-lab__chart-scale" aria-hidden="true"><span>0</span><span>${maximum} pessoas</span></div>`;
   }
 
   function renderAiReview(signals) {
@@ -1585,6 +1716,8 @@
     registeredDecisions,
     buildFunnel,
     buildIalSummary,
+    buildOnsetDistribution,
+    buildSignalPopulationRows,
     buildQuestionUtility,
     setSignalReview,
     acceptSignal,

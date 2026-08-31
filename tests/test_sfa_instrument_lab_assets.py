@@ -22,6 +22,8 @@ def test_instrument_lab_dom_contract_has_unique_ids():
         "sfa-lab-form-host",
         "sfa-lab-funnel",
         "sfa-lab-kpis",
+        "sfa-lab-onset-chart",
+        "sfa-lab-signal-chart",
         "sfa-lab-signals",
         "sfa-lab-ai-review",
         "sfa-lab-ial",
@@ -40,6 +42,8 @@ def test_instrument_lab_clearly_identifies_the_safe_synthetic_sandbox():
     assert "nada é gravado e os formulários reais não são alterados" in html
     assert "Dados inteiramente sintéticos" in html
     assert "não estimam a realidade de Orlândia" in html
+    assert "Gráficos da simulação" in html
+    assert "Potencialmente exposta" in html
 
 
 def test_instrument_lab_exposes_semantic_false_friend_and_one_health_scenarios():
@@ -77,6 +81,8 @@ def test_instrument_lab_is_ephemeral_and_uses_explicit_synthetic_scenarios():
     assert "onehealth" in script
     assert "wilsonInterval" in script
     assert "buildSignals" in script
+    assert "buildOnsetDistribution" in script
+    assert "buildSignalPopulationRows" in script
     assert "renderAblation" in script
     assert "fetch(" not in script
     assert "XMLHttpRequest" not in script

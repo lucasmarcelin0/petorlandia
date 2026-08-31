@@ -46,6 +46,20 @@ assert(signals.some((signal) => signal.key === 'environment:lama-roedores-jardim
 assert(signals.some((signal) => signal.key === 'animal:fazenda-santa-clara'));
 assert(signals.some((signal) => signal.key === 'vector:mosquitos-jardim-boa-vista'));
 
+const onsetDistribution = model.buildOnsetDistribution(cohort);
+assert(onsetDistribution.length >= 30);
+assert.strictEqual(onsetDistribution.reduce((sum, point) => sum + point.total, 0), 100);
+assert.strictEqual(
+  onsetDistribution.reduce((sum, point) => sum + point.specific, 0),
+  cohort.filter((record) => record.specificity === 'specific').length
+);
+assert(onsetDistribution.every((point) => point.total === point.specific + point.other));
+
+const signalPopulationRows = model.buildSignalPopulationRows(signals);
+assert.strictEqual(signalPopulationRows.length, 5);
+assert(signalPopulationRows.every((row) => row.potentialExposed >= row.directCases));
+assert(signalPopulationRows.every((row, index) => index === 0 || signalPopulationRows[index - 1].directCases >= row.directCases));
+
 function record(overrides) {
   return Object.assign({
     exposureKey: 'test:shared',
@@ -146,6 +160,7 @@ const falseFriendSignals = model.buildSignals(model.buildSyntheticCohort('falsef
 assert.strictEqual(falseFriendSignals.length, 1);
 assert.strictEqual(falseFriendSignals[0].sourceConsistent, false);
 assert.strictEqual(falseFriendSignals[0].actionable, false, 'Fontes distintas não devem ser acionáveis como um único sinal.');
+assert.deepStrictEqual(model.buildSignalPopulationRows([]), []);
 
 const oneHealthSignals = model.buildSignals(model.buildSyntheticCohort('onehealth'));
 assert.strictEqual(oneHealthSignals.length, 1);

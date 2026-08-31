@@ -147,6 +147,38 @@
 
     <div id="sfa-lab-kpis" class="row g-3 mb-4" aria-label="Indicadores da coorte sintetica"></div>
 
+    <section class="sfa-lab__card mb-4" aria-labelledby="sfa-lab-charts-title">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+          <div class="sfa-lab__eyebrow">Leitura visual da coorte</div>
+          <h5 id="sfa-lab-charts-title" class="mb-1">Gráficos da simulação</h5>
+          <p class="small text-muted mb-0">
+            As figuras são recalculadas com o cenário selecionado e mantêm a coorte sintética de 100 participantes como referência.
+          </p>
+        </div>
+        <span class="sfa-lab__badge">n = 100 sintético</span>
+      </div>
+      <div class="row g-4">
+        <div class="col-xl-7">
+          <div class="sfa-lab__chart-panel">
+            <h6 class="mb-1">Inícios de sintomas por dia</h6>
+            <p class="small text-muted mb-2">Distribuição dos 100 registros; o destaque identifica participantes ligados a vínculos específicos.</p>
+            <div id="sfa-lab-onset-chart" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="col-xl-5">
+          <div class="sfa-lab__chart-panel">
+            <h6 class="mb-1">Tamanho dos sinais candidatos</h6>
+            <p class="small text-muted mb-2">Participantes diretamente ligados e população potencialmente exposta usam a mesma escala.</p>
+            <div id="sfa-lab-signal-chart" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+      <p class="small text-muted mb-0 mt-3">
+        “Potencialmente exposta” é uma premissa do cenário, não um número de casos nem uma estimativa para Orlândia.
+      </p>
+    </section>
+
     <div class="row g-4 mb-4">
       <div class="col-xl-7">
         <div class="sfa-lab__card h-100">

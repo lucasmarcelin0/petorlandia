@@ -409,6 +409,173 @@
   font-size: .72rem;
 }
 
+.sfa-lab__chart-panel h6 {
+  color: var(--lab-ink);
+  font-weight: 800;
+}
+
+.sfa-lab__chart-legend {
+  align-items: center;
+  color: var(--lab-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: .7rem;
+  gap: .45rem 1rem;
+  margin-bottom: .55rem;
+}
+
+.sfa-lab__chart-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: .35rem;
+}
+
+.sfa-lab__chart-legend i {
+  border-radius: 2px;
+  display: inline-block;
+  height: .65rem;
+  width: .85rem;
+}
+
+.sfa-lab__chart-legend i.is-other {
+  background: #91b4bc;
+}
+
+.sfa-lab__chart-legend i.is-specific,
+.sfa-lab__chart-legend i.is-direct {
+  background: var(--lab-orange);
+}
+
+.sfa-lab__chart-legend i.is-potential {
+  background: var(--lab-orange-soft);
+  border: 1px solid #e5a677;
+}
+
+.sfa-lab__timeline-scroll {
+  overflow-x: auto;
+  padding-bottom: .15rem;
+}
+
+.sfa-lab__timeline-chart {
+  display: block;
+  height: auto;
+  min-width: 620px;
+  width: 100%;
+}
+
+.sfa-lab__chart-grid {
+  stroke: #dfe8ea;
+  stroke-width: 1;
+}
+
+.sfa-lab__chart-axis {
+  stroke: #8ba0a6;
+  stroke-width: 1.2;
+}
+
+.sfa-lab__chart-axis-label,
+.sfa-lab__chart-axis-title {
+  fill: var(--lab-muted);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 10px;
+}
+
+.sfa-lab__chart-axis-title {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sfa-lab__timeline-bar rect.is-other {
+  fill: #91b4bc;
+}
+
+.sfa-lab__timeline-bar rect.is-specific {
+  fill: var(--lab-orange);
+}
+
+.sfa-lab__timeline-bar:focus {
+  outline: none;
+}
+
+.sfa-lab__timeline-bar:focus rect {
+  stroke: var(--lab-teal-dark);
+  stroke-width: 2;
+}
+
+.sfa-lab__signal-population {
+  display: grid;
+  gap: .8rem;
+}
+
+.sfa-lab__signal-population-row {
+  display: grid;
+  gap: .35rem;
+}
+
+.sfa-lab__signal-population-label,
+.sfa-lab__signal-population-values,
+.sfa-lab__chart-scale {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.sfa-lab__signal-population-label {
+  gap: .75rem;
+}
+
+.sfa-lab__signal-population-label strong {
+  font-size: .76rem;
+  line-height: 1.25;
+}
+
+.sfa-lab__signal-population-label span {
+  color: var(--lab-muted);
+  flex: 0 0 auto;
+  font-size: .64rem;
+}
+
+.sfa-lab__signal-population-values {
+  color: var(--lab-muted);
+  font-size: .67rem;
+}
+
+.sfa-lab__signal-population-values strong {
+  color: #9a460f;
+}
+
+.sfa-lab__signal-population-track {
+  background: #eef3f4;
+  border-radius: 999px;
+  height: .9rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.sfa-lab__signal-population-track span {
+  border-radius: inherit;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.sfa-lab__signal-population-track .is-potential {
+  background: var(--lab-orange-soft);
+  border: 1px solid #e5a677;
+}
+
+.sfa-lab__signal-population-track .is-direct {
+  background: var(--lab-orange);
+  border-radius: 999px 0 0 999px;
+}
+
+.sfa-lab__chart-scale {
+  color: var(--lab-muted);
+  font-size: .64rem;
+  margin-top: .4rem;
+}
+
 .sfa-lab__bar-group + .sfa-lab__bar-group {
   margin-top: 1rem;
 }
@@ -835,6 +1002,12 @@
 
   .sfa-lab__comparison-row {
     grid-template-columns: 1fr;
+  }
+
+  .sfa-lab__signal-population-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .15rem;
   }
 
   .sfa-lab__funnel,
