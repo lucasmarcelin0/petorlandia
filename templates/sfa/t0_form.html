@@ -154,6 +154,13 @@
       display: none;
     }
 
+    /* O atributo [hidden] precisa vencer o display das classes de layout
+       (.field usa display: grid). Sem isso o campo condicional continua na
+       tela apenas desabilitado, e o participante acha que o formulario travou. */
+    [hidden] {
+      display: none !important;
+    }
+
     label.field-label {
       font-weight: 700;
       font-size: 0.96rem;
