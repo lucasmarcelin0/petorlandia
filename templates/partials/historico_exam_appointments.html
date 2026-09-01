@@ -13,8 +13,8 @@
             <span class="badge ms-2 {% if status == 'Aceito' %}bg-success{% elif status == 'Cancelado' %}bg-danger{% elif status == 'Prazo expirado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ status }}</span>
           </div>
           <div class="btn-group">
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarAgendamentoExame({{ appt.id }})">✏️</button>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletarAgendamentoExame({{ appt.id }})">🗑️</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarAgendamentoExame({{ appt.id }})" aria-label="Editar agendamento de exame" title="Editar agendamento"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletarAgendamentoExame({{ appt.id }})" aria-label="Excluir agendamento de exame" title="Excluir agendamento"><i class="fas fa-trash-alt" aria-hidden="true"></i></button>
           </div>
         </div>
         <form class="row g-2 align-items-center mt-2 d-none exam-edit-form" data-id="{{ appt.id }}" onsubmit="salvarAgendamentoExame(event, {{ appt.id }})">
