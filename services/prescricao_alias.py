@@ -35,6 +35,10 @@ _DASHES = (
     '‑',  # non-breaking hyphen ‑
 )
 
+_RE_DASH_SPACES = re.compile(r'\s*-+\s*')
+_RE_MULTIPLE_SPACES = re.compile(r'\s+')
+_RE_PREFIXO_DASH = re.compile(r'^(.+?)\s+-\s+')
+
 
 def _norm(s: str) -> str:
     """Lowercase, substitui dashes por hífen, colapsa espaços."""
@@ -43,8 +47,8 @@ def _norm(s: str) -> str:
     for d in _DASHES:
         s = s.replace(d, '-')
     s = s.lower().strip()
-    s = re.sub(r'\s*-+\s*', ' - ', s)   # espaços uniformes ao redor do hífen
-    s = re.sub(r'\s+', ' ', s)
+    s = _RE_DASH_SPACES.sub(' - ', s)   # espaços uniformes ao redor do hífen
+    s = _RE_MULTIPLE_SPACES.sub(' ', s)
     return s
 
 
@@ -54,7 +58,7 @@ def _prefixo(nome: str) -> str:
     'Tobradex - Tobramicina 0,3%'  →  'tobradex'
     """
     norm = _norm(nome)
-    m = re.match(r'^(.+?)\s+-\s+', norm)
+    m = _RE_PREFIXO_DASH.match(norm)
     return m.group(1).strip() if m else norm
 
 
