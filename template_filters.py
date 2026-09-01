@@ -32,16 +32,18 @@ def datetime_brazil(value):
     return value
 
 
+def _assume_utc_local() -> bool:
+    return os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "0").lower() in {"1", "true", "yes"}
+
+
 def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
 
     if isinstance(value, datetime):
-        assume_utc_local = os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "0").lower() in {"1", "true", "yes"}
-
         if value.tzinfo is None:
             localized = coerce_to_brazil_tz(value)
-        elif assume_utc_local and value.tzinfo == timezone.utc:
+        elif _assume_utc_local() and value.tzinfo == timezone.utc:
             # Some records may have been stored with UTC tzinfo even though the
             # timestamp was captured in local time. Reattach the Brazil timezone
             # without shifting the clock to avoid showing hours behind.
@@ -217,13 +219,16 @@ def species_display(species) -> str:
     return _resolve_species_name(species) or "Espécie não informada"
 
 
+_RE_NON_ALPHANUMERIC = re.compile(r"[^a-zA-Z0-9]+")
+
+
 def _normalize_species_token(species: str | None) -> str | None:
     name = _resolve_species_name(species)
     if not name:
         return None
     normalized = unicodedata.normalize("NFKD", name)
     without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
-    cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", without_accents).strip("-")
+    cleaned = _RE_NON_ALPHANUMERIC.sub("-", without_accents).strip("-")
     token = cleaned.lower()
     return token or None
 
