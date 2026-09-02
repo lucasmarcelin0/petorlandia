@@ -293,8 +293,8 @@
                             data-animal-species="{{ a.species }}"
                             data-animal-breed="{{ a.breed }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-outline-danger btn-sm">
-                          <i class="fas fa-trash"></i>
+                        <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Excluir {{ a.name }}" title="Excluir {{ a.name }}">
+                          <i class="fas fa-trash" aria-hidden="true"></i>
                         </button>
                       </form>
                     </div>
