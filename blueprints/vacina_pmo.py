@@ -971,6 +971,11 @@ def vacina_pmo_animal_photo_src(animal_id):
     if parsed.scheme not in {'http', 'https'}:
         abort(404)
 
+    from security.url_safe import is_url_ssrf_safe
+    if not is_url_ssrf_safe(image_url):
+        current_app.logger.warning("vacina_pmo_animal_photo_src blocked unsafe SSRF URL: %s", image_url)
+        abort(400)
+
     try:
         upstream = requests.get(image_url, timeout=8)
         upstream.raise_for_status()
