@@ -150,7 +150,7 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-semibold mb-0">Atualizar informações da loja</h5>
-            <button type="button" class="btn-close" onclick="toggleStoreEdit()"></button>
+            <button type="button" class="btn-close" aria-label="Fechar" onclick="toggleStoreEdit()"></button>
           </div>
           <form method="post" enctype="multipart/form-data" class="row g-3" action="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}">
             {{ store_form.hidden_tag() }}
@@ -356,7 +356,7 @@
                     <form method="post" action="{{ url_for('casa_de_racao_horario_delete', casa_id=casa.id, horario_id=h.id) }}"
                           onsubmit="return confirm('Remover este horário?')">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir horário" aria-label="Excluir horário"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
                     </form>
                   </td>
                 </tr>
@@ -512,13 +512,15 @@
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
                               class="btn btn-sm {% if p.status == 'active' %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
-                              title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}">
-                        <i class="fa-solid {% if p.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                              title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}"
+                              aria-label="{% if p.status == 'active' %}Desativar produto{% else %}Ativar produto{% endif %}">
+                        <i class="fa-solid {% if p.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i>
                       </button>
                     </form>
                     <a href="{{ url_for('produto_detail', product_id=p.id) }}" target="_blank"
-                       class="btn btn-outline-secondary btn-sm" title="Ver na loja">
-                      <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                       class="btn btn-outline-secondary btn-sm" title="Ver na loja"
+                       aria-label="Ver produto na loja">
+                      <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                     </a>
                   </div>
                 </div>
