@@ -48,3 +48,36 @@ def test_editar_bloco_orcamento(app):
         assert bloco.itens[0].descricao == 'Procedimento'
         assert float(bloco.itens[0].valor) == 100.0
         db.drop_all()
+
+
+def test_editar_bloco_prescricao_accessibility(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica 1')
+        vet_user = User(name='Vet', email='vet@example.com', worker='veterinario', role='admin')
+        vet_user.set_password('x')
+        vet = Veterinario(user=vet_user, crmv='123', clinica=clinica)
+        tutor = User(name='Tutor', email='tutor@example.com')
+        tutor.set_password('y')
+        animal = Animal(name='Rex', owner=tutor, clinica=clinica)
+        from models import BlocoPrescricao, Prescricao
+        bloco = BlocoPrescricao(animal=animal, clinica=clinica)
+        p = Prescricao(bloco=bloco, animal=animal, medicamento='Amoxicilina', dosagem='500mg', frequencia='12/12h', duracao='7d')
+        db.session.add_all([clinica, vet_user, vet, tutor, animal, bloco, p])
+        db.session.commit()
+        bloco_id = bloco.id
+
+    client = app.test_client()
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.get(f'/bloco_prescricao/{bloco_id}/editar')
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'role="dialog"' in html
+        assert 'aria-modal="true"' in html
+        assert 'aria-label="Remover medicamento"' in html
+        assert 'title="Remover medicamento"' in html
+        assert 'aria-hidden="true"' in html
+        with app.app_context():
+            db.drop_all()
