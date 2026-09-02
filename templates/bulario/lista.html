@@ -169,14 +169,16 @@
           <div class="bulario-card__actions">
             <a href="{{ url_for('bulario_editar', medicamento_id=med.id) }}"
                class="bulario-action-btn bulario-action-btn--edit"
+               aria-label="Editar {{ med.nome }}"
                title="Editar" onclick="event.stopPropagation()">
-              <i class="fas fa-pen"></i>
+              <i class="fas fa-pen" aria-hidden="true"></i>
             </a>
             <button type="button"
                class="bulario-action-btn bulario-action-btn--delete"
+               aria-label="Excluir {{ med.nome }}"
                title="Excluir"
                onclick="confirmarExclusao({{ med.id }}, '{{ med.nome | e }}')">
-              <i class="fas fa-trash"></i>
+              <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
           </div>
         </div>
@@ -517,7 +519,8 @@
   opacity: 0;
   transition: opacity .15s;
 }
-.bulario-card:hover .bulario-card__actions { opacity: 1; }
+.bulario-card:hover .bulario-card__actions,
+.bulario-card:focus-within .bulario-card__actions { opacity: 1; }
 .bulario-action-btn {
   width: 28px; height: 28px;
   border-radius: 7px;
@@ -527,6 +530,10 @@
   cursor: pointer;
   transition: all .15s;
   text-decoration: none;
+}
+.bulario-action-btn:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
 }
 .bulario-action-btn--edit {
   background: #eff6ff; color: #1976d2;
