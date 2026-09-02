@@ -35,6 +35,11 @@ def app():
         RATELIMIT_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
+    from extensions import limiter
+    try:
+        limiter.reset()
+    except Exception:
+        pass
     yield flask_app
 
 

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import csv
 import copy
+
+from security.csv_safe import safe_csv_dict_writer
 import hashlib
 import io
 import json
@@ -1923,7 +1925,7 @@ def gerar_csv_assinaturas_tcle(assinaturas: Optional[list[dict[str, str]]] = Non
         "user_agent",
     ]
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for registro in registros:
         writer.writerow({field: _serializar_valor_csv(registro.get(field, "")) for field in fieldnames})
@@ -1933,7 +1935,7 @@ def gerar_csv_assinaturas_tcle(assinaturas: Optional[list[dict[str, str]]] = Non
 def gerar_csv_exportacao_cadastro(pacientes) -> str:
     output = io.StringIO(newline="")
     fieldnames = _colunas_fixas_exportacao()
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for paciente in pacientes:
         writer.writerow(
@@ -1962,7 +1964,7 @@ def gerar_csv_exportacao_analitica(pacientes) -> str:
     )
 
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for paciente in pacientes:
         writer.writerow(montar_linha_exportacao_analitica(paciente, schemas=schemas))

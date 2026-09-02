@@ -263,3 +263,43 @@ def test_gerar_csv_assinaturas_tcle_exporta_registros():
     assert rows[0]["id_estudo"] == "SFA-123"
     assert rows[0]["nome_assinatura"] == "Lucilene Alves da Silva"
     assert rows[0]["ip"] == "203.0.113.9"
+
+
+def test_gerar_csv_sfa_escapes_formula_cells():
+    paciente_formula = _fake_patient()
+    paciente_formula.nome = "=CMD()"
+    paciente_formula.bairro = "+EvilBairro"
+    paciente_formula.endereco = "-EvilAddr"
+    paciente_formula.proxima_acao = "@EvilAction"
+
+    cadastro_csv = gerar_csv_exportacao_cadastro([paciente_formula])
+    rows_cad = list(csv.DictReader(io.StringIO(cadastro_csv)))
+    assert rows_cad[0]["nome"].startswith("'=")
+    assert rows_cad[0]["bairro"].startswith("'+")
+    assert rows_cad[0]["endereco"].startswith("'-")
+    assert rows_cad[0]["proxima_acao"].startswith("'@")
+
+    analitica_csv = gerar_csv_exportacao_analitica([paciente_formula])
+    rows_ana = list(csv.DictReader(io.StringIO(analitica_csv)))
+    assert rows_ana[0]["nome"].startswith("'=")
+    assert rows_ana[0]["bairro"].startswith("'+")
+
+    tcle_csv = gerar_csv_assinaturas_tcle(
+        [
+            {
+                "assinado_em": "18/03/2026 11:43",
+                "id_estudo": "=SFA-123",
+                "ficha_sinan": "3032976",
+                "participante": "+Attacker Name",
+                "nome_assinatura": "@Attacker Signature",
+                "data_nascimento": "01/11/1976",
+                "ip": "-127.0.0.1",
+                "user_agent": "pytest-agent",
+            }
+        ]
+    )
+    rows_tcle = list(csv.DictReader(io.StringIO(tcle_csv)))
+    assert rows_tcle[0]["id_estudo"].startswith("'=")
+    assert rows_tcle[0]["participante"].startswith("'+")
+    assert rows_tcle[0]["nome_assinatura"].startswith("'@")
+    assert rows_tcle[0]["ip"].startswith("'-")

@@ -1,0 +1,3 @@
+## 2026-08-31 - Pre-compiling Regex Patterns in Posology and Jinja Filter Hot Paths
+**Learning:** In PetOrlandia, posology normalization (`services/posologia_normalizacao.py`) and Jinja species/datetime filters (`template_filters.py`) are executed frequently during catalog searches, monography displays, and template rendering. Passing raw string regexes to `re.sub`/`re.search`/`re.finditer` causes redundant regex parsing and compilation on every single execution.
+**Action:** Always pre-compile module-level regexes into `re.compile` objects when defining text parsing tables or filter utilities.

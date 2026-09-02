@@ -1,9 +1,9 @@
-<div class="custom-modal" id="{{ modal_id }}" style="display:none;">
+<div class="custom-modal" id="{{ modal_id }}" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="{{ modal_id }}-title">
   <div class="custom-modal-backdrop" data-modal-close="{{ modal_id }}"></div>
   <div class="custom-modal-content">
     <div class="custom-modal-header">
-      <h5 class="modal-title">{{ title }}</h5>
-      <button type="button" class="btn-close" data-modal-close="{{ modal_id }}"></button>
+      <h5 class="modal-title" id="{{ modal_id }}-title">{{ title }}</h5>
+      <button type="button" class="btn-close" data-modal-close="{{ modal_id }}" aria-label="Fechar"></button>
     </div>
     <div class="custom-modal-body">
       <div class="mb-3">

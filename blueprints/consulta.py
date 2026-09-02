@@ -94,6 +94,9 @@ from app import (  # noqa: E402
 
 bp = Blueprint("consulta_routes", __name__)
 
+_RE_NORM_NEOMICINA = re.compile(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b")
+_RE_TOKENS_BUSCA = re.compile(r"[a-z0-9]{3,}")
+
 PROTOCOL_PROPOSAL_CATEGORIES = {
     'doenca': 'Doença ou diagnóstico',
     'sintoma': 'Sintoma ou sinal clínico',
@@ -1667,13 +1670,13 @@ def buscar_medicamentos():
     def _norm_busca(valor):
         texto = unicodedata.normalize("NFKD", str(valor or "").lower())
         texto = "".join(c for c in texto if not unicodedata.combining(c))
-        texto = re.sub(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b", "neomicina", texto)
+        texto = _RE_NORM_NEOMICINA.sub("neomicina", texto)
         return texto
 
     q_norm = _norm_busca(q_norm)
     tokens_busca = [
         token
-        for token in re.findall(r"[a-z0-9]{3,}", q_norm)
+        for token in _RE_TOKENS_BUSCA.findall(q_norm)
         if token not in {"com", "para", "por", "uso", "mg", "ml"}
     ]
 
