@@ -1297,6 +1297,33 @@ def _colunas_fixas_exportacao() -> list[str]:
     ]
 
 
+SINAN_EXPORT_FIELDS = [
+    "numero_controle",
+    "agravo",
+    "data_notificacao",
+    "data_inicio_sintomas",
+    "data_investigacao",
+    "unidade_notificante",
+    "idade_anos",
+    "sexo",
+    "raca_cor",
+    "zona",
+    "ocupacao",
+    "sintomas",
+    "comorbidades",
+    "comorbidades_status",
+    "ns1_data_coleta",
+    "ns1_resultado",
+    "revisao_status",
+    "campos_revisar",
+    "fonte",
+]
+
+
+def _colunas_sinan_exportacao() -> list[str]:
+    return [f"sinan__{field}" for field in SINAN_EXPORT_FIELDS]
+
+
 def _colunas_formulario_exportacao(form_stage: str, schema: Optional[object] = None) -> list[str]:
     stage = _normalize_form_stage(form_stage)
     schema_entries = schema or _schemas_exportacao_por_stage(stage)
@@ -1324,6 +1351,10 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
         column: _serializar_valor_csv(getattr(paciente, column, ""))
         for column in _colunas_fixas_exportacao()
     }
+
+    dados_sinan = getattr(paciente, "_sinan_dados", {}) or {}
+    for field in SINAN_EXPORT_FIELDS:
+        row[f"sinan__{field}"] = _serializar_valor_csv(dados_sinan.get(field))
 
     for stage in ("t0", "t10", "t30"):
         resposta, payload = obter_payload_formulario(paciente, stage)
@@ -1676,19 +1707,41 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
     environmental_counter: Counter = Counter()
     domain_counter: Counter = Counter()
     overlap_counter: Counter = Counter()
+    sinan_symptom_counter: Counter = Counter()
+    sinan_comorbidity_counter: Counter = Counter()
+    sinan_sex_counter: Counter = Counter()
+    sinan_race_counter: Counter = Counter()
+    sinan_ns1_counter: Counter = Counter()
     timing_counter = {stage: Counter() for stage in ("t0", "t10", "t30")}
 
     respostas_por_stage = {stage: 0 for stage in ("t0", "t10", "t30")}
     total_com_inicio = 0
     total_sem_inicio = 0
+    total_sinan_estruturado = 0
+    total_sinan_revisar = 0
     timeline_rows: list[dict[str, object]] = []
 
     for paciente in pacientes:
+        dados_sinan = getattr(paciente, "_sinan_dados", {}) or {}
+        sinan_status = str(dados_sinan.get("revisao_status") or "NAO_ESTRUTURADO")
+        if sinan_status in {"TRANSCRITO", "REVISAR"}:
+            total_sinan_estruturado += 1
+        if sinan_status == "REVISAR":
+            total_sinan_revisar += 1
+        for symptom in _normalizar_lista_sinan(dados_sinan.get("sintomas")):
+            _somar_counter(sinan_symptom_counter, symptom)
+        for comorbidity in _normalizar_lista_sinan(dados_sinan.get("comorbidades")):
+            _somar_counter(sinan_comorbidity_counter, comorbidity)
+        _somar_counter(sinan_sex_counter, str(dados_sinan.get("sexo") or ""))
+        _somar_counter(sinan_race_counter, str(dados_sinan.get("raca_cor") or ""))
+        _somar_counter(sinan_ns1_counter, str(dados_sinan.get("ns1_resultado") or ""))
+
         resposta_t0, payload_t0 = obter_payload_formulario(paciente, "t0")
         payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
         inicio_doenca = _parse_data_analise(
             payload_t0.get("data_inicio_sintomas")
             or getattr(resposta_t0, "data_inicio_sintomas", None)
+            or dados_sinan.get("data_inicio_sintomas")
         )
         if inicio_doenca:
             total_com_inicio += 1
@@ -1751,6 +1804,7 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
         row = {
             "id_estudo": getattr(paciente, "id_estudo", "") or "-",
             "nome": getattr(paciente, "nome", "") or "-",
+            "sinan_status": sinan_status,
             "inicio_sintomas": formatar_data(inicio_doenca) or "Sem data",
             "t0_data": "-",
             "t0_dia_doenca": "-",
@@ -1794,11 +1848,15 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
             {"label": "Risco animal", "value": domain_counter.get("Animal", 0), "icon": "fas fa-paw", "tone": "#e8711c"},
             {"label": "Risco ambiental", "value": domain_counter.get("Ambiental", 0), "icon": "fas fa-seedling", "tone": "#20c997"},
             {"label": "Risco alimentar", "value": domain_counter.get("Alimentar", 0), "icon": "fas fa-utensils", "tone": "#dc3545"},
+            {"label": "SINAN estruturado", "value": total_sinan_estruturado, "icon": "fas fa-file-medical", "tone": "#6f42c1"},
+            {"label": "Ficha a revisar", "value": total_sinan_revisar, "icon": "fas fa-triangle-exclamation", "tone": "#fd7e14"},
         ],
         "missing": {
             "data_inicio_sintomas": total_sem_inicio,
             "t10": len(pacientes) - respostas_por_stage["t10"],
             "t30": len(pacientes) - respostas_por_stage["t30"],
+            "sinan_estruturado": len(pacientes) - total_sinan_estruturado,
+            "sinan_revisao": total_sinan_revisar,
         },
         "charts": {
             "timing": {
@@ -1817,6 +1875,16 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
                 ],
             },
             "overlap": _chart_from_counter(overlap_counter, limit=8),
+            "sinan_symptoms": _chart_from_counter(sinan_symptom_counter, limit=10),
+            "sinan_comorbidities": _chart_from_counter(sinan_comorbidity_counter, limit=8),
+            "sinan_sex": _chart_from_counter(sinan_sex_counter, limit=8),
+            "sinan_race": _chart_from_counter(sinan_race_counter, limit=8),
+            "sinan_ns1": _chart_from_counter(sinan_ns1_counter, limit=8),
+        },
+        "sinan": {
+            "estruturados": total_sinan_estruturado,
+            "revisar": total_sinan_revisar,
+            "sem_estrutura": len(pacientes) - total_sinan_estruturado,
         },
         "timeline": timeline_rows[:30],
         "generated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -1885,6 +1953,7 @@ def gerar_csv_exportacao_analitica(pacientes) -> str:
     }
     fieldnames = (
         _colunas_fixas_exportacao()
+        + _colunas_sinan_exportacao()
         + [f"{stage}__respondido_em" for stage in ("t0", "t10", "t30")]
         + [f"{stage}__instrument_version" for stage in ("t0", "t10", "t30")]
         + _colunas_formulario_exportacao("t0", schemas["t0"])
@@ -2166,6 +2235,390 @@ def chave_dedup_sinan(row: list) -> Optional[str]:
     if n:
         return f"N-{n.zfill(3)}"
     return None
+
+
+SINAN_STRUCTURED_FIELDS = {
+    "numero_controle",
+    "agravo",
+    "data_investigacao",
+    "unidade_notificante",
+    "idade_anos",
+    "sexo",
+    "raca_cor",
+    "zona",
+    "ocupacao",
+    "sintomas",
+    "comorbidades",
+    "comorbidades_status",
+    "ns1_data_coleta",
+    "ns1_resultado",
+    "campos_revisar",
+}
+SINAN_STRUCTURED_LIST_FIELDS = {"sintomas", "comorbidades", "campos_revisar"}
+SINAN_REVIEW_STATUSES = {"NAO_ESTRUTURADO", "TRANSCRITO", "REVISAR"}
+
+
+def _normalizar_lista_sinan(value: object) -> list[str]:
+    if isinstance(value, str):
+        items = re.split(r"[|;]", value)
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        items = []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        clean = _sanitize_limited_text(item, 120, "item_sinan")
+        key = normalizar_nome_chave(clean)
+        if clean and key not in seen:
+            seen.add(key)
+            normalized.append(clean)
+    return normalized
+
+
+def normalizar_dados_estruturados_sinan(dados: object) -> dict[str, object]:
+    """Mantem somente variaveis clinicas autorizadas para a base analitica."""
+    if not isinstance(dados, dict):
+        return {}
+
+    normalized: dict[str, object] = {}
+    for field in SINAN_STRUCTURED_FIELDS:
+        value = dados.get(field)
+        if field in SINAN_STRUCTURED_LIST_FIELDS:
+            items = _normalizar_lista_sinan(value)
+            if items:
+                normalized[field] = items
+            continue
+        if field == "idade_anos":
+            try:
+                age = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= age <= 130:
+                normalized[field] = age
+            continue
+        if field in {"data_investigacao", "ns1_data_coleta"}:
+            parsed = parse_data(value)
+            if parsed:
+                normalized[field] = formatar_data(parsed)
+            continue
+        clean = _sanitize_limited_text(value, 160, field)
+        if clean:
+            normalized[field] = clean
+    return normalized
+
+
+def obter_dados_sinan_log(log_sinan) -> dict[str, object]:
+    if log_sinan is None:
+        return {}
+    payload: dict[str, object] = {}
+    raw = getattr(log_sinan, "dados_json", None)
+    if raw:
+        try:
+            payload = normalizar_dados_estruturados_sinan(json.loads(raw))
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+
+    raw_source = getattr(log_sinan, "fonte_complementar", "") or ""
+    source_labels = {
+        "ficha_sinan_fotografada": "Ficha SINAN fotografada",
+    }
+    core = {
+        "ficha_sinan": getattr(log_sinan, "ficha_sinan", "") or "",
+        "n_caso": getattr(log_sinan, "n_caso", "") or "",
+        "data_notificacao": getattr(log_sinan, "data_notificacao", "") or "",
+        "data_inicio_sintomas": getattr(log_sinan, "data_inicio_sintomas", "") or "",
+        "tipo_exame": getattr(log_sinan, "tipo_exame", "") or "",
+        "resultado_exame": getattr(log_sinan, "resultado", "") or "",
+        "grupo": getattr(log_sinan, "grupo", "") or "",
+        "revisao_status": getattr(log_sinan, "revisao_status", "") or "NAO_ESTRUTURADO",
+        "fonte": source_labels.get(raw_source, raw_source) or "SINAN importado",
+    }
+    for field, value in core.items():
+        if value not in (None, "", []):
+            payload[field] = value
+    if (
+        not payload.get("ns1_resultado")
+        and "ns1" in normalizar_nome_chave(payload.get("tipo_exame", ""))
+        and payload.get("resultado_exame")
+    ):
+        payload["ns1_resultado"] = payload["resultado_exame"]
+    return payload
+
+
+def anexar_dados_sinan_pacientes(pacientes) -> None:
+    """Anexa o registro SINAN mais recente sem gerar uma consulta por paciente."""
+    from models.sfa import SfaSinanLog
+
+    pacientes = list(pacientes or [])
+    ids_estudo = [
+        str(getattr(paciente, "id_estudo", "") or "").strip()
+        for paciente in pacientes
+        if str(getattr(paciente, "id_estudo", "") or "").strip()
+    ]
+    logs = []
+    if ids_estudo:
+        try:
+            logs = (
+                SfaSinanLog.query
+                .filter(SfaSinanLog.id_estudo_vinculado.in_(ids_estudo))
+                .order_by(SfaSinanLog.id.desc())
+                .all()
+            )
+        except (RuntimeError, ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+            # Algumas rotas sao exercitadas com objetos simulados e sem o banco
+            # principal registrado; a analise continua com o T0/T10/T30.
+            logs = []
+
+    latest_by_patient = {}
+    for log_sinan in logs:
+        patient_id = str(log_sinan.id_estudo_vinculado or "").strip()
+        if patient_id and patient_id not in latest_by_patient:
+            latest_by_patient[patient_id] = log_sinan
+
+    for paciente in pacientes:
+        patient_id = str(getattr(paciente, "id_estudo", "") or "").strip()
+        log_sinan = latest_by_patient.get(patient_id)
+        dados = obter_dados_sinan_log(log_sinan)
+        paciente._sinan_log = log_sinan
+        paciente._sinan_dados = dados
+        paciente._data_notificacao_sinan = str(dados.get("data_notificacao") or "")
+        paciente._data_inicio_sintomas = (
+            str(getattr(getattr(paciente, "resposta_t0", None), "data_inicio_sintomas", "") or "")
+            or str(dados.get("data_inicio_sintomas") or "")
+        )
+
+
+def _chave_dedup_sinan_dados(dados: dict) -> Optional[str]:
+    ficha = re.sub(r"\D", "", str(dados.get("ficha_sinan") or ""))
+    if len(ficha) >= 5:
+        return f"FICHA-{ficha}"
+    n_caso = re.sub(r"\D", "", str(dados.get("n_caso") or ""))
+    return f"N-{n_caso.zfill(3)}" if n_caso else None
+
+
+def _grupo_por_resultado_sinan(resultado: str) -> str:
+    normalized = normalizar_nome_chave(resultado)
+    if not normalized:
+        return GRUPO_PENDENTE
+    is_positive = (
+        ("positiv" in normalized and "nao positiv" not in normalized)
+        or ("reagente" in normalized and "nao reagente" not in normalized)
+    )
+    return "A" if is_positive else "B"
+
+
+def _buscar_log_sinan_para_dados(dados: dict):
+    from models.sfa import SfaSinanLog
+    from sqlalchemy import or_
+
+    conditions = []
+    ficha = _sanitize_limited_text(dados.get("ficha_sinan"), 50, "ficha_sinan")
+    n_caso = _sanitize_limited_text(dados.get("n_caso"), 20, "n_caso")
+    if ficha:
+        conditions.append(SfaSinanLog.ficha_sinan == ficha)
+    if n_caso:
+        conditions.append(SfaSinanLog.n_caso == n_caso)
+    if not conditions:
+        return None
+    matches = SfaSinanLog.query.filter(or_(*conditions)).all()
+    if len(matches) > 1:
+        patient_ids = {str(item.id_estudo_vinculado or "") for item in matches}
+        if len(patient_ids) > 1:
+            raise ValueError("Ficha e numero do caso apontam para pacientes diferentes.")
+    return matches[0] if matches else None
+
+
+def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False) -> dict[str, object]:
+    """Inclui ou complementa fichas SINAN transcritas, com auditoria e deduplicacao."""
+    from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
+
+    if isinstance(registros, dict):
+        registros = registros.get("registros")
+    if not isinstance(registros, list) or not registros:
+        raise ValueError("Informe uma lista nao vazia de fichas SINAN.")
+
+    summary: dict[str, object] = {
+        "recebidos": len(registros),
+        "criados": 0,
+        "atualizados": 0,
+        "revisar": 0,
+        "itens": [],
+        "dry_run": bool(dry_run),
+    }
+    try:
+        for position, incoming in enumerate(registros, start=1):
+            if not isinstance(incoming, dict):
+                raise ValueError(f"Registro {position}: formato invalido.")
+
+            dados = dict(incoming)
+            ficha = _sanitize_limited_text(dados.get("ficha_sinan"), 50, "ficha_sinan")
+            n_caso = _sanitize_limited_text(dados.get("n_caso"), 20, "n_caso")
+            nome = _sanitize_limited_text(dados.get("nome"), 200, "nome")
+            if not (ficha or n_caso) or not nome:
+                raise ValueError(f"Registro {position}: ficha/numero e nome sao obrigatorios.")
+
+            for field in ("data_notificacao", "data_inicio_sintomas", "data_nascimento"):
+                raw_date = dados.get(field)
+                if raw_date:
+                    parsed = parse_data(raw_date)
+                    if not parsed:
+                        raise ValueError(f"Registro {position}: {field} invalida.")
+                    dados[field] = formatar_data(parsed)
+
+            structured = normalizar_dados_estruturados_sinan(dados)
+            requested_status = str(dados.get("revisao_status") or "").strip().upper()
+            review_status = "REVISAR" if structured.get("campos_revisar") else requested_status
+            if review_status not in SINAN_REVIEW_STATUSES - {"NAO_ESTRUTURADO"}:
+                review_status = "TRANSCRITO"
+            if review_status == "REVISAR":
+                summary["revisar"] += 1
+
+            log_sinan = _buscar_log_sinan_para_dados(dados)
+            paciente = None
+            if log_sinan and log_sinan.id_estudo_vinculado:
+                paciente = SfaPaciente.query.filter_by(
+                    id_estudo=log_sinan.id_estudo_vinculado
+                ).first()
+            if paciente is None and ficha:
+                paciente = SfaPaciente.query.filter_by(ficha_sinan=ficha).first()
+            if paciente is None:
+                data_nascimento = str(dados.get("data_nascimento") or "")
+                for candidate in SfaPaciente.query.all():
+                    if (
+                        normalizar_nome_chave(candidate.nome) == normalizar_nome_chave(nome)
+                        and str(candidate.data_nascimento or "") == data_nascimento
+                    ):
+                        paciente = candidate
+                        break
+
+            created = paciente is None
+            resultado = _sanitize_limited_text(dados.get("resultado"), 120, "resultado")
+            grupo = str(dados.get("grupo") or "").strip().upper()
+            if grupo not in {"A", "B", GRUPO_PENDENTE}:
+                grupo = _grupo_por_resultado_sinan(resultado)
+
+            if created:
+                paciente = SfaPaciente(
+                    id_estudo=proximo_id_estudo(),
+                    ficha_sinan=ficha,
+                    nome=nome,
+                    data_nascimento=str(dados.get("data_nascimento") or ""),
+                    telefone=normalizar_telefone(dados.get("telefone") or ""),
+                    bairro=_sanitize_limited_text(dados.get("bairro"), 120, "bairro"),
+                    endereco=_sanitize_limited_text(dados.get("endereco"), 300, "endereco"),
+                    grupo=grupo,
+                    status_t0="SINAN_Aguardando_T0",
+                    status_geral="SINAN_Notificado",
+                )
+                paciente.gerar_token()
+                atualizar_operacional_paciente(paciente)
+                db.session.add(paciente)
+                db.session.flush()
+                summary["criados"] += 1
+            else:
+                fill_if_empty = {
+                    "ficha_sinan": ficha,
+                    "nome": nome,
+                    "data_nascimento": str(dados.get("data_nascimento") or ""),
+                    "telefone": normalizar_telefone(dados.get("telefone") or ""),
+                    "bairro": _sanitize_limited_text(dados.get("bairro"), 120, "bairro"),
+                    "endereco": _sanitize_limited_text(dados.get("endereco"), 300, "endereco"),
+                }
+                for field, value in fill_if_empty.items():
+                    if value and not str(getattr(paciente, field, "") or "").strip():
+                        setattr(paciente, field, value)
+                summary["atualizados"] += 1
+
+            new_log = log_sinan is None
+            if new_log:
+                chave = _chave_dedup_sinan_dados(dados)
+                if not chave:
+                    raise ValueError(f"Registro {position}: sem chave de deduplicacao.")
+                log_sinan = SfaSinanLog(chave_dedup=chave)
+                db.session.add(log_sinan)
+
+            core_values = {
+                "ficha_sinan": ficha,
+                "n_caso": n_caso,
+                "nome": nome,
+                "telefone": normalizar_telefone(dados.get("telefone") or ""),
+                "bairro": _sanitize_limited_text(dados.get("bairro"), 120, "bairro"),
+                "data_notificacao": str(dados.get("data_notificacao") or ""),
+                "data_inicio_sintomas": str(dados.get("data_inicio_sintomas") or ""),
+                "tipo_exame": _sanitize_limited_text(dados.get("tipo_exame"), 120, "tipo_exame"),
+                "resultado": resultado,
+            }
+            for field, value in core_values.items():
+                if value and (new_log or not str(getattr(log_sinan, field, "") or "").strip()):
+                    setattr(log_sinan, field, value)
+            existing_structured = {}
+            if log_sinan.dados_json:
+                try:
+                    existing_structured = normalizar_dados_estruturados_sinan(
+                        json.loads(log_sinan.dados_json)
+                    )
+                except (TypeError, json.JSONDecodeError):
+                    existing_structured = {}
+            existing_structured.update(structured)
+            log_sinan.dados_json = json.dumps(existing_structured, ensure_ascii=False, sort_keys=True)
+            log_sinan.fonte_complementar = _sanitize_limited_text(
+                dados.get("fonte") or "ficha_sinan_fotografada", 60, "fonte"
+            )
+            log_sinan.revisao_status = review_status
+            log_sinan.grupo = log_sinan.grupo or grupo
+            log_sinan.id_estudo_vinculado = paciente.id_estudo
+
+            summary["itens"].append(
+                {
+                    "id_estudo": paciente.id_estudo,
+                    "ficha_sinan": ficha or str(log_sinan.ficha_sinan or ""),
+                    "n_caso": n_caso or str(log_sinan.n_caso or ""),
+                    "acao": "criado" if created else "atualizado",
+                    "revisao_status": review_status,
+                }
+            )
+
+        db.session.add(
+            SfaAuditoria(
+                nivel="WARN" if summary["revisar"] else "INFO",
+                categoria="SINAN_FICHA_ESTRUTURADA",
+                funcao="importar_fichas_sinan_estruturadas",
+                mensagem=(
+                    f"{summary['recebidos']} ficha(s) estruturada(s): "
+                    f"{summary['criados']} criada(s), {summary['atualizados']} atualizada(s), "
+                    f"{summary['revisar']} para revisar."
+                ),
+                detalhes_json=json.dumps(
+                    {
+                        "quantidades": {
+                            "recebidos": summary["recebidos"],
+                            "criados": summary["criados"],
+                            "atualizados": summary["atualizados"],
+                            "revisar": summary["revisar"],
+                        },
+                        "identificadores": [
+                            {
+                                "id_estudo": item["id_estudo"],
+                                "n_caso": item["n_caso"],
+                                "revisao_status": item["revisao_status"],
+                            }
+                            for item in summary["itens"]
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        )
+        if dry_run:
+            db.session.flush()
+            db.session.rollback()
+        else:
+            db.session.commit()
+        return summary
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def registrar_auditoria(nivel: str, categoria: str, funcao: str,

@@ -13,7 +13,7 @@
                placeholder="Buscar por nome, ID, bairro…" value="{{ filtros.q }}">
       </div>
       <div class="col-sm-2">
-        <label class="form-label form-label-sm mb-1">Mês início sintomas (T0)</label>
+        <label class="form-label form-label-sm mb-1">Mês início sintomas</label>
         <input type="month" name="mes_inicio_sintomas" class="form-control form-control-sm"
                value="{{ filtros.mes_inicio_sintomas }}">
       </div>
@@ -45,6 +45,16 @@
           <option value="reais" {% if filtros.visao == 'reais' %}selected{% endif %}>Somente reais</option>
           <option value="testes" {% if filtros.visao == 'testes' %}selected{% endif %}>Somente testes</option>
           <option value="todos" {% if filtros.visao == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label form-label-sm mb-1">Ficha clínica SINAN</label>
+        <select name="dados_sinan" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          <option value="estruturado" {% if filtros.dados_sinan == 'estruturado' %}selected{% endif %}>Com dados estruturados</option>
+          <option value="transcrito" {% if filtros.dados_sinan == 'transcrito' %}selected{% endif %}>Transcrição completa</option>
+          <option value="revisar" {% if filtros.dados_sinan == 'revisar' %}selected{% endif %}>Precisa revisar</option>
+          <option value="ausente" {% if filtros.dados_sinan == 'ausente' %}selected{% endif %}>Ainda sem estruturação</option>
         </select>
       </div>
       <div class="col-sm-3">
@@ -524,6 +534,7 @@
             <th>Nome</th>
             <th>Bairro</th>
             <th>Início sintomas</th>
+            <th>Ficha clínica</th>
             <th>Cadastro</th>
             <th>Grupo</th>
             <th>Status</th>
@@ -544,7 +555,20 @@
             </td>
             <td>{{ p.nome or '—' }}</td>
             <td><small>{{ p.bairro or '—' }}</small></td>
-            <td><small>{{ p.resposta_t0.data_inicio_sintomas if p.resposta_t0 and p.resposta_t0.data_inicio_sintomas else '—' }}</small></td>
+            <td><small>{{ p._data_inicio_sintomas or (p.resposta_t0.data_inicio_sintomas if p.resposta_t0 and p.resposta_t0.data_inicio_sintomas else '') or '—' }}</small></td>
+            <td>
+              {% set sinan_status = p._sinan_dados.revisao_status if p._sinan_dados else 'NAO_ESTRUTURADO' %}
+              {% if sinan_status == 'TRANSCRITO' %}
+                <span class="badge bg-success">Transcrito</span>
+              {% elif sinan_status == 'REVISAR' %}
+                <span class="badge bg-warning text-dark">Revisar</span>
+              {% else %}
+                <span class="badge bg-secondary">Ausente</span>
+              {% endif %}
+              {% if p._sinan_dados and p._sinan_dados.sintomas %}
+                <div class="text-muted" style="font-size:.7rem">{{ p._sinan_dados.sintomas|length }} sintoma(s)</div>
+              {% endif %}
+            </td>
             <td><small>{{ p.timestamp_cadastro.strftime('%d/%m/%Y') if p.timestamp_cadastro else '—' }}</small></td>
             <td>
               {% if p.grupo == 'A' %}

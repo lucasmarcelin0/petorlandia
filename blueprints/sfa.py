@@ -237,6 +237,7 @@ def _coletar_filtros_pacientes() -> dict[str, str]:
         "respondido_t30_ate": request.args.get("respondido_t30_ate", "").strip(),
         "proxima_acao_ate": request.args.get("proxima_acao_ate", "").strip(),
         "situacao_data": request.args.get("situacao_data", "").strip(),
+        "dados_sinan": request.args.get("dados_sinan", "").strip(),
     }
 
 
@@ -260,6 +261,7 @@ def _filtros_pacientes_vazios(visao: str = "reais") -> dict[str, str]:
         "respondido_t30_ate": "",
         "proxima_acao_ate": "",
         "situacao_data": "",
+        "dados_sinan": "",
     }
 
 
@@ -366,6 +368,7 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
     respondido_t30_ate = filtros.get("respondido_t30_ate", "").strip()
     proxima_acao_ate = filtros.get("proxima_acao_ate", "").strip()
     situacao_data = filtros.get("situacao_data", "").strip()
+    dados_sinan = filtros.get("dados_sinan", "").strip().lower()
 
     q = SfaPaciente.query.options(joinedload(SfaPaciente.resposta_t0))
 
@@ -429,6 +432,31 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
                 .where(*filtros_sinan)
             )
 
+    if dados_sinan == "transcrito":
+        q = q.filter(
+            exists()
+            .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+            .where(SfaSinanLog.revisao_status == "TRANSCRITO")
+        )
+    elif dados_sinan == "revisar":
+        q = q.filter(
+            exists()
+            .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+            .where(SfaSinanLog.revisao_status == "REVISAR")
+        )
+    elif dados_sinan == "estruturado":
+        q = q.filter(
+            exists()
+            .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+            .where(SfaSinanLog.revisao_status.in_(["TRANSCRITO", "REVISAR"]))
+        )
+    elif dados_sinan == "ausente":
+        q = q.filter(
+            ~exists()
+            .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+            .where(SfaSinanLog.revisao_status.in_(["TRANSCRITO", "REVISAR"]))
+        )
+
     if respondido_t10_de or respondido_t10_ate:
         filtros_t10 = _timestamp_conditions(SfaRespostaT10.timestamp, respondido_t10_de, respondido_t10_ate)
         if filtros_t10:
@@ -483,27 +511,9 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
 
 
 def _anexar_datas_notificacao_sinan(pacientes) -> None:
-    from models.sfa import SfaSinanLog
+    from services.sfa_service import anexar_dados_sinan_pacientes
 
-    ids_estudo = [getattr(paciente, "id_estudo", "") for paciente in pacientes if getattr(paciente, "id_estudo", "")]
-    if not ids_estudo:
-        return
-
-    logs = (
-        SfaSinanLog.query
-        .filter(SfaSinanLog.id_estudo_vinculado.in_(ids_estudo))
-        .order_by(SfaSinanLog.id.desc())
-        .all()
-    )
-
-    datas_por_estudo = {}
-    for log in logs:
-        id_estudo = getattr(log, "id_estudo_vinculado", "")
-        if id_estudo and id_estudo not in datas_por_estudo:
-            datas_por_estudo[id_estudo] = getattr(log, "data_notificacao", "") or ""
-
-    for paciente in pacientes:
-        paciente._data_notificacao_sinan = datas_por_estudo.get(getattr(paciente, "id_estudo", ""), "")
+    anexar_dados_sinan_pacientes(pacientes)
 
 
 def _resposta_recente(respostas):
@@ -1910,6 +1920,7 @@ def analise_respostas():
     filtros = _coletar_filtros_pacientes()
     filtros["visao"] = "reais"
     pacientes = filtrar_pacientes_reais_sfa(_consulta_pacientes_filtrada(filtros).all())
+    _anexar_datas_notificacao_sinan(pacientes)
     analise = montar_analise_respostas(pacientes)
 
     return render_template(
@@ -1946,6 +1957,7 @@ def export_analitico_csv():
 
     filtros = _coletar_filtros_pacientes()
     pacientes = _consulta_pacientes_filtrada(filtros).all()
+    _anexar_datas_notificacao_sinan(pacientes)
     csv_text = gerar_csv_exportacao_analitica(pacientes)
     return _csv_download_response(csv_text, f"sfa_analitico_{date.today().isoformat()}.csv")
 
@@ -2023,6 +2035,7 @@ def paciente_detail(id_estudo: str):
         ]
 
     p = SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    _anexar_datas_notificacao_sinan([p])
     auditoria = (SfaAuditoria.query
                  .filter_by(id_estudo=id_estudo)
                  .order_by(SfaAuditoria.timestamp.desc())

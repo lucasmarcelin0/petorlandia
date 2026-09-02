@@ -113,6 +113,98 @@
       </div>
     </div>
 
+    {% set sinan = p._sinan_dados or {} %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <span><i class="fas fa-file-medical me-2"></i>Ficha SINAN estruturada</span>
+        <div>
+          {% if sinan.revisao_status == 'TRANSCRITO' %}
+            <span class="badge bg-success">Transcrito</span>
+          {% elif sinan.revisao_status == 'REVISAR' %}
+            <span class="badge bg-warning text-dark">Precisa revisar</span>
+          {% else %}
+            <span class="badge bg-secondary">Ainda não estruturado</span>
+          {% endif %}
+          {% if sinan.fonte %}<span class="badge bg-light text-dark">{{ sinan.fonte }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        {% if sinan.revisao_status in ['TRANSCRITO', 'REVISAR'] %}
+        <div class="row g-2 mb-3">
+          {% for label, value in [
+              ('Controle local', sinan.numero_controle),
+              ('Número do caso', sinan.n_caso),
+              ('Agravo', sinan.agravo),
+              ('Unidade notificante', sinan.unidade_notificante),
+              ('Início dos sintomas', sinan.data_inicio_sintomas),
+              ('Notificação', sinan.data_notificacao),
+              ('Investigação', sinan.data_investigacao),
+              ('Idade na ficha', sinan.idade_anos),
+              ('Sexo', sinan.sexo),
+              ('Raça/cor', sinan.raca_cor),
+              ('Zona', sinan.zona),
+              ('Ocupação', sinan.ocupacao),
+          ] %}
+          {% if value is defined and value is not none and value != '' %}
+          <div class="col-sm-6 col-xl-4">
+            <div class="response-metric">
+              <div class="response-metric-label">{{ label }}</div>
+              <div class="response-metric-value">{{ value }}</div>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <div class="response-answer-card h-100">
+              <div class="response-answer-label">Sinais clínicos</div>
+              <div class="response-answer-value">
+                {{ sinan.sintomas|join(' · ') if sinan.sintomas else 'Nenhum informado na ficha' }}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="response-answer-card h-100">
+              <div class="response-answer-label">Condições preexistentes</div>
+              <div class="response-answer-value">
+                {% if sinan.comorbidades %}
+                  {{ sinan.comorbidades|join(' · ') }}
+                {% elif sinan.comorbidades_status %}
+                  {{ sinan.comorbidades_status }}
+                {% else %}
+                  Não informado na ficha
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="response-answer-card h-100">
+              <div class="response-answer-label">Exame NS1</div>
+              <div class="response-answer-value">
+                Coleta: {{ sinan.ns1_data_coleta or 'não informada' }} · Resultado: {{ sinan.ns1_resultado or 'não informado' }}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="response-answer-card {% if not sinan.campos_revisar %}is-empty{% endif %} h-100">
+              <div class="response-answer-label">Conferência da transcrição</div>
+              <div class="response-answer-value">
+                {% if sinan.campos_revisar %}
+                  Revisar: {{ sinan.campos_revisar|join(' · ') }}
+                {% else %}
+                  Sem campos sinalizados para revisão.
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">O cadastro SINAN existe, mas os campos clínicos da ficha ainda não foram estruturados.</p>
+        {% endif %}
+      </div>
+    </div>
+
     <div class="card shadow-sm mb-3">
       <div class="card-header"><i class="fas fa-timeline me-2"></i>Acompanhamento</div>
       <div class="card-body">

@@ -233,6 +233,17 @@ class SfaSinanLog(db.Model):
     resultado = db.Column(db.String(120))
     grupo = db.Column(db.String(20))
     id_estudo_vinculado = db.Column(db.String(30))
+    # Complemento estruturado das fichas em papel. O JSON aceita apenas
+    # variaveis clinicas/de pesquisa definidas no servico; identificadores
+    # sensiveis como CPF, CNS e filiacao nao sao persistidos aqui.
+    dados_json = db.Column(db.Text)
+    fonte_complementar = db.Column(db.String(60))
+    revisao_status = db.Column(
+        db.String(20),
+        default="NAO_ESTRUTURADO",
+        nullable=False,
+        index=True,
+    )
     timestamp_importacao = db.Column(db.DateTime(timezone=True), default=utcnow)
 
 
