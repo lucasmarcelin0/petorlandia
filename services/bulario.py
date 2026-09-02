@@ -52,16 +52,20 @@ def _strip_accents(s: str) -> str:
 #
 # Como adicionar uma classe nova: veja se algum pattern existente já pega
 # (muitas vezes sim). Se não, acrescente ao macro mais clínico-próximo.
-MACRO_GRUPOS: List[Dict[str, Any]] = [
+# Bolt performance optimization: pre-compile regex patterns for macro groups
+# to avoid re-parsing regexes repeatedly during bulk bulario queries.
+_COMPILED_MACRO_GRUPOS: List[Dict[str, Any]] = [
     {
         "key": "antimicrobiano",
         "label": "Antimicrobiano",
         "icon": "fa-bacteria",
         "patterns": [
-            r"antibi", r"antibact", r"antimicrobia", r"antifung",
-            r"antiviral", r"antivira", r"antissep", r"antisep",
-            r"sulf", r"quinolon", r"cefalospor", r"penicil", r"macrolid",
-            r"tetracicl", r"aminoglic", r"nitroimida",
+            re.compile(p) for p in [
+                r"antibi", r"antibact", r"antimicrobia", r"antifung",
+                r"antiviral", r"antivira", r"antissep", r"antisep",
+                r"sulf", r"quinolon", r"cefalospor", r"penicil", r"macrolid",
+                r"tetracicl", r"aminoglic", r"nitroimida",
+            ]
         ],
     },
     {
@@ -69,10 +73,12 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Antiparasitário",
         "icon": "fa-bug",
         "patterns": [
-            r"antiparas", r"endectoc", r"ectoparas", r"endoparas",
-            r"carrapatic", r"pulguicid", r"vermifug", r"verm[ií]fug",
-            r"anti[- ]?helm[ií]nt", r"leishmanic", r"giardic",
-            r"coccidios", r"acaricid", r"inseticid",
+            re.compile(p) for p in [
+                r"antiparas", r"endectoc", r"ectoparas", r"endoparas",
+                r"carrapatic", r"pulguicid", r"vermifug", r"verm[ií]fug",
+                r"anti[- ]?helm[ií]nt", r"leishmanic", r"giardic",
+                r"coccidios", r"acaricid", r"inseticid",
+            ]
         ],
     },
     {
@@ -80,9 +86,11 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Anti-inflamatório / Analgésico",
         "icon": "fa-fire-flame-curved",
         "patterns": [
-            r"anti[- ]?inflamat", r"antiinflamat", r"aine",
-            r"analg[eé]s", r"opioid", r"antip[ií]r[ée]t",
-            r"esteroid", r"corticoster", r"glucocortic",
+            re.compile(p) for p in [
+                r"anti[- ]?inflamat", r"antiinflamat", r"aine",
+                r"analg[eé]s", r"opioid", r"antip[ií]r[ée]t",
+                r"esteroid", r"corticoster", r"glucocortic",
+            ]
         ],
     },
     {
@@ -90,8 +98,10 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Vacina / Imunobiológico",
         "icon": "fa-syringe",
         "patterns": [
-            r"vacina", r"imunobio", r"imuno[- ]?modul",
-            r"\bsoro\b", r"antitet[aâ]n", r"antirrab", r"antirr[áa]b",
+            re.compile(p) for p in [
+                r"vacina", r"imunobio", r"imuno[- ]?modul",
+                r"\bsoro\b", r"antitet[aâ]n", r"antirrab", r"antirr[áa]b",
+            ]
         ],
     },
     {
@@ -99,10 +109,12 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Cardiovascular / Renal",
         "icon": "fa-heart-pulse",
         "patterns": [
-            r"cardiot[oô]n", r"cardiova", r"cardiol",
-            r"antiarr[ií]tm", r"anti[- ]?hipertens", r"antihipertens",
-            r"diur[eé]t", r"vasodil", r"vasopress",
-            r"ieca", r"bra\b", r"beta[- ]?bloq", r"nefro",
+            re.compile(p) for p in [
+                r"cardiot[oô]n", r"cardiova", r"cardiol",
+                r"antiarr[ií]tm", r"anti[- ]?hipertens", r"antihipertens",
+                r"diur[eé]t", r"vasodil", r"vasopress",
+                r"ieca", r"bra\b", r"beta[- ]?bloq", r"nefro",
+            ]
         ],
     },
     {
@@ -110,9 +122,11 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Endócrino / Hormonal",
         "icon": "fa-dna",
         "patterns": [
-            r"horm[oô]n", r"insulin", r"antidiab[eé]t", r"hipoglic",
-            r"tireoid", r"tiroxin", r"anticoncep", r"contracep",
-            r"progester", r"estrog", r"androg",
+            re.compile(p) for p in [
+                r"horm[oô]n", r"insulin", r"antidiab[eé]t", r"hipoglic",
+                r"tireoid", r"tiroxin", r"anticoncep", r"contracep",
+                r"progester", r"estrog", r"androg",
+            ]
         ],
     },
     {
@@ -120,9 +134,11 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Gastrointestinal / Hepático",
         "icon": "fa-pills",
         "patterns": [
-            r"antiem[eé]t", r"antidiarr", r"antiac", r"antiulc",
-            r"procin[eé]t", r"laxat", r"hepatoprot", r"hepat",
-            r"g[aá]stric", r"digest", r"pancre",
+            re.compile(p) for p in [
+                r"antiem[eé]t", r"antidiarr", r"antiac", r"antiulc",
+                r"procin[eé]t", r"laxat", r"hepatoprot", r"hepat",
+                r"g[aá]stric", r"digest", r"pancre",
+            ]
         ],
     },
     {
@@ -130,8 +146,10 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Respiratório",
         "icon": "fa-lungs",
         "patterns": [
-            r"broncodil", r"broncop", r"mucol[ií]t", r"expector",
-            r"antituss", r"respir",
+            re.compile(p) for p in [
+                r"broncodil", r"broncop", r"mucol[ií]t", r"expector",
+                r"antituss", r"respir",
+            ]
         ],
     },
     {
@@ -139,9 +157,11 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "SNC / Comportamento / Anestesia",
         "icon": "fa-brain",
         "patterns": [
-            r"anticonvul", r"antiepil", r"ansiol[ií]t", r"antidepress",
-            r"sedat", r"anest[eé]s", r"tranquiliz", r"neurol[eé]pt",
-            r"psicotr[oó]p", r"hipn[oó]t", r"relaxant[e ]*muscul",
+            re.compile(p) for p in [
+                r"anticonvul", r"antiepil", r"ansiol[ií]t", r"antidepress",
+                r"sedat", r"anest[eé]s", r"tranquiliz", r"neurol[eé]pt",
+                r"psicotr[oó]p", r"hipn[oó]t", r"relaxant[e ]*muscul",
+            ]
         ],
     },
     # Catch-all: tópicos (derm/oftal/otol), suplementos, e qualquer
@@ -151,11 +171,23 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
         "label": "Tópicos / Suplementos / Outros",
         "icon": "fa-spray-can-sparkles",
         "patterns": [
-            r"dermatol", r"oftalmol", r"otol[oó]g",
-            r"cicatriz", r"suplem", r"vitamin", r"probiot", r"prebi[oó]t",
-            r"fluidoter", r"nutric", r"t[oó]pic",
+            re.compile(p) for p in [
+                r"dermatol", r"oftalmol", r"otol[oó]g",
+                r"cicatriz", r"suplem", r"vitamin", r"probiot", r"prebi[oó]t",
+                r"fluidoter", r"nutric", r"t[oó]pic",
+            ]
         ],
     },
+]
+
+MACRO_GRUPOS: List[Dict[str, Any]] = [
+    {
+        "key": g["key"],
+        "label": g["label"],
+        "icon": g["icon"],
+        "patterns": [p.pattern for p in g["patterns"]],
+    }
+    for g in _COMPILED_MACRO_GRUPOS
 ]
 
 
@@ -169,9 +201,9 @@ def classificar_em_macro_grupo(classificacao: Optional[str]) -> str:
     if not classificacao:
         return "outros"
     alvo = _strip_accents(classificacao).lower()
-    for grupo in MACRO_GRUPOS:
+    for grupo in _COMPILED_MACRO_GRUPOS:
         for pat in grupo["patterns"]:
-            if re.search(pat, alvo):
+            if pat.search(alvo):
                 return grupo["key"]
     return "outros"
 
@@ -182,53 +214,54 @@ def classificar_em_macro_grupo(classificacao: Optional[str]) -> str:
 # Ordem importa: padrões mais específicos primeiro.
 # Cada tupla: (regex_na_classificacao, min_dias, max_dias, descricao_curta)
 # Regex testado contra a classificação sem acentos e em minúscula.
-_DURACAO_PADRAO: List[Tuple[str, int, int, str]] = [
+# Bolt performance optimization: pre-compile regex patterns for default durations.
+_DURACAO_PADRAO: List[Tuple[re.Pattern, int, int, str]] = [
     # Antiparasitários — maioria dose única ou curtíssimo
-    (r'vermifug|anti[- ]?helmint',                   1,   1, 'dose única'),
-    (r'ectoparas|endoparas|endectoc|carrapatic|acaricid|pulguicid', 1, 3, 'dose única a curto prazo'),
+    (re.compile(r'vermifug|anti[- ]?helmint'),                   1,   1, 'dose única'),
+    (re.compile(r'ectoparas|endoparas|endectoc|carrapatic|acaricid|pulguicid'), 1, 3, 'dose única a curto prazo'),
     # Antifúngicos — curso mais longo que antibacterianos
-    (r'antifung',                                    14,  30, 'curso antifúngico'),
+    (re.compile(r'antifung'),                                    14,  30, 'curso antifúngico'),
     # Antibacterianos / Antimicrobianos
-    (r'antibi|antibact|antimicrobia|antissep|antisep', 7, 14, 'curso antibiótico padrão'),
+    (re.compile(r'antibi|antibact|antimicrobia|antissep|antisep'), 7, 14, 'curso antibiótico padrão'),
     # Anti-inflamatórios — distingue AINE de esteroides
-    (r'nao.*ester|n.o.*ester|aine',                   3,   7, 'anti-inflamatório agudo'),
-    (r'esteroid|corticoster|glicocortic',              5,  14, 'corticosteroide'),
-    (r'analg|opioid',                                  3,   7, 'analgesia'),
-    (r'anti[- ]?inflamat',                             3,   7, 'anti-inflamatório'),
+    (re.compile(r'nao.*ester|n.o.*ester|aine'),                   3,   7, 'anti-inflamatório agudo'),
+    (re.compile(r'esteroid|corticoster|glicocortic'),              5,  14, 'corticosteroide'),
+    (re.compile(r'analg|opioid'),                                  3,   7, 'analgesia'),
+    (re.compile(r'anti[- ]?inflamat'),                             3,   7, 'anti-inflamatório'),
     # SNC / Anestesia / Comportamento
-    (r'anest[eé]s|sedat',                              1,   1, 'dose única — procedimento'),
-    (r'relaxant.*muscul',                              3,   5, 'relaxamento muscular'),
-    (r'anticonvul|antiepil',                          30,  90, 'controle epiléptico contínuo'),
-    (r'antidepress|ansiol|tranquiliz|comportament',   30,  90, 'tratamento comportamental'),
-    (r'neurolep|psicotr',                             30,  90, 'tratamento neurológico'),
+    (re.compile(r'anest[eé]s|sedat'),                              1,   1, 'dose única — procedimento'),
+    (re.compile(r'relaxant.*muscul'),                              3,   5, 'relaxamento muscular'),
+    (re.compile(r'anticonvul|antiepil'),                          30,  90, 'controle epiléptico contínuo'),
+    (re.compile(r'antidepress|ansiol|tranquiliz|comportament'),   30,  90, 'tratamento comportamental'),
+    (re.compile(r'neurolep|psicotr'),                             30,  90, 'tratamento neurológico'),
     # Cardiovascular / Renal
-    (r'inotr[oó]p|cardiot[oô]n|antiarr',             30,  90, 'tratamento cardíaco crônico'),
-    (r'diur[eé]t',                                    14,  30, 'diurético'),
-    (r'vasodil|vasopress',                            30,  90, 'suporte vascular'),
+    (re.compile(r'inotr[oó]p|cardiot[oô]n|antiarr'),             30,  90, 'tratamento cardíaco crônico'),
+    (re.compile(r'diur[eé]t'),                                    14,  30, 'diurético'),
+    (re.compile(r'vasodil|vasopress'),                            30,  90, 'suporte vascular'),
     # Endócrino
-    (r'insulin|antidiab|hipoglic',                    30,  90, 'controle glicêmico contínuo'),
-    (r'horm[oô]n|tireoid|tiroxin',                   30,  90, 'terapia hormonal contínua'),
-    (r'anticoncep|contracep',                          30,  90, 'contracepção'),
+    (re.compile(r'insulin|antidiab|hipoglic'),                    30,  90, 'controle glicêmico contínuo'),
+    (re.compile(r'horm[oô]n|tireoid|tiroxin'),                   30,  90, 'terapia hormonal contínua'),
+    (re.compile(r'anticoncep|contracep'),                          30,  90, 'contracepção'),
     # Gastrointestinal / Hepático
-    (r'antiem[eé]t|antinaus',                          3,   5, 'controle de êmese'),
-    (r'antidiarr',                                     3,   7, 'controle de diarreia'),
-    (r'hepatoprot|hepat',                             14,  30, 'hepatoproteção'),
-    (r'antiulc|antiac|proteto.*gastric|g[aá]stric',  14,  28, 'proteção gástrica'),
-    (r'probiot|prebi[oó]t',                           14,  30, 'probiótico'),
-    (r'laxat|procin[eé]t',                             3,   7, 'motilidade gastrointestinal'),
+    (re.compile(r'antiem[eé]t|antinaus'),                          3,   5, 'controle de êmese'),
+    (re.compile(r'antidiarr'),                                     3,   7, 'controle de diarreia'),
+    (re.compile(r'hepatoprot|hepat'),                             14,  30, 'hepatoproteção'),
+    (re.compile(r'antiulc|antiac|proteto.*gastric|g[aá]stric'),  14,  28, 'proteção gástrica'),
+    (re.compile(r'probiot|prebi[oó]t'),                           14,  30, 'probiótico'),
+    (re.compile(r'laxat|procin[eé]t'),                             3,   7, 'motilidade gastrointestinal'),
     # Respiratório
-    (r'broncodil|broncop',                             7,  14, 'broncodilatação'),
-    (r'mucol[ií]t|expector|antituss',                  5,  10, 'manejo respiratório'),
+    (re.compile(r'broncodil|broncop'),                             7,  14, 'broncodilatação'),
+    (re.compile(r'mucol[ií]t|expector|antituss'),                  5,  10, 'manejo respiratório'),
     # Tópicos locais
-    (r'otol[oó]g',                                     7,  14, 'tratamento otológico'),
-    (r'oftalm|optalmol',                               7,  14, 'tratamento oftálmico'),
-    (r'dermatol',                                      7,  21, 'tratamento dermatológico'),
-    (r'cicatriz',                                      7,  14, 'cicatrização'),
+    (re.compile(r'otol[oó]g'),                                     7,  14, 'tratamento otológico'),
+    (re.compile(r'oftalm|optalmol'),                               7,  14, 'tratamento oftálmico'),
+    (re.compile(r'dermatol'),                                      7,  21, 'tratamento dermatológico'),
+    (re.compile(r'cicatriz'),                                      7,  14, 'cicatrização'),
     # Imunomoduladores
-    (r'imunoestim|imunomodul',                        14,  30, 'imunoestimulação'),
-    (r'antineoplas',                                   14,  30, 'oncológico — avaliar protocolo'),
+    (re.compile(r'imunoestim|imunomodul'),                        14,  30, 'imunoestimulação'),
+    (re.compile(r'antineoplas'),                                   14,  30, 'oncológico — avaliar protocolo'),
     # Suplementos / Nutraceuticos (uso crônico)
-    (r'suplem|nutrac|vitamin|regenerad|articular',    30,  90, 'suplementação contínua'),
+    (re.compile(r'suplem|nutrac|vitamin|regenerad|articular'),    30,  90, 'suplementação contínua'),
 ]
 
 
@@ -238,7 +271,7 @@ def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional
     cls = getattr(medicamento, 'classificacao', None) or ''
     alvo = _strip_accents(cls).lower()
     for pat, mn, mx, desc in _DURACAO_PADRAO:
-        if re.search(pat, alvo):
+        if pat.search(alvo):
             return (mn, mx, desc)
     return (None, None, None)
 
