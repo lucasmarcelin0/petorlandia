@@ -5416,6 +5416,352 @@ def get_pmo_frascos_ledger(*, use_cache: bool = True) -> dict[str, Any]:
     }
 
 
+# ——— Frascos do dia, calculados das fichas ———————————————————————————————————
+# A "Controle de doses" só sabe de um dia depois que ele é compilado; o painel
+# do aplicador precisa saber ANTES e DURANTE. Estas funções reconstroem a mesma
+# linha do tempo de frascos a partir do banco (cães + gatos vacinados + perdas),
+# então o número muda ao vivo conforme a lista é marcada. Controle é por DIA: a
+# sobra da manhã atravessa para a tarde, e o que for descartado entre os turnos
+# entra como perda da visita.
+
+
+def _pmo_dia_label(value: date) -> str:
+    return value.strftime("%d/%m/%Y")
+
+
+def _pmo_doses_por_dia() -> dict[date, dict[str, Any]]:
+    """Doses usadas por dia segundo as fichas, abertas por turno.
+
+    Dose usada = animal com status ``vacinado`` (quem já estava imunizado não
+    consome frasco) + perdas lançadas na visita.
+    """
+    from sqlalchemy.orm import selectinload
+
+    visits = (
+        PmoVaccinationVisit.query.options(
+            selectinload(PmoVaccinationVisit.animals)
+        ).all()
+    )
+
+    por_dia: dict[date, dict[str, Any]] = {}
+    for visit in visits:
+        day = _parse_date_object((visit.sheet_title or "").strip())
+        if not day:
+            continue
+        bucket = por_dia.setdefault(
+            day,
+            {
+                "dogs": 0,
+                "cats": 0,
+                "losses": 0,
+                "shifts": {
+                    "Manha": {"dogs": 0, "cats": 0, "losses": 0},
+                    "Tarde": {"dogs": 0, "cats": 0, "losses": 0},
+                    "": {"dogs": 0, "cats": 0, "losses": 0},
+                },
+            },
+        )
+        shift = _normalize_shift(visit.shift)
+        shift_bucket = bucket["shifts"].setdefault(
+            shift if shift in ("Manha", "Tarde") else "",
+            {"dogs": 0, "cats": 0, "losses": 0},
+        )
+        dogs = sum(
+            1
+            for animal in visit.animals
+            if (animal.status or "") == "vacinado" and animal.species != "gato"
+        )
+        cats = sum(
+            1
+            for animal in visit.animals
+            if (animal.status or "") == "vacinado" and animal.species == "gato"
+        )
+        losses = int(visit.losses or 0)
+        for target in (bucket, shift_bucket):
+            target["dogs"] += dogs
+            target["cats"] += cats
+            target["losses"] += losses
+    return por_dia
+
+
+def _pmo_day_stock_overrides(spreadsheet_id: str) -> dict[date, Any]:
+    from models import PmoVaccinationDayStock
+
+    return {
+        row.day: row
+        for row in PmoVaccinationDayStock.query.filter_by(
+            spreadsheet_id=spreadsheet_id
+        ).all()
+    }
+
+
+def _pmo_frascos_timeline(extra_days: list[date] | None = None) -> dict[date, dict[str, Any]]:
+    """Estado de frascos de cada dia da campanha, na ordem cronológica.
+
+    Um dia entra na linha do tempo se teve dose, se o vacinador corrigiu algo
+    nele ou se foi pedido explicitamente (o dia de hoje, ainda sem nenhuma
+    marcação, precisa aparecer com a sobra que herdou).
+    """
+    vial = PMO_FRASCO_DOSES
+    validity = PMO_FRASCO_VALIDADE_DIAS
+    spreadsheet_id = _pmo_spreadsheet_id()
+
+    usage = _pmo_doses_por_dia()
+    overrides = _pmo_day_stock_overrides(spreadsheet_id)
+    days = sorted(set(usage) | set(overrides) | set(extra_days or []))
+
+    timeline: dict[date, dict[str, Any]] = {}
+    leftover = 0
+    opened_on: date | None = None
+
+    for day in days:
+        alerts: list[str] = []
+
+        # 1) O que sobrou do dia anterior ainda vale?
+        if leftover and opened_on and (day - opened_on).days >= validity:
+            alerts.append(
+                f"{leftover} dose(s) do frasco aberto em {_pmo_dia_label(opened_on)} venceram "
+                f"em {_pmo_dia_label(opened_on + timedelta(days=validity - 1))} — lance como perda."
+            )
+            leftover, opened_on = 0, None
+
+        override = overrides.get(day)
+        leftover_source = "auto"
+        if override is not None and override.leftover_start is not None:
+            leftover = max(0, int(override.leftover_start))
+            opened_on = override.leftover_opened_on or (day if leftover else None)
+            leftover_source = "manual"
+
+        start_leftover = leftover
+        start_opened_on = opened_on
+        start_valid_until = (
+            start_opened_on + timedelta(days=validity - 1) if start_opened_on else None
+        )
+
+        # 2) Quanto o dia consumiu, segundo as fichas.
+        day_usage = usage.get(day) or {
+            "dogs": 0,
+            "cats": 0,
+            "losses": 0,
+            "shifts": {
+                "Manha": {"dogs": 0, "cats": 0, "losses": 0},
+                "Tarde": {"dogs": 0, "cats": 0, "losses": 0},
+                "": {"dogs": 0, "cats": 0, "losses": 0},
+            },
+        }
+        used = day_usage["dogs"] + day_usage["cats"] + day_usage["losses"]
+
+        # 3) Frascos novos: o cálculo é o mínimo que fecha a conta; o vacinador
+        #    pode dizer outro número (abriu um a mais, um quebrou).
+        from_leftover = min(start_leftover, used)
+        remaining = used - from_leftover
+        auto_vials = math.ceil(remaining / vial) if remaining else 0
+        vials = auto_vials
+        vials_source = "auto"
+        if override is not None and override.vials_opened is not None:
+            vials = max(0, int(override.vials_opened))
+            vials_source = "manual"
+
+        available = start_leftover + vials * vial
+        end_leftover = available - used
+        if end_leftover < 0:
+            alerts.append(
+                f"Faltam {abs(end_leftover)} dose(s) para o que já foi aplicado: "
+                f"{used} usada(s) contra {available} disponível(is). Registre o frasco "
+                "que faltou ou confira as perdas."
+            )
+            end_leftover = 0
+
+        if vials:
+            opened_on = day
+        leftover = end_leftover
+        if leftover == 0:
+            opened_on = None
+        end_valid_until = (
+            opened_on + timedelta(days=validity - 1) if opened_on and leftover else None
+        )
+
+        timeline[day] = {
+            "day": day.isoformat(),
+            "dayLabel": _pmo_dia_label(day),
+            "leftoverStart": start_leftover,
+            "leftoverStartSource": leftover_source,
+            "leftoverOpenedOn": _pmo_dia_label(start_opened_on) if start_opened_on else "",
+            "leftoverValidUntil": (
+                _pmo_dia_label(start_valid_until) if start_valid_until else ""
+            ),
+            "vialsOpened": vials,
+            "vialsOpenedAuto": auto_vials,
+            "vialsSource": vials_source,
+            "available": available,
+            "used": used,
+            "usedDogs": day_usage["dogs"],
+            "usedCats": day_usage["cats"],
+            "losses": day_usage["losses"],
+            "byShift": {
+                shift: dict(counts)
+                for shift, counts in day_usage["shifts"].items()
+                if counts["dogs"] or counts["cats"] or counts["losses"]
+            },
+            "remaining": max(0, available - used),
+            "leftoverEnd": leftover,
+            "leftoverEndValidUntil": (
+                _pmo_dia_label(end_valid_until) if end_valid_until else ""
+            ),
+            "leftoverEndValidUntilIso": end_valid_until.isoformat() if end_valid_until else "",
+            "alerts": alerts,
+            "note": (override.note or "") if override is not None else "",
+            "updatedBy": (
+                override.updated_by.name
+                if override is not None and override.updated_by is not None
+                else ""
+            ),
+        }
+    return timeline
+
+
+def _pmo_dias_com_lista(after: date) -> date | None:
+    """Próximo dia que já tem lista montada no banco (agenda real da campanha)."""
+    titles = {
+        title
+        for (title,) in db.session.query(PmoVaccinationVisit.sheet_title).distinct().all()
+    }
+    futuros = sorted(
+        day
+        for day in (_parse_date_object((title or "").strip()) for title in titles)
+        if day and day > after
+    )
+    return futuros[0] if futuros else None
+
+
+def get_pmo_dia_frascos(day: Any) -> dict[str, Any]:
+    """Sobra herdada e frascos abertos de um dia, com o consumo ao vivo.
+
+    É o que o painel do aplicador mostra no topo: quanto dá para vacinar hoje
+    sem abrir mais nada, quanto já foi usado e o que a sobra do fim do dia
+    permite agendar antes de vencer.
+    """
+    target = day if isinstance(day, date) else _parse_date_object(day)
+    if not target:
+        raise ValueError("Dia inválido: use uma aba com data (dd/mm/aaaa).")
+
+    timeline = _pmo_frascos_timeline(extra_days=[target])
+    payload = dict(timeline[target])
+    payload["vialDoses"] = PMO_FRASCO_DOSES
+    payload["validityDays"] = PMO_FRASCO_VALIDADE_DIAS
+
+    next_day = _pmo_dias_com_lista(target)
+    payload["nextDay"] = _pmo_dia_label(next_day) if next_day else ""
+
+    # O que a sobra do fim do dia permite planejar. É daqui que sai a leitura de
+    # agendamento: sobra que vence antes do próximo dia é dose perdida.
+    leftover_end = payload["leftoverEnd"]
+    valid_until = payload["leftoverEndValidUntil"]
+    limite = _parse_date_object(payload["leftoverEndValidUntilIso"])
+    hint = ""
+    if leftover_end and limite:
+        if next_day and next_day > limite:
+            hint = (
+                f"A sobra de {leftover_end} dose(s) vence em {valid_until} e o próximo dia "
+                f"com lista é {_pmo_dia_label(next_day)} — antecipe um atendimento ou "
+                "planeje o descarte."
+            )
+        elif next_day:
+            hint = (
+                f"{_pmo_dia_label(next_day)} já começa com {leftover_end} dose(s) da sobra: "
+                f"agende {leftover_end} animal(is) antes de precisar de frasco novo."
+            )
+        elif limite <= target:
+            hint = (
+                f"A sobra de {leftover_end} dose(s) vence hoje ({valid_until}) — use ainda "
+                "hoje ou lance como perda."
+            )
+        else:
+            hint = (
+                f"Sobram {leftover_end} dose(s) válidas até {valid_until} — marque um dia "
+                "até lá para não perder."
+            )
+    elif payload["remaining"]:
+        hint = (
+            f"Ainda há {payload['remaining']} dose(s) abertas para hoje "
+            f"({payload['available']} disponíveis, {payload['used']} usadas)."
+        )
+    payload["planningHint"] = hint
+    return payload
+
+
+def save_pmo_dia_frascos(
+    day: Any,
+    *,
+    leftover_start: Any = None,
+    leftover_opened_on: Any = None,
+    vials_opened: Any = None,
+    note: Any = None,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """Grava (ou limpa) a correção manual do dia e devolve o estado recalculado.
+
+    Campo em branco volta ao automático de propósito: o vacinador não deveria
+    precisar redigitar todo dia um número que o app sabe calcular.
+    """
+    from models import PmoVaccinationDayStock
+
+    target = day if isinstance(day, date) else _parse_date_object(day)
+    if not target:
+        raise ValueError("Dia inválido: use uma aba com data (dd/mm/aaaa).")
+
+    def _int_or_none(value: Any, label: str) -> int | None:
+        # Só string vazia (ou ausência) significa "calcule sozinho". O inteiro 0
+        # é uma afirmação do vacinador — "não sobrou nada", "não abri frasco" —
+        # e não pode cair no mesmo balde de branco.
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        try:
+            parsed = int(str(value).strip())
+        except (TypeError, ValueError):
+            raise ValueError(f"{label}: informe um número inteiro ou deixe em branco.")
+        if parsed < 0:
+            raise ValueError(f"{label}: não pode ser negativo.")
+        return parsed
+
+    leftover_value = _int_or_none(leftover_start, "Sobra do dia anterior")
+    vials_value = _int_or_none(vials_opened, "Frascos abertos")
+    opened_value = (
+        _parse_date_object(leftover_opened_on)
+        if leftover_opened_on not in (None, "")
+        else None
+    )
+    if leftover_opened_on not in (None, "") and opened_value is None:
+        raise ValueError("Data de abertura do frasco inválida. Use dd/mm/aaaa.")
+    if opened_value and opened_value > target:
+        raise ValueError("O frasco não pode ter sido aberto depois do dia da lista.")
+
+    spreadsheet_id = _pmo_spreadsheet_id()
+    row = PmoVaccinationDayStock.query.filter_by(
+        spreadsheet_id=spreadsheet_id, day=target
+    ).one_or_none()
+    if row is None:
+        row = PmoVaccinationDayStock(spreadsheet_id=spreadsheet_id, day=target)
+        db.session.add(row)
+
+    row.leftover_start = leftover_value
+    row.leftover_opened_on = opened_value if leftover_value else None
+    row.vials_opened = vials_value
+    row.note = _normalize_text(note) or None
+    row.updated_by_id = user_id
+
+    if row.is_empty:
+        # Nada corrigido: some com a linha para o dia voltar a ser 100% calculado.
+        if row in db.session.new:
+            db.session.expunge(row)
+        else:
+            db.session.delete(row)
+    db.session.commit()
+    return get_pmo_dia_frascos(target)
+
+
 def get_vacina_pmo_kpis() -> dict[str, Any]:
     """Indicadores da campanha, calculados do banco (mesma fonte do status-sync).
 

@@ -1738,6 +1738,94 @@
     </div>
   </div>
 
+  {# ───── Doses do dia: sobra herdada + frascos abertos ─────
+     Os números saem das fichas (vacinados + perdas), então mudam ao vivo
+     enquanto a lista é marcada. O vacinador corrige quando a realidade não
+     bate com a conta. #}
+  <div class="row g-3 mb-3" id="pmo-stock-row" hidden>
+    <div class="col-12">
+      <section class="pmo-panel">
+        <div class="pmo-panel__header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+          <div>
+            <h2 class="h6 mb-0">Doses do dia <span class="text-muted fw-normal" id="pmo-stock-day"></span></h2>
+            <div class="text-muted small" id="pmo-stock-sub">Calculado pelas fichas: vacinados + perdas.</div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="pmo-stock-edit">
+            <i class="fas fa-pen-to-square me-1"></i> Ajustar
+          </button>
+        </div>
+        <div class="pmo-panel__body">
+          <div class="row g-3">
+            <div class="col-6 col-lg-3">
+              <div class="pmo-stat h-100">
+                <div class="text-muted small">Sobra do dia anterior</div>
+                <div class="pmo-stat__value" data-stock="leftoverStart">0</div>
+                <div class="text-muted small mt-1" data-stock="leftoverInfo">sem frasco aberto</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="pmo-stat h-100">
+                <div class="text-muted small">Frascos abertos hoje</div>
+                <div class="pmo-stat__value" data-stock="vialsOpened">0</div>
+                <div class="text-muted small mt-1" data-stock="vialsInfo">nenhum frasco novo</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="pmo-stat h-100">
+                <div class="text-muted small">Doses usadas</div>
+                <div class="pmo-stat__value" data-stock="used">0</div>
+                <div class="text-muted small mt-1" data-stock="usedInfo">nada aplicado ainda</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="pmo-stat h-100">
+                <div class="text-muted small">Ainda na mão</div>
+                <div class="pmo-stat__value" data-stock="remaining">0</div>
+                <div class="text-muted small mt-1" data-stock="remainingInfo">de 0 disponíveis</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-light border small mt-3 mb-0 d-none" id="pmo-stock-hint"></div>
+          <div class="alert alert-warning small mt-3 mb-0 d-none" id="pmo-stock-alerts"></div>
+
+          <form class="mt-3 d-none" id="pmo-stock-form">
+            <div class="row g-2 align-items-end">
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="pmo-stock-leftover">Sobra do dia anterior</label>
+                <input type="number" min="0" class="form-control form-control-sm" id="pmo-stock-leftover"
+                       placeholder="automático">
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="pmo-stock-opened">Frasco aberto em</label>
+                <input type="date" class="form-control form-control-sm" id="pmo-stock-opened">
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="pmo-stock-vials">Frascos abertos hoje</label>
+                <input type="number" min="0" class="form-control form-control-sm" id="pmo-stock-vials"
+                       placeholder="automático">
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-1" for="pmo-stock-note">Observação</label>
+                <input type="text" class="form-control form-control-sm" id="pmo-stock-note"
+                       placeholder="ex.: frasco quebrou">
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <button type="submit" class="btn btn-sm btn-primary">Salvar ajuste</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="pmo-stock-auto">
+                Voltar ao automático
+              </button>
+              <span class="form-text ms-auto">
+                Campo em branco = o site calcula sozinho a partir do dia anterior.
+              </span>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <div class="row g-3 mb-3">
     <div class="col-12">
       <section class="pmo-panel">
@@ -2531,7 +2619,7 @@
     },
     badge: {
       label: 'Carteirinha',
-      note: 'apresenta cada animal em uma carteirinha digital de vacinação com selo de proteção e todos os animais.',
+      note: 'apresenta cada animal na carteirinha digital oficial do site com foto ampliada em evidência e selo de vacina em dia.',
     },
     pop: {
       label: 'Pop Viral',
@@ -2539,7 +2627,7 @@
     },
     runway: {
       label: 'Passarela',
-      note: 'seleciona até 16 destaques em formato editorial de moda pet, com tipografia refinada e desfile lateral.',
+      note: 'seleciona até 16 destaques no estilo Pets de Orlândia, com tipografia refinada e desfile lateral na passarela.',
     },
   };
 
@@ -2714,12 +2802,32 @@
     };
   }
 
-  function loadVideoImage(src) {
+  function loadVideoImage(src, timeoutMs = 4500) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Não foi possível carregar uma das fotos do vídeo.'));
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          img.src = '';
+          reject(new Error('Tempo esgotado ao carregar foto do animal.'));
+        }
+      }, timeoutMs);
+      img.onload = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(img);
+        }
+      };
+      img.onerror = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error('Não foi possível carregar uma das fotos do vídeo.'));
+        }
+      };
       img.src = src;
     });
   }
@@ -3631,16 +3739,16 @@
     return Math.round(clamp(13500 / Math.max(1, groupCount), 420, 1600));
   }
 
-  // --- Estilo Carteirinha (RG Pet / Passaporte Oficial) ---
+  // --- Estilo Carteirinha (Fiel à Carteirinha Real do Site) ---
   const BADGE_BATCH_SIZE = 12;
 
   function drawBadgeBrand(ctx, canvas) {
     ctx.save();
-    ctx.fillStyle = 'rgba(7, 21, 48, .88)';
+    ctx.fillStyle = 'rgba(20, 33, 61, .92)';
     ctx.beginPath();
-    addRoundedRect(ctx, 48, 46, 650, 80, 40);
+    addRoundedRect(ctx, 48, 46, 680, 80, 40);
     ctx.fill();
-    ctx.fillStyle = '#0ea5e9';
+    ctx.fillStyle = '#087f5b';
     ctx.beginPath();
     ctx.arc(92, 86, 14, 0, Math.PI * 2);
     ctx.fill();
@@ -3648,7 +3756,7 @@
     ctx.font = '800 28px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('CARTEIRA DE VACINAÇÃO PMO', 126, 86);
+    ctx.fillText('CARTEIRINHA DIGITAL · PMO', 126, 86);
     if (municipalLogoImage) {
       const logoHeight = 78;
       const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
@@ -3659,69 +3767,78 @@
 
   function drawBadgeIntro(ctx, canvas, items) {
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#06132b');
-    gradient.addColorStop(0.5, '#0c234d');
-    gradient.addColorStop(1, '#081735');
+    gradient.addColorStop(0, '#eaf2f9');
+    gradient.addColorStop(0.4, '#eef5fb');
+    gradient.addColorStop(1, '#dfeaf5');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(14, 165, 233, 0.12)';
-    ctx.lineWidth = 2;
-    for (let y = 100; y < canvas.height; y += 70) {
+    ctx.strokeStyle = 'rgba(15, 103, 255, 0.08)';
+    ctx.lineWidth = 3;
+    for (let y = 120; y < canvas.height; y += 80) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y + 40);
+      ctx.lineTo(canvas.width, y + 50);
       ctx.stroke();
     }
     ctx.restore();
 
     drawBadgeBrand(ctx, canvas);
 
-    ctx.fillStyle = '#fff';
-    fitCenterText(ctx, 'PASSAPORTE DA SAÚDE', canvas.width / 2, 650, canvas.width - 100, 88, 900);
-    fitCenterText(ctx, 'ANIMAL', canvas.width / 2, 750, canvas.width - 100, 96, 900);
+    ctx.fillStyle = '#087f5b';
+    ctx.font = '800 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('COMPROVANTES OFICIAIS', canvas.width / 2, 590);
 
-    ctx.fillStyle = '#0ea5e9';
-    ctx.fillRect(canvas.width / 2 - 180, 830, 360, 6);
+    ctx.fillStyle = '#14213d';
+    fitCenterText(ctx, 'CARTEIRINHAS DIGITAIS', canvas.width / 2, 690, canvas.width - 100, 84, 900);
+    fitCenterText(ctx, 'DOS VACINADOS', canvas.width / 2, 780, canvas.width - 100, 84, 900);
 
-    ctx.fillStyle = '#38bdf8';
-    fitCenterText(ctx, `${items.length} CIDADÃOS DE 4 PATAS`, canvas.width / 2, 990, canvas.width - 120, 60, 900);
-    ctx.fillStyle = '#ffffff';
-    fitCenterText(ctx, 'DEVIDAMENTE IMUNIZADOS', canvas.width / 2, 1070, canvas.width - 130, 48, 800);
+    ctx.fillStyle = '#0f67ff';
+    ctx.fillRect(canvas.width / 2 - 160, 850, 320, 6);
 
-    ctx.fillStyle = 'rgba(255,255,255,.76)';
+    ctx.fillStyle = '#087f5b';
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'ANIMAL PROTEGIDO' : 'ANIMAIS PROTEGIDOS'}`, canvas.width / 2, 990, canvas.width - 120, 58, 900);
+    ctx.fillStyle = '#5d687a';
+    fitCenterText(ctx, 'VACINAÇÃO ANTIRRÁBICA EM DIA', canvas.width / 2, 1070, canvas.width - 130, 42, 700);
+
+    ctx.fillStyle = '#5d687a';
     fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1160, canvas.width - 140, 36, 600);
 
-    ctx.fillStyle = '#0ea5e9';
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    addRoundedRect(ctx, 210, 1420, canvas.width - 420, 80, 40);
+    addRoundedRect(ctx, 160, 1420, canvas.width - 320, 84, 42);
     ctx.fill();
-    ctx.fillStyle = '#051937';
-    ctx.font = '900 30px Arial, sans-serif';
+    ctx.strokeStyle = '#dbe3ee';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#14213d';
+    ctx.font = '800 28px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('DOCUMENTO OFICIAL PMO', canvas.width / 2, 1460);
+    ctx.fillText('✓ petorlandia.com.br/vacina-pmo', canvas.width / 2, 1462);
   }
 
   function drawBadgePetFrame(ctx, canvas, item, img, focus, index, total, progress) {
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#07152f');
-    gradient.addColorStop(0.5, '#0b1f42');
-    gradient.addColorStop(1, '#06132b');
-    ctx.fillStyle = gradient;
+    const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    bgGradient.addColorStop(0, '#eaf2f9');
+    bgGradient.addColorStop(0.5, '#eef5fb');
+    bgGradient.addColorStop(1, '#dfe8f3');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawBadgeBrand(ctx, canvas);
 
-    const cardW = 940;
-    const cardH = 1380;
+    const cardW = 960;
+    const cardH = 1460;
     const cardX = (canvas.width - cardW) / 2;
-    const cardY = 280;
+    const cardY = 220;
 
-    const arrival = clamp(progress / 0.28, 0, 1);
+    const arrival = clamp(progress / 0.25, 0, 1);
     const eased = 1 - Math.pow(1 - arrival, 3);
-    const scale = 0.92 + eased * 0.08;
+    const scale = 0.94 + eased * 0.06;
 
     ctx.save();
     ctx.translate(cardX + cardW / 2, cardY + cardH / 2);
@@ -3730,134 +3847,205 @@
     const x = -cardW / 2;
     const y = -cardH / 2;
 
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 40;
-    ctx.shadowOffsetY = 20;
+    ctx.shadowColor = 'rgba(20, 33, 61, 0.16)';
+    ctx.shadowBlur = 48;
+    ctx.shadowOffsetY = 24;
 
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    addRoundedRect(ctx, x, y, cardW, cardH, 30);
+    addRoundedRect(ctx, x, y, cardW, cardH, 26);
     ctx.fill();
     ctx.shadowColor = 'transparent';
 
-    const headerH = 140;
-    const headerGrad = ctx.createLinearGradient(x, y, x + cardW, y);
-    headerGrad.addColorStop(0, '#102a5c');
-    headerGrad.addColorStop(0.6, '#1a3e85');
-    headerGrad.addColorStop(1, '#0ea5e9');
-    ctx.fillStyle = headerGrad;
+    ctx.strokeStyle = '#dbe3ee';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    addRoundedRect(ctx, x, y, cardW, headerH, 30);
-    ctx.fill();
-    ctx.fillRect(x, y + headerH - 30, cardW, 30);
+    addRoundedRect(ctx, x, y, cardW, cardH, 26);
+    ctx.stroke();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 32px Arial, sans-serif';
+    // Top Hero Band (estilo hero-band de public_pet_card.html)
+    const bandH = 200;
+    const bandGrad = ctx.createLinearGradient(x, y, x + cardW, y + bandH);
+    bandGrad.addColorStop(0, '#e7f8f5');
+    bandGrad.addColorStop(1, '#edf4ff');
+    ctx.fillStyle = bandGrad;
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, cardW, bandH, 26);
+    ctx.fill();
+    ctx.fillRect(x, y + bandH - 26, cardW, 26);
+
+    ctx.strokeStyle = '#dbe3ee';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y + bandH);
+    ctx.lineTo(x + cardW, y + bandH);
+    ctx.stroke();
+
+    // Título e subtítulo do animal na banda
+    ctx.fillStyle = '#14213d';
+    ctx.font = '900 44px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('CARTEIRA DE VACINAÇÃO ANIMAL', x + 42, y + 54);
-    ctx.font = '700 22px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('MUNICÍPIO DE ORLÂNDIA · CONTROLE DE ZOONOSES', x + 42, y + 96);
+    ctx.textBaseline = 'top';
+    const petTitle = `Carteirinha de ${item.name || 'Animal'}`;
+    fitCenterText(ctx, petTitle, x + 44 + Math.min(ctx.measureText(petTitle).width, 580) / 2, y + 42, 580, 44, 900);
 
-    ctx.save();
-    ctx.fillStyle = '#f59e0b';
+    ctx.fillStyle = '#5d687a';
+    ctx.font = '600 22px Arial, sans-serif';
+    ctx.fillText('Comprovante digital da campanha de vacinação', x + 44, y + 96);
+
+    // Pill verde de status na banda
+    ctx.fillStyle = '#e6fcf5';
     ctx.beginPath();
-    addRoundedRect(ctx, x + cardW - 120, y + 42, 75, 56, 10);
+    addRoundedRect(ctx, x + 44, y + 134, 185, 42, 21);
     ctx.fill();
-    ctx.strokeStyle = '#b45309';
+    ctx.strokeStyle = '#bbf7d0';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#087f5b';
+    ctx.font = '800 20px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✓ Vacinado', x + 44 + 92, y + 155);
+
+    ctx.fillStyle = '#5d687a';
+    ctx.font = '700 20px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.species === 'gato' ? '· Felino (Gato)' : '· Canino (Cão)', x + 242, y + 155);
+
+    // Selo circular "Vacina em dia" (estilo seal do site)
+    const sealCenterX = x + cardW - 100;
+    const sealCenterY = y + 100;
+    ctx.save();
+    ctx.shadowColor = 'rgba(8, 127, 91, 0.16)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sealCenterX, sealCenterY, 52, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#dbe3ee';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.strokeRect(x + cardW - 100, y + 52, 35, 36);
+
+    ctx.fillStyle = '#087f5b';
+    ctx.font = '900 21px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Vacina', sealCenterX, sealCenterY - 12);
+    ctx.fillText('em dia', sealCenterX, sealCenterY + 14);
     ctx.restore();
 
-    const photoW = cardW - 84;
-    const photoH = 680;
-    const photoX = x + 42;
-    const photoY = y + 175;
+    // Foto do animal em MAIOR EVIDÊNCIA (centro de atenção da carteirinha)
+    const photoW = cardW - 72;
+    const photoH = 780;
+    const photoX = x + 36;
+    const photoY = y + 232;
+
     ctx.save();
     ctx.beginPath();
-    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 22);
+    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 20);
     ctx.clip();
     drawPetFaceCoverImage(ctx, img, photoX, photoY, photoW, photoH, focus);
     ctx.restore();
 
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#dbe3ee';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 22);
+    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 20);
     ctx.stroke();
 
-    ctx.fillStyle = '#16a34a';
+    // Ícone discreto de ampliação ⤢ no canto da foto (reproduzindo o site)
+    ctx.save();
+    ctx.fillStyle = 'rgba(20, 33, 61, .65)';
     ctx.beginPath();
-    addRoundedRect(ctx, x + 42, y + 885, 360, 52, 26);
+    ctx.arc(photoX + photoW - 36, photoY + photoH - 36, 20, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
+    ctx.font = '700 20px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⤢', photoX + photoW - 36, photoY + photoH - 35);
+    ctx.restore();
+
+    // 3 Cards de Detalhes Reais (estilo detail-card de public_pet_card.html)
+    const detailsY = y + 1045;
+    const colGap = 16;
+    const colW = (photoW - (colGap * 2)) / 3;
+
+    const cardsData = [
+      { label: 'APLICAÇÃO', val: item.date ? displayDate(item.date) : 'Dose de rotina' },
+      { label: 'VACINA', val: 'Antirrábica' },
+      { label: 'PRÓXIMO REFORÇO', val: 'Anual (1 ano)' },
+    ];
+
+    for (let c = 0; c < 3; c += 1) {
+      const cx = photoX + c * (colW + colGap);
+      ctx.fillStyle = '#fbfdff';
+      ctx.beginPath();
+      addRoundedRect(ctx, cx, detailsY, colW, 110, 12);
+      ctx.fill();
+      ctx.strokeStyle = '#dbe3ee';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#5d687a';
+      ctx.font = '800 17px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(cardsData[c].label, cx + 18, detailsY + 18);
+
+      ctx.fillStyle = '#14213d';
+      ctx.font = '900 24px Arial, sans-serif';
+      ctx.fillText(cardsData[c].val, cx + 18, detailsY + 54);
+    }
+
+    // Bloco de Orientação e Status Oficial (estilo booster-card / status-message)
+    const infoBoxY = y + 1180;
+    const infoBoxH = 120;
+    const infoGrad = ctx.createLinearGradient(photoX, infoBoxY, photoX + photoW, infoBoxY + infoBoxH);
+    infoGrad.addColorStop(0, '#f0fff4');
+    infoGrad.addColorStop(1, '#f8fcff');
+    ctx.fillStyle = infoGrad;
+    ctx.beginPath();
+    addRoundedRect(ctx, photoX, infoBoxY, photoW, infoBoxH, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(8, 127, 91, .25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#e6fcf5';
+    ctx.beginPath();
+    ctx.arc(photoX + 54, infoBoxY + infoBoxH / 2, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#087f5b';
     ctx.font = '900 24px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('✓ STATUS: 100% IMUNIZADO', x + 222, y + 911);
+    ctx.fillText('🛡️', photoX + 54, infoBoxY + infoBoxH / 2);
 
-    ctx.font = '800 24px Arial, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText(`REGISTRO Nº ${String(index + 1).padStart(4, '0')}-PMO`, x + cardW - 42, y + 911);
-
-    ctx.fillStyle = '#0f172a';
-    fitCenterText(ctx, item.name || 'Animal', 0, y + 995, cardW - 100, 68, 900);
-
-    const infoY = y + 1070;
-    ctx.fillStyle = '#64748b';
-    ctx.font = '700 20px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('ESPÉCIE', x + 50, infoY);
-    ctx.fillText('DATA DA DOSE', x + 380, infoY);
-    ctx.fillText('CIDADE', x + 710, infoY);
-
-    ctx.fillStyle = '#1e293b';
-    ctx.font = '900 27px Arial, sans-serif';
-    ctx.fillText(item.species === 'gato' ? 'Felina (Gato)' : 'Canina (Cão)', x + 50, infoY + 36);
-    ctx.fillText(item.date ? displayDate(item.date) : 'Dose do dia', x + 380, infoY + 36);
-    ctx.fillText('Orlândia - SP', x + 710, infoY + 36);
-
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x + 42, y + 1175);
-    ctx.lineTo(x + cardW - 42, y + 1175);
-    ctx.stroke();
-
-    ctx.save();
-    ctx.fillStyle = '#1e293b';
-    for (let bi = 0; bi < 42; bi += 1) {
-      const bw = (bi % 3 === 0 ? 4 : (bi % 2 === 0 ? 7 : 3));
-      ctx.fillRect(x + 50 + bi * 13, y + 1205, bw, 65);
-    }
-    ctx.font = '600 18px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`*PMO-${String(index + 1).padStart(4, '0')}-VACINADO*`, x + 50, y + 1295);
-    ctx.restore();
-
-    ctx.save();
-    ctx.fillStyle = '#0ea5e9';
+    ctx.fillStyle = '#14213d';
     ctx.font = '800 22px Arial, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('PROTEÇÃO GARANTIDA', x + cardW - 42, y + 1240);
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 18px Arial, sans-serif';
-    ctx.fillText('Campanha Antirrábica PMO', x + cardW - 42, y + 1270);
-    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Campanha de Vacinação Antirrábica · Prefeitura de Orlândia', photoX + 102, infoBoxY + 30);
 
-    const sweepProgress = (progress * 2.2) - 0.6;
+    ctx.fillStyle = '#5d687a';
+    ctx.font = '600 18px Arial, sans-serif';
+    ctx.fillText('Animal protegido e registrado oficialmente no sistema municipal.', photoX + 102, infoBoxY + 66);
+
+    // Efeito suave de luz holográfica atravessando a carteirinha
+    const sweepProgress = (progress * 2.2) - 0.5;
     if (sweepProgress >= 0 && sweepProgress <= 1.2) {
       ctx.save();
       ctx.beginPath();
-      addRoundedRect(ctx, x, y, cardW, cardH, 30);
+      addRoundedRect(ctx, x, y, cardW, cardH, 26);
       ctx.clip();
       const sweepX = x - 200 + sweepProgress * (cardW + 400);
       const sweepGrad = ctx.createLinearGradient(sweepX, y, sweepX + 180, y + cardH);
       sweepGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      sweepGrad.addColorStop(0.5, 'rgba(255,255,255,0.38)');
+      sweepGrad.addColorStop(0.5, 'rgba(255,255,255,0.25)');
       sweepGrad.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = sweepGrad;
       ctx.fillRect(x, y, cardW, cardH);
@@ -3866,43 +4054,46 @@
 
     ctx.restore();
 
-    ctx.fillStyle = 'rgba(255,255,255,.82)';
-    ctx.font = '800 27px Arial, sans-serif';
+    ctx.fillStyle = '#5d687a';
+    ctx.font = '800 25px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`CARTEIRINHA ${index + 1} DE ${total}  ·  ORLÂNDIA PROTEGIDA`, canvas.width / 2, canvas.height - 80);
+    ctx.fillText(`CARTEIRINHA ${index + 1} DE ${total}  ·  PREFEITURA DE ORLÂNDIA`, canvas.width / 2, canvas.height - 85);
   }
 
   function drawBadgeOutro(ctx, canvas, items) {
     const summary = videoItemSummary(items);
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#07152f');
-    gradient.addColorStop(0.5, '#0e2b5c');
-    gradient.addColorStop(1, '#051228');
+    gradient.addColorStop(0, '#eaf2f9');
+    gradient.addColorStop(0.4, '#eef5fb');
+    gradient.addColorStop(1, '#dfeaf5');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawBadgeBrand(ctx, canvas);
 
-    ctx.fillStyle = '#38bdf8';
-    fitCenterText(ctx, 'DOCUMENTAÇÃO EM DIA', canvas.width / 2, 590, canvas.width - 100, 78, 900);
-    ctx.fillStyle = '#fff';
-    fitCenterText(ctx, 'CIDADE 100% PROTEGIDA', canvas.width / 2, 690, canvas.width - 100, 88, 900);
+    ctx.fillStyle = '#087f5b';
+    ctx.font = '800 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DOCUMENTAÇÃO ENTREGUE', canvas.width / 2, 580);
 
-    ctx.fillStyle = '#0ea5e9';
-    ctx.fillRect(canvas.width / 2 - 160, 770, 320, 7);
+    ctx.fillStyle = '#14213d';
+    fitCenterText(ctx, 'CIDADE 100% IMUNIZADA', canvas.width / 2, 680, canvas.width - 100, 86, 900);
 
-    ctx.fillStyle = '#ffffff';
-    fitCenterText(ctx, `${items.length} VIDAS SALVAGUARDADAS`, canvas.width / 2, 940, canvas.width - 120, 60, 900);
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillStyle = '#0f67ff';
+    ctx.fillRect(canvas.width / 2 - 160, 760, 320, 6);
+
+    ctx.fillStyle = '#087f5b';
+    fitCenterText(ctx, `${items.length} CARTEIRINHAS EMITIDAS`, canvas.width / 2, 920, canvas.width - 120, 60, 900);
+    ctx.fillStyle = '#14213d';
     ctx.font = '800 42px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1040);
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1020);
 
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = '#14213d';
     fitCenterText(ctx, 'A carteirinha de vacinação é a maior prova de amor.', canvas.width / 2, 1310, canvas.width - 140, 44, 800);
     ctx.font = '700 30px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,.76)';
-    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1480);
+    ctx.fillStyle = '#5d687a';
+    ctx.fillText('Prefeitura Municipal de Orlândia · petorlandia.com.br', canvas.width / 2, 1480);
   }
 
   function badgeCardDuration(itemsCount) {
@@ -4138,7 +4329,7 @@
     ctx.font = '800 28px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('ORLÂNDIA PET COUTURE', 138, 86);
+    ctx.fillText('Pets de Orlândia', 138, 86);
     if (municipalLogoImage) {
       const logoHeight = 78;
       const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
@@ -4171,11 +4362,11 @@
     ctx.fillStyle = '#10b981';
     ctx.font = '800 32px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('ÉDITION SPÉCIALE 2026', canvas.width / 2, 580);
+    ctx.fillText('DESFILE OFICIAL PMO', canvas.width / 2, 580);
 
     ctx.fillStyle = '#fff';
-    fitCenterText(ctx, 'A PASSARELA DOS', canvas.width / 2, 700, canvas.width - 120, 96, 900);
-    fitCenterText(ctx, 'IMUNIZADOS', canvas.width / 2, 805, canvas.width - 120, 96, 900);
+    fitCenterText(ctx, 'PETS DE ORLÂNDIA', canvas.width / 2, 700, canvas.width - 120, 96, 900);
+    fitCenterText(ctx, 'A PASSARELA DA PROTEÇÃO', canvas.width / 2, 805, canvas.width - 120, 78, 900);
 
     ctx.fillStyle = '#10b981';
     ctx.fillRect(canvas.width / 2 - 160, 900, 320, 6);
@@ -4188,7 +4379,7 @@
     ctx.font = '600 32px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillText('A verdadeira elegância é cuidar de quem te ama.', canvas.width / 2, 1520);
+    ctx.fillText('O desfile dos animais protegidos da nossa cidade.', canvas.width / 2, 1520);
   }
 
   function drawRunwayPetFrame(ctx, canvas, item, img, focus, index, total, progress) {
@@ -4225,7 +4416,7 @@
     ctx.fillStyle = '#10b981';
     ctx.font = '800 25px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('LOOK DO DIA · TOTALMENTE IMUNIZADO', 98, canvas.height - 315);
+    ctx.fillText('PETS DE ORLÂNDIA · TOTALMENTE IMUNIZADO', 98, canvas.height - 315);
 
     ctx.fillStyle = '#ffffff';
     fitCenterText(ctx, item.name || 'Modelo', canvas.width / 2 + 10, canvas.height - 230, canvas.width - 170, 84, 900);
@@ -4266,8 +4457,8 @@
     ctx.fillText('A BELEZA DA SAÚDE', canvas.width / 2, 570);
 
     ctx.fillStyle = '#fff';
-    fitCenterText(ctx, 'PROTEÇÃO COM', canvas.width / 2, 700, canvas.width - 120, 92, 900);
-    fitCenterText(ctx, 'AMOR E ATITUDE', canvas.width / 2, 800, canvas.width - 120, 92, 900);
+    fitCenterText(ctx, 'PETS DE ORLÂNDIA', canvas.width / 2, 700, canvas.width - 120, 92, 900);
+    fitCenterText(ctx, 'PROTEÇÃO E AMOR', canvas.width / 2, 800, canvas.width - 120, 92, 900);
 
     ctx.fillStyle = '#10b981';
     fitCenterText(ctx, `${items.length} VIDAS PROTEGIDAS`, canvas.width / 2, 1020, canvas.width - 130, 60, 900);
@@ -4288,26 +4479,35 @@
   }
 
   function nextCaptureTick() {
-    // requestAnimationFrame acompanha o compositor e rende ~3x mais quadros que
-    // setTimeout, que o Chrome estrangula (chega a 1 tique por segundo quando a
-    // aba perde o foco). Com a aba oculta o rAF para de disparar, então o
-    // setTimeout fica como rede de segurança para o loop não travar.
-    if (document.visibilityState === 'visible' && typeof window.requestAnimationFrame === 'function') {
-      return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
-    }
-    return delay(1000 / 30);
+    // Garante avanço constante de frames. Se a aba perder o foco ou for minimizada,
+    // o requestAnimationFrame é suspenso pelo navegador. O timer de segurança (35ms ~ 28 FPS)
+    // garante que a gravação continue sem nunca congelar ou estender o vídeo indefinidamente.
+    return new Promise((resolve) => {
+      let settled = false;
+      const safetyTimer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      }, 35);
+      if (document.visibilityState === 'visible' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(safetyTimer);
+            resolve();
+          }
+        });
+      }
+    });
   }
 
   async function holdCanvasFrame(drawFn, durationMs, captureTrack) {
     const started = performance.now();
+    const maxElapsed = durationMs + 200;
     let frames = 0;
-    // Mesmo com os timers estrangulados cada trecho precisa render pelo menos
-    // dois quadros, senão o slide pode não aparecer no arquivo final.
-    while (performance.now() - started < durationMs || frames < 2) {
+    while ((performance.now() - started < durationMs || frames < 2) && (performance.now() - started < maxElapsed)) {
       drawFn();
-      // Alguns navegadores não incluem atualizações de um canvas oculto na
-      // captura automática. Solicitar o frame explicitamente mantém a duração
-      // e a imagem do WebM corretas.
       captureTrack?.requestFrame?.();
       frames += 1;
       await nextCaptureTick();
@@ -4317,8 +4517,9 @@
 
   async function holdAnimatedCanvasFrame(drawFn, durationMs, captureTrack) {
     const started = performance.now();
+    const maxElapsed = durationMs + 200;
     let frames = 0;
-    while (performance.now() - started < durationMs || frames < 2) {
+    while ((performance.now() - started < durationMs || frames < 2) && (performance.now() - started < maxElapsed)) {
       const elapsed = performance.now() - started;
       drawFn(clamp(elapsed / durationMs, 0, 1));
       captureTrack?.requestFrame?.();
@@ -4355,6 +4556,28 @@
 
   function videoFileExtension(containerMime) {
     return containerMime.includes('mp4') ? 'mp4' : 'webm';
+  }
+
+  async function preloadVideoImages(targetItems, onProgress) {
+    const loaded = [];
+    const total = targetItems.length;
+    const concurrency = 4;
+    for (let i = 0; i < total; i += concurrency) {
+      const slice = targetItems.slice(i, i + concurrency);
+      if (onProgress) onProgress(i, total);
+      const results = await Promise.allSettled(slice.map(async (item) => {
+        const image = await loadVideoImage(item.imageSrc, 4500);
+        const focus = estimatePetFocus(image);
+        return { item, image, focus };
+      }));
+      for (const res of results) {
+        if (res.status === 'fulfilled' && res.value) {
+          loaded.push(res.value);
+        }
+      }
+    }
+    if (onProgress) onProgress(total, total);
+    return loaded;
   }
 
   async function loadRapidVideoBatch(items) {
@@ -4417,6 +4640,28 @@
         : `Não há animais vacinados com foto em ${videoPeriodLabel(generatedVideoScope, generatedVideoMeta).toLowerCase()}. Sincronize as abas do período e tente novamente.`);
     }
 
+    // 1. Determina quais itens serão processados
+    let targetItems = items;
+    if (generatedVideoStyle === 'cinematic') {
+      targetItems = selectEvenlySpacedVideoItems(items, CINEMATIC_HIGHLIGHT_LIMIT);
+    } else if (generatedVideoStyle === 'runway') {
+      targetItems = selectEvenlySpacedVideoItems(items, RUNWAY_HIGHLIGHT_LIMIT);
+    }
+
+    // 2. Pré-carrega todas as imagens em memória ANTES de iniciar o MediaRecorder.
+    // Isso garante que NUNCA haja pausas de rede ou gargalos durante a gravação,
+    // eliminando qualquer chance do vídeo ficar congelado em um frame.
+    setVideoStatus(`Carregando fotos dos vacinados (0/${targetItems.length})...`);
+    const loadedPairs = await preloadVideoImages(targetItems, (done, total) => {
+      setVideoStatus(`Carregando fotos dos vacinados: ${done}/${total}...`);
+    });
+
+    if (!loadedPairs.length) {
+      throw new Error(generatedVideoScope === 'day'
+        ? 'As fotos dos animais não puderam ser carregadas. Verifique a conexão e tente novamente.'
+        : `Não foi possível carregar as fotos dos animais em ${videoPeriodLabel(generatedVideoScope, generatedVideoMeta).toLowerCase()}. Sincronize as abas e tente novamente.`);
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
@@ -4438,202 +4683,127 @@
       recorder.onstop = resolve;
     });
 
-    // Emitir blocos durante a gravação deixa o WebM finalizável também em
-    // navegadores que não entregam todo o conteúdo quando stop() é imediato.
-    let recordedItems = items;
+    setVideoStatus(`Gravando vídeo (${selectedStyleDetails.label})...`);
+    let recordedItems = loadedPairs.map((p) => p.item);
     try {
       recorder.start(500);
       if (generatedVideoStyle === 'mosaic') {
         const groups = [];
-        for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
-        const successfulItems = [];
+        for (let i = 0; i < loadedPairs.length; i += 6) groups.push(loadedPairs.slice(i, i + 6));
         const slideDurationMs = mosaicSlideDuration(groups.length);
-        await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1150, captureTrack);
+        await holdCanvasFrame(() => drawIntro(ctx, canvas, loadedPairs.length), 1150, captureTrack);
         for (let i = 0; i < groups.length; i += 1) {
-          setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[i]));
-          if (!loaded.length) continue;
-          const group = loaded.map((pair) => pair.item);
-          const images = loaded.map((pair) => pair.image);
-          const focuses = images.map(estimatePetFocus);
-          successfulItems.push(...group);
-          setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-          await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), slideDurationMs, captureTrack);
-          images.forEach((image) => { image.src = ''; });
+          setVideoStatus(`Gravando mosaico ${i + 1}/${groups.length}...`);
+          const groupItems = groups[i].map((p) => p.item);
+          const groupImages = groups[i].map((p) => p.image);
+          const groupFocuses = groups[i].map((p) => p.focus);
+          await holdCanvasFrame(() => drawSlide(ctx, canvas, groupItems, groupImages, groupFocuses, i, groups.length), slideDurationMs, captureTrack);
         }
-        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        recordedItems = successfulItems;
-        await holdCanvasFrame(() => drawOutro(ctx, canvas, successfulItems.length), 1050, captureTrack);
+        await holdCanvasFrame(() => drawOutro(ctx, canvas, loadedPairs.length), 1050, captureTrack);
       } else if (generatedVideoStyle === 'rapid') {
-        const batches = [];
-        for (let i = 0; i < items.length; i += RAPID_BATCH_SIZE) batches.push(items.slice(i, i + RAPID_BATCH_SIZE));
-        const durationMs = rapidPhotoDuration(items.length, generatedVideoScope);
-        const successfulItems = [];
-        await holdCanvasFrame(() => drawRapidIntro(ctx, canvas, items), 1450, captureTrack);
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
-          setVideoStatus(`Carregando lote ${batchIndex + 1}/${batches.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
-          for (const pair of loaded) {
-            const itemIndex = items.indexOf(pair.item);
-            const focus = estimatePetFocus(pair.image);
-            successfulItems.push(pair.item);
-            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
-              setVideoStatus(`Montando sequência rápida: ${successfulItems.length}/${items.length} animais...`);
-            }
-            await holdAnimatedCanvasFrame(
-              (progress) => drawRapidPetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
-              durationMs,
-              captureTrack,
-            );
-            pair.image.src = '';
+        const durationMs = rapidPhotoDuration(loadedPairs.length, generatedVideoScope);
+        await holdCanvasFrame(() => drawRapidIntro(ctx, canvas, recordedItems), 1450, captureTrack);
+        for (let index = 0; index < loadedPairs.length; index += 1) {
+          const pair = loadedPairs[index];
+          if (index === 0 || index % 5 === 0 || index === loadedPairs.length - 1) {
+            setVideoStatus(`Montando sequência rápida: ${index + 1}/${loadedPairs.length} animais...`);
           }
-        }
-        if (!successfulItems.length) {
-          throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        }
-        recordedItems = successfulItems;
-        await holdCanvasFrame(() => drawRapidOutro(ctx, canvas, successfulItems), 1800, captureTrack);
-      } else if (generatedVideoStyle === 'cinematic') {
-        const highlights = selectEvenlySpacedVideoItems(items, CINEMATIC_HIGHLIGHT_LIMIT);
-        await holdCanvasFrame(() => drawCinematicIntro(ctx, canvas, items), 1250, captureTrack);
-        setVideoStatus(`Selecionando ${highlights.length} destaques para o modo Cinema...`);
-        const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(highlights));
-        if (!loaded.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        const durationMs = cinematicPhotoDuration(loaded.length);
-        for (let index = 0; index < loaded.length; index += 1) {
-          const pair = loaded[index];
-          const focus = estimatePetFocus(pair.image);
-          setVideoStatus(`Montando cena ${index + 1}/${loaded.length}...`);
           await holdAnimatedCanvasFrame(
-            (progress) => drawCinematicPetFrame(ctx, canvas, pair.item, pair.image, focus, index, loaded.length, progress),
+            (progress) => drawRapidPetFrame(ctx, canvas, pair.item, pair.image, pair.focus, index, loadedPairs.length, progress),
             durationMs,
             captureTrack,
           );
-          pair.image.src = '';
         }
-        recordedItems = loaded.map((pair) => pair.item);
+        await holdCanvasFrame(() => drawRapidOutro(ctx, canvas, recordedItems), 1800, captureTrack);
+      } else if (generatedVideoStyle === 'cinematic') {
+        const durationMs = cinematicPhotoDuration(loadedPairs.length);
+        await holdCanvasFrame(() => drawCinematicIntro(ctx, canvas, items), 1250, captureTrack);
+        for (let index = 0; index < loadedPairs.length; index += 1) {
+          const pair = loadedPairs[index];
+          setVideoStatus(`Montando cena ${index + 1}/${loadedPairs.length}...`);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawCinematicPetFrame(ctx, canvas, pair.item, pair.image, pair.focus, index, loadedPairs.length, progress),
+            durationMs,
+            captureTrack,
+          );
+        }
         await holdCanvasFrame(() => drawCinematicOutro(ctx, canvas, items), 1450, captureTrack);
       } else if (generatedVideoStyle === 'celebration') {
         const groups = [];
-        for (let i = 0; i < items.length; i += CELEBRATION_GROUP_SIZE) groups.push(items.slice(i, i + CELEBRATION_GROUP_SIZE));
+        for (let i = 0; i < loadedPairs.length; i += CELEBRATION_GROUP_SIZE) groups.push(loadedPairs.slice(i, i + CELEBRATION_GROUP_SIZE));
         const durationMs = celebrationSlideDuration(groups.length);
-        const successfulItems = [];
-        await holdAnimatedCanvasFrame((progress) => drawCelebrationIntro(ctx, canvas, items, progress), 1150, captureTrack);
+        await holdAnimatedCanvasFrame((progress) => drawCelebrationIntro(ctx, canvas, recordedItems, progress), 1150, captureTrack);
         for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
           setVideoStatus(`Preparando cards ${groupIndex + 1}/${groups.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[groupIndex]));
-          if (!loaded.length) continue;
-          const group = loaded.map((pair) => pair.item);
-          const images = loaded.map((pair) => pair.image);
-          const focuses = images.map(estimatePetFocus);
-          successfulItems.push(...group);
+          const groupItems = groups[groupIndex].map((p) => p.item);
+          const groupImages = groups[groupIndex].map((p) => p.image);
+          const groupFocuses = groups[groupIndex].map((p) => p.focus);
           await holdAnimatedCanvasFrame(
-            (progress) => drawCelebrationFrame(ctx, canvas, group, images, focuses, groupIndex, groups.length, progress),
+            (progress) => drawCelebrationFrame(ctx, canvas, groupItems, groupImages, groupFocuses, groupIndex, groups.length, progress),
             durationMs,
             captureTrack,
           );
-          images.forEach((image) => { image.src = ''; });
         }
-        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        recordedItems = successfulItems;
-        await holdAnimatedCanvasFrame((progress) => drawCelebrationOutro(ctx, canvas, successfulItems, progress), 1350, captureTrack);
+        await holdAnimatedCanvasFrame((progress) => drawCelebrationOutro(ctx, canvas, recordedItems, progress), 1350, captureTrack);
       } else if (generatedVideoStyle === 'polaroid') {
         const groups = [];
-        for (let i = 0; i < items.length; i += POLAROID_GROUP_SIZE) groups.push(items.slice(i, i + POLAROID_GROUP_SIZE));
+        for (let i = 0; i < loadedPairs.length; i += POLAROID_GROUP_SIZE) groups.push(loadedPairs.slice(i, i + POLAROID_GROUP_SIZE));
         const durationMs = polaroidSlideDuration(groups.length);
-        const successfulItems = [];
-        await holdAnimatedCanvasFrame((progress) => drawPolaroidIntro(ctx, canvas, items, progress), 1250, captureTrack);
+        await holdAnimatedCanvasFrame((progress) => drawPolaroidIntro(ctx, canvas, recordedItems, progress), 1250, captureTrack);
         for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
           setVideoStatus(`Montando álbum polaroid ${groupIndex + 1}/${groups.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[groupIndex]));
-          if (!loaded.length) continue;
-          const group = loaded.map((pair) => pair.item);
-          const images = loaded.map((pair) => pair.image);
-          const focuses = images.map(estimatePetFocus);
-          successfulItems.push(...group);
+          const groupItems = groups[groupIndex].map((p) => p.item);
+          const groupImages = groups[groupIndex].map((p) => p.image);
+          const groupFocuses = groups[groupIndex].map((p) => p.focus);
           await holdAnimatedCanvasFrame(
-            (progress) => drawPolaroidFrame(ctx, canvas, group, images, focuses, groupIndex, groups.length, progress),
+            (progress) => drawPolaroidFrame(ctx, canvas, groupItems, groupImages, groupFocuses, groupIndex, groups.length, progress),
             durationMs,
             captureTrack,
           );
-          images.forEach((image) => { image.src = ''; });
         }
-        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        recordedItems = successfulItems;
-        await holdAnimatedCanvasFrame((progress) => drawPolaroidOutro(ctx, canvas, successfulItems, progress), 1350, captureTrack);
+        await holdAnimatedCanvasFrame((progress) => drawPolaroidOutro(ctx, canvas, recordedItems, progress), 1350, captureTrack);
       } else if (generatedVideoStyle === 'badge') {
-        const batches = [];
-        for (let i = 0; i < items.length; i += BADGE_BATCH_SIZE) batches.push(items.slice(i, i + BADGE_BATCH_SIZE));
-        const durationMs = badgeCardDuration(items.length);
-        const successfulItems = [];
-        await holdCanvasFrame(() => drawBadgeIntro(ctx, canvas, items), 1350, captureTrack);
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
-          setVideoStatus(`Emitindo carteirinhas ${batchIndex + 1}/${batches.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
-          for (const pair of loaded) {
-            const itemIndex = items.indexOf(pair.item);
-            const focus = estimatePetFocus(pair.image);
-            successfulItems.push(pair.item);
-            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
-              setVideoStatus(`Gerando carteirinha: ${successfulItems.length}/${items.length} animais...`);
-            }
-            await holdAnimatedCanvasFrame(
-              (progress) => drawBadgePetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
-              durationMs,
-              captureTrack,
-            );
-            pair.image.src = '';
+        const durationMs = badgeCardDuration(loadedPairs.length);
+        await holdCanvasFrame(() => drawBadgeIntro(ctx, canvas, recordedItems), 1250, captureTrack);
+        for (let index = 0; index < loadedPairs.length; index += 1) {
+          const pair = loadedPairs[index];
+          if (index === 0 || index % 5 === 0 || index === loadedPairs.length - 1) {
+            setVideoStatus(`Exibindo carteirinha: ${index + 1}/${loadedPairs.length} animais...`);
           }
-        }
-        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        recordedItems = successfulItems;
-        await holdCanvasFrame(() => drawBadgeOutro(ctx, canvas, successfulItems), 1500, captureTrack);
-      } else if (generatedVideoStyle === 'pop') {
-        const batches = [];
-        for (let i = 0; i < items.length; i += POP_BATCH_SIZE) batches.push(items.slice(i, i + POP_BATCH_SIZE));
-        const durationMs = popPetDuration(items.length);
-        const successfulItems = [];
-        await holdAnimatedCanvasFrame((progress) => drawPopIntro(ctx, canvas, items, progress), 1250, captureTrack);
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
-          setVideoStatus(`Sincronizando batida ${batchIndex + 1}/${batches.length}...`);
-          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
-          for (const pair of loaded) {
-            const itemIndex = items.indexOf(pair.item);
-            const focus = estimatePetFocus(pair.image);
-            successfulItems.push(pair.item);
-            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
-              setVideoStatus(`Gravando Reels: ${successfulItems.length}/${items.length} animais...`);
-            }
-            await holdAnimatedCanvasFrame(
-              (progress) => drawPopPetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
-              durationMs,
-              captureTrack,
-            );
-            pair.image.src = '';
-          }
-        }
-        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        recordedItems = successfulItems;
-        await holdCanvasFrame(() => drawPopOutro(ctx, canvas, successfulItems), 1500, captureTrack);
-      } else {
-        const highlights = selectEvenlySpacedVideoItems(items, RUNWAY_HIGHLIGHT_LIMIT);
-        await holdCanvasFrame(() => drawRunwayIntro(ctx, canvas, items), 1250, captureTrack);
-        setVideoStatus(`Selecionando ${highlights.length} modelos para o desfile Passarela...`);
-        const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(highlights));
-        if (!loaded.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
-        const durationMs = runwayPhotoDuration(loaded.length);
-        for (let index = 0; index < loaded.length; index += 1) {
-          const pair = loaded[index];
-          const focus = estimatePetFocus(pair.image);
-          setVideoStatus(`Desfilando na passarela ${index + 1}/${loaded.length}...`);
           await holdAnimatedCanvasFrame(
-            (progress) => drawRunwayPetFrame(ctx, canvas, pair.item, pair.image, focus, index, loaded.length, progress),
+            (progress) => drawBadgePetFrame(ctx, canvas, pair.item, pair.image, pair.focus, index, loadedPairs.length, progress),
             durationMs,
             captureTrack,
           );
-          pair.image.src = '';
         }
-        recordedItems = loaded.map((pair) => pair.item);
+        await holdCanvasFrame(() => drawBadgeOutro(ctx, canvas, recordedItems), 1450, captureTrack);
+      } else if (generatedVideoStyle === 'pop') {
+        const durationMs = popPetDuration(loadedPairs.length);
+        await holdAnimatedCanvasFrame((progress) => drawPopIntro(ctx, canvas, recordedItems, progress), 1250, captureTrack);
+        for (let index = 0; index < loadedPairs.length; index += 1) {
+          const pair = loadedPairs[index];
+          if (index === 0 || index % 5 === 0 || index === loadedPairs.length - 1) {
+            setVideoStatus(`Gravando Reels: ${index + 1}/${loadedPairs.length} animais...`);
+          }
+          await holdAnimatedCanvasFrame(
+            (progress) => drawPopPetFrame(ctx, canvas, pair.item, pair.image, pair.focus, index, loadedPairs.length, progress),
+            durationMs,
+            captureTrack,
+          );
+        }
+        await holdCanvasFrame(() => drawPopOutro(ctx, canvas, recordedItems), 1450, captureTrack);
+      } else {
+        const durationMs = runwayPhotoDuration(loadedPairs.length);
+        await holdCanvasFrame(() => drawRunwayIntro(ctx, canvas, items), 1250, captureTrack);
+        for (let index = 0; index < loadedPairs.length; index += 1) {
+          const pair = loadedPairs[index];
+          setVideoStatus(`Desfilando na passarela ${index + 1}/${loadedPairs.length}...`);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawRunwayPetFrame(ctx, canvas, pair.item, pair.image, pair.focus, index, loadedPairs.length, progress),
+            durationMs,
+            captureTrack,
+          );
+        }
         await holdCanvasFrame(() => drawRunwayOutro(ctx, canvas, items), 1450, captureTrack);
       }
       recorder.stop();
@@ -4641,6 +4811,9 @@
     } finally {
       if (recorder.state !== 'inactive') recorder.stop();
       stream.getTracks().forEach((track) => track.stop());
+      loadedPairs.forEach((pair) => {
+        if (pair?.image) pair.image.src = '';
+      });
     }
 
     const containerMime = videoContainerMime(recorder, mimeType);
@@ -6533,6 +6706,192 @@
     document.querySelector('[data-stat="links"]').textContent = links;
   }
 
+  // ───── Doses do dia: sobra herdada + frascos abertos ─────
+  // Os números vêm do servidor, que recalcula a linha do tempo de frascos a
+  // partir das fichas. A assinatura evita refetch a cada troca de filtro: só
+  // busca de novo quando a aba muda ou quando um vacinado/perda entrou.
+  const stockRow = document.getElementById('pmo-stock-row');
+  const stockDayEl = document.getElementById('pmo-stock-day');
+  const stockSubEl = document.getElementById('pmo-stock-sub');
+  const stockHintEl = document.getElementById('pmo-stock-hint');
+  const stockAlertsEl = document.getElementById('pmo-stock-alerts');
+  const stockFormEl = document.getElementById('pmo-stock-form');
+  const stockEditBtn = document.getElementById('pmo-stock-edit');
+  const stockAutoBtn = document.getElementById('pmo-stock-auto');
+  const stockFields = {
+    leftover: document.getElementById('pmo-stock-leftover'),
+    opened: document.getElementById('pmo-stock-opened'),
+    vials: document.getElementById('pmo-stock-vials'),
+    note: document.getElementById('pmo-stock-note'),
+  };
+  let stockSignature = '';
+  let stockTimer = null;
+
+  function stockValue(key, text) {
+    const el = document.querySelector(`[data-stock="${key}"]`);
+    if (el) el.textContent = text;
+  }
+
+  function selectedSheetDate() {
+    return sheetEl.selectedOptions[0]?.dataset.date || '';
+  }
+
+  function currentStockSignature() {
+    const doses = state.rows.reduce((sum, row) => {
+      const vaccinated = (row.animals || []).filter((animal) => animal.status === 'vacinado').length;
+      return sum + vaccinated + (Number(row.losses) || 0);
+    }, 0);
+    return `${selectedSheetDate()}|${state.rows.length}|${doses}`;
+  }
+
+  function stockShiftText(byShift) {
+    const labels = { Manha: 'manhã', Tarde: 'tarde', '': 'sem turno' };
+    return Object.entries(byShift || {})
+      .map(([shift, counts]) => `${labels[shift] || shift} ${counts.dogs + counts.cats + counts.losses}`)
+      .join(' · ');
+  }
+
+  function renderStock(stock) {
+    stockDayEl.textContent = stock.dayLabel ? `· ${stock.dayLabel}` : '';
+
+    stockValue('leftoverStart', stock.leftoverStart);
+    stockValue('leftoverInfo', stock.leftoverStart
+      ? `${stock.leftoverOpenedOn ? `frasco de ${stock.leftoverOpenedOn} · ` : ''}vale até ${stock.leftoverValidUntil || '—'}`
+      : 'nenhuma sobra válida herdada');
+
+    stockValue('vialsOpened', stock.vialsOpened);
+    stockValue('vialsInfo', stock.vialsOpened
+      ? `${stock.vialsOpened * stock.vialDoses} doses novas`
+      : 'nenhum frasco novo aberto');
+
+    stockValue('used', stock.used);
+    const shifts = stockShiftText(stock.byShift);
+    stockValue('usedInfo', stock.used
+      ? `🐕${stock.usedDogs} 🐈${stock.usedCats} · perdas ${stock.losses}${shifts ? ` · ${shifts}` : ''}`
+      : 'nada aplicado ainda');
+
+    stockValue('remaining', stock.remaining);
+    stockValue('remainingInfo', `de ${stock.available} disponível(is) hoje`);
+
+    const manual = [];
+    if (stock.leftoverStartSource === 'manual') manual.push('sobra');
+    if (stock.vialsSource === 'manual') manual.push('frascos');
+    stockSubEl.textContent = manual.length
+      ? `${manual.join(' e ')} ajustado(s) à mão${stock.updatedBy ? ` por ${stock.updatedBy}` : ''}; o resto continua calculado pelas fichas.`
+      : 'Calculado pelas fichas: vacinados + perdas. Ajuste se a realidade divergir.';
+
+    if (stock.planningHint) {
+      stockHintEl.textContent = stock.planningHint;
+      stockHintEl.classList.remove('d-none');
+    } else {
+      stockHintEl.classList.add('d-none');
+    }
+
+    if ((stock.alerts || []).length) {
+      stockAlertsEl.innerHTML = stock.alerts.map((alert) => `<div>⚠️ ${escapeHtml(alert)}</div>`).join('');
+      stockAlertsEl.classList.remove('d-none');
+    } else {
+      stockAlertsEl.classList.add('d-none');
+    }
+
+    // O campo em branco mostra o número automático como placeholder: dá para
+    // ver o que o site calculou sem transformar isso num valor digitado.
+    stockFields.leftover.value = stock.leftoverStartSource === 'manual' ? stock.leftoverStart : '';
+    stockFields.leftover.placeholder = `automático (${stock.leftoverStart})`;
+    stockFields.vials.value = stock.vialsSource === 'manual' ? stock.vialsOpened : '';
+    stockFields.vials.placeholder = `automático (${stock.vialsOpenedAuto})`;
+    stockFields.opened.value = stock.leftoverStartSource === 'manual' && stock.leftoverOpenedOn
+      ? stock.leftoverOpenedOn.split('/').reverse().join('-')
+      : '';
+    stockFields.note.value = stock.note || '';
+  }
+
+  async function refreshDayStock(force = false) {
+    const day = selectedSheetDate();
+    if (!day) {
+      stockRow.hidden = true;
+      stockSignature = '';
+      return;
+    }
+    const signature = currentStockSignature();
+    if (!force && signature === stockSignature) return;
+    stockSignature = signature;
+    try {
+      const response = await fetch(`/vacina-pmo/dia/${day}/frascos`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível ler os frascos do dia.');
+      }
+      if (day !== selectedSheetDate()) return; // trocou de aba no meio da requisição
+      renderStock(payload.stock);
+      stockRow.hidden = false;
+    } catch (error) {
+      stockSignature = ''; // permite nova tentativa no próximo render
+      console.warn('Frascos do dia', error);
+    }
+  }
+
+  function scheduleDayStockRefresh(force = false) {
+    window.clearTimeout(stockTimer);
+    stockTimer = window.setTimeout(() => refreshDayStock(force), force ? 0 : 600);
+  }
+
+  async function saveDayStock(values) {
+    const day = selectedSheetDate();
+    if (!day) return;
+    const response = await fetch(`/vacina-pmo/dia/${day}/frascos`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify(values),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível salvar o ajuste.');
+    }
+    renderStock(payload.stock);
+  }
+
+  if (stockEditBtn && stockFormEl) {
+    stockEditBtn.addEventListener('click', () => {
+      stockFormEl.classList.toggle('d-none');
+      if (!stockFormEl.classList.contains('d-none')) stockFields.leftover.focus();
+    });
+
+    stockFormEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        await saveDayStock({
+          leftover_start: stockFields.leftover.value,
+          leftover_opened_on: stockFields.opened.value,
+          vials_opened: stockFields.vials.value,
+          note: stockFields.note.value,
+        });
+        stockFormEl.classList.add('d-none');
+        if (window.showAppToast) window.showAppToast('Frascos do dia atualizados.', 'success');
+      } catch (error) {
+        if (window.showAppToast) window.showAppToast(error.message, 'danger');
+        else alert(error.message);
+      }
+    });
+
+    stockAutoBtn.addEventListener('click', async () => {
+      try {
+        await saveDayStock({
+          leftover_start: '', leftover_opened_on: '', vials_opened: '', note: '',
+        });
+        stockFormEl.classList.add('d-none');
+      } catch (error) {
+        if (window.showAppToast) window.showAppToast(error.message, 'danger');
+      }
+    });
+  }
+
   function numericRating(value) {
     const rating = Number(value);
     return Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : null;
@@ -6711,6 +7070,7 @@
 
   function render() {
     renderStats(state.rows);
+    scheduleDayStockRefresh();
     renderEvaluationScope();
     updateFullRouteMapsButton();
     const visible = state.rows.filter(rowMatchesFilters);

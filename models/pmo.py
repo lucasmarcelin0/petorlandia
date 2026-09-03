@@ -125,6 +125,57 @@ class PmoVaccinationAnimal(db.Model):
     vaccine = db.relationship('Vacina', foreign_keys=[vaccine_id])
 
 
+class PmoVaccinationDayStock(db.Model):
+    """Correções manuais do controle de frascos de um dia de campanha.
+
+    O normal é o app calcular tudo sozinho: as doses usadas no dia saem das
+    fichas (cães + gatos vacinados + perdas) e a sobra de um dia abastece o
+    seguinte enquanto o frasco aberto estiver dentro da validade. Esta tabela
+    guarda só o que a realidade impôs contra a conta — frasco que quebrou,
+    sobra que foi descartada, frasco extra aberto. Campo nulo significa
+    "continua automático", e é por isso que nada aqui tem default numérico:
+    zero é uma afirmação do vacinador ("não abri nenhum frasco"), diferente de
+    "não me pergunte, calcule".
+    """
+
+    __tablename__ = 'pmo_vaccination_day_stock'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'spreadsheet_id', 'day', name='uq_pmo_vaccination_day_stock_day'
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    spreadsheet_id = db.Column(db.String(128), nullable=False, index=True)
+    day = db.Column(db.Date, nullable=False, index=True)
+    # Sobra herdada do dia anterior, em doses, quando o vacinador corrige.
+    leftover_start = db.Column(db.Integer, nullable=True)
+    # Dia em que o frasco dessa sobra foi aberto — é ele que define a validade.
+    leftover_opened_on = db.Column(db.Date, nullable=True)
+    # Frascos lacrados abertos neste dia.
+    vials_opened = db.Column(db.Integer, nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    updated_by_id = db.Column(
+        db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True
+    )
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    updated_by = db.relationship('User', foreign_keys=[updated_by_id])
+
+    @property
+    def is_empty(self) -> bool:
+        """Sem nenhuma correção: a linha pode ser apagada e tudo volta ao automático."""
+        return (
+            self.leftover_start is None
+            and self.leftover_opened_on is None
+            and self.vials_opened is None
+            and not (self.note or '').strip()
+        )
+
+
 class PmoVaccinationVisitToken(db.Model):
     """Link de carteirinha que ja foi entregue ao morador e precisa continuar valendo.
 
