@@ -1,4 +1,4 @@
-﻿"""Cadastra/atualiza a Sulfadiazina de Prata 10mg/g Creme 30g no Bulario e na Loja (idempotente).
+"""Cadastra/atualiza a Sulfadiazina de Prata 10mg/g Creme 30g no Bulario e na Loja (idempotente).
 
 Uso:
     python scripts/seed_produto_sulfadiazina.py
@@ -57,7 +57,7 @@ def seed_sulfadiazina(
     preco: float = 29.00,
     estoque: int = 10,
     nome_produto: str = NOME_PRODUTO,
-    casa_de_racao_id: int | None = 34,
+    casa_de_racao_id: int | None = None,
 ):
     # 1. Garantir Medicamento no Bulario
     med = Medicamento.query.filter(

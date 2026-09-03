@@ -3,8 +3,6 @@
 from extensions import db
 from models.bulario import ApresentacaoMedicamento, DoseMedicamento, Medicamento
 from models.loja import Product, ProductVariant
-from models.racao import CasaDeRacao
-from models.usuarios import User
 from services.prescription_store import build_prescription_offers
 
 
@@ -15,25 +13,8 @@ class _FakePrescricao:
 
 def test_sulfadiazina_match_produto_loja(app):
     with app.app_context():
-        user = User(
-            name="Lojista Teste",
-            email="lojista.sulfadiazina@teste.com",
-            password_hash="test_hash",
-            role="adotante",
-        )
-        db.session.add(user)
-        db.session.commit()
-
-        # Casa de ração ativa
-        casa = CasaDeRacao(
-            nome="AgroGraner Teste",
-            status="ativa",
-            owner_id=user.id,
-        )
-        db.session.add(casa)
-        db.session.commit()
-
-        # Produto na loja com preco base de 29.00 (sem taxas da plataforma)
+        # Vendido diretamente pela PetOrlândia (casa_de_racao_id=None)
+        # Preço base de 29.00 (sem taxas da plataforma)
         # Com taxa da plataforma de 10%, preco publico = 29.00 / 0.90 = 32.22
         produto = Product(
             name="Sulfadiazina de Prata 10mg/g Creme 30g",
@@ -43,7 +24,7 @@ def test_sulfadiazina_match_produto_loja(app):
             status="active",
             is_demo=False,
             category="medicamento",
-            casa_de_racao_id=casa.id,
+            casa_de_racao_id=None,
             image_url="https://petorlandia.s3.amazonaws.com/products/sulfadiazina_de_prata_10mg_creme_30g.png",
         )
         db.session.add(produto)
@@ -66,6 +47,7 @@ def test_sulfadiazina_match_produto_loja(app):
         # Validar cálculo de preço público com taxa embutida
         assert float(produto.price) == 29.00
         assert float(produto.preco_publico) == 32.22
+        assert produto.casa_de_racao_id is None
 
         # Prescrição veterinária de Sulfadiazina de Prata 10mg/g
         prescricao = _FakePrescricao("Sulfadiazina de Prata 10mg/g — Creme dermatológico")

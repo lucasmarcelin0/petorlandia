@@ -1,8 +1,8 @@
-Ôªø"""Cadastra/atualiza a Cefalexina 250mg/5ml P√≥ para Suspens√£o Oral no Bul√°rio e na Loja (idempotente).
+"""Cadastra/atualiza a Cefalexina 250mg/5ml PÛ para Suspens„o Oral no Bul·rio e na Loja (idempotente).
 
 Uso:
     python scripts/seed_produto_cefalexina_suspensao.py
-    # ou ajustando par√¢metros:
+    # ou ajustando par‚metros:
     python scripts/seed_produto_cefalexina_suspensao.py --preco 60.00 --estoque 10 --casa-de-racao-id 34
 """
 
@@ -25,19 +25,19 @@ NOME_MEDICAMENTO = "Cefalexina"
 PRINCIPIO_ATIVO = "Cefalexina"
 CLASSIFICACAO = "Antimicrobiano"
 
-NOME_PRODUTO = "Cefalexina 250mg/5ml P√≥ para Suspens√£o Oral 100ml"
+NOME_PRODUTO = "Cefalexina 250mg/5ml PÛ para Suspens„o Oral 100ml"
 NOMES_ANTERIORES = [
-    "Cefalexina 250mg/5ml P√≥ para Suspens√£o Oral",
-    "Cefalexina 250mg/5ml Suspens√£o Oral",
-    "Cefalexina 250 mg / 5 mL Suspens√£o Oral",
-    "Cefalexina 250mg/5ml Suspens√£o Oral 100ml",
-    "Cefalexina 250mg/5ml Suspens√£o Oral 60ml",
+    "Cefalexina 250mg/5ml PÛ para Suspens„o Oral",
+    "Cefalexina 250mg/5ml Suspens„o Oral",
+    "Cefalexina 250 mg / 5 mL Suspens„o Oral",
+    "Cefalexina 250mg/5ml Suspens„o Oral 100ml",
+    "Cefalexina 250mg/5ml Suspens„o Oral 60ml",
 ]
 DESCRICAO_PRODUTO = (
-    "Cefalexina 250 mg/5 mL (50 mg/mL) p√≥ para prepara√ß√£o de suspens√£o oral. "
-    "Frasco para reconstitui√ß√£o de 100 mL com seringa dosadora. "
-    "Antimicrobiano de amplo espectro para c√£es e gatos. "
-    "Venda sob prescri√ß√£o m√©dica com reten√ß√£o de receita."
+    "Cefalexina 250 mg/5 mL (50 mg/mL) pÛ para preparaÁ„o de suspens„o oral. "
+    "Frasco para reconstituiÁ„o de 100 mL com seringa dosadora. "
+    "Antimicrobiano de amplo espectro para c„es e gatos. "
+    "Venda sob prescriÁ„o mÈdica com retenÁ„o de receita."
 )
 IMAGEM_PRODUTO = "https://petorlandia.s3.amazonaws.com/products/cefalexina_250mg_suspensao_100ml.png"
 IMAGEM_LOCAL = "/static/img/produtos/cefalexina_250mg_suspensao_100ml.png"
@@ -47,10 +47,10 @@ CATEGORIA_PRODUTO = "medicamento"
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--nome-produto", default=NOME_PRODUTO)
-    parser.add_argument("--preco", type=float, default=60.00, help="Pre√ßo base l√≠quido do vendedor (sem taxas)")
+    parser.add_argument("--preco", type=float, default=60.00, help="PreÁo base lÌquido do vendedor (sem taxas)")
     parser.add_argument("--estoque", type=int, default=10)
     parser.add_argument("--categoria", default=CATEGORIA_PRODUTO)
-    parser.add_argument("--casa-de-racao-id", type=int, default=34, help="ID da Casa de Ra√ß√£o (padr√£o: 34 AgroGraner)")
+    parser.add_argument("--casa-de-racao-id", type=int, default=None, help="ID da Casa de RaÁ„o (padr„o: 34 AgroGraner)")
     return parser.parse_args()
 
 
@@ -58,9 +58,9 @@ def seed_cefalexina_suspensao(
     preco: float = 60.00,
     estoque: int = 10,
     nome_produto: str = NOME_PRODUTO,
-    casa_de_racao_id: int | None = 34,
+    casa_de_racao_id: int | None = None,
 ):
-    # 1. Garantir Medicamento no Bul√°rio
+    # 1. Garantir Medicamento no Bul·rio
     med = Medicamento.query.filter(
         db.or_(
             Medicamento.nome.ilike(f"%{NOME_MEDICAMENTO}%"),
@@ -85,14 +85,14 @@ def seed_cefalexina_suspensao(
     else:
         print(f"Medicamento encontrado: {med.nome} (id={med.id})")
 
-    # 2. Garantir Apresenta√ß√£o Suspens√£o 250mg/5ml no Bul√°rio
+    # 2. Garantir ApresentaÁ„o Suspens„o 250mg/5ml no Bul·rio
     apres = (
         ApresentacaoMedicamento.query
         .filter_by(medicamento_id=med.id)
         .filter(
             db.or_(
-                ApresentacaoMedicamento.forma.ilike("%suspens√£o%"),
-                ApresentacaoMedicamento.forma.ilike("%solu√ß√£o%"),
+                ApresentacaoMedicamento.forma.ilike("%suspens„o%"),
+                ApresentacaoMedicamento.forma.ilike("%soluÁ„o%"),
             ),
             ApresentacaoMedicamento.concentracao.ilike("%250%5%"),
         )
@@ -102,33 +102,33 @@ def seed_cefalexina_suspensao(
     if apres is None:
         apres = ApresentacaoMedicamento(
             medicamento_id=med.id,
-            forma="suspens√£o oral",
+            forma="suspens„o oral",
             concentracao="250 mg / 5 mL",
             concentracao_valor=50.0,
             concentracao_unidade="mg/ml",
             volume_valor=100.0,
             volume_unidade="ml",
-            fabricante="Medicamento Gen√©rico",
+            fabricante="Medicamento GenÈrico",
             nome_variante=NOME_PRODUTO,
-            nome_comercial="Cefalexina 250 mg / 5 mL Suspens√£o Oral",
+            nome_comercial="Cefalexina 250 mg / 5 mL Suspens„o Oral",
         )
         db.session.add(apres)
         db.session.flush()
-        print(f"Apresenta√ß√£o criada: {apres.forma} {apres.concentracao} (id={apres.id})")
+        print(f"ApresentaÁ„o criada: {apres.forma} {apres.concentracao} (id={apres.id})")
     else:
-        apres.forma = "suspens√£o oral"
+        apres.forma = "suspens„o oral"
         apres.concentracao = "250 mg / 5 mL"
         apres.concentracao_valor = 50.0
         apres.concentracao_unidade = "mg/ml"
         apres.volume_valor = 100.0
         apres.volume_unidade = "ml"
         if not apres.fabricante:
-            apres.fabricante = "Medicamento Gen√©rico"
+            apres.fabricante = "Medicamento GenÈrico"
         if not apres.nome_variante:
             apres.nome_variante = NOME_PRODUTO
-        print(f"Apresenta√ß√£o existente atualizada: {apres.forma} {apres.concentracao} (id={apres.id})")
+        print(f"ApresentaÁ„o existente atualizada: {apres.forma} {apres.concentracao} (id={apres.id})")
 
-    # 3. Validar Casa de Ra√ß√£o se informada
+    # 3. Validar Casa de RaÁ„o se informada
     casa = None
     if casa_de_racao_id:
         try:
@@ -136,9 +136,9 @@ def seed_cefalexina_suspensao(
         except Exception:
             casa = None
         if casa:
-            print(f"Vinculado √† Casa de Ra√ß√£o: {casa.nome} (id={casa.id}, status={casa.status})")
+            print(f"Vinculado ‡ Casa de RaÁ„o: {casa.nome} (id={casa.id}, status={casa.status})")
         else:
-            print(f"Aviso: CasaDeRacao {casa_de_racao_id} n√£o encontrada; cadastrando sem casa espec√≠fica.")
+            print(f"Aviso: CasaDeRacao {casa_de_racao_id} n„o encontrada; cadastrando sem casa especÌfica.")
             casa_de_racao_id = None
 
     # 4. Garantir Produto na Loja
@@ -206,12 +206,12 @@ def seed_cefalexina_suspensao(
     print(f"OK: Produto {'criado' if criado else 'atualizado'}:")
     print(f" - ID: {produto.id}")
     print(f" - Nome: {produto.name}")
-    print(f" - Pre√ßo Base (Repasse sem taxas): R$ {produto.price:.2f}")
-    print(f" - Pre√ßo P√∫blico com Taxa: R$ {preco_pub:.2f} (Taxa da plataforma: R$ {taxa:.2f})")
+    print(f" - PreÁo Base (Repasse sem taxas): R$ {produto.price:.2f}")
+    print(f" - PreÁo P˙blico com Taxa: R$ {preco_pub:.2f} (Taxa da plataforma: R$ {taxa:.2f})")
     print(f" - Estoque: {produto.stock} unidades")
     print(f" - Categoria: {produto.category}")
-    print(f" - Status: {produto.status} (Vis√≠vel na loja)")
-    print(f" - Casa de Ra√ß√£o: {casa.nome if casa else 'Geral / Plataforma'} (ID: {produto.casa_de_racao_id})")
+    print(f" - Status: {produto.status} (VisÌvel na loja)")
+    print(f" - Casa de RaÁ„o: {casa.nome if casa else 'Geral / Plataforma'} (ID: {produto.casa_de_racao_id})")
     print(f" - Imagem: {produto.image_url}")
     print("="*60 + "\n")
 
