@@ -9,7 +9,7 @@ from flask import abort, current_app, flash, jsonify, redirect, render_template,
 from flask_login import current_user, login_required
 from io import BytesIO
 from models import Animal, Endereco, User, Vacina
-from time_utils import BR_TZ
+from time_utils import BR_TZ, now_in_brazil
 from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
 
@@ -631,44 +631,105 @@ def vacina_pmo_doses_webhook():
     return jsonify({'success': True, 'message': 'Compilação do Controle de doses iniciada.'})
 
 
+def _pmo_painel_guard():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+
+
 @bp.route('/vacina-pmo/painel')
 @login_required
 def vacina_pmo_painel():
-    if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
-    from services.vacina_pmo_service import get_vacina_pmo_kpis, get_controle_de_doses_summary
+    """Casca do painel: nada de planilha nem varredura do banco aqui.
+
+    Cada bloco pesado (planilha de doses/frascos, pipeline e lista de
+    vacinados) vem por fetch depois que a página já está na tela. Antes, as
+    quatro leituras — duas delas round-trips à API do Google — aconteciam antes
+    do primeiro byte, e o painel levava dezenas de segundos para abrir.
+    """
+    _pmo_painel_guard()
+    return render_template('vacina_pmo/painel.html')
+
+
+@bp.route('/vacina-pmo/painel/planilha')
+@login_required
+def vacina_pmo_painel_planilha():
+    """Resumo de doses + controle de frascos, ambos do mesmo snapshot da aba."""
+    _pmo_painel_guard()
+    from services.vacina_pmo_service import (
+        get_controle_de_doses_summary,
+        get_pmo_frascos_ledger,
+        invalidate_pmo_painel_caches,
+    )
+
+    use_cache = request.args.get('refresh') not in ('1', 'true', 'yes')
+    if not use_cache:
+        invalidate_pmo_painel_caches()
     try:
-        kpis = get_vacina_pmo_kpis()
-    except Exception as exc:
-        current_app.logger.exception("Falha ao montar painel Vacina PMO")
-        kpis = {'error': str(exc)}
-    try:
-        doses = get_controle_de_doses_summary()
+        doses = get_controle_de_doses_summary(use_cache=use_cache)
     except Exception as exc:
         current_app.logger.exception("Falha ao ler Controle de doses PMO")
         doses = {'error': str(exc)}
     try:
-        from services.vacina_pmo_service import get_vacina_pmo_cobertura_summary
-        cobertura = get_vacina_pmo_cobertura_summary()
-    except Exception as exc:
-        current_app.logger.exception("Falha ao montar cobertura ativa PMO")
-        cobertura = {'error': str(exc)}
-    try:
-        from services.vacina_pmo_service import get_pmo_frascos_ledger
-        frascos = get_pmo_frascos_ledger()
+        frascos = get_pmo_frascos_ledger(use_cache=use_cache)
     except Exception as exc:
         current_app.logger.exception("Falha ao montar controle de frascos PMO")
         frascos = {'error': str(exc)}
-    return render_template(
-        'vacina_pmo/painel.html', kpis=kpis, doses=doses, cobertura=cobertura, frascos=frascos
-    )
+    return jsonify({
+        'success': True,
+        'doses': doses,
+        'frascos': frascos,
+        'fetchedAt': now_in_brazil().strftime('%d/%m/%Y %H:%M'),
+        'cached': use_cache,
+    })
+
+
+@bp.route('/vacina-pmo/painel/pipeline')
+@login_required
+def vacina_pmo_painel_pipeline():
+    _pmo_painel_guard()
+    from services.vacina_pmo_service import get_vacina_pmo_kpis
+
+    try:
+        return jsonify({'success': True, 'kpis': get_vacina_pmo_kpis()})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar pipeline Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@bp.route('/vacina-pmo/painel/vacinados')
+@login_required
+def vacina_pmo_painel_vacinados():
+    """Animais com dose registrada, na ordem e no filtro pedidos pela tela."""
+    _pmo_painel_guard()
+    from services.vacina_pmo_service import PMO_VACINADOS_PAGE_SIZE, get_vacina_pmo_vacinados
+
+    try:
+        per_page = int(request.args.get('per_page') or PMO_VACINADOS_PAGE_SIZE)
+    except (TypeError, ValueError):
+        per_page = PMO_VACINADOS_PAGE_SIZE
+    try:
+        page = int(request.args.get('page') or 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        payload = get_vacina_pmo_vacinados(
+            order=request.args.get('order') or 'recentes',
+            status=request.args.get('status') or 'todos',
+            query=request.args.get('q') or '',
+            page=page,
+            per_page=per_page,
+        )
+    except Exception as exc:
+        current_app.logger.exception("Falha ao listar vacinados PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+    payload['success'] = True
+    return jsonify(payload)
 
 
 @bp.route('/vacina-pmo/cobertura-ativa')
 @login_required
 def vacina_pmo_cobertura_ativa():
-    if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
+    _pmo_painel_guard()
     try:
         from services.vacina_pmo_service import get_vacina_pmo_cobertura_detail
         detail = get_vacina_pmo_cobertura_detail()

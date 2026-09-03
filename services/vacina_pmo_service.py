@@ -94,6 +94,10 @@ PMO_MASTER_SHEET_TITLE = os.getenv("PMO_VACCINE_MASTER_SHEET_TITLE", "Vacinaçã
 # Aba de controle de doses/estoque mantida à mão (fonte oficial de vacinados/perdas).
 PMO_DOSES_SHEET_TITLE_ENV = "PMO_VACCINE_DOSES_SHEET_TITLE"
 PMO_DOSES_SHEET_DEFAULT_TITLE = "Controle de doses"
+# Faixa única lida da aba de doses. Resumo e controle de frascos passam a ler a
+# MESMA faixa de propósito: assim as duas visões do painel saem do mesmo
+# snapshot (não podem divergir entre si) e de uma só chamada em cache.
+PMO_DOSES_SHEET_RANGE = "A1:AZ400"
 _PMO_MONTHS = [
     "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
     "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
@@ -2012,6 +2016,53 @@ def list_vacina_pmo_sheets(*, use_cache: bool = True) -> list[dict[str, Any]]:
         )
     _PMO_SHEETS_CACHE[spreadsheet_id] = (time.monotonic(), sheets)
     return [dict(item) for item in sheets]
+
+
+# Faixas de valores da planilha. O painel lê a mesma aba "Controle de doses"
+# duas vezes (resumo de doses e controle de frascos) e pagava o round-trip
+# inteiro em cada abertura. Guardar os valores por alguns minutos tira isso do
+# caminho de abertura; o botão "Atualizar" do painel força a releitura.
+PMO_SHEET_VALUES_CACHE_TTL = 300.0
+_PMO_SHEET_VALUES_CACHE: dict[tuple[str, str], tuple[float, list[list[Any]]]] = {}
+
+
+def _pmo_spreadsheet_id() -> str:
+    spreadsheet_id = _extract_google_sheet_id(
+        os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    )
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+    return spreadsheet_id
+
+
+def invalidate_pmo_sheet_values_cache() -> None:
+    _PMO_SHEET_VALUES_CACHE.clear()
+
+
+def read_pmo_sheet_values(
+    spreadsheet_id: str, title: str, a1_range: str, *, use_cache: bool = True
+) -> list[list[Any]]:
+    """Lê uma faixa da planilha PMO com cache de leitura por alguns minutos."""
+    key = (spreadsheet_id, f"{title}!{a1_range}")
+    cached = _PMO_SHEET_VALUES_CACHE.get(key)
+    if use_cache and cached and (time.monotonic() - cached[0]) < PMO_SHEET_VALUES_CACHE_TTL:
+        return [list(row) for row in cached[1]]
+    service = _get_sheets_service()
+    values = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!{a1_range}")
+        .execute()
+        .get("values", [])
+    )
+    _PMO_SHEET_VALUES_CACHE[key] = (time.monotonic(), values)
+    return [list(row) for row in values]
+
+
+def invalidate_pmo_painel_caches() -> None:
+    """Zera tudo que o painel guarda de planilha (usado pelo botão Atualizar)."""
+    invalidate_vacina_pmo_sheets_cache()
+    invalidate_pmo_sheet_values_cache()
 
 
 def infer_visit_status(animals: list[dict[str, Any]] | list[PmoVaccinationAnimal]) -> str:
@@ -3941,23 +3992,13 @@ def _pmo_normalize_title(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _resolve_pmo_sheet_title(service, spreadsheet_id: str, wanted: str) -> str:
-    """Acha o título real de uma aba de forma tolerante.
+def _pmo_match_sheet_title(titles: list[str], wanted: str) -> str:
+    """Acha o título real de uma aba de forma tolerante, dentro de ``titles``.
 
     Ordem de tentativa: igualdade normalizada (sem acento/maiúscula/espaços
     repetidos) → todas as palavras procuradas presentes na aba → substring em
     qualquer direção. Se nada casar, lista as abas disponíveis no erro.
     """
-    metadata = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
-        .execute()
-    )
-    titles = [
-        sheet.get("properties", {}).get("title", "")
-        for sheet in metadata.get("sheets", [])
-        if sheet.get("properties", {}).get("title")
-    ]
     target = _pmo_normalize_title(wanted)
 
     for title in titles:  # 1) igualdade normalizada
@@ -3978,6 +4019,33 @@ def _resolve_pmo_sheet_title(service, spreadsheet_id: str, wanted: str) -> str:
     raise ValueError(
         f"Não encontrei a aba '{wanted}' na planilha PMO. Abas disponíveis: {disponiveis}."
     )
+
+
+def _resolve_pmo_sheet_title(service, spreadsheet_id: str, wanted: str) -> str:
+    """Versão que consulta a API na hora (usada por escritas, que não podem
+    trabalhar sobre uma lista de abas possivelmente velha)."""
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    titles = [
+        sheet.get("properties", {}).get("title", "")
+        for sheet in metadata.get("sheets", [])
+        if sheet.get("properties", {}).get("title")
+    ]
+    return _pmo_match_sheet_title(titles, wanted)
+
+
+def resolve_pmo_sheet_title_cached(wanted: str, *, use_cache: bool = True) -> str:
+    """Mesma resolução, mas sobre a lista de abas em cache (TTL de minutos).
+
+    Leituras de painel não precisam de metadados frescos: uma aba nova só
+    aparece quando um dia de campanha é criado, e esse caminho já invalida o
+    cache. Evita um round-trip à API por bloco do painel.
+    """
+    titles = [sheet["title"] for sheet in list_vacina_pmo_sheets(use_cache=use_cache)]
+    return _pmo_match_sheet_title(titles, wanted)
 
 
 def _pmo_color_is_white(color: dict[str, float] | None) -> bool:
@@ -4577,28 +4645,19 @@ def _pmo_last_numeric(row: list[Any]) -> int:
     return last
 
 
-def get_controle_de_doses_summary() -> dict[str, Any]:
+def get_controle_de_doses_summary(*, use_cache: bool = True) -> dict[str, Any]:
     """Espelha a aba 'Controle de doses' (vacinados, doses, perdas por mês).
 
     Só leitura. Usa o último número de cada linha (Cachorros/Gatos/Doses/Perdas)
     como total do mês, o que é robusto às irregularidades da planilha manual.
     """
-    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
-    spreadsheet_id = _extract_google_sheet_id(sheet_url)
-    if not spreadsheet_id:
-        raise RuntimeError("URL/ID da planilha PMO inválido.")
-    service = _get_sheets_service()
-    title = _resolve_pmo_sheet_title(
-        service,
-        spreadsheet_id,
+    spreadsheet_id = _pmo_spreadsheet_id()
+    title = resolve_pmo_sheet_title_cached(
         os.getenv(PMO_DOSES_SHEET_TITLE_ENV, PMO_DOSES_SHEET_DEFAULT_TITLE),
+        use_cache=use_cache,
     )
-    values = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!A1:Z200")
-        .execute()
-        .get("values", [])
+    values = read_pmo_sheet_values(
+        spreadsheet_id, title, PMO_DOSES_SHEET_RANGE, use_cache=use_cache
     )
 
     per_month: list[dict[str, Any]] = []
@@ -5167,6 +5226,11 @@ def compile_controle_de_doses(*, dry_run: bool = False, include_compiled: bool =
 
         compiled.append({"title": title, "date": day.isoformat(), "columns": written_columns})
 
+    if compiled and not dry_run:
+        # A aba de doses acabou de mudar: o painel precisa ler os números novos
+        # em vez do snapshot em cache.
+        invalidate_pmo_sheet_values_cache()
+
     return {
         "compiled": compiled,
         "unchanged": unchanged,
@@ -5190,7 +5254,7 @@ def _pmo_br_date(value: date) -> str:
     return value.strftime("%d/%m/%Y")
 
 
-def get_pmo_frascos_ledger() -> dict[str, Any]:
+def get_pmo_frascos_ledger(*, use_cache: bool = True) -> dict[str, Any]:
     """Reconstrói a linha do tempo de frascos a partir da "Controle de doses".
 
     Só leitura. A sobra é derivada (nunca digitada): sobra = sobra válida
@@ -5200,23 +5264,14 @@ def get_pmo_frascos_ledger() -> dict[str, Any]:
     """
     vial = PMO_FRASCO_DOSES
     validity = PMO_FRASCO_VALIDADE_DIAS
-    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
-    spreadsheet_id = _extract_google_sheet_id(sheet_url)
-    if not spreadsheet_id:
-        raise RuntimeError("URL/ID da planilha PMO inválido.")
-    service = _get_sheets_service()
-    metadata = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))")
-        .execute()
-    )
+    spreadsheet_id = _pmo_spreadsheet_id()
     today = now_in_brazil().date()
 
     wanted_doses_title = os.getenv(PMO_DOSES_SHEET_TITLE_ENV, PMO_DOSES_SHEET_DEFAULT_TITLE)
     doses_title = ""
     next_scheduled: date | None = None
-    for sheet in metadata.get("sheets", []):
-        title = sheet.get("properties", {}).get("title", "")
+    for sheet in list_vacina_pmo_sheets(use_cache=use_cache):
+        title = sheet.get("title", "")
         if _pmo_normalize_title(title) == _pmo_normalize_title(wanted_doses_title):
             doses_title = title
             continue
@@ -5227,12 +5282,8 @@ def get_pmo_frascos_ledger() -> dict[str, Any]:
     if not doses_title:
         raise RuntimeError(f"Aba '{wanted_doses_title}' não encontrada na planilha PMO.")
 
-    values = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(doses_title)}!A1:AZ400")
-        .execute()
-        .get("values", [])
+    values = read_pmo_sheet_values(
+        spreadsheet_id, doses_title, PMO_DOSES_SHEET_RANGE, use_cache=use_cache
     )
 
     per_day: dict[date, int] = {}
@@ -5375,7 +5426,14 @@ def get_vacina_pmo_kpis() -> dict[str, Any]:
         _overall_status,
     )
 
-    all_visits = PmoVaccinationVisit.query.all()
+    # selectinload obrigatório: _overall_status percorre ``visit.animals`` três
+    # vezes por visita e, sem eager loading, cada casa vira um SELECT próprio —
+    # era o grosso do tempo de abertura do painel.
+    from sqlalchemy.orm import selectinload
+
+    all_visits = (
+        PmoVaccinationVisit.query.options(selectinload(PmoVaccinationVisit.animals)).all()
+    )
     by_phone, by_name, by_user = _build_visit_index(all_visits)
 
     master_visits = [v for v in all_visits if v.sheet_title == MASTER_SHEET_TITLE]
@@ -5649,108 +5707,223 @@ def _pmo_format_phone_wa(raw: str | None) -> str | None:
     return digits if len(digits) >= 12 else None
 
 
-def get_vacina_pmo_cobertura_summary() -> dict[str, Any]:
-    """Retorna 3 contadores rápidos de cobertura ativa, sem carregar objetos."""
-    from sqlalchemy import func, case
-    from models import PmoVaccinationAnimal, PmoVaccinationVisit
+PMO_VACINADOS_PAGE_SIZE = 60
 
-    today = date.today()
-    threshold_30 = today + timedelta(days=30)
+# Ordens que o painel oferece. "recentes"/"antigos" olham a data da dose;
+# "vencendo" olha o que falta para a proteção acabar.
+PMO_VACINADOS_ORDERS = ("recentes", "antigos", "vencendo", "nome")
 
-    rows = (
-        db.session.query(
-            PmoVaccinationAnimal.id,
-            PmoVaccinationVisit.vaccine_date,
+
+def _pmo_coverage_status(days_left: int | None) -> str:
+    if days_left is None:
+        return "sem_data"
+    if days_left > 30:
+        return "protected"
+    if days_left >= 0:
+        return "expiring"
+    return "expired"
+
+
+def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
+    """Um registro por animal com dose registrada — a fonte do painel.
+
+    A data da dose sai de ``_pmo_dose_date``, a mesma regra que a carteirinha e
+    a folha impressa usam: dose aplicada na visita, dose anterior de quem já
+    estava imunizado ou, na falta das duas, a data da aba do dia. A versão
+    antiga exigia ``visit.vaccine_date`` preenchido e sumia em silêncio com
+    quem foi vacinado em aba sem data (Encaixes, Solicitações) — daí a
+    sensação de número que não bate com a planilha. Aqui esses animais
+    aparecem no balde ``sem_data``, visíveis e contáveis.
+    """
+    from sqlalchemy.orm import joinedload
+
+    today = now_in_brazil().date()
+    animals = (
+        PmoVaccinationAnimal.query.options(
+            joinedload(PmoVaccinationAnimal.visit),
+            joinedload(PmoVaccinationAnimal.animal),
         )
-        .join(PmoVaccinationVisit, PmoVaccinationAnimal.visit_id == PmoVaccinationVisit.id)
-        .filter(
-            PmoVaccinationAnimal.status == "vacinado",
-            PmoVaccinationVisit.vaccine_date.isnot(None),
-        )
-        .with_entities(PmoVaccinationVisit.vaccine_date)
+        .filter(PmoVaccinationAnimal.status.in_(PMO_DONE_STATUSES))
         .all()
     )
 
-    protected = expiring = expired = 0
-    for (vdate,) in rows:
-        expiry = vdate + timedelta(days=_PMO_VACCINE_VALIDITY_DAYS)
-        days_left = (expiry - today).days
-        if days_left > 30:
-            protected += 1
-        elif days_left >= 0:
-            expiring += 1
+    rows: list[dict[str, Any]] = []
+    for animal in animals:
+        visit = animal.visit
+        if visit is None:
+            continue
+        dose_date = _pmo_dose_date(animal, visit)
+        expiry = dose_date + timedelta(days=_PMO_VACCINE_VALIDITY_DAYS) if dose_date else None
+        days_left = (expiry - today).days if expiry else None
+        days_since = (today - dose_date).days if dose_date else None
+        applied_here = animal.status == "vacinado"
+
+        phone_raw = visit.phone1 or visit.phone2
+        dose_label = _pmo_br_date(dose_date) if dose_date else ""
+        expiry_label = _pmo_br_date(expiry) if expiry else ""
+        if dose_date:
+            wa_msg = (
+                f"Olá, {visit.tutor_name}! "
+                f"A vacina antirrábica de *{animal.name}* foi aplicada em "
+                f"{dose_label} pela Prefeitura de Orlândia. "
+                f"A proteção é válida por 1 ano e vence em *{expiry_label}*. "
+                "Lembre-se de revacinar para manter seu pet protegido. 🐾"
+            )
         else:
-            expired += 1
+            wa_msg = (
+                f"Olá, {visit.tutor_name}! Sobre a vacina antirrábica de "
+                f"*{animal.name}*: precisamos confirmar a data em que ela foi "
+                "aplicada. Você lembra?"
+            )
+
+        rows.append(
+            {
+                "pmo_id": animal.id,
+                "animal_id": animal.animal_id,
+                "animal_name": animal.name,
+                "species": animal.species,
+                "tutor": visit.tutor_name,
+                "address": visit.address or "",
+                "phone": phone_raw or "",
+                "phone_wa": _pmo_format_phone_wa(phone_raw),
+                "image_url": (
+                    animal.animal.image if animal.animal and animal.animal.image else ""
+                ),
+                "profile_url": (
+                    url_for("ficha_animal", animal_id=animal.animal_id)
+                    if animal.animal_id and has_request_context()
+                    else ""
+                ),
+                "card_url": (
+                    url_for(
+                        "vacina_pmo_public_pet",
+                        token=visit.public_token,
+                        pmo_animal_id=animal.id,
+                    )
+                    if visit.public_token and has_request_context()
+                    else ""
+                ),
+                "sheet_title": visit.sheet_title or "",
+                "shift": visit.shift or "",
+                "attended_by": visit.attended_by or "",
+                "applied_here": applied_here,
+                "status": animal.status,
+                "dose_date": dose_date.isoformat() if dose_date else "",
+                "vaccine_date": dose_label,
+                "expiry_date": expiry_label,
+                "days_left": days_left,
+                "days_since": days_since,
+                "status_key": _pmo_coverage_status(days_left),
+                "wa_msg": wa_msg,
+            }
+        )
+    return rows
+
+
+def _pmo_vacinados_sort(rows: list[dict[str, Any]], order: str) -> list[dict[str, Any]]:
+    """Ordena sem deixar quem está sem data embaralhado no meio da lista."""
+    undated = [row for row in rows if not row["dose_date"]]
+    dated = [row for row in rows if row["dose_date"]]
+    if order == "antigos":
+        dated.sort(key=lambda row: (row["dose_date"], row["animal_name"].casefold()))
+    elif order == "vencendo":
+        dated.sort(key=lambda row: (row["days_left"], row["animal_name"].casefold()))
+    elif order == "nome":
+        dated.sort(key=lambda row: (row["animal_name"].casefold(), row["dose_date"]))
+        undated.sort(key=lambda row: row["animal_name"].casefold())
+        return dated + undated
+    else:  # "recentes" — padrão: o vacinado mais recente primeiro
+        dated.sort(
+            key=lambda row: (row["dose_date"], row["animal_name"].casefold()), reverse=True
+        )
+    undated.sort(key=lambda row: row["animal_name"].casefold())
+    return dated + undated
+
+
+def _pmo_vacinados_matches(row: dict[str, Any], needle: str) -> bool:
+    if not needle:
+        return True
+    haystack = " ".join(
+        [row["animal_name"], row["tutor"], row["address"], row["sheet_title"], row["phone"]]
+    )
+    return needle in _strip_accents(haystack).casefold()
+
+
+def get_vacina_pmo_vacinados(
+    *,
+    order: str = "recentes",
+    status: str = "todos",
+    query: str = "",
+    page: int = 1,
+    per_page: int = PMO_VACINADOS_PAGE_SIZE,
+) -> dict[str, Any]:
+    """Lista paginada dos animais com dose registrada, na ordem pedida."""
+    order = order if order in PMO_VACINADOS_ORDERS else "recentes"
+    per_page = max(1, min(int(per_page or PMO_VACINADOS_PAGE_SIZE), 200))
+    page = max(1, int(page or 1))
+
+    rows = _pmo_vacinados_dataset()
+    counts = {
+        "todos": len(rows),
+        "protected": 0,
+        "expiring": 0,
+        "expired": 0,
+        "sem_data": 0,
+        "aplicadas": 0,
+        "imunizados": 0,
+        "com_foto": 0,
+        "caes": 0,
+        "gatos": 0,
+    }
+    last_dose = ""
+    for row in rows:
+        counts[row["status_key"]] += 1
+        counts["aplicadas" if row["applied_here"] else "imunizados"] += 1
+        if row["image_url"]:
+            counts["com_foto"] += 1
+        if row["species"] == "cao":
+            counts["caes"] += 1
+        elif row["species"] == "gato":
+            counts["gatos"] += 1
+        if row["dose_date"] > last_dose:
+            last_dose = row["dose_date"]
+
+    filtered = [row for row in rows if status in ("todos", row["status_key"])]
+    needle = _strip_accents(query or "").casefold().strip()
+    if needle:
+        filtered = [row for row in filtered if _pmo_vacinados_matches(row, needle)]
+
+    ordered = _pmo_vacinados_sort(filtered, order)
+    total = len(ordered)
+    start = (page - 1) * per_page
+    items = ordered[start : start + per_page]
 
     return {
-        "protected": protected,
-        "expiring": expiring,
-        "expired": expired,
-        "total": protected + expiring + expired,
+        "animals": items,
+        "counts": counts,
+        "order": order,
+        "status": status,
+        "query": query or "",
+        "page": page,
+        "perPage": per_page,
+        "total": total,
+        "hasMore": start + per_page < total,
+        "lastDose": _pmo_br_date(date.fromisoformat(last_dose)) if last_dose else "",
+    }
+
+
+def get_vacina_pmo_cobertura_summary() -> dict[str, Any]:
+    """Contadores de cobertura ativa, derivados da mesma lista de vacinados."""
+    counts = get_vacina_pmo_vacinados(per_page=1)["counts"]
+    return {
+        "protected": counts["protected"],
+        "expiring": counts["expiring"],
+        "expired": counts["expired"],
+        "sem_data": counts["sem_data"],
+        "total": counts["todos"],
     }
 
 
 def get_vacina_pmo_cobertura_detail() -> list[dict[str, Any]]:
-    """Lista detalhada de animais vacinados com dias restantes de proteção."""
-    from models import PmoVaccinationAnimal, PmoVaccinationVisit
-
-    today = date.today()
-
-    animals = (
-        db.session.query(PmoVaccinationAnimal)
-        .join(PmoVaccinationVisit, PmoVaccinationAnimal.visit_id == PmoVaccinationVisit.id)
-        .filter(
-            PmoVaccinationAnimal.status == "vacinado",
-            PmoVaccinationVisit.vaccine_date.isnot(None),
-        )
-        .order_by(PmoVaccinationVisit.vaccine_date.asc())
-        .limit(500)
-        .all()
-    )
-
-    result = []
-    for a in animals:
-        vdate = a.visit.vaccine_date
-        expiry = vdate + timedelta(days=_PMO_VACCINE_VALIDITY_DAYS)
-        days_left = (expiry - today).days
-
-        if days_left > 30:
-            status_key = "protected"
-        elif days_left >= 0:
-            status_key = "expiring"
-        else:
-            status_key = "expired"
-
-        phone_raw = a.visit.phone1 or a.visit.phone2
-        phone_wa = _pmo_format_phone_wa(phone_raw)
-
-        msg = (
-            f"Olá, {a.visit.tutor_name}! "
-            f"A vacina antirrábica de *{a.name}* foi aplicada em "
-            f"{vdate.strftime('%d/%m/%Y')} pela Prefeitura de Orlândia. "
-            f"A proteção é válida por 1 ano e vence em *{expiry.strftime('%d/%m/%Y')}*. "
-            f"Lembre-se de revacinar para manter seu pet protegido. 🐾"
-        )
-
-        result.append({
-            "animal_id": a.animal_id,
-            "animal_name": a.name,
-            "species": a.species,
-            "tutor": a.visit.tutor_name,
-            "phone": phone_raw or "",
-            "phone_wa": phone_wa,
-            "image_url": (a.animal.image if a.animal and a.animal.image else ""),
-            "profile_url": (
-                url_for("ficha_animal", animal_id=a.animal_id)
-                if a.animal_id and has_request_context()
-                else ""
-            ),
-            "vaccine_date": vdate.strftime("%d/%m/%Y"),
-            "expiry_date": expiry.strftime("%d/%m/%Y"),
-            "days_left": days_left,
-            "status_key": status_key,
-            "wa_msg": msg,
-        })
-
-    result.sort(key=lambda x: x["days_left"])
-    return result
+    """Lista completa de vacinados ordenada pelo vencimento mais próximo."""
+    return get_vacina_pmo_vacinados(order="vencendo", per_page=200)["animals"]

@@ -54,6 +54,21 @@ def _clear_context_cache():
     _context_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_pmo_sheet_caches():
+    """Zera os caches de planilha do PMO (abas e faixas de valores) entre testes.
+
+    Os caches são module-level e keyed por spreadsheet_id/faixa; os testes usam
+    sempre o mesmo id com fakes diferentes e herdariam a planilha do teste
+    anterior.
+    """
+    from services import vacina_pmo_service
+
+    vacina_pmo_service.invalidate_pmo_painel_caches()
+    yield
+    vacina_pmo_service.invalidate_pmo_painel_caches()
+
+
 @pytest.fixture()
 def app():
     app = create_app()

@@ -3356,3 +3356,298 @@ def test_serialize_visit_and_preview_include_coordinates(app):
         assert preview_item["lat"] == -21.055
         assert preview_item["lng"] == -47.888
         assert preview_item["located"] is True
+
+
+# ——— Painel: lista de animais vacinados ——————————————————————————————————————
+
+
+def _pmo_visit_with_animals(sheet_title, tutor, animals, *, vaccine_date=None, source_row=2):
+    """Cria uma visita com animais já com o status pedido."""
+    from models import PmoVaccinationAnimal
+
+    visit = PmoVaccinationVisit(
+        spreadsheet_id="sheet-painel",
+        sheet_gid="1",
+        sheet_title=sheet_title,
+        source_row=source_row,
+        tutor_name=tutor,
+        address="Rua A, 10, Centro",
+        phone1="16999990000",
+        password="PMOA0001",
+        vaccine_date=vaccine_date,
+    )
+    db.session.add(visit)
+    db.session.flush()
+    for position, (name, species, status) in enumerate(animals, start=1):
+        db.session.add(
+            PmoVaccinationAnimal(
+                visit=visit,
+                position=position,
+                name=name,
+                species=species,
+                status=status,
+            )
+        )
+    db.session.commit()
+    return visit
+
+
+def test_vacinados_ordena_do_mais_recente_ao_mais_antigo(app):
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_visit_with_animals(
+            "10/06/2026", "Ana", [("Rex", "cao", "vacinado")], vaccine_date=date(2026, 6, 10)
+        )
+        _pmo_visit_with_animals(
+            "20/06/2026",
+            "Bia",
+            [("Mel", "gato", "vacinado")],
+            vaccine_date=date(2026, 6, 20),
+            source_row=3,
+        )
+        _pmo_visit_with_animals(
+            "01/06/2026",
+            "Caio",
+            [("Thor", "cao", "vacinado")],
+            vaccine_date=date(2026, 6, 1),
+            source_row=4,
+        )
+
+        recentes = get_vacina_pmo_vacinados(order="recentes")["animals"]
+        assert [a["animal_name"] for a in recentes] == ["Mel", "Rex", "Thor"]
+
+        antigos = get_vacina_pmo_vacinados(order="antigos")["animals"]
+        assert [a["animal_name"] for a in antigos] == ["Thor", "Rex", "Mel"]
+
+        # A data mostrada é a do dia da dose, não a de hoje.
+        assert recentes[0]["vaccine_date"] == "20/06/2026"
+        assert recentes[0]["expiry_date"] == "20/06/2027"
+
+
+def test_vacinados_mostra_quem_ficou_sem_data_em_vez_de_sumir(app):
+    """Vacinado em aba sem data (Encaixes) precisa aparecer, não desaparecer."""
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_visit_with_animals(
+            "15/06/2026", "Ana", [("Rex", "cao", "vacinado")], vaccine_date=date(2026, 6, 15)
+        )
+        _pmo_visit_with_animals(
+            "Encaixes", "Bia", [("Mel", "gato", "vacinado")], vaccine_date=None, source_row=3
+        )
+
+        payload = get_vacina_pmo_vacinados()
+        assert payload["counts"]["todos"] == 2
+        assert payload["counts"]["sem_data"] == 1
+        nomes = [a["animal_name"] for a in payload["animals"]]
+        assert "Mel" in nomes
+        # Quem está sem data vai para o fim da lista, nunca no meio das datadas.
+        assert nomes[-1] == "Mel"
+
+        so_sem_data = get_vacina_pmo_vacinados(status="sem_data")["animals"]
+        assert [a["animal_name"] for a in so_sem_data] == ["Mel"]
+
+
+def test_vacinados_filtra_por_busca_e_pagina(app):
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_visit_with_animals(
+            "10/06/2026",
+            "Ana Souza",
+            [("Rex", "cao", "vacinado"), ("Mel", "gato", "vacinado")],
+            vaccine_date=date(2026, 6, 10),
+        )
+        _pmo_visit_with_animals(
+            "11/06/2026",
+            "Bia Lima",
+            [("Thor", "cao", "vacinado")],
+            vaccine_date=date(2026, 6, 11),
+            source_row=3,
+        )
+
+        por_tutor = get_vacina_pmo_vacinados(query="ana souza")
+        assert por_tutor["total"] == 2
+        assert por_tutor["counts"]["todos"] == 3  # contadores olham a campanha inteira
+
+        primeira = get_vacina_pmo_vacinados(per_page=2)
+        assert len(primeira["animals"]) == 2
+        assert primeira["hasMore"] is True
+        segunda = get_vacina_pmo_vacinados(per_page=2, page=2)
+        assert len(segunda["animals"]) == 1
+        assert segunda["hasMore"] is False
+
+
+def test_vacinados_conta_ja_imunizado_pela_data_da_dose_anterior(app):
+    from services.vacina_pmo_service import PMO_STATUS_ALREADY_IMMUNE, get_vacina_pmo_vacinados
+    from models import PmoVaccinationAnimal
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        visit = _pmo_visit_with_animals(
+            "10/06/2026",
+            "Ana",
+            [("Rex", "cao", PMO_STATUS_ALREADY_IMMUNE)],
+            vaccine_date=date(2026, 6, 10),
+        )
+        animal = PmoVaccinationAnimal.query.filter_by(visit_id=visit.id).one()
+        animal.immune_since = date(2026, 1, 5)
+        db.session.commit()
+
+        payload = get_vacina_pmo_vacinados()
+        row = payload["animals"][0]
+        # A data válida é a da dose antiga: carimbar a visita adiantaria a
+        # proteção em meses que ninguém aplicou.
+        assert row["vaccine_date"] == "05/01/2026"
+        assert row["applied_here"] is False
+        assert payload["counts"]["imunizados"] == 1
+        assert payload["counts"]["aplicadas"] == 0
+
+
+def test_cobertura_summary_bate_com_a_lista_de_vacinados(app):
+    from services.vacina_pmo_service import (
+        get_vacina_pmo_cobertura_summary,
+        get_vacina_pmo_vacinados,
+    )
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_visit_with_animals(
+            "10/06/2026", "Ana", [("Rex", "cao", "vacinado")], vaccine_date=date(2026, 6, 10)
+        )
+        _pmo_visit_with_animals(
+            "Encaixes", "Bia", [("Mel", "gato", "vacinado")], vaccine_date=None, source_row=3
+        )
+
+        resumo = get_vacina_pmo_cobertura_summary()
+        counts = get_vacina_pmo_vacinados(per_page=1)["counts"]
+        assert resumo["total"] == counts["todos"] == 2
+        assert resumo["sem_data"] == 1
+
+
+def test_painel_le_a_aba_de_doses_uma_vez_para_resumo_e_frascos(app, monkeypatch):
+    """Resumo e frascos saem do mesmo snapshot — uma leitura, não quatro."""
+    from datetime import datetime
+
+    from services.vacina_pmo_service import (
+        get_controle_de_doses_summary,
+        get_pmo_frascos_ledger,
+    )
+
+    fake = _FakeDosesSheetsService(
+        _frascos_metadata(),
+        {
+            "Controle de doses": _frascos_tab_values(
+                ["20/01/2026 - Manhã"], ["25", "", "", "", "", "", "", "", "25"]
+            )
+        },
+    )
+    calls = {"n": 0}
+
+    def counting_service():
+        calls["n"] += 1
+        return fake
+
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", counting_service)
+    _patch_frascos_clock(monkeypatch, datetime(2026, 1, 25, 12, 0))
+
+    with app.app_context():
+        vacina_pmo_service.invalidate_pmo_painel_caches()
+        doses = get_controle_de_doses_summary()
+        ledger = get_pmo_frascos_ledger()
+
+    # Uma chamada para listar as abas e uma para ler os valores; a segunda
+    # função reaproveita as duas.
+    assert calls["n"] == 2
+    assert doses["totals"]["doses"] == 25
+    assert ledger["vialsTotal"] == 1
+
+
+def test_atualizar_forca_releitura_da_planilha(app, monkeypatch):
+    from datetime import datetime
+
+    from services.vacina_pmo_service import get_controle_de_doses_summary
+
+    fake = _FakeDosesSheetsService(
+        _frascos_metadata(),
+        {
+            "Controle de doses": _frascos_tab_values(
+                ["20/01/2026 - Manhã"], ["25", "", "", "", "", "", "", "", "25"]
+            )
+        },
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: fake)
+    _patch_frascos_clock(monkeypatch, datetime(2026, 1, 25, 12, 0))
+
+    with app.app_context():
+        vacina_pmo_service.invalidate_pmo_painel_caches()
+        assert get_controle_de_doses_summary()["totals"]["doses"] == 25
+
+        fake.values_by_title["Controle de doses"] = _frascos_tab_values(
+            ["20/01/2026 - Manhã"], ["50", "", "", "", "", "", "", "", "50"]
+        )
+        # Com cache, o painel continua no snapshot anterior…
+        assert get_controle_de_doses_summary()["totals"]["doses"] == 25
+        # …e o botão Atualizar (use_cache=False) traz o número novo.
+        assert get_controle_de_doses_summary(use_cache=False)["totals"]["doses"] == 50
+
+
+def test_painel_abre_sem_tocar_na_planilha(app, client, monkeypatch):
+    """A casca do painel não pode depender da API do Google para renderizar."""
+
+    def explode():
+        raise AssertionError("o painel não deve ler a planilha no request da página")
+
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", explode)
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name="Admin Painel", email="admin-painel@example.com", role="admin")
+        admin.set_password("senha")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    _pmo_login(client, admin_id)
+    response = client.get("/vacina-pmo/painel")
+
+    assert response.status_code == 200
+    assert "Animais vacinados" in response.get_data(as_text=True)
+
+
+def test_endpoint_de_vacinados_responde_na_ordem_pedida(app, client):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name="Admin Lista", email="admin-lista@example.com", role="admin")
+        admin.set_password("senha")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+        _pmo_visit_with_animals(
+            "10/06/2026", "Ana", [("Rex", "cao", "vacinado")], vaccine_date=date(2026, 6, 10)
+        )
+        _pmo_visit_with_animals(
+            "20/06/2026",
+            "Bia",
+            [("Mel", "gato", "vacinado")],
+            vaccine_date=date(2026, 6, 20),
+            source_row=3,
+        )
+
+    _pmo_login(client, admin_id)
+    payload = client.get("/vacina-pmo/painel/vacinados?order=antigos").get_json()
+
+    assert payload["success"] is True
+    assert [a["animal_name"] for a in payload["animals"]] == ["Rex", "Mel"]
+    assert payload["counts"]["todos"] == 2
