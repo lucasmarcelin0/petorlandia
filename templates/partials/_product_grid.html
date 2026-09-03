@@ -48,9 +48,9 @@
             <div class="d-flex align-items-stretch gap-2">
               <!-- Quantidade -->
               <div class="quantity-selector">
-                <button type="button" class="quantity-btn minus">–</button>
-                {{ form.quantity(class="quantity-input", min="1", value="1") }}
-                <button type="button" class="quantity-btn plus">+</button>
+                <button type="button" class="quantity-btn minus" aria-label="Diminuir quantidade de {{ product.name }}" title="Diminuir quantidade">–</button>
+                {{ form.quantity(class="quantity-input", min="1", value="1", **{'aria-label': 'Quantidade de ' ~ product.name}) }}
+                <button type="button" class="quantity-btn plus" aria-label="Aumentar quantidade de {{ product.name }}" title="Aumentar quantidade">+</button>
               </div>
 
               <!-- Botão -->
@@ -77,7 +77,7 @@
 
 <!-- Paginação -->
 {% if pagination.pages > 1 %}
-<nav class="mt-4 pagination-responsive">
+<nav class="mt-4 pagination-responsive" aria-label="Navegação por páginas de produtos">
   <ul class="pagination justify-content-center">
     <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
       <a class="page-link" href="{{ url_for('loja', page=pagination.prev_num, q=search_term, filter=selected_filter) if pagination.has_prev else '#' }}">Anterior</a>
