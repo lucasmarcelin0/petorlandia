@@ -21,18 +21,79 @@
       color: #000;
     }
 
-    /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
-    .header { margin-bottom: 6px; }
-    .header h1 { font-size: 22pt; margin: 0 0 2px; }
-    .header .sub {
-      font-size: 14pt;
+    /* ── Cabeçalho & Identidade PMO ────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 6px;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #1a1a2e;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-right: 14px;
+      border-right: 1.5px solid #bbb;
+      flex-shrink: 0;
+    }
+    .header-logo {
+      height: 52px;
+      width: auto;
+      display: block;
+      object-fit: contain;
+    }
+    .header-pmo {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .pmo-title {
+      font-size: 24pt;
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: 0.5px;
+      color: #1a1a2e;
+    }
+    .pmo-subtitle {
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #555;
+      margin-top: 3px;
+      white-space: nowrap;
+    }
+    .header-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .header-main h1 {
+      font-size: 18pt;
+      margin: 0 0 3px;
+      line-height: 1.15;
+    }
+    .header-main .sub {
+      font-size: 13pt;
       color: #444;
       display: flex;
-      gap: 20px;
+      gap: 18px;
       flex-wrap: wrap;
+      align-items: center;
     }
-    .header .sub strong { color: #000; }
-    .header .legend { font-size: 11pt; color: #555; }
+    .header-main .sub strong { color: #000; }
+    .header-main .legend { font-size: 10.5pt; color: #555; }
+    .header-main .falta strong { font-size: 1.15em; }
+    .header-main .feito { color: #555; }
+    .header-main .aviso {
+      margin-top: 4px;
+      font-size: 9.5pt;
+      border-left: 4px solid #d97706;
+      padding: 2px 8px;
+      background: #fef3c7;
+      color: #92400e;
+    }
 
     /* ── Navegação (oculta na impressão) ───────────────────────────────────── */
     .no-print {
@@ -84,21 +145,20 @@
 
     tbody tr:nth-child(even) td { background: #f0f4f8; }
 
-    /* Colunas fixas — cor/tamanho so no corpo, senao sobrescrevem o thead. */
+    /* Colunas fixas — redistribuição com largura confortável para assinatura. */
     .c-num  { width: 26px;  text-align: center; }
     .c-name { width: 14%; }
-    .c-addr { width: 15%; }
+    .c-addr { width: 17%; }
     .c-tel  { width: 10%; white-space: nowrap; }
     .c-pet  { width: 26%; }
     .c-obs  { width: 14%; }
-    .c-ok   { width: 30px;  text-align: center; }
-    .c-sign { width: 15%; }
+    .c-sign { width: 19%; }
 
     tbody .c-num  { font-weight: 700; color: #555; }
     tbody .c-name { font-weight: 700; }
+    tbody .c-addr { font-size: 12pt; }
     tbody .c-tel  { font-size: 11pt; }
     tbody .c-obs  { font-size: 10pt; color: #333; }
-    tbody .c-ok   { font-size: 16pt; }
 
     .pet-row { display: block; line-height: 1.5; }
 
@@ -120,31 +180,17 @@
 
     .pet-count { display: block; font-size: 0.62em; color: #666; margin-top: 3px; }
 
-    /* Linha para o tutor assinar / escrever o nome. */
+    /* Linha para o morador assinar / escrever o nome. */
     .sign-line {
       display: block;
-      border-bottom: 1px solid #555;
+      border-bottom: 1.5px solid #555;
       height: 2.1em;
     }
     .sign-hint {
       display: block;
-      font-size: 8pt;
-      color: #777;
+      font-size: 7.5pt;
+      color: #666;
       margin-top: 2px;
-    }
-
-    /* ── Timbre / avisos ────────────────────────────────────────────────────── */
-    /* Timbre ao lado do titulo: em bloco proprio custava ~18mm de altura. */
-    .timbre { float: left; width: 62mm; height: auto; margin: 0 8mm 2mm 0; }
-    .header { overflow: hidden; }
-    .header .falta strong { font-size: 1.15em; }
-    .header .feito { color: #555; }
-    .header .aviso {
-      margin-top: 4px;
-      font-size: 10pt;
-      border-left: 4px solid #444;
-      padding: 3px 8px;
-      background: #f2f2f2;
     }
 
     /* Instrucao que vinha grudada no nome do tutor na planilha. */
@@ -226,18 +272,27 @@
       line-height: 1.25;
     }
 
-    body.compacta .timbre { width: 55mm; }
-    body.compacta .header h1 { font-size: 16pt; }
+    body.compacta .header { gap: 12px; margin-bottom: 4px; padding-bottom: 4px; }
+    body.compacta .header-brand { gap: 10px; padding-right: 12px; }
+    body.compacta .header-logo { height: 44px; }
+    body.compacta .pmo-title { font-size: 20pt; }
+    body.compacta .pmo-subtitle { font-size: 7pt; }
+    body.compacta .header-main h1 { font-size: 15pt; }
+    body.compacta .header-main .sub { font-size: 10.5pt; gap: 12px; }
     body.compacta tbody tr { height: 12mm; }
     body.compacta tbody td { padding: 4px 6px; font-size: 11pt; }
     body.compacta tbody .c-obs { font-size: 9pt; }
     body.compacta .sign-line { height: 1.5em; }
     body.compacta .rodape { margin-top: 6px; }
 
-    body.super-compacta .timbre { width: 46mm; }
-    body.super-compacta .header h1 { font-size: 14pt; }
-    body.super-compacta .header .sub { font-size: 9pt; gap: 12px; }
-    body.super-compacta .header .legend { display: none; }
+    body.super-compacta .header { gap: 10px; margin-bottom: 3px; padding-bottom: 3px; }
+    body.super-compacta .header-brand { gap: 6px; padding-right: 10px; }
+    body.super-compacta .header-logo { height: 32px; }
+    body.super-compacta .pmo-title { font-size: 15pt; }
+    body.super-compacta .pmo-subtitle { font-size: 6pt; }
+    body.super-compacta .header-main h1 { font-size: 13pt; }
+    body.super-compacta .header-main .sub { font-size: 9pt; gap: 10px; }
+    body.super-compacta .header-main .legend { display: none; }
     body.super-compacta tbody tr { height: 9mm; }
     body.super-compacta tbody td { padding: 3px 5px; font-size: 9.5pt; }
     body.super-compacta tbody .c-obs { font-size: 8pt; }
@@ -276,27 +331,36 @@
 
   {# ── Cabeçalho ────────────────────────────────────────────────────────────── #}
   <div class="header">
-    <img class="timbre" src="{{ url_for('static', filename='img/timbre_orlandia.jpeg') }}"
-         alt="Prefeitura Municipal de Orlândia">
-    <h1>Vacinação antirrábica — {{ sheet_title }} · {{ shift_label }}</h1>
-    <div class="sub">
-      <span>Residências: <strong>{{ totals.tutores }}</strong></span>
-      <span class="falta">A vacinar: <strong>{{ totals.pendentes }}</strong>
-        ({{ totals.pendentes_caes }}<span class="pet-badge pet-badge--cao">C</span>
-         {{ totals.pendentes_gatos }}<span class="pet-badge pet-badge--gato">G</span>)</span>
-      {% if totals.ja_vacinados %}
-        <span class="feito">Já vacinados nesta lista: <strong>{{ totals.ja_vacinados }}</strong></span>
-      {% endif %}
-      <span class="legend">
-        <span class="pet-badge pet-badge--cao">C</span> cão
-        <span class="pet-badge pet-badge--gato">G</span> gato
-      </span>
-    </div>
-    {% if totals.duplicadas %}
-      <div class="aviso">
-        {{ totals.duplicadas }} linha(s) repetem um tutor que já aparece acima — confira antes de bater na porta.
+    <div class="header-brand">
+      <img class="header-logo" src="{{ url_for('static', filename='img/brasao_orlandia.png') }}"
+           srcset="{{ url_for('static', filename='img/brasao_orlandia@2x.png') }} 2x"
+           alt="Brasão de Orlândia">
+      <div class="header-pmo">
+        <div class="pmo-title">PMO</div>
+        <div class="pmo-subtitle">Prefeitura Municipal de Orlândia</div>
       </div>
-    {% endif %}
+    </div>
+    <div class="header-main">
+      <h1>Vacinação antirrábica — {{ sheet_title }} · {{ shift_label }}</h1>
+      <div class="sub">
+        <span>Residências: <strong>{{ totals.tutores }}</strong></span>
+        <span class="falta">A vacinar: <strong>{{ totals.pendentes }}</strong>
+          ({{ totals.pendentes_caes }}<span class="pet-badge pet-badge--cao">C</span>
+           {{ totals.pendentes_gatos }}<span class="pet-badge pet-badge--gato">G</span>)</span>
+        {% if totals.ja_vacinados %}
+          <span class="feito">Já vacinados nesta lista: <strong>{{ totals.ja_vacinados }}</strong></span>
+        {% endif %}
+        <span class="legend">
+          <span class="pet-badge pet-badge--cao">C</span> cão
+          <span class="pet-badge pet-badge--gato">G</span> gato
+        </span>
+      </div>
+      {% if totals.duplicadas %}
+        <div class="aviso">
+          {{ totals.duplicadas }} linha(s) repetem um tutor que já aparece acima — confira antes de bater na porta.
+        </div>
+      {% endif %}
+    </div>
   </div>
 
   {# Telefone legivel: 5516982116928 -> (16) 98211-6928 #}
@@ -322,8 +386,7 @@
         <th class="c-tel">Telefone</th>
         <th class="c-pet">Animais</th>
         <th class="c-obs">Observação</th>
-        <th class="c-ok">✓</th>
-        <th class="c-sign">Assinatura do tutor</th>
+        <th class="c-sign">Assinatura / Nome do morador</th>
       </tr>
     </thead>
     <tbody>
@@ -392,10 +455,9 @@
         <td class="c-obs">
           {% for n in r.notas %}<span class="obs-row">{{ n }}</span>{% endfor %}
         </td>
-        <td class="c-ok">☐</td>
         <td class="c-sign">
           <span class="sign-line"></span>
-          <span class="sign-hint">Nome / assinatura</span>
+          <span class="sign-hint">Assinatura ou nome legível</span>
         </td>
       </tr>
       {% endfor %}

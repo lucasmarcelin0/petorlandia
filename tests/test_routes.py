@@ -68,10 +68,9 @@ def login(client, user_id):
         sess.clear()
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
-    # This module keeps one application context open for the whole test. A
-    # previous request can therefore leave Flask-Login's anonymous user cached
-    # on ``g``, unlike production where each request gets a fresh context.
-    g.pop('_login_user', None)
+    from flask import has_app_context
+    if has_app_context():
+        g.pop('_login_user', None)
 
 def test_login_page(app):
     client = app.test_client()
@@ -1273,6 +1272,13 @@ def test_vacina_pmo_imprimir_mostra_pendentes_e_historico_do_encaixe(app):
     assert 'Um gatinho morreu' in body
     # O nome do tutor perde a instrução colada pela planilha.
     assert 'Remarcar a partir de 22/07/2026</span>' in body
+    # Novo cabeçalho com Brasão e PMO
+    assert 'brasao_orlandia.png' in body
+    assert 'PMO' in body
+    assert 'Prefeitura Municipal de Orlândia' in body
+    # Assinatura direta sem o checkbox à esquerda
+    assert 'Assinatura / Nome do morador' in body
+    assert 'class="c-ok"' not in body
 
 
 def test_vacina_pmo_imprimir_marca_linha_duplicada(app):
