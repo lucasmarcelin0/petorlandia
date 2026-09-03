@@ -2139,6 +2139,50 @@
             <span class="pmo-video-style__tag">Novo</span>
           </span>
         </label>
+        <label class="pmo-video-style" style="--video-style-accent:#f97316">
+          <input type="radio" name="pmo-video-style" value="polaroid">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-camera-retro"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Polaroid</strong>
+              <small>Álbum retrô em duplas, fita adesiva e carimbo.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#0ea5e9">
+          <input type="radio" name="pmo-video-style" value="badge">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-id-card"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Carteirinha</strong>
+              <small>Crachá oficial tipo RG Pet com selo e dados.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#8b5cf6">
+          <input type="radio" name="pmo-video-style" value="pop">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-fire"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Pop Viral</strong>
+              <small>Visual Reels/TikTok com figurinhas, neon e ritmo.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#10b981">
+          <input type="radio" name="pmo-video-style" value="runway">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-crown"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Passarela</strong>
+              <small>Capa editorial e até 16 destaques em cerca de 15 s.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
+          </span>
+        </label>
       </div>
     </fieldset>
     <div class="pmo-video-period-note" id="pmo-video-period-note"></div>
@@ -2480,6 +2524,22 @@
     celebration: {
       label: 'Celebração',
       note: 'mostra todos em cards animados, com cores vivas e duração-alvo de até 18 segundos.',
+    },
+    polaroid: {
+      label: 'Polaroid',
+      note: 'reúne os animais em duplas estilo polaroid com fita adesiva, carimbo de proteção e todos os animais.',
+    },
+    badge: {
+      label: 'Carteirinha',
+      note: 'apresenta cada animal em uma carteirinha digital de vacinação com selo de proteção e todos os animais.',
+    },
+    pop: {
+      label: 'Pop Viral',
+      note: 'estilo enérgico para redes sociais com stickers animados, molduras neon e todos os animais.',
+    },
+    runway: {
+      label: 'Passarela',
+      note: 'seleciona até 16 destaques em formato editorial de moda pet, com tipografia refinada e desfile lateral.',
     },
   };
 
@@ -3353,6 +3413,876 @@
     ctx.fillText('Compartilhe e ajude essa proteção a chegar mais longe.', canvas.width / 2, 1370);
   }
 
+  // --- Estilo Polaroid (Álbum Retrô em duplas) ---
+  const POLAROID_GROUP_SIZE = 2;
+  const POLAROID_TAPE_COLORS = [
+    'rgba(249, 115, 22, .75)',
+    'rgba(245, 158, 11, .75)',
+    'rgba(59, 130, 246, .75)',
+    'rgba(16, 185, 129, .75)',
+  ];
+
+  function drawPolaroidBackground(ctx, canvas) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#fbf8f2');
+    gradient.addColorStop(0.5, '#f4ede2');
+    gradient.addColorStop(1, '#ece2d0');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(168, 130, 90, 0.055)';
+    for (let py = 60; py < canvas.height; py += 120) {
+      for (let px = 60; px < canvas.width; px += 120) {
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPolaroidBrand(ctx, canvas) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(64, 46, 30, .88)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 48, 46, 620, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.arc(92, 86, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ÁLBUM DE MEMÓRIAS PMO', 126, 86);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 48, 47, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawPolaroidIntro(ctx, canvas, items, progress) {
+    drawPolaroidBackground(ctx, canvas);
+    drawPolaroidBrand(ctx, canvas);
+
+    ctx.save();
+    ctx.fillStyle = '#3d2b1f';
+    fitCenterText(ctx, 'ÁLBUM DE FOTOS', canvas.width / 2, 620, canvas.width - 120, 96, 900);
+    ctx.fillStyle = '#d9531e';
+    fitCenterText(ctx, 'HISTÓRIAS QUE CUIDAM', canvas.width / 2, 730, canvas.width - 120, 78, 900);
+
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(canvas.width / 2 - 180, 810, 360, 6);
+
+    ctx.fillStyle = '#3d2b1f';
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'VIDA REGISTRADA' : 'VIDAS REGISTRADAS'}`, canvas.width / 2, 980, canvas.width - 120, 62, 900);
+    ctx.fillStyle = 'rgba(61, 43, 31, .8)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1070, canvas.width - 140, 36, 600);
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, 1390);
+    ctx.rotate(-0.06);
+    ctx.strokeStyle = '#b91c1c';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    addRoundedRect(ctx, -260, -45, 520, 90, 20);
+    ctx.stroke();
+    ctx.fillStyle = '#b91c1c';
+    ctx.font = '900 34px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✓ 100% PROTEGIDOS CONTRA A RAIVA', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#6b4f3b';
+    ctx.font = '600 30px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cada foto, um gesto de carinho e cidadania.', canvas.width / 2, 1550);
+    ctx.restore();
+  }
+
+  function drawPolaroidTile(ctx, item, img, focus, rect, index, progress) {
+    const arrival = clamp((progress - index * 0.12) / 0.55, 0, 1);
+    const eased = 1 - Math.pow(1 - arrival, 3);
+    const tilt = (index % 2 === 0 ? -0.045 : 0.045) * (1 - eased * 0.15);
+    const scale = 0.88 + eased * 0.12;
+
+    ctx.save();
+    ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+    ctx.rotate(tilt);
+    ctx.scale(scale, scale);
+
+    const x = -rect.w / 2;
+    const y = -rect.h / 2;
+
+    ctx.shadowColor = 'rgba(45, 30, 15, 0.28)';
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetY = 16;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, rect.w, rect.h, 18);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    const photoMargin = 22;
+    const photoH = rect.h - 145;
+    const photoW = rect.w - photoMargin * 2;
+    ctx.save();
+    ctx.beginPath();
+    addRoundedRect(ctx, x + photoMargin, y + photoMargin, photoW, photoH, 12);
+    ctx.clip();
+    drawPetFaceCoverImage(ctx, img, x + photoMargin, y + photoMargin, photoW, photoH, focus);
+    ctx.restore();
+
+    const tapeColor = POLAROID_TAPE_COLORS[index % POLAROID_TAPE_COLORS.length];
+    ctx.save();
+    ctx.fillStyle = tapeColor;
+    ctx.translate(0, y + 10);
+    ctx.rotate((index % 2 === 0 ? 0.03 : -0.03));
+    ctx.fillRect(-65, -16, 130, 32);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x + rect.w - 115, y + photoH - 12);
+    ctx.rotate(-0.15);
+    ctx.strokeStyle = 'rgba(185, 28, 28, 0.88)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    addRoundedRect(ctx, -85, -24, 170, 48, 12);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(185, 28, 28, 0.9)';
+    ctx.font = '900 22px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✓ VACINADO', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#261b14';
+    fitCenterText(ctx, item.name || 'Animal', 0, y + rect.h - 84, rect.w - 60, 52, 900);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '700 24px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const speciesLabel = item.species === 'gato' ? '🐱 Gato protegido' : '🐶 Cão protegido';
+    const dateLabel = item.date ? ` · ${displayDate(item.date)}` : '';
+    ctx.fillText(`${speciesLabel}${dateLabel}`, 0, y + rect.h - 38);
+
+    ctx.restore();
+  }
+
+  function drawPolaroidFrame(ctx, canvas, group, images, focuses, slideIndex, totalSlides, progress) {
+    drawPolaroidBackground(ctx, canvas);
+    drawPolaroidBrand(ctx, canvas);
+
+    ctx.fillStyle = '#6b4f3b';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(videoScopeBadge(), canvas.width / 2, 230);
+
+    const slots = group.length === 1
+      ? [{ x: 170, y: 350, w: 740, h: 1040 }]
+      : [
+          { x: 170, y: 320, w: 740, h: 630 },
+          { x: 170, y: 990, w: 740, h: 630 },
+        ];
+
+    group.forEach((item, index) => {
+      drawPolaroidTile(ctx, item, images[index], focuses[index], slots[index], index, progress);
+    });
+
+    ctx.fillStyle = '#8c6d53';
+    ctx.font = '700 26px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`PÁGINA ${slideIndex + 1} DE ${totalSlides}  ·  PREFEITURA DE ORLÂNDIA`, canvas.width / 2, canvas.height - 84);
+  }
+
+  function drawPolaroidOutro(ctx, canvas, items, progress) {
+    const summary = videoItemSummary(items);
+    drawPolaroidBackground(ctx, canvas);
+    drawPolaroidBrand(ctx, canvas);
+
+    ctx.fillStyle = '#3d2b1f';
+    fitCenterText(ctx, 'MEMÓRIAS DE', canvas.width / 2, 600, canvas.width - 120, 92, 900);
+    ctx.fillStyle = '#d9531e';
+    fitCenterText(ctx, 'AMOR E SAÚDE', canvas.width / 2, 700, canvas.width - 120, 92, 900);
+
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(canvas.width / 2 - 160, 780, 320, 6);
+
+    ctx.fillStyle = '#3d2b1f';
+    fitCenterText(ctx, `${items.length} ANIMAIS PROTEGIDOS`, canvas.width / 2, 920, canvas.width - 120, 58, 900);
+    ctx.fillStyle = '#5c4033';
+    ctx.font = '800 40px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1020);
+
+    ctx.fillStyle = '#3d2b1f';
+    fitCenterText(ctx, 'Vacinar é eternizar o cuidado.', canvas.width / 2, 1280, canvas.width - 140, 48, 800);
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.fillStyle = '#8c6d53';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1460);
+  }
+
+  function polaroidSlideDuration(groupCount) {
+    return Math.round(clamp(13500 / Math.max(1, groupCount), 420, 1600));
+  }
+
+  // --- Estilo Carteirinha (RG Pet / Passaporte Oficial) ---
+  const BADGE_BATCH_SIZE = 12;
+
+  function drawBadgeBrand(ctx, canvas) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(7, 21, 48, .88)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 48, 46, 650, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#0ea5e9';
+    ctx.beginPath();
+    ctx.arc(92, 86, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CARTEIRA DE VACINAÇÃO PMO', 126, 86);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 48, 47, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawBadgeIntro(ctx, canvas, items) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#06132b');
+    gradient.addColorStop(0.5, '#0c234d');
+    gradient.addColorStop(1, '#081735');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(14, 165, 233, 0.12)';
+    ctx.lineWidth = 2;
+    for (let y = 100; y < canvas.height; y += 70) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y + 40);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    drawBadgeBrand(ctx, canvas);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'PASSAPORTE DA SAÚDE', canvas.width / 2, 650, canvas.width - 100, 88, 900);
+    fitCenterText(ctx, 'ANIMAL', canvas.width / 2, 750, canvas.width - 100, 96, 900);
+
+    ctx.fillStyle = '#0ea5e9';
+    ctx.fillRect(canvas.width / 2 - 180, 830, 360, 6);
+
+    ctx.fillStyle = '#38bdf8';
+    fitCenterText(ctx, `${items.length} CIDADÃOS DE 4 PATAS`, canvas.width / 2, 990, canvas.width - 120, 60, 900);
+    ctx.fillStyle = '#ffffff';
+    fitCenterText(ctx, 'DEVIDAMENTE IMUNIZADOS', canvas.width / 2, 1070, canvas.width - 130, 48, 800);
+
+    ctx.fillStyle = 'rgba(255,255,255,.76)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1160, canvas.width - 140, 36, 600);
+
+    ctx.fillStyle = '#0ea5e9';
+    ctx.beginPath();
+    addRoundedRect(ctx, 210, 1420, canvas.width - 420, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#051937';
+    ctx.font = '900 30px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('DOCUMENTO OFICIAL PMO', canvas.width / 2, 1460);
+  }
+
+  function drawBadgePetFrame(ctx, canvas, item, img, focus, index, total, progress) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#07152f');
+    gradient.addColorStop(0.5, '#0b1f42');
+    gradient.addColorStop(1, '#06132b');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawBadgeBrand(ctx, canvas);
+
+    const cardW = 940;
+    const cardH = 1380;
+    const cardX = (canvas.width - cardW) / 2;
+    const cardY = 280;
+
+    const arrival = clamp(progress / 0.28, 0, 1);
+    const eased = 1 - Math.pow(1 - arrival, 3);
+    const scale = 0.92 + eased * 0.08;
+
+    ctx.save();
+    ctx.translate(cardX + cardW / 2, cardY + cardH / 2);
+    ctx.scale(scale, scale);
+
+    const x = -cardW / 2;
+    const y = -cardH / 2;
+
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 20;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, cardW, cardH, 30);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    const headerH = 140;
+    const headerGrad = ctx.createLinearGradient(x, y, x + cardW, y);
+    headerGrad.addColorStop(0, '#102a5c');
+    headerGrad.addColorStop(0.6, '#1a3e85');
+    headerGrad.addColorStop(1, '#0ea5e9');
+    ctx.fillStyle = headerGrad;
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, cardW, headerH, 30);
+    ctx.fill();
+    ctx.fillRect(x, y + headerH - 30, cardW, 30);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 32px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CARTEIRA DE VACINAÇÃO ANIMAL', x + 42, y + 54);
+    ctx.font = '700 22px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('MUNICÍPIO DE ORLÂNDIA · CONTROLE DE ZOONOSES', x + 42, y + 96);
+
+    ctx.save();
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    addRoundedRect(ctx, x + cardW - 120, y + 42, 75, 56, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeRect(x + cardW - 100, y + 52, 35, 36);
+    ctx.restore();
+
+    const photoW = cardW - 84;
+    const photoH = 680;
+    const photoX = x + 42;
+    const photoY = y + 175;
+    ctx.save();
+    ctx.beginPath();
+    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 22);
+    ctx.clip();
+    drawPetFaceCoverImage(ctx, img, photoX, photoY, photoW, photoH, focus);
+    ctx.restore();
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    addRoundedRect(ctx, photoX, photoY, photoW, photoH, 22);
+    ctx.stroke();
+
+    ctx.fillStyle = '#16a34a';
+    ctx.beginPath();
+    addRoundedRect(ctx, x + 42, y + 885, 360, 52, 26);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 24px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✓ STATUS: 100% IMUNIZADO', x + 222, y + 911);
+
+    ctx.font = '800 24px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(`REGISTRO Nº ${String(index + 1).padStart(4, '0')}-PMO`, x + cardW - 42, y + 911);
+
+    ctx.fillStyle = '#0f172a';
+    fitCenterText(ctx, item.name || 'Animal', 0, y + 995, cardW - 100, 68, 900);
+
+    const infoY = y + 1070;
+    ctx.fillStyle = '#64748b';
+    ctx.font = '700 20px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('ESPÉCIE', x + 50, infoY);
+    ctx.fillText('DATA DA DOSE', x + 380, infoY);
+    ctx.fillText('CIDADE', x + 710, infoY);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = '900 27px Arial, sans-serif';
+    ctx.fillText(item.species === 'gato' ? 'Felina (Gato)' : 'Canina (Cão)', x + 50, infoY + 36);
+    ctx.fillText(item.date ? displayDate(item.date) : 'Dose do dia', x + 380, infoY + 36);
+    ctx.fillText('Orlândia - SP', x + 710, infoY + 36);
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 42, y + 1175);
+    ctx.lineTo(x + cardW - 42, y + 1175);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.fillStyle = '#1e293b';
+    for (let bi = 0; bi < 42; bi += 1) {
+      const bw = (bi % 3 === 0 ? 4 : (bi % 2 === 0 ? 7 : 3));
+      ctx.fillRect(x + 50 + bi * 13, y + 1205, bw, 65);
+    }
+    ctx.font = '600 18px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`*PMO-${String(index + 1).padStart(4, '0')}-VACINADO*`, x + 50, y + 1295);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = '#0ea5e9';
+    ctx.font = '800 22px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('PROTEÇÃO GARANTIDA', x + cardW - 42, y + 1240);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '600 18px Arial, sans-serif';
+    ctx.fillText('Campanha Antirrábica PMO', x + cardW - 42, y + 1270);
+    ctx.restore();
+
+    const sweepProgress = (progress * 2.2) - 0.6;
+    if (sweepProgress >= 0 && sweepProgress <= 1.2) {
+      ctx.save();
+      ctx.beginPath();
+      addRoundedRect(ctx, x, y, cardW, cardH, 30);
+      ctx.clip();
+      const sweepX = x - 200 + sweepProgress * (cardW + 400);
+      const sweepGrad = ctx.createLinearGradient(sweepX, y, sweepX + 180, y + cardH);
+      sweepGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      sweepGrad.addColorStop(0.5, 'rgba(255,255,255,0.38)');
+      sweepGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sweepGrad;
+      ctx.fillRect(x, y, cardW, cardH);
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.font = '800 27px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`CARTEIRINHA ${index + 1} DE ${total}  ·  ORLÂNDIA PROTEGIDA`, canvas.width / 2, canvas.height - 80);
+  }
+
+  function drawBadgeOutro(ctx, canvas, items) {
+    const summary = videoItemSummary(items);
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#07152f');
+    gradient.addColorStop(0.5, '#0e2b5c');
+    gradient.addColorStop(1, '#051228');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawBadgeBrand(ctx, canvas);
+
+    ctx.fillStyle = '#38bdf8';
+    fitCenterText(ctx, 'DOCUMENTAÇÃO EM DIA', canvas.width / 2, 590, canvas.width - 100, 78, 900);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'CIDADE 100% PROTEGIDA', canvas.width / 2, 690, canvas.width - 100, 88, 900);
+
+    ctx.fillStyle = '#0ea5e9';
+    ctx.fillRect(canvas.width / 2 - 160, 770, 320, 7);
+
+    ctx.fillStyle = '#ffffff';
+    fitCenterText(ctx, `${items.length} VIDAS SALVAGUARDADAS`, canvas.width / 2, 940, canvas.width - 120, 60, 900);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '800 42px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1040);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'A carteirinha de vacinação é a maior prova de amor.', canvas.width / 2, 1310, canvas.width - 140, 44, 800);
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.76)';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1480);
+  }
+
+  function badgeCardDuration(itemsCount) {
+    return Math.round(clamp(15000 / Math.max(1, itemsCount), 400, 1100));
+  }
+
+  // --- Estilo Pop Viral (Reels Beat / TikTok Trend) ---
+  const POP_BATCH_SIZE = 12;
+
+  function drawPopBrand(ctx, canvas) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(16, 9, 32, .88)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 48, 46, 620, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#8b5cf6';
+    ctx.beginPath();
+    ctx.arc(92, 86, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('REELS DO DIA · PMO PETS', 126, 86);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 48, 47, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawPopIntro(ctx, canvas, items, progress) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0b0914');
+    gradient.addColorStop(0.5, '#200e42');
+    gradient.addColorStop(1, '#0c0718');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.22)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, 750, 240 + Math.sin(progress * Math.PI) * 40, 0, Math.PI * 2);
+    ctx.arc(canvas.width / 2, 750, 420 + Math.cos(progress * Math.PI) * 40, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    drawPopBrand(ctx, canvas);
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, 540);
+    ctx.rotate(-0.05);
+    ctx.fillStyle = '#8b5cf6';
+    ctx.beginPath();
+    addRoundedRect(ctx, -200, -38, 400, 76, 38);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔥 TREND DA PROTEÇÃO', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'DÊ O PLAY', canvas.width / 2, 700, canvas.width - 100, 115, 900);
+    ctx.fillStyle = '#38bdf8';
+    fitCenterText(ctx, 'NA FOFURA!', canvas.width / 2, 820, canvas.width - 100, 115, 900);
+
+    ctx.fillStyle = '#ec4899';
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'PET VACINADO' : 'PETS VACINADOS'}`, canvas.width / 2, 1020, canvas.width - 120, 62, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1110, canvas.width - 140, 36, 600);
+
+    ctx.font = '60px Arial';
+    ctx.fillText('🐾', 180, 1380);
+    ctx.fillText('💖', 880, 1350);
+    ctx.fillText('✨', 240, 420);
+    ctx.fillText('🛡️', 840, 440);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cortes rápidos, batida visual e pura proteção.', canvas.width / 2, 1550);
+  }
+
+  function drawPopPetFrame(ctx, canvas, item, img, focus, index, total, progress) {
+    const direction = index % 2 === 0 ? 0.7 : -0.7;
+    drawAnimatedPetCover(ctx, img, canvas, focus, progress * 0.85, direction);
+
+    const shade = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    shade.addColorStop(0, 'rgba(11, 9, 20, .75)');
+    shade.addColorStop(0.3, 'rgba(11, 9, 20, 0)');
+    shade.addColorStop(0.65, 'rgba(11, 9, 20, .2)');
+    shade.addColorStop(1, 'rgba(11, 9, 20, .94)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.strokeStyle = index % 2 === 0 ? 'rgba(139, 92, 246, 0.75)' : 'rgba(56, 189, 248, 0.75)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    addRoundedRect(ctx, 36, 36, canvas.width - 72, canvas.height - 72, 28);
+    ctx.stroke();
+    ctx.restore();
+
+    drawPopBrand(ctx, canvas);
+
+    const bob = Math.sin(progress * Math.PI * 2) * 8;
+    ctx.save();
+    ctx.font = '54px Arial';
+    ctx.fillText('🐾', 72, 250 + bob);
+    ctx.fillText('✨', canvas.width - 120, 240 - bob);
+    ctx.fillText('💖', canvas.width - 120, canvas.height - 420 + bob);
+    ctx.restore();
+
+    ctx.save();
+    const barCount = 28;
+    const barWidth = 18;
+    const barGap = 12;
+    const totalEqWidth = barCount * (barWidth + barGap);
+    const startX = (canvas.width - totalEqWidth) / 2;
+    const baseBarY = canvas.height - 115;
+    for (let b = 0; b < barCount; b += 1) {
+      const barH = 14 + Math.abs(Math.sin(progress * 8 + b * 0.45)) * 48;
+      const barGrad = ctx.createLinearGradient(0, baseBarY - barH, 0, baseBarY);
+      barGrad.addColorStop(0, '#38bdf8');
+      barGrad.addColorStop(1, '#8b5cf6');
+      ctx.fillStyle = barGrad;
+      ctx.beginPath();
+      addRoundedRect(ctx, startX + b * (barWidth + barGap), baseBarY - barH, barWidth, barH, 9);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height - 310);
+    ctx.rotate((index % 2 === 0 ? -0.025 : 0.025));
+
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 12;
+
+    const badgeW = Math.min(canvas.width - 110, 880);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    addRoundedRect(ctx, -badgeW / 2, -90, badgeW, 160, 26);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    ctx.fillStyle = index % 2 === 0 ? '#8b5cf6' : '#ec4899';
+    ctx.beginPath();
+    addRoundedRect(ctx, -badgeW / 2 + 16, -74, 14, 128, 7);
+    ctx.fill();
+
+    ctx.fillStyle = '#0f172a';
+    fitCenterText(ctx, item.name || 'Pet Vacinado', 10, -32, badgeW - 140, 72, 900);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '800 25px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const speciesLabel = item.species === 'gato' ? '🐱 GATO 100% PROTEGIDO' : '🐶 CÃO 100% PROTEGIDO';
+    const dateLabel = item.date ? ` · ${displayDate(item.date)}` : '';
+    ctx.fillText(`${speciesLabel}${dateLabel}`, 10, 36);
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(16, 9, 32, .82)';
+    ctx.beginPath();
+    addRoundedRect(ctx, canvas.width - 185, canvas.height - 96, 145, 48, 24);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '900 24px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${index + 1} / ${total}`, canvas.width - 112, canvas.height - 72);
+    ctx.restore();
+
+    if (progress < 0.14) {
+      ctx.fillStyle = `rgba(139, 92, 246, ${(0.14 - progress) * 2.8})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function drawPopOutro(ctx, canvas, items) {
+    const summary = videoItemSummary(items);
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0c0718');
+    gradient.addColorStop(0.5, '#220d48');
+    gradient.addColorStop(1, '#0a0815');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawPopBrand(ctx, canvas);
+
+    ctx.fillStyle = '#8b5cf6';
+    fitCenterText(ctx, 'VIRALIZE ESSE AMOR!', canvas.width / 2, 590, canvas.width - 100, 84, 900);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'ORLÂNDIA PROTEGIDA', canvas.width / 2, 690, canvas.width - 100, 84, 900);
+
+    ctx.fillStyle = '#ec4899';
+    fitCenterText(ctx, `${items.length} VIDAS SALVAS`, canvas.width / 2, 880, canvas.width - 120, 68, 900);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '900 44px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 990);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'Curta, compartilhe e mantenha a vacina em dia!', canvas.width / 2, 1310, canvas.width - 140, 44, 800);
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.76)';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1490);
+  }
+
+  function popPetDuration(itemsCount) {
+    return Math.round(clamp(14000 / Math.max(1, itemsCount), 240, 720));
+  }
+
+  // --- Estilo Passarela (Revista Editorial / Moda Pet) ---
+  const RUNWAY_HIGHLIGHT_LIMIT = 16;
+
+  function drawRunwayBrand(ctx, canvas) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 18, 14, .82)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 48, 46, 620, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(80, 84, 40, 5);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ORLÂNDIA PET COUTURE', 138, 86);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 48, 47, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawRunwayIntro(ctx, canvas, items) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#09100d');
+    gradient.addColorStop(0.5, '#10241b');
+    gradient.addColorStop(1, '#060a08');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(80, 200);
+    ctx.lineTo(80, canvas.height - 200);
+    ctx.moveTo(canvas.width - 80, 200);
+    ctx.lineTo(canvas.width - 80, canvas.height - 200);
+    ctx.stroke();
+    ctx.restore();
+
+    drawRunwayBrand(ctx, canvas);
+
+    ctx.fillStyle = '#10b981';
+    ctx.font = '800 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ÉDITION SPÉCIALE 2026', canvas.width / 2, 580);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'A PASSARELA DOS', canvas.width / 2, 700, canvas.width - 120, 96, 900);
+    fitCenterText(ctx, 'IMUNIZADOS', canvas.width / 2, 805, canvas.width - 120, 96, 900);
+
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(canvas.width / 2 - 160, 900, 320, 6);
+
+    ctx.fillStyle = '#ffffff';
+    fitCenterText(ctx, `${items.length} MODELOS PROTEGIDOS`, canvas.width / 2, 1040, canvas.width - 130, 56, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.76)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1130, canvas.width - 150, 36, 600);
+
+    ctx.font = '600 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText('A verdadeira elegância é cuidar de quem te ama.', canvas.width / 2, 1520);
+  }
+
+  function drawRunwayPetFrame(ctx, canvas, item, img, focus, index, total, progress) {
+    const sw = canvas.width / Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+    const glideOffset = (progress - 0.5) * sw * 0.12;
+    drawAnimatedPetCover(ctx, img, canvas, { x: clamp(focus.x + glideOffset / img.naturalWidth, 0.2, 0.8), y: focus.y }, progress * 0.65, 0.4);
+
+    const overlay = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    overlay.addColorStop(0, 'rgba(8, 14, 11, .78)');
+    overlay.addColorStop(0.28, 'rgba(8, 14, 11, 0)');
+    overlay.addColorStop(0.6, 'rgba(8, 14, 11, .3)');
+    overlay.addColorStop(1, 'rgba(8, 14, 11, .95)');
+    ctx.fillStyle = overlay;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawRunwayBrand(ctx, canvas);
+
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.65)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+    ctx.save();
+    ctx.font = '900 130px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(String(index + 1).padStart(2, '0'), 72, canvas.height - 380);
+    ctx.restore();
+
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(72, canvas.height - 350, 10, 220);
+
+    ctx.save();
+    ctx.fillStyle = '#10b981';
+    ctx.font = '800 25px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('LOOK DO DIA · TOTALMENTE IMUNIZADO', 98, canvas.height - 315);
+
+    ctx.fillStyle = '#ffffff';
+    fitCenterText(ctx, item.name || 'Modelo', canvas.width / 2 + 10, canvas.height - 230, canvas.width - 170, 84, 900);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const speciesLabel = item.species === 'gato' ? 'MODELO FELINO' : 'MODELO CANINO';
+    const dateLabel = item.date ? ` · ${displayDate(item.date)}` : '';
+    ctx.fillText(`${speciesLabel}${dateLabel}`, canvas.width / 2, canvas.height - 150);
+
+    ctx.fillStyle = '#10b981';
+    ctx.font = '800 26px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${index + 1} / ${total}`, canvas.width - 72, canvas.height - 80);
+    ctx.restore();
+
+    if (progress < 0.16) {
+      ctx.fillStyle = `rgba(8, 14, 11, ${(0.16 - progress) * 4.2})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function drawRunwayOutro(ctx, canvas, items) {
+    const summary = videoItemSummary(items);
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#09100d');
+    gradient.addColorStop(0.5, '#132c21');
+    gradient.addColorStop(1, '#060a08');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawRunwayBrand(ctx, canvas);
+
+    ctx.fillStyle = '#10b981';
+    ctx.font = '800 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('A BELEZA DA SAÚDE', canvas.width / 2, 570);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'PROTEÇÃO COM', canvas.width / 2, 700, canvas.width - 120, 92, 900);
+    fitCenterText(ctx, 'AMOR E ATITUDE', canvas.width / 2, 800, canvas.width - 120, 92, 900);
+
+    ctx.fillStyle = '#10b981';
+    fitCenterText(ctx, `${items.length} VIDAS PROTEGIDAS`, canvas.width / 2, 1020, canvas.width - 130, 60, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.84)';
+    ctx.font = '700 38px Arial, sans-serif';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1115);
+
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'O desfile da saúde pública continua em Orlândia.', canvas.width / 2, 1420, canvas.width - 150, 44, 800);
+  }
+
+  function runwayPhotoDuration(itemsCount) {
+    return Math.round(clamp(11000 / Math.max(1, itemsCount), 520, 950));
+  }
+
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -3583,7 +4513,7 @@
         }
         recordedItems = loaded.map((pair) => pair.item);
         await holdCanvasFrame(() => drawCinematicOutro(ctx, canvas, items), 1450, captureTrack);
-      } else {
+      } else if (generatedVideoStyle === 'celebration') {
         const groups = [];
         for (let i = 0; i < items.length; i += CELEBRATION_GROUP_SIZE) groups.push(items.slice(i, i + CELEBRATION_GROUP_SIZE));
         const durationMs = celebrationSlideDuration(groups.length);
@@ -3607,6 +4537,104 @@
         if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
         recordedItems = successfulItems;
         await holdAnimatedCanvasFrame((progress) => drawCelebrationOutro(ctx, canvas, successfulItems, progress), 1350, captureTrack);
+      } else if (generatedVideoStyle === 'polaroid') {
+        const groups = [];
+        for (let i = 0; i < items.length; i += POLAROID_GROUP_SIZE) groups.push(items.slice(i, i + POLAROID_GROUP_SIZE));
+        const durationMs = polaroidSlideDuration(groups.length);
+        const successfulItems = [];
+        await holdAnimatedCanvasFrame((progress) => drawPolaroidIntro(ctx, canvas, items, progress), 1250, captureTrack);
+        for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+          setVideoStatus(`Montando álbum polaroid ${groupIndex + 1}/${groups.length}...`);
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[groupIndex]));
+          if (!loaded.length) continue;
+          const group = loaded.map((pair) => pair.item);
+          const images = loaded.map((pair) => pair.image);
+          const focuses = images.map(estimatePetFocus);
+          successfulItems.push(...group);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawPolaroidFrame(ctx, canvas, group, images, focuses, groupIndex, groups.length, progress),
+            durationMs,
+            captureTrack,
+          );
+          images.forEach((image) => { image.src = ''; });
+        }
+        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        recordedItems = successfulItems;
+        await holdAnimatedCanvasFrame((progress) => drawPolaroidOutro(ctx, canvas, successfulItems, progress), 1350, captureTrack);
+      } else if (generatedVideoStyle === 'badge') {
+        const batches = [];
+        for (let i = 0; i < items.length; i += BADGE_BATCH_SIZE) batches.push(items.slice(i, i + BADGE_BATCH_SIZE));
+        const durationMs = badgeCardDuration(items.length);
+        const successfulItems = [];
+        await holdCanvasFrame(() => drawBadgeIntro(ctx, canvas, items), 1350, captureTrack);
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+          setVideoStatus(`Emitindo carteirinhas ${batchIndex + 1}/${batches.length}...`);
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
+          for (const pair of loaded) {
+            const itemIndex = items.indexOf(pair.item);
+            const focus = estimatePetFocus(pair.image);
+            successfulItems.push(pair.item);
+            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
+              setVideoStatus(`Gerando carteirinha: ${successfulItems.length}/${items.length} animais...`);
+            }
+            await holdAnimatedCanvasFrame(
+              (progress) => drawBadgePetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
+              durationMs,
+              captureTrack,
+            );
+            pair.image.src = '';
+          }
+        }
+        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        recordedItems = successfulItems;
+        await holdCanvasFrame(() => drawBadgeOutro(ctx, canvas, successfulItems), 1500, captureTrack);
+      } else if (generatedVideoStyle === 'pop') {
+        const batches = [];
+        for (let i = 0; i < items.length; i += POP_BATCH_SIZE) batches.push(items.slice(i, i + POP_BATCH_SIZE));
+        const durationMs = popPetDuration(items.length);
+        const successfulItems = [];
+        await holdAnimatedCanvasFrame((progress) => drawPopIntro(ctx, canvas, items, progress), 1250, captureTrack);
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+          setVideoStatus(`Sincronizando batida ${batchIndex + 1}/${batches.length}...`);
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
+          for (const pair of loaded) {
+            const itemIndex = items.indexOf(pair.item);
+            const focus = estimatePetFocus(pair.image);
+            successfulItems.push(pair.item);
+            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
+              setVideoStatus(`Gravando Reels: ${successfulItems.length}/${items.length} animais...`);
+            }
+            await holdAnimatedCanvasFrame(
+              (progress) => drawPopPetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
+              durationMs,
+              captureTrack,
+            );
+            pair.image.src = '';
+          }
+        }
+        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        recordedItems = successfulItems;
+        await holdCanvasFrame(() => drawPopOutro(ctx, canvas, successfulItems), 1500, captureTrack);
+      } else {
+        const highlights = selectEvenlySpacedVideoItems(items, RUNWAY_HIGHLIGHT_LIMIT);
+        await holdCanvasFrame(() => drawRunwayIntro(ctx, canvas, items), 1250, captureTrack);
+        setVideoStatus(`Selecionando ${highlights.length} modelos para o desfile Passarela...`);
+        const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(highlights));
+        if (!loaded.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        const durationMs = runwayPhotoDuration(loaded.length);
+        for (let index = 0; index < loaded.length; index += 1) {
+          const pair = loaded[index];
+          const focus = estimatePetFocus(pair.image);
+          setVideoStatus(`Desfilando na passarela ${index + 1}/${loaded.length}...`);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawRunwayPetFrame(ctx, canvas, pair.item, pair.image, focus, index, loaded.length, progress),
+            durationMs,
+            captureTrack,
+          );
+          pair.image.src = '';
+        }
+        recordedItems = loaded.map((pair) => pair.item);
+        await holdCanvasFrame(() => drawRunwayOutro(ctx, canvas, items), 1450, captureTrack);
       }
       recorder.stop();
       await stopped;
@@ -3633,7 +4661,7 @@
 
     const totalLabel = `${generatedVideoTotalItems} ${generatedVideoTotalItems === 1 ? 'animal' : 'animais'}`;
     const highlightsLabel = recordedItems.length < generatedVideoTotalItems
-      ? ` ${recordedItems.length} aparecem como destaques no modo Cinema.`
+      ? ` ${recordedItems.length} aparecem como destaques no modo ${selectedStyleDetails.label}.`
       : '';
     const played = await previewGeneratedVideo();
     const base = played
