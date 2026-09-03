@@ -77,21 +77,38 @@ def test_video_period_selector_keeps_day_and_adds_week_and_month(source):
 
 def test_video_styles_are_selectable_independently_from_the_period(source):
     styles = re.findall(
-        r'name="pmo-video-style" value="(mosaic|rapid|cinematic|celebration)"',
+        r'name="pmo-video-style" value="(mosaic|rapid|cinematic|celebration|polaroid|badge|pop|runway)"',
         source,
     )
-    assert styles == ["mosaic", "rapid", "cinematic", "celebration"]
+    assert styles == [
+        "mosaic",
+        "rapid",
+        "cinematic",
+        "celebration",
+        "polaroid",
+        "badge",
+        "pop",
+        "runway",
+    ]
     assert "generatedVideoStyle = selectedVideoStyle()" in source
     assert "if (generatedVideoStyle === 'mosaic')" in source
     assert "generatedVideoStyle === 'rapid'" in source
     assert "generatedVideoStyle === 'cinematic'" in source
+    assert "generatedVideoStyle === 'celebration'" in source
+    assert "generatedVideoStyle === 'polaroid'" in source
+    assert "generatedVideoStyle === 'badge'" in source
+    assert "generatedVideoStyle === 'pop'" in source
 
 
-def test_all_four_social_styles_keep_vertical_30_fps_rendering(source):
+def test_all_eight_social_styles_keep_vertical_30_fps_rendering(source):
     assert "const VIDEO_CAPTURE_FPS = 30" in source
     assert "drawRapidPetFrame" in source
     assert "drawCinematicPetFrame" in source
     assert "drawCelebrationFrame" in source
+    assert "drawPolaroidFrame" in source
+    assert "drawBadgePetFrame" in source
+    assert "drawPopPetFrame" in source
+    assert "drawRunwayPetFrame" in source
     assert "holdAnimatedCanvasFrame" in source
     assert "RAPID_PHOTO_MIN_MS" in source
     assert "RAPID_PHOTO_MAX_MS" in source
@@ -101,6 +118,11 @@ def test_all_four_social_styles_keep_vertical_30_fps_rendering(source):
 
 def test_new_styles_have_short_bounded_storyboards(source):
     assert "const CINEMATIC_HIGHLIGHT_LIMIT = 16" in source
+    assert "const RUNWAY_HIGHLIGHT_LIMIT = 16" in source
     assert "cinematicPhotoDuration" in source
     assert "celebrationSlideDuration" in source
     assert "mosaicSlideDuration" in source
+    assert "polaroidSlideDuration" in source
+    assert "badgeCardDuration" in source
+    assert "popPetDuration" in source
+    assert "runwayPhotoDuration" in source

@@ -15,41 +15,131 @@
   .pmo-step .n { font-size: 1.4rem; font-weight: 700; }
   .pmo-step .l { font-size: .78rem; color: #6b7280; }
   .pmo-section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
-  .pmo-cob-row { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; background: #fff; }
-  .pmo-cob-avatar {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    object-fit: cover;
-    background: #eef2ff;
-    color: #64748b;
-    display: inline-grid;
-    place-items: center;
-    flex: 0 0 auto;
-  }
-  .pmo-frascos-summary {
-    border: 1px solid #fde68a;
-    border-radius: 10px;
-    background: #fffbeb;
-    color: #78350f;
-  }
+  .pmo-frascos-summary { border: 1px solid #fde68a; border-radius: 10px; background: #fffbeb; color: #78350f; }
   .pmo-frascos-details summary { cursor: pointer; }
+
+  /* ─── Animais vacinados ─── */
+  .pmo-vac-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .pmo-vac-card { border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .pmo-vac-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .pmo-vac-photo {
+    width: 56px; height: 56px; border-radius: 14px; object-fit: cover;
+    background: #eef2ff; color: #64748b; display: inline-grid; place-items: center;
+    font-size: 1.5rem; flex: 0 0 auto;
+  }
+  .pmo-vac-name { font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+  .pmo-vac-tutor { font-size: .8rem; color: #6b7280; overflow-wrap: anywhere; }
+  .pmo-vac-when { font-size: .85rem; }
+  .pmo-vac-when strong { font-variant-numeric: tabular-nums; }
+  .pmo-vac-source { font-size: .75rem; color: #6b7280; overflow-wrap: anywhere; }
+  .pmo-vac-badge { font-size: .72rem; padding: .25rem .5rem; border-radius: 999px; white-space: nowrap; }
+  .pmo-vac-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+  .pmo-vac-actions .btn { --bs-btn-padding-y: .15rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem; }
+  .pmo-skeleton { border-radius: 10px; background: linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 37%,#f3f4f6 63%); background-size: 400% 100%; animation: pmo-shimmer 1.3s ease infinite; }
+  @keyframes pmo-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+  .pmo-count-chip { border: 1px solid #e5e7eb; border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; color: #374151; background: #fff; }
+  /* Faixa de filtros rola na horizontal em vez de virar cinco botões
+     empilhados: no celular do aplicador a lista tem que caber na primeira
+     tela. O `width:auto` desfaz a regra global `main .btn { width: 100% }`
+     que o CSS do site aplica abaixo de 576px. */
+  .pmo-vac-filters { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: 4px; }
+  .pmo-vac-filters .btn { flex: 0 0 auto; white-space: nowrap; }
+  @media (max-width: 576px) {
+    main .pmo-vac-filters .btn,
+    main .pmo-vac-actions .btn { width: auto; margin-bottom: 0; }
+  }
 </style>
 {% endblock %}
 
 {% block main %}
 <div class="container py-4">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-1 gap-2">
     <div>
       <h2 class="mb-1">📊 Painel da Campanha — Vacinação 2026</h2>
-      <p class="text-muted mb-0">Resultado/doses espelhados da "Controle de doses"; pipeline lido do banco. Só leitura.</p>
+      <p class="text-muted mb-0">
+        Animais e datas vêm das fichas do banco; doses e frascos espelham a aba
+        "Controle de doses". Só leitura.
+      </p>
     </div>
-    <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Painel operacional</a>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Painel operacional</a>
+      <button type="button" id="pmo-refresh" class="btn btn-outline-primary"
+              title="Relê a planilha agora, ignorando o cache de alguns minutos">
+        <i class="fa-solid fa-rotate me-1"></i>Atualizar
+      </button>
+    </div>
+  </div>
+  <p class="small text-muted" id="pmo-fresh">Planilha: carregando…</p>
+
+  {# ───── Animais vacinados ───── #}
+  <div class="pmo-section-title mb-3">Animais vacinados</div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3" id="pmo-vac-counts">
+    <span class="pmo-count-chip">carregando…</span>
+  </div>
+
+  <div class="row g-2 align-items-center mb-3">
+    <div class="col-12 col-md-5">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <input type="search" class="form-control" id="pmo-vac-q"
+               placeholder="Buscar por animal, tutor, endereço ou dia…" aria-label="Buscar animais vacinados">
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="visually-hidden" for="pmo-vac-order">Ordenar por</label>
+      <select class="form-select form-select-sm" id="pmo-vac-order">
+        <option value="recentes">Vacinados há menos tempo (mais recentes)</option>
+        <option value="antigos">Vacinados há mais tempo (mais antigos)</option>
+        <option value="vencendo">Proteção vencendo primeiro</option>
+        <option value="nome">Nome do animal (A–Z)</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-3 text-md-end">
+      <span class="small text-muted" id="pmo-vac-total"></span>
+    </div>
+  </div>
+
+  <div class="pmo-vac-filters mb-3" id="pmo-vac-filters">
+    <button type="button" class="btn btn-sm btn-primary pmo-vac-filter" data-status="todos">Todos</button>
+    <button type="button" class="btn btn-sm btn-outline-success pmo-vac-filter" data-status="protected">Protegidos</button>
+    <button type="button" class="btn btn-sm btn-outline-warning pmo-vac-filter" data-status="expiring">Expirando</button>
+    <button type="button" class="btn btn-sm btn-outline-danger pmo-vac-filter" data-status="expired">Expirados</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary pmo-vac-filter" data-status="sem_data">Sem data</button>
+  </div>
+
+  <div id="pmo-vac-reconcile" class="alert alert-light border small d-none"></div>
+
+  <div class="pmo-vac-grid" id="pmo-vac-grid">
+    {% for _ in range(6) %}
+    <div class="pmo-vac-card">
+      <div class="pmo-vac-head">
+        <span class="pmo-skeleton" style="width:56px;height:56px;border-radius:14px;"></span>
+        <span class="flex-grow-1">
+          <span class="pmo-skeleton d-block mb-1" style="height:14px;width:70%;"></span>
+          <span class="pmo-skeleton d-block" style="height:11px;width:50%;"></span>
+        </span>
+      </div>
+      <span class="pmo-skeleton d-block" style="height:11px;width:85%;"></span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="text-center my-3">
+    <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="pmo-vac-more">
+      Carregar mais
+    </button>
+  </div>
+
+  {# ───── Cobertura ativa (derivada da mesma lista acima) ───── #}
+  <div class="pmo-section-title mb-3">Cobertura ativa (vacina antirrábica · 365 dias)</div>
+  <div id="pmo-cobertura">
+    <div class="pmo-skeleton mb-4" style="height:86px;"></div>
   </div>
 
   {# ───── Resultado & doses (espelho da Controle de doses) ───── #}
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-    <div class="pmo-section-title mb-0">Resultado & doses (Controle de doses)</div>
+    <div class="pmo-section-title mb-0">Resultado &amp; doses (Controle de doses)</div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <div class="form-check form-check-inline m-0 small">
         <input class="form-check-input" type="checkbox" id="pmo-doses-include-green">
@@ -60,248 +150,443 @@
     </div>
   </div>
   <div id="pmo-doses-compile-result" class="alert alert-light border small d-none"></div>
-  {% if doses.error %}
-    <div class="alert alert-warning">Não consegui ler a "Controle de doses": {{ doses.error }}</div>
-  {% else %}
-  {% set t = doses.totals %}
-  <div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Vacinados</div>
-        <div class="kpi-value">{{ t.vaccinated }}</div>
-        <div class="kpi-sub">🐕 {{ t.dogs }} &nbsp; 🐈 {{ t.cats }}</div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Doses utilizadas</div>
-        <div class="kpi-value">{{ t.doses }}</div>
-        <div class="kpi-sub">vacinados + perdas</div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Desperdício</div>
-        <div class="kpi-value {{ 'pmo-meta-off' if t.waste_pct >= 8 else 'pmo-meta-ok' }}">{{ t.waste_pct }}%</div>
-        <div class="kpi-sub">{{ t.perdas }} doses perdidas</div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Meses ativos</div>
-        <div class="kpi-value">{{ doses.months|length }}</div>
-        <div class="kpi-sub">com vacinação registrada</div>
-      </div>
-    </div>
+  <div id="pmo-doses">
+    <div class="pmo-skeleton mb-4" style="height:120px;"></div>
   </div>
-
-  {% set maxv = (doses.months|map(attribute='vaccinated')|max) or 1 %}
-  <div class="row g-3 mb-4">
-    <div class="col-lg-8">
-      <div class="small text-muted mb-2">Vacinados por mês</div>
-      {% for m in doses.months %}
-      <div class="mb-2">
-        <div class="d-flex justify-content-between small">
-          <span>{{ m.month }}</span>
-          <span class="text-muted">{{ m.vaccinated }} &nbsp;(🐕{{ m.dogs }} 🐈{{ m.cats }} · perdas {{ m.perdas }})</span>
-        </div>
-        <div class="pmo-bar"><span style="width: {{ (100 * m.vaccinated / maxv)|round }}%; background:#34d399;"></span></div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
 
   {# ───── Controle de frascos ───── #}
-  <div class="pmo-section-title mb-3">Controle de frascos ({{ frascos.vialDoses or 25 }} doses · validade {{ frascos.validityDays or 3 }} dias após abrir)</div>
-  {% if frascos.error %}
-    <div class="alert alert-warning">Não consegui montar o controle de frascos: {{ frascos.error }}</div>
-  {% else %}
-  <div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Sobra atual</div>
-        <div class="kpi-value {{ 'pmo-meta-off' if frascos.current.expired else '' }}">{{ frascos.current.leftover }}</div>
-        <div class="kpi-sub">
-          {% if frascos.current.leftover %}
-            frasco de {{ frascos.current.opened }} · {{ 'VENCEU' if frascos.current.expired else 'usar até' }} {{ frascos.current.validUntil }}
-          {% else %}
-            nenhum frasco aberto
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Frascos abertos</div>
-        <div class="kpi-value">{{ frascos.vialsTotal }}</div>
-        <div class="kpi-sub">na campanha ({{ frascos.vialsTotal * frascos.vialDoses }} doses)</div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Próximo dia agendado</div>
-        <div class="kpi-value" style="font-size:1.1rem;">{{ frascos.nextScheduled or '—' }}</div>
-        <div class="kpi-sub">
-          {% if frascos.current.leftover and not frascos.current.expired %}
-            {{ frascos.current.leftover }} dose(s) da sobra + frascos novos
-          {% else %}
-            começa com frasco novo
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="pmo-kpi-card">
-        <div class="kpi-label">Fechamento dos meses</div>
-        <div class="kpi-sub mt-1">
-          {% for m in frascos.months %}
-            <div>{{ '✅' if m.closes else '⚠️' }} {{ m.month }}: {{ m.doses }} = {{ m.vials }} frasco(s){{ '' if m.closes else ' + ' ~ m.rest }}</div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
+  <div class="pmo-section-title mb-3" id="pmo-frascos-title">Controle de frascos</div>
+  <div id="pmo-frascos">
+    <div class="pmo-skeleton mb-4" style="height:120px;"></div>
   </div>
-  {% if frascos.alerts %}
-    <div class="pmo-frascos-summary p-3 mb-3 small">
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-        <div>
-          <div class="fw-semibold">Ajustes pendentes no controle de frascos</div>
-          <div>
-            {{ frascos.alerts|length }} sobra(s) vencida(s) ou incompatíveis com o próximo dia.
-            Registre o descarte/perda correspondente para limpar estes avisos.
-          </div>
-        </div>
-        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
-          {{ frascos.alerts|length }} aviso(s)
-        </span>
-      </div>
-      <details class="pmo-frascos-details mt-2">
-        <summary class="fw-semibold">Ver detalhes dos frascos</summary>
-        <ul class="mb-0 mt-2 ps-3">
-          {% for alert in frascos.alerts %}
-            <li>{{ alert }}</li>
-          {% endfor %}
-        </ul>
-      </details>
-    </div>
-  {% endif %}
-  {% if frascos.anomalies %}
-    <details class="alert alert-secondary py-2 small mb-3 pmo-frascos-details">
-      <summary class="fw-semibold">
-        {{ frascos.anomalies|length }} ponto(s) para revisar na planilha Controle de doses
-      </summary>
-      <ul class="mb-0 mt-2 ps-3">
-        {% for anomaly in frascos.anomalies %}
-          <li>{{ anomaly }}</li>
-        {% endfor %}
-      </ul>
-    </details>
-  {% endif %}
-  {% if frascos.days %}
-  <details class="mb-4">
-    <summary class="small text-muted" style="cursor:pointer;">Linha do tempo dos frascos ({{ frascos.days|length }} dias de vacinação)</summary>
-    <div class="table-responsive mt-2" style="max-height: 320px; overflow-y: auto;">
-      <table class="table table-sm small align-middle">
-        <thead><tr><th>Data</th><th>Doses usadas</th><th>Da sobra</th><th>Frascos abertos</th><th>Sobra ao fim</th><th>Sobra vale até</th></tr></thead>
-        <tbody>
-          {% for d in frascos.days|reverse %}
-          <tr>
-            <td>{{ d.dateLabel }}</td>
-            <td>{{ d.doses }}</td>
-            <td>{{ d.fromLeftover or '' }}</td>
-            <td>{{ d.vialsOpened or '' }}</td>
-            <td>{{ d.leftover or 0 }}</td>
-            <td>{{ d.leftoverValidUntil }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
-  {% endif %}
-  {% endif %}
-
-  {# ───── Cobertura ativa ───── #}
-  <div class="pmo-section-title mb-3">Cobertura ativa (vacina antirrábica · 365 dias)</div>
-  {% if cobertura.error %}
-    <div class="alert alert-warning">Não consegui calcular a cobertura: {{ cobertura.error }}</div>
-  {% else %}
-  <div class="row g-3 mb-3">
-    <div class="col-4">
-      <div class="pmo-kpi-card text-center" style="border-color:#d1fae5;">
-        <div class="kpi-label">Protegidos</div>
-        <div class="kpi-value" style="color:#059669;">{{ cobertura.protected }}</div>
-        <div class="kpi-sub">mais de 30 dias</div>
-      </div>
-    </div>
-    <div class="col-4">
-      <div class="pmo-kpi-card text-center" style="border-color:#fef3c7;">
-        <div class="kpi-label">Expirando</div>
-        <div class="kpi-value" style="color:#d97706;">{{ cobertura.expiring }}</div>
-        <div class="kpi-sub">em até 30 dias</div>
-      </div>
-    </div>
-    <div class="col-4">
-      <div class="pmo-kpi-card text-center" style="border-color:#fee2e2;">
-        <div class="kpi-label">Expirados</div>
-        <div class="kpi-value" style="color:#dc2626;">{{ cobertura.expired }}</div>
-        <div class="kpi-sub">sem cobertura</div>
-      </div>
-    </div>
-  </div>
-  {% if cobertura.total > 0 %}
-  <div class="pmo-bar mb-1" style="height:10px;">
-    <span style="width:{{ (100 * cobertura.protected / cobertura.total)|round }}%;background:#34d399;float:left;height:100%;border-radius:6px 0 0 6px;"></span>
-    <span style="width:{{ (100 * cobertura.expiring / cobertura.total)|round }}%;background:#fbbf24;float:left;height:100%;border-radius:0;"></span>
-    <span style="width:{{ (100 * cobertura.expired / cobertura.total)|round }}%;background:#f87171;float:left;height:100%;border-radius:0 6px 6px 0;"></span>
-  </div>
-  <div class="d-flex gap-3 small text-muted mb-3">
-    <span><span style="display:inline-block;width:10px;height:10px;background:#34d399;border-radius:2px;"></span> Protegidos</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#fbbf24;border-radius:2px;"></span> Expirando</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#f87171;border-radius:2px;"></span> Expirados</span>
-  </div>
-  {% endif %}
-
-  <button class="btn btn-sm btn-outline-secondary mb-4" id="pmo-cobertura-toggle" type="button">
-    <i class="fa-solid fa-list me-1"></i> Ver animais ({{ cobertura.total }})
-  </button>
-  <div id="pmo-cobertura-detail" class="mb-4" style="display:none;"></div>
-  {% endif %}
 
   {# ───── Pipeline (banco) ───── #}
   <div class="pmo-section-title mb-3">Pipeline (cadastros e agendamentos)</div>
-  {% if kpis.error %}
-    <div class="alert alert-warning">Não consegui montar o pipeline: {{ kpis.error }}</div>
-  {% else %}
-  <div class="row g-3 mb-3">
-    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.total_people }}</div><div class="l">Cadastrados</div></div></div>
-    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.backlog }}</div><div class="l">A agendar</div></div></div>
-    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.outcomes|selectattr('key','equalto','agendado')|map(attribute='count')|sum }}</div><div class="l">Agendados</div></div></div>
+  <div id="pmo-pipeline">
+    <div class="pmo-skeleton mb-4" style="height:120px;"></div>
   </div>
-
-  <div class="small text-muted mb-2">Desfechos por pessoa (cadastros únicos)</div>
-  {% for o in kpis.outcomes %}
-  <div class="mb-2">
-    <div class="d-flex justify-content-between small">
-      <span>{{ o.label }}</span>
-      <span class="text-muted">{{ o.count }} · {{ o.pct }}%</span>
-    </div>
-    <div class="pmo-bar">
-      <span style="width: {{ o.pct }}%; background:
-        {%- if o.key == 'vacinado' %} #34d399
-        {%- elif o.key == 'parcial' %} #fbbf24
-        {%- elif o.key in ['agendado','pendente','fluxo_ativo','reagendar'] %} #60a5fa
-        {%- elif o.key == 'ausente' %} #fb923c
-        {%- elif o.key == 'recusou' %} #f87171
-        {%- else %} #9ca3af {%- endif %};"></span>
-    </div>
-  </div>
-  {% endfor %}
-  {% endif %}
 </div>
 
 <script>
+(function () {
+  const URLS = {
+    planilha: '{{ url_for("vacina_pmo_painel_planilha") }}',
+    pipeline: '{{ url_for("vacina_pmo_painel_pipeline") }}',
+    vacinados: '{{ url_for("vacina_pmo_painel_vacinados") }}',
+  };
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    }[char]));
+  }
+
+  function pct(part, total) {
+    return total ? Math.round((100 * part) / total) : 0;
+  }
+
+  function warn(target, message) {
+    target.innerHTML = `<div class="alert alert-warning small">${esc(message)}</div>`;
+  }
+
+  // ───────────────────────── Animais vacinados ─────────────────────────
+  const STATUS = {
+    protected: { label: 'Protegido', bg: '#d1fae5', color: '#065f46', bar: '#34d399' },
+    expiring:  { label: 'Expirando', bg: '#fef3c7', color: '#92400e', bar: '#fbbf24' },
+    expired:   { label: 'Expirado',  bg: '#fee2e2', color: '#991b1b', bar: '#f87171' },
+    sem_data:  { label: 'Sem data',  bg: '#e5e7eb', color: '#374151', bar: '#9ca3af' },
+  };
+  const SPECIES_ICON = { cao: '🐕', gato: '🐈' };
+
+  const grid = document.getElementById('pmo-vac-grid');
+  const moreBtn = document.getElementById('pmo-vac-more');
+  const orderSel = document.getElementById('pmo-vac-order');
+  const searchEl = document.getElementById('pmo-vac-q');
+  const filtersEl = document.getElementById('pmo-vac-filters');
+  const countsEl = document.getElementById('pmo-vac-counts');
+  const totalEl = document.getElementById('pmo-vac-total');
+  const coberturaEl = document.getElementById('pmo-cobertura');
+  const reconcileEl = document.getElementById('pmo-vac-reconcile');
+
+  const state = { order: 'recentes', status: 'todos', q: '', page: 1, loading: false };
+  let lastCounts = null;
+  let sheetVaccinated = null;
+
+  function sinceText(animal) {
+    const days = animal.days_since;
+    if (days === null || days === undefined) return 'data não registrada';
+    if (days === 0) return 'vacinado hoje';
+    if (days === 1) return 'vacinado ontem';
+    if (days < 30) return `há ${days} dias`;
+    if (days < 365) {
+      const months = Math.max(1, Math.round(days / 30.44));
+      return `há ${months} ${months === 1 ? 'mês' : 'meses'}`;
+    }
+    const years = Math.floor(days / 365);
+    return `há ${years} ${years === 1 ? 'ano' : 'anos'}`;
+  }
+
+  function leftText(animal) {
+    if (animal.days_left === null || animal.days_left === undefined) return '';
+    if (animal.days_left > 0) return `vence em ${animal.days_left} dias (${esc(animal.expiry_date)})`;
+    if (animal.days_left === 0) return 'vence hoje';
+    return `venceu há ${Math.abs(animal.days_left)} dias`;
+  }
+
+  function renderCard(animal) {
+    const s = STATUS[animal.status_key] || STATUS.sem_data;
+    const photo = animal.image_url
+      ? `<img src="${esc(animal.image_url)}" alt="Foto de ${esc(animal.animal_name)}" class="pmo-vac-photo" loading="lazy" decoding="async">`
+      : `<span class="pmo-vac-photo" aria-hidden="true">${SPECIES_ICON[animal.species] || '🐾'}</span>`;
+    const source = [animal.sheet_title, animal.shift, animal.attended_by ? `aplicou: ${animal.attended_by}` : '']
+      .filter(Boolean).map(esc).join(' · ');
+    const doseBadge = animal.applied_here
+      ? ''
+      : '<span class="pmo-vac-badge" style="background:#e0e7ff;color:#3730a3;">dose anterior</span>';
+    const ficha = animal.profile_url
+      ? `<a href="${esc(animal.profile_url)}" class="btn btn-outline-primary"><i class="fa-solid fa-file-medical me-1"></i>Ficha</a>`
+      : '';
+    const carteirinha = animal.card_url
+      ? `<a href="${esc(animal.card_url)}" class="btn btn-outline-secondary" target="_blank" rel="noopener"><i class="fa-solid fa-id-card me-1"></i>Carteirinha</a>`
+      : '';
+    const zap = animal.phone_wa
+      ? `<a href="https://wa.me/${encodeURIComponent(animal.phone_wa)}?text=${encodeURIComponent(animal.wa_msg)}"
+            target="_blank" rel="noopener" class="btn btn-outline-success"><i class="fa-brands fa-whatsapp me-1"></i>Avisar</a>`
+      : '';
+
+    return `
+      <div class="pmo-vac-card">
+        <div class="pmo-vac-head">
+          ${photo}
+          <span class="flex-grow-1 min-w-0">
+            <span class="pmo-vac-name d-block">${SPECIES_ICON[animal.species] || '🐾'} ${esc(animal.animal_name)}</span>
+            <span class="pmo-vac-tutor d-block">${esc(animal.tutor)}</span>
+          </span>
+        </div>
+        <div class="d-flex gap-1 flex-wrap">
+          <span class="pmo-vac-badge" style="background:${s.bg};color:${s.color};">${s.label}</span>
+          ${doseBadge}
+        </div>
+        <div class="pmo-vac-when">
+          <i class="fa-solid fa-syringe me-1 text-muted"></i>
+          <strong>${esc(animal.vaccine_date || '—')}</strong>
+          <span class="text-muted">· ${esc(sinceText(animal))}</span>
+        </div>
+        ${leftText(animal) ? `<div class="pmo-vac-source">${leftText(animal)}</div>` : ''}
+        ${source ? `<div class="pmo-vac-source"><i class="fa-solid fa-table-list me-1"></i>${source}</div>` : ''}
+        <div class="pmo-vac-actions">${ficha}${carteirinha}${zap}</div>
+      </div>`;
+  }
+
+  function renderCounts(counts) {
+    lastCounts = counts;
+    countsEl.innerHTML = [
+      `<span class="pmo-count-chip"><strong>${counts.todos}</strong> animais com dose registrada</span>`,
+      `<span class="pmo-count-chip">🐕 ${counts.caes}</span>`,
+      `<span class="pmo-count-chip">🐈 ${counts.gatos}</span>`,
+      `<span class="pmo-count-chip">${counts.aplicadas} vacinados na campanha</span>`,
+      counts.imunizados ? `<span class="pmo-count-chip">${counts.imunizados} já imunizados</span>` : '',
+      `<span class="pmo-count-chip">${counts.com_foto} com foto</span>`,
+      counts.sem_data ? `<span class="pmo-count-chip" style="border-color:#fca5a5;color:#991b1b;">${counts.sem_data} sem data</span>` : '',
+    ].filter(Boolean).join('');
+    renderCobertura(counts);
+    renderReconcile();
+  }
+
+  function renderCobertura(counts) {
+    const dated = counts.protected + counts.expiring + counts.expired;
+    const cards = [
+      ['Protegidos', counts.protected, '#059669', '#d1fae5', 'mais de 30 dias'],
+      ['Expirando', counts.expiring, '#d97706', '#fef3c7', 'em até 30 dias'],
+      ['Expirados', counts.expired, '#dc2626', '#fee2e2', 'sem cobertura'],
+      ['Sem data', counts.sem_data, '#4b5563', '#e5e7eb', 'dose sem data registrada'],
+    ].map(([label, value, color, border, sub]) => `
+      <div class="col-6 col-lg-3">
+        <div class="pmo-kpi-card text-center" style="border-color:${border};">
+          <div class="kpi-label">${label}</div>
+          <div class="kpi-value" style="color:${color};">${value}</div>
+          <div class="kpi-sub">${sub}</div>
+        </div>
+      </div>`).join('');
+
+    const bar = dated ? `
+      <div class="pmo-bar mb-1" style="height:10px;">
+        <span style="width:${pct(counts.protected, dated)}%;background:#34d399;float:left;height:100%;"></span>
+        <span style="width:${pct(counts.expiring, dated)}%;background:#fbbf24;float:left;height:100%;"></span>
+        <span style="width:${pct(counts.expired, dated)}%;background:#f87171;float:left;height:100%;"></span>
+      </div>
+      <div class="d-flex gap-3 small text-muted mb-4">
+        <span>Protegidos</span><span>Expirando</span><span>Expirados</span>
+      </div>` : '<p class="text-muted small mb-4">Nenhuma dose com data registrada ainda.</p>';
+
+    coberturaEl.innerHTML = `<div class="row g-3 mb-3">${cards}</div>${bar}`;
+  }
+
+  // A conferência que dá (ou tira) a confiança no painel: o total do banco
+  // contra o total lançado na planilha. Divergência não é escondida — é o
+  // aviso de que uma aba-dia ainda não foi compilada ou de que alguém lançou
+  // à mão um número que as fichas não têm.
+  function renderReconcile() {
+    if (!lastCounts || sheetVaccinated === null) return;
+    const db = lastCounts.aplicadas;
+    const diff = db - sheetVaccinated;
+    if (diff === 0) {
+      reconcileEl.className = 'alert alert-success border small';
+      reconcileEl.innerHTML =
+        `✅ <strong>Bate com a planilha:</strong> ${db} vacinados nas fichas e ${sheetVaccinated} no "Controle de doses".`;
+    } else {
+      reconcileEl.className = 'alert alert-warning border small';
+      reconcileEl.innerHTML =
+        `⚠️ <strong>Diferença de ${Math.abs(diff)}:</strong> as fichas do banco têm <strong>${db}</strong> animais vacinados ` +
+        `e o "Controle de doses" soma <strong>${sheetVaccinated}</strong>. ` +
+        (diff > 0
+          ? 'Provavelmente há aba-dia ainda não compilada — use "Compilar Controle de doses".'
+          : 'A planilha tem lançamentos manuais que não existem como ficha; confira as colunas do mês.');
+    }
+    reconcileEl.classList.remove('d-none');
+  }
+
+  async function loadVacinados(append) {
+    if (state.loading) return;
+    state.loading = true;
+    moreBtn.disabled = true;
+    const params = new URLSearchParams({
+      order: state.order, status: state.status, q: state.q, page: String(state.page),
+    });
+    try {
+      const resp = await fetch(`${URLS.vacinados}?${params}`, { headers: { Accept: 'application/json' } });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || 'Falha ao carregar os animais vacinados.');
+
+      const cards = data.animals.map(renderCard).join('');
+      if (append) {
+        grid.insertAdjacentHTML('beforeend', cards);
+      } else {
+        grid.innerHTML = cards || '<p class="text-muted small">Nenhum animal nesta combinação de filtro e busca.</p>';
+      }
+      renderCounts(data.counts);
+      totalEl.textContent = data.total
+        ? `${data.total} resultado(s)${data.lastDose ? ` · última dose registrada em ${data.lastDose}` : ''}`
+        : 'nenhum resultado';
+      moreBtn.classList.toggle('d-none', !data.hasMore);
+    } catch (error) {
+      if (!append) warn(grid, error.message);
+    } finally {
+      state.loading = false;
+      moreBtn.disabled = false;
+    }
+  }
+
+  function reload() {
+    state.page = 1;
+    loadVacinados(false);
+  }
+
+  orderSel.addEventListener('change', () => { state.order = orderSel.value; reload(); });
+
+  let searchTimer = null;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { state.q = searchEl.value.trim(); reload(); }, 300);
+  });
+
+  filtersEl.addEventListener('click', (event) => {
+    const button = event.target.closest('.pmo-vac-filter');
+    if (!button) return;
+    state.status = button.dataset.status;
+    filtersEl.querySelectorAll('.pmo-vac-filter').forEach((item) => {
+      const on = item === button;
+      const tone = item.dataset.status === 'protected' ? 'success'
+        : item.dataset.status === 'expiring' ? 'warning'
+        : item.dataset.status === 'expired' ? 'danger'
+        : item.dataset.status === 'sem_data' ? 'secondary' : 'primary';
+      item.classList.toggle(`btn-${tone}`, on);
+      item.classList.toggle(`btn-outline-${tone}`, !on);
+    });
+    reload();
+  });
+
+  moreBtn.addEventListener('click', () => { state.page += 1; loadVacinados(true); });
+
+  // ───────────────────────── Planilha (doses + frascos) ─────────────────────────
+  const dosesEl = document.getElementById('pmo-doses');
+  const frascosEl = document.getElementById('pmo-frascos');
+  const frascosTitle = document.getElementById('pmo-frascos-title');
+  const freshEl = document.getElementById('pmo-fresh');
+
+  function renderDoses(doses) {
+    if (doses.error) { warn(dosesEl, `Não consegui ler a "Controle de doses": ${doses.error}`); return; }
+    const t = doses.totals;
+    sheetVaccinated = t.vaccinated;
+    renderReconcile();
+    const maxv = Math.max(1, ...doses.months.map((m) => m.vaccinated));
+    const kpis = [
+      ['Vacinados', t.vaccinated, `🐕 ${t.dogs} &nbsp; 🐈 ${t.cats}`, ''],
+      ['Doses utilizadas', t.doses, 'vacinados + perdas', ''],
+      ['Desperdício', `${t.waste_pct}%`, `${t.perdas} doses perdidas`, t.waste_pct >= 8 ? 'pmo-meta-off' : 'pmo-meta-ok'],
+      ['Meses ativos', doses.months.length, 'com vacinação registrada', ''],
+    ].map(([label, value, sub, cls]) => `
+      <div class="col-6 col-lg-3">
+        <div class="pmo-kpi-card">
+          <div class="kpi-label">${label}</div>
+          <div class="kpi-value ${cls}">${value}</div>
+          <div class="kpi-sub">${sub}</div>
+        </div>
+      </div>`).join('');
+
+    const months = doses.months.map((m) => `
+      <div class="mb-2">
+        <div class="d-flex justify-content-between small">
+          <span>${esc(m.month)}</span>
+          <span class="text-muted">${m.vaccinated} &nbsp;(🐕${m.dogs} 🐈${m.cats} · perdas ${m.perdas})</span>
+        </div>
+        <div class="pmo-bar"><span style="width:${pct(m.vaccinated, maxv)}%;background:#34d399;"></span></div>
+      </div>`).join('');
+
+    dosesEl.innerHTML = `
+      <div class="row g-3 mb-3">${kpis}</div>
+      <div class="row g-3 mb-4"><div class="col-lg-8">
+        <div class="small text-muted mb-2">Vacinados por mês</div>${months}
+      </div></div>`;
+  }
+
+  function renderFrascos(frascos) {
+    if (frascos.error) { warn(frascosEl, `Não consegui montar o controle de frascos: ${frascos.error}`); return; }
+    frascosTitle.textContent =
+      `Controle de frascos (${frascos.vialDoses} doses · validade ${frascos.validityDays} dias após abrir)`;
+
+    const current = frascos.current;
+    const closing = frascos.months.map((m) =>
+      `<div>${m.closes ? '✅' : '⚠️'} ${esc(m.month)}: ${m.doses} = ${m.vials} frasco(s)${m.closes ? '' : ` + ${m.rest}`}</div>`
+    ).join('');
+
+    const alerts = frascos.alerts.length ? `
+      <div class="pmo-frascos-summary p-3 mb-3 small">
+        <div class="fw-semibold">Ajustes pendentes no controle de frascos</div>
+        <div>${frascos.alerts.length} sobra(s) vencida(s) ou incompatíveis com o próximo dia.</div>
+        <details class="pmo-frascos-details mt-2">
+          <summary class="fw-semibold">Ver detalhes dos frascos</summary>
+          <ul class="mb-0 mt-2 ps-3">${frascos.alerts.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
+        </details>
+      </div>` : '';
+
+    const anomalies = frascos.anomalies.length ? `
+      <details class="alert alert-secondary py-2 small mb-3 pmo-frascos-details">
+        <summary class="fw-semibold">${frascos.anomalies.length} ponto(s) para revisar na planilha Controle de doses</summary>
+        <ul class="mb-0 mt-2 ps-3">${frascos.anomalies.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
+      </details>` : '';
+
+    const timeline = frascos.days.length ? `
+      <details class="mb-4">
+        <summary class="small text-muted" style="cursor:pointer;">Linha do tempo dos frascos (${frascos.days.length} dias de vacinação)</summary>
+        <div class="table-responsive mt-2" style="max-height:320px;overflow-y:auto;">
+          <table class="table table-sm small align-middle">
+            <thead><tr><th>Data</th><th>Doses usadas</th><th>Da sobra</th><th>Frascos abertos</th><th>Sobra ao fim</th><th>Sobra vale até</th></tr></thead>
+            <tbody>${frascos.days.slice().reverse().map((d) => `
+              <tr><td>${esc(d.dateLabel)}</td><td>${d.doses}</td><td>${d.fromLeftover || ''}</td>
+                  <td>${d.vialsOpened || ''}</td><td>${d.leftover || 0}</td><td>${esc(d.leftoverValidUntil)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>` : '';
+
+    frascosEl.innerHTML = `
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3"><div class="pmo-kpi-card">
+          <div class="kpi-label">Sobra atual</div>
+          <div class="kpi-value ${current.expired ? 'pmo-meta-off' : ''}">${current.leftover}</div>
+          <div class="kpi-sub">${current.leftover
+            ? `frasco de ${esc(current.opened)} · ${current.expired ? 'VENCEU' : 'usar até'} ${esc(current.validUntil)}`
+            : 'nenhum frasco aberto'}</div>
+        </div></div>
+        <div class="col-6 col-lg-3"><div class="pmo-kpi-card">
+          <div class="kpi-label">Frascos abertos</div>
+          <div class="kpi-value">${frascos.vialsTotal}</div>
+          <div class="kpi-sub">na campanha (${frascos.vialsTotal * frascos.vialDoses} doses)</div>
+        </div></div>
+        <div class="col-6 col-lg-3"><div class="pmo-kpi-card">
+          <div class="kpi-label">Próximo dia agendado</div>
+          <div class="kpi-value" style="font-size:1.1rem;">${esc(frascos.nextScheduled || '—')}</div>
+          <div class="kpi-sub">${current.leftover && !current.expired
+            ? `${current.leftover} dose(s) da sobra + frascos novos` : 'começa com frasco novo'}</div>
+        </div></div>
+        <div class="col-6 col-lg-3"><div class="pmo-kpi-card">
+          <div class="kpi-label">Fechamento dos meses</div>
+          <div class="kpi-sub mt-1">${closing}</div>
+        </div></div>
+      </div>
+      ${alerts}${anomalies}${timeline}`;
+  }
+
+  async function loadPlanilha(refresh) {
+    freshEl.textContent = refresh ? 'Relendo a planilha…' : 'Planilha: carregando…';
+    try {
+      const resp = await fetch(`${URLS.planilha}${refresh ? '?refresh=1' : ''}`, { headers: { Accept: 'application/json' } });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || 'Falha ao ler a planilha.');
+      renderDoses(data.doses);
+      renderFrascos(data.frascos);
+      freshEl.textContent = `Planilha lida em ${data.fetchedAt}${data.cached ? ' (pode vir de um cache de até 5 min — use Atualizar para forçar)' : ' (leitura nova)'}`;
+    } catch (error) {
+      freshEl.textContent = 'Não consegui ler a planilha agora.';
+      warn(dosesEl, error.message);
+      warn(frascosEl, error.message);
+    }
+  }
+
+  // ───────────────────────── Pipeline ─────────────────────────
+  const pipelineEl = document.getElementById('pmo-pipeline');
+
+  function renderPipeline(kpis) {
+    const agendados = kpis.outcomes.filter((o) => o.key === 'agendado').reduce((sum, o) => sum + o.count, 0);
+    const steps = [
+      [kpis.total_people, 'Cadastrados'],
+      [kpis.backlog, 'A agendar'],
+      [agendados, 'Agendados'],
+    ].map(([n, l]) => `<div class="col-4"><div class="pmo-step"><div class="n">${n}</div><div class="l">${l}</div></div></div>`).join('');
+
+    const colors = {
+      vacinado: '#34d399', parcial: '#fbbf24', agendado: '#60a5fa', pendente: '#60a5fa',
+      fluxo_ativo: '#60a5fa', reagendar: '#60a5fa', ausente: '#fb923c', recusou: '#f87171',
+    };
+    const outcomes = kpis.outcomes.map((o) => `
+      <div class="mb-2">
+        <div class="d-flex justify-content-between small">
+          <span>${esc(o.label)}</span><span class="text-muted">${o.count} · ${o.pct}%</span>
+        </div>
+        <div class="pmo-bar"><span style="width:${o.pct}%;background:${colors[o.key] || '#9ca3af'};"></span></div>
+      </div>`).join('');
+
+    pipelineEl.innerHTML = `
+      <div class="row g-3 mb-3">${steps}</div>
+      <div class="small text-muted mb-2">Desfechos por pessoa (cadastros únicos)</div>${outcomes}`;
+  }
+
+  async function loadPipeline() {
+    try {
+      const resp = await fetch(URLS.pipeline, { headers: { Accept: 'application/json' } });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || 'Falha ao montar o pipeline.');
+      renderPipeline(data.kpis);
+    } catch (error) {
+      warn(pipelineEl, error.message);
+    }
+  }
+
+  document.getElementById('pmo-refresh').addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    Promise.all([loadPlanilha(true), reload(), loadPipeline()])
+      .finally(() => { button.disabled = false; });
+  });
+
+  // A lista de animais é o que a pessoa veio ver: sai na frente e sozinha,
+  // sem esperar a planilha (que depende da API do Google).
+  loadVacinados(false);
+  loadPlanilha(false);
+  loadPipeline();
+})();
+
 (function () {
   const dryBtn = document.getElementById('pmo-doses-dry');
   const runBtn = document.getElementById('pmo-doses-compile');
@@ -380,147 +665,6 @@
 
   dryBtn.addEventListener('click', () => compile(true, dryBtn));
   runBtn.addEventListener('click', () => compile(false, runBtn));
-})();
-
-(function () {
-  const btn = document.getElementById('pmo-cobertura-toggle');
-  const box = document.getElementById('pmo-cobertura-detail');
-  if (!btn || !box) return;
-
-  const STATUS = {
-    protected: { label: 'Protegido',  bg: '#d1fae5', color: '#065f46', icon: 'fa-shield-dog' },
-    expiring:  { label: 'Expirando',  bg: '#fef3c7', color: '#92400e', icon: 'fa-clock' },
-    expired:   { label: 'Expirado',   bg: '#fee2e2', color: '#991b1b', icon: 'fa-triangle-exclamation' },
-  };
-
-  const SPECIES_ICON = { cao: '🐕', gato: '🐈' };
-
-  function esc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    }[char]));
-  }
-
-  function renderAnimal(a) {
-    const s = STATUS[a.status_key] || STATUS.expired;
-    const daysText = a.days_left > 0
-      ? `${a.days_left} dias restantes`
-      : a.days_left === 0 ? 'Vence hoje'
-      : `Venceu há ${Math.abs(a.days_left)} dias`;
-    const barPct = Math.max(0, Math.min(100, Math.round(a.days_left / 3.65)));
-    const barColor = a.status_key === 'protected' ? '#34d399' : a.status_key === 'expiring' ? '#fbbf24' : '#f87171';
-    const waBtn = a.phone_wa
-      ? `<a href="https://wa.me/${encodeURIComponent(a.phone_wa)}?text=${encodeURIComponent(a.wa_msg)}" target="_blank" rel="noopener"
-            class="btn btn-sm btn-outline-success" title="Enviar lembrete pelo WhatsApp">
-           <i class="fa-brands fa-whatsapp me-1"></i>Lembrete
-         </a>`
-      : `<span class="text-muted small">Sem telefone</span>`;
-    const fichaBtn = a.profile_url
-      ? `<a href="${esc(a.profile_url)}" class="btn btn-sm btn-outline-primary" title="Abrir ficha do animal">
-           <i class="fa-solid fa-file-medical me-1"></i>Ficha
-         </a>`
-      : '';
-    const avatar = a.image_url
-      ? `<img src="${esc(a.image_url)}" alt="Foto de ${esc(a.animal_name)}" class="pmo-cob-avatar" loading="lazy">`
-      : `<span class="pmo-cob-avatar">${SPECIES_ICON[a.species] || '🐾'}</span>`;
-
-    return `
-      <div class="pmo-cob-row">
-        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-          <div class="d-flex align-items-center gap-2 min-w-0">
-            ${avatar}
-            <span class="d-flex flex-column min-w-0">
-              <span class="fw-semibold">${esc(a.animal_name)}</span>
-              <span class="text-muted small">Tutor: ${esc(a.tutor)}</span>
-            </span>
-          </div>
-          <span class="badge rounded-pill" style="background:${s.bg};color:${s.color};">
-            <i class="fa-solid ${s.icon} me-1"></i>${s.label}
-          </span>
-        </div>
-        <div class="pmo-bar my-1" style="height:6px;">
-          <span style="width:${barPct}%;background:${barColor};"></span>
-        </div>
-        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-          <span class="small text-muted">
-            <i class="fa-solid fa-syringe me-1"></i>${esc(a.vaccine_date)}
-            &nbsp;→&nbsp;
-            <i class="fa-solid fa-calendar-xmark me-1"></i>${esc(a.expiry_date)}
-            &nbsp;·&nbsp;<strong>${esc(daysText)}</strong>
-          </span>
-          <span class="d-flex gap-2 flex-wrap">
-            ${fichaBtn}
-            ${waBtn}
-          </span>
-        </div>
-      </div>`;
-  }
-
-  function renderFilter(animals) {
-    const counts = { all: animals.length, expiring: 0, expired: 0, protected: 0 };
-    animals.forEach(a => counts[a.status_key] = (counts[a.status_key] || 0) + 1);
-    return `
-      <div class="d-flex gap-2 flex-wrap mb-3" id="pmo-cob-filters">
-        <button class="btn btn-sm btn-primary pmo-cob-filter active" data-filter="all">Todos (${counts.all})</button>
-        <button class="btn btn-sm btn-outline-warning pmo-cob-filter" data-filter="expiring">Expirando (${counts.expiring})</button>
-        <button class="btn btn-sm btn-outline-danger pmo-cob-filter" data-filter="expired">Expirados (${counts.expired})</button>
-        <button class="btn btn-sm btn-outline-success pmo-cob-filter" data-filter="protected">Protegidos (${counts.protected})</button>
-      </div>`;
-  }
-
-  let allAnimals = null;
-  let loaded = false;
-
-  btn.addEventListener('click', async () => {
-    if (box.style.display !== 'none') {
-      box.style.display = 'none';
-      btn.innerHTML = '<i class="fa-solid fa-list me-1"></i> Ver animais';
-      return;
-    }
-
-    if (!loaded) {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Carregando…';
-      try {
-        const resp = await fetch('{{ url_for("vacina_pmo_cobertura_ativa") }}');
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.message);
-        allAnimals = data.animals;
-        loaded = true;
-      } catch (e) {
-        box.innerHTML = `<div class="alert alert-warning small">Erro ao carregar: ${e.message}</div>`;
-        box.style.display = '';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-list me-1"></i> Ver animais';
-        return;
-      }
-    }
-
-    function applyFilter(filter) {
-      const list = filter === 'all' ? allAnimals : allAnimals.filter(a => a.status_key === filter);
-      const listHtml = list.length
-        ? list.map(renderAnimal).join('')
-        : '<p class="text-muted small">Nenhum animal nesta categoria.</p>';
-      document.getElementById('pmo-cob-list').innerHTML = listHtml;
-      document.querySelectorAll('.pmo-cob-filter').forEach(b => {
-        b.classList.toggle('active', b.dataset.filter === filter);
-        b.classList.toggle('btn-primary', b.dataset.filter === filter);
-        b.classList.toggle('btn-outline-secondary', false);
-      });
-    }
-
-    box.innerHTML = renderFilter(allAnimals) + `<div id="pmo-cob-list"></div>`;
-    applyFilter('all');
-
-    document.getElementById('pmo-cob-filters').addEventListener('click', e => {
-      const b = e.target.closest('.pmo-cob-filter');
-      if (b) applyFilter(b.dataset.filter);
-    });
-
-    box.style.display = '';
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-chevron-up me-1"></i> Ocultar animais';
-  });
 })();
 </script>
 {% endblock %}
