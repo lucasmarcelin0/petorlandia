@@ -3651,3 +3651,227 @@ def test_endpoint_de_vacinados_responde_na_ordem_pedida(app, client):
     assert payload["success"] is True
     assert [a["animal_name"] for a in payload["animals"]] == ["Rex", "Mel"]
     assert payload["counts"]["todos"] == 2
+
+
+# ——— Frascos do dia (sobra herdada + frascos abertos) ————————————————————————
+
+
+def _pmo_dia(sheet_title, animais, *, losses=0, shift="Manha", source_row=2):
+    """Uma visita num dia da campanha, com os animais já no status pedido."""
+    from models import PmoVaccinationAnimal
+
+    visit = PmoVaccinationVisit(
+        spreadsheet_id=vacina_pmo_service._pmo_spreadsheet_id(),
+        sheet_gid="1",
+        sheet_title=sheet_title,
+        source_row=source_row,
+        tutor_name=f"Tutor {source_row}",
+        password="PMOA0001",
+        shift=shift,
+        losses=losses,
+    )
+    db.session.add(visit)
+    db.session.flush()
+    for position, (name, species, status) in enumerate(animais, start=1):
+        db.session.add(
+            PmoVaccinationAnimal(
+                visit=visit, position=position, name=name, species=species, status=status
+            )
+        )
+    db.session.commit()
+    return visit
+
+
+def _vacinados(quantidade, especie="cao"):
+    return [(f"Pet {i}", especie, "vacinado") for i in range(quantidade)]
+
+
+def test_frascos_do_dia_abre_o_minimo_e_passa_a_sobra_adiante(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        # 20/01: 30 doses → 2 frascos (50), sobra 20 válida até 22/01.
+        _pmo_dia("20/01/2026", _vacinados(30))
+        # 22/01: 25 doses → usa as 20 da sobra e abre 1 frasco; sobra 20.
+        _pmo_dia("22/01/2026", _vacinados(25), source_row=3)
+
+        dia1 = get_pmo_dia_frascos("2026-01-20")
+        assert (dia1["leftoverStart"], dia1["vialsOpened"], dia1["used"]) == (0, 2, 30)
+        assert dia1["leftoverEnd"] == 20
+        assert dia1["leftoverEndValidUntil"] == "22/01/2026"
+
+        dia2 = get_pmo_dia_frascos("2026-01-22")
+        assert dia2["leftoverStart"] == 20
+        assert dia2["leftoverOpenedOn"] == "20/01/2026"
+        assert dia2["vialsOpened"] == 1
+        assert dia2["available"] == 45
+        assert dia2["leftoverEnd"] == 20
+
+
+def test_frascos_do_dia_contam_perdas_como_dose_usada(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(20), losses=5)
+
+        dia = get_pmo_dia_frascos("2026-01-20")
+        assert dia["used"] == 25
+        assert dia["losses"] == 5
+        assert dia["vialsOpened"] == 1
+        assert dia["leftoverEnd"] == 0
+
+
+def test_frascos_do_dia_somam_manha_e_tarde_no_mesmo_frasco(app):
+    """A sobra da manhã atravessa para a tarde: um frasco, não dois."""
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(10), shift="Manha", source_row=2)
+        _pmo_dia("20/01/2026", _vacinados(8), shift="Tarde", source_row=3)
+
+        dia = get_pmo_dia_frascos("2026-01-20")
+        assert dia["used"] == 18
+        assert dia["vialsOpened"] == 1
+        assert dia["leftoverEnd"] == 7
+        assert dia["byShift"]["Manha"]["dogs"] == 10
+        assert dia["byShift"]["Tarde"]["dogs"] == 8
+
+
+def test_sobra_vencida_nao_atravessa_e_vira_aviso(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(5))  # 1 frasco, sobra 20 até 22/01
+        _pmo_dia("30/01/2026", _vacinados(5), source_row=3)
+
+        dia = get_pmo_dia_frascos("2026-01-30")
+        assert dia["leftoverStart"] == 0  # a sobra de 20 venceu no caminho
+        assert dia["vialsOpened"] == 1
+        assert any("venceram" in alert for alert in dia["alerts"])
+
+
+def test_dia_sem_marcacao_ainda_mostra_a_sobra_que_herdou(app):
+    """O dia de hoje aparece antes de qualquer animal ser marcado."""
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(5))  # sobra 20 até 22/01
+        _pmo_dia("21/01/2026", [("Pet", "cao", "pendente")], source_row=3)
+
+        dia = get_pmo_dia_frascos("2026-01-21")
+        assert dia["used"] == 0
+        assert dia["leftoverStart"] == 20
+        assert dia["vialsOpened"] == 0
+        assert dia["remaining"] == 20
+
+
+def test_vacinador_corrige_sobra_e_frascos_e_volta_ao_automatico(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos, save_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(30))
+
+        # Um frasco quebrou: abriu 3 em vez dos 2 que a conta pede.
+        ajustado = save_pmo_dia_frascos("2026-01-20", vials_opened=3, note="frasco quebrou")
+        assert ajustado["vialsOpened"] == 3
+        assert ajustado["vialsSource"] == "manual"
+        assert ajustado["vialsOpenedAuto"] == 2
+        assert ajustado["available"] == 75
+        assert ajustado["leftoverEnd"] == 45
+        assert ajustado["note"] == "frasco quebrou"
+
+        # Campo em branco devolve o dia ao cálculo automático.
+        voltou = save_pmo_dia_frascos("2026-01-20", vials_opened="", note="")
+        assert voltou["vialsOpened"] == 2
+        assert voltou["vialsSource"] == "auto"
+        assert get_pmo_dia_frascos("2026-01-20")["vialsSource"] == "auto"
+
+
+def test_correcao_de_sobra_recalcula_os_dias_seguintes(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos, save_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(30))
+        _pmo_dia("21/01/2026", _vacinados(10), source_row=3)
+
+        # Sem ajuste: 21/01 herda 20 e não abre frasco.
+        assert get_pmo_dia_frascos("2026-01-21")["vialsOpened"] == 0
+
+        # A sobra foi descartada: quem chega no dia 21 não tem nada na mão.
+        save_pmo_dia_frascos("2026-01-21", leftover_start=0)
+        dia = get_pmo_dia_frascos("2026-01-21")
+        assert dia["leftoverStart"] == 0
+        assert dia["leftoverStartSource"] == "manual"
+        assert dia["vialsOpened"] == 1
+
+
+def test_frascos_insuficientes_viram_alerta_em_vez_de_sobra_negativa(app):
+    from services.vacina_pmo_service import save_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(30))
+
+        dia = save_pmo_dia_frascos("2026-01-20", vials_opened=1)
+        assert dia["leftoverEnd"] == 0
+        assert any("Faltam 5 dose" in alert for alert in dia["alerts"])
+
+
+def test_dica_de_agendamento_avisa_quando_a_sobra_vence_antes_do_proximo_dia(app):
+    from services.vacina_pmo_service import get_pmo_dia_frascos
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        _pmo_dia("20/01/2026", _vacinados(5))  # sobra 20, vale até 22/01
+        _pmo_dia("30/01/2026", [("Pet", "cao", "pendente")], source_row=3)
+
+        dia = get_pmo_dia_frascos("2026-01-20")
+        assert dia["nextDay"] == "30/01/2026"
+        assert "vence em 22/01/2026" in dia["planningHint"]
+        assert "antecipe" in dia["planningHint"]
+
+
+def test_endpoint_de_frascos_do_dia_le_e_grava(app, client):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name="Admin Frascos", email="admin-frascos@example.com", role="admin")
+        admin.set_password("senha")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+        _pmo_dia("20/01/2026", _vacinados(30))
+
+    _pmo_login(client, admin_id)
+
+    lido = client.get("/vacina-pmo/dia/2026-01-20/frascos").get_json()
+    assert lido["success"] is True
+    assert lido["stock"]["vialsOpened"] == 2
+
+    gravado = client.post(
+        "/vacina-pmo/dia/2026-01-20/frascos", json={"vials_opened": 3}
+    ).get_json()
+    assert gravado["stock"]["vialsOpened"] == 3
+    assert gravado["stock"]["vialsSource"] == "manual"
+
+    invalido = client.post("/vacina-pmo/dia/2026-01-20/frascos", json={"vials_opened": -1})
+    assert invalido.status_code == 400
+
+    aba_sem_data = client.get("/vacina-pmo/dia/Encaixes/frascos")
+    assert aba_sem_data.status_code == 400

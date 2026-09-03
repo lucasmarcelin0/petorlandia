@@ -715,6 +715,42 @@ def vacina_pmo_painel_vacinados():
     return jsonify(payload)
 
 
+@bp.route('/vacina-pmo/dia/<date_str>/frascos', methods=['GET', 'POST'])
+@login_required
+def vacina_pmo_dia_frascos(date_str):
+    """Sobra herdada e frascos abertos do dia — leitura e correção do vacinador."""
+    _pmo_painel_guard()
+    from services.vacina_pmo_service import get_pmo_dia_frascos, save_pmo_dia_frascos
+
+    if request.method == 'GET':
+        try:
+            return jsonify({'success': True, 'stock': get_pmo_dia_frascos(date_str)})
+        except ValueError as exc:
+            return jsonify({'success': False, 'message': str(exc)}), 400
+        except Exception as exc:
+            current_app.logger.exception("Falha ao montar frascos do dia PMO")
+            return jsonify({'success': False, 'message': str(exc)}), 500
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        stock = save_pmo_dia_frascos(
+            date_str,
+            leftover_start=payload.get('leftover_start'),
+            leftover_opened_on=payload.get('leftover_opened_on'),
+            vials_opened=payload.get('vials_opened'),
+            note=payload.get('note'),
+            user_id=current_user.id,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao salvar frascos do dia PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+    return jsonify({'success': True, 'stock': stock})
+
+
 @bp.route('/vacina-pmo/cobertura-ativa')
 @login_required
 def vacina_pmo_cobertura_ativa():

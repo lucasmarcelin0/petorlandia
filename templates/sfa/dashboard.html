@@ -3,6 +3,140 @@
 {% block title %}Dashboard — SFA Orlândia{% endblock %}
 {% block page_title %}Painel Operacional{% endblock %}
 
+{% block head %}
+<style>
+  .symptom-overview {
+    border: 0;
+    overflow: hidden;
+  }
+
+  .symptom-overview__header {
+    background: linear-gradient(135deg, #015f73, #087f8c);
+    color: #fff;
+  }
+
+  .symptom-overview__metric {
+    background: #e8f4f7;
+    border: 1px solid #cce4e8;
+    border-radius: .65rem;
+    min-width: 112px;
+    padding: .6rem .8rem;
+  }
+
+  .symptom-overview__metric strong {
+    color: var(--sfa-teal);
+    display: block;
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .symptom-rank {
+    border-bottom: 1px solid #e9ecef;
+    padding: .55rem 0;
+  }
+
+  .symptom-rank:last-child {
+    border-bottom: 0;
+  }
+
+  .symptom-rank summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .symptom-rank summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .symptom-rank__bar {
+    background: #e8edf0;
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+  }
+
+  .symptom-rank__fill {
+    background: var(--sfa-teal);
+    border-radius: inherit;
+    height: 100%;
+    min-width: 3px;
+  }
+
+  .symptom-patient-chip {
+    background: #f1f5f6;
+    border: 1px solid #d9e5e7;
+    border-radius: 999px;
+    color: #164b55;
+    display: inline-block;
+    font-size: .75rem;
+    margin: .35rem .25rem 0 0;
+    padding: .18rem .55rem;
+    text-decoration: none;
+  }
+
+  .symptom-patient-chip:hover,
+  .symptom-patient-chip:focus {
+    background: #dff0f3;
+    color: #013c48;
+  }
+
+  .symptom-matrix-wrap {
+    max-height: 520px;
+  }
+
+  .symptom-matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .78rem;
+  }
+
+  .symptom-matrix th {
+    background: #f4f7f8;
+    min-width: 88px;
+    padding: .55rem .35rem;
+    text-align: center;
+    vertical-align: bottom;
+    white-space: normal;
+  }
+
+  .symptom-matrix th:first-child,
+  .symptom-matrix td:first-child {
+    left: 0;
+    min-width: 165px;
+    position: sticky;
+    text-align: left;
+    z-index: 2;
+  }
+
+  .symptom-matrix th:first-child {
+    z-index: 3;
+  }
+
+  .symptom-matrix td:first-child {
+    background: #fff;
+  }
+
+  .symptom-matrix tbody tr:hover td,
+  .symptom-matrix tbody tr:hover td:first-child {
+    background: #f4fafb;
+  }
+
+  .symptom-matrix__cell {
+    color: #adb5bd;
+    font-size: 1rem;
+    text-align: center;
+  }
+
+  .symptom-matrix__cell.is-present {
+    color: var(--sfa-teal);
+  }
+
+  .symptom-matrix__cell.is-unknown {
+    color: #d69e00;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card shadow-sm mb-3">
   <div class="card-body py-3">
@@ -56,6 +190,136 @@
   </div>
   {% endfor %}
 </div>
+
+{% set symptom_data = stats.sintomas_sinan %}
+<section class="card shadow-sm symptom-overview mb-4" aria-labelledby="symptom-overview-title">
+  <div class="card-header symptom-overview__header d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
+    <div>
+      <h2 id="symptom-overview-title" class="h5 mb-1">
+        <i class="fas fa-stethoscope me-2" aria-hidden="true"></i>Sintomas das fichas SINAN
+      </h2>
+      <div class="small opacity-75">
+        Quantidade, proporção e distribuição por paciente{% if mes_label %} em {{ mes_label }}{% endif %}.
+      </div>
+    </div>
+    <a href="{{ url_for('sfa_routes.analise_respostas', **filtros_mes_pacientes) }}" class="btn btn-sm btn-outline-light">
+      <i class="fas fa-chart-column me-1" aria-hidden="true"></i>Abrir análise completa
+    </a>
+  </div>
+
+  <div class="card-body p-3 p-lg-4">
+    <div class="d-flex flex-wrap gap-2 mb-3" aria-label="Cobertura dos dados de sintomas">
+      <div class="symptom-overview__metric">
+        <strong>{{ symptom_data.total }}</strong>
+        <span class="small text-muted">pacientes no recorte</span>
+      </div>
+      <div class="symptom-overview__metric">
+        <strong>{{ symptom_data.structured_count }}</strong>
+        <span class="small text-muted">fichas estruturadas</span>
+      </div>
+      <div class="symptom-overview__metric">
+        <strong>{{ symptom_data.patients_with_symptoms }}</strong>
+        <span class="small text-muted">com sintoma registrado</span>
+      </div>
+    </div>
+
+    {% if symptom_data.missing_count %}
+    <div class="alert alert-warning py-2 small" role="status">
+      <i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>
+      {{ symptom_data.missing_count }} paciente{% if symptom_data.missing_count != 1 %}s{% endif %}
+      ainda {% if symptom_data.missing_count == 1 %}não tem{% else %}não têm{% endif %} ficha clínica estruturada.
+      Na matriz, “?” significa dado ainda desconhecido, não ausência do sintoma.
+    </div>
+    {% endif %}
+
+    {% if symptom_data["items"] %}
+    <div class="row g-4">
+      <div class="col-xl-5">
+        <h3 class="h6 mb-1">Quantos tiveram cada sintoma</h3>
+        <p class="small text-muted mb-2">
+          Percentual sobre os {{ symptom_data.total }} pacientes do recorte. Clique em um sintoma para ver os nomes.
+        </p>
+        <div aria-label="Ranking de sintomas">
+          {% for item in symptom_data["items"] %}
+          <details class="symptom-rank">
+            <summary aria-label="{{ item.label }}: {{ item.count }} de {{ symptom_data.total }} pacientes, {{ item.percent }} por cento">
+              <div class="d-flex align-items-center justify-content-between gap-3 mb-1">
+                <span class="fw-semibold">{{ item.label }}</span>
+                <span class="text-nowrap">
+                  <strong style="color:var(--sfa-teal)">{{ item.count }}</strong>
+                  <span class="text-muted">de {{ symptom_data.total }} · {{ item.percent }}%</span>
+                  <i class="fas fa-chevron-down ms-1 text-muted" aria-hidden="true"></i>
+                </span>
+              </div>
+              <div class="symptom-rank__bar" role="progressbar" aria-valuenow="{{ item.count }}" aria-valuemin="0" aria-valuemax="{{ symptom_data.total }}">
+                <div class="symptom-rank__fill" style="width:{{ item.percent }}%"></div>
+              </div>
+            </summary>
+            <div class="pt-1">
+              {% for patient in item.patients %}
+              <a class="symptom-patient-chip" href="{{ url_for('sfa_routes.paciente_detail', id_estudo=patient.id_estudo) }}">
+                {{ patient.nome }} · {{ patient.id_estudo }}
+              </a>
+              {% endfor %}
+            </div>
+          </details>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="col-xl-7">
+        <h3 class="h6 mb-1">Mapa de sintomas por paciente</h3>
+        <p class="small text-muted mb-2">
+          <i class="fas fa-circle-check me-1" style="color:var(--sfa-teal)" aria-hidden="true"></i>presente
+          <span class="mx-2">·</span><span aria-hidden="true">—</span> não assinalado
+          {% if symptom_data.missing_count %}<span class="mx-2">·</span><span class="text-warning fw-bold">?</span> sem ficha estruturada{% endif %}
+        </p>
+        <div class="table-responsive symptom-matrix-wrap">
+          <table class="table table-sm table-bordered symptom-matrix mb-0">
+            <caption class="visually-hidden">Sintomas registrados para cada paciente do recorte selecionado.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Paciente</th>
+                {% for symptom in symptom_data.symptoms %}
+                <th scope="col">{{ symptom }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for patient in symptom_data.patients %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=patient.id_estudo) }}" class="fw-semibold text-decoration-none">
+                    {{ patient.nome }}
+                  </a>
+                  <div class="text-muted">{{ patient.id_estudo }} · {{ patient.symptom_count }} sintoma{% if patient.symptom_count != 1 %}s{% endif %}</div>
+                </td>
+                {% for symptom in symptom_data.symptoms %}
+                  {% if not patient.structured %}
+                  <td class="symptom-matrix__cell is-unknown" aria-label="{{ patient.nome }}: {{ symptom }} sem informação">?</td>
+                  {% elif symptom in patient.symptoms %}
+                  <td class="symptom-matrix__cell is-present" aria-label="{{ patient.nome }} apresentou {{ symptom }}">
+                    <i class="fas fa-circle-check" aria-hidden="true"></i>
+                  </td>
+                  {% else %}
+                  <td class="symptom-matrix__cell" aria-label="{{ patient.nome }} não teve {{ symptom }} assinalado">—</td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="fas fa-clipboard-question fa-2x mb-2" aria-hidden="true"></i>
+      <div>Nenhum sintoma estruturado disponível para este recorte.</div>
+    </div>
+    {% endif %}
+  </div>
+</section>
 
 <div class="row g-3">
   <!-- Fila do dia -->

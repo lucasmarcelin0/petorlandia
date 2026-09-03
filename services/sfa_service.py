@@ -1700,6 +1700,76 @@ def _somar_counter(counter: Counter, label: str, amount: int = 1) -> None:
         counter[label] += amount
 
 
+def montar_resumo_sintomas_sinan(pacientes) -> dict[str, object]:
+    """Resume sintomas SINAN por frequencia e por participante.
+
+    A porcentagem usa todo o recorte selecionado como denominador. Pacientes
+    sem ficha estruturada permanecem explicitamente marcados como sem dados,
+    evitando interpretar ausencia de transcricao como ausencia de sintoma.
+    """
+    pacientes = list(pacientes or [])
+    symptom_patients: dict[str, list[dict[str, str]]] = {}
+    patient_rows: list[dict[str, object]] = []
+    structured_count = 0
+    patients_with_symptoms = 0
+
+    for paciente in pacientes:
+        dados_sinan = getattr(paciente, "_sinan_dados", {}) or {}
+        review_status = str(dados_sinan.get("revisao_status") or "NAO_ESTRUTURADO")
+        structured = review_status in {"TRANSCRITO", "REVISAR"}
+        symptoms = sorted(
+            set(_normalizar_lista_sinan(dados_sinan.get("sintomas"))),
+            key=normalizar_nome_chave,
+        )
+        patient = {
+            "id_estudo": str(getattr(paciente, "id_estudo", "") or "-"),
+            "nome": str(getattr(paciente, "nome", "") or "Participante"),
+        }
+
+        if structured:
+            structured_count += 1
+        if symptoms:
+            patients_with_symptoms += 1
+        for symptom in symptoms:
+            symptom_patients.setdefault(symptom, []).append(patient)
+
+        patient_rows.append(
+            {
+                **patient,
+                "structured": structured,
+                "review_status": review_status,
+                "symptoms": symptoms,
+                "symptom_count": len(symptoms),
+            }
+        )
+
+    total = len(pacientes)
+    ordered_symptoms = sorted(
+        symptom_patients,
+        key=lambda symptom: (-len(symptom_patients[symptom]), normalizar_nome_chave(symptom)),
+    )
+    items = [
+        {
+            "label": symptom,
+            "count": len(symptom_patients[symptom]),
+            "percent": round((len(symptom_patients[symptom]) / total) * 100) if total else 0,
+            "patients": symptom_patients[symptom],
+        }
+        for symptom in ordered_symptoms
+    ]
+    patient_rows.sort(key=lambda row: normalizar_nome_chave(row["nome"]))
+
+    return {
+        "total": total,
+        "structured_count": structured_count,
+        "missing_count": total - structured_count,
+        "patients_with_symptoms": patients_with_symptoms,
+        "items": items,
+        "symptoms": ordered_symptoms,
+        "patients": patient_rows,
+    }
+
+
 def montar_analise_respostas(pacientes) -> dict[str, object]:
     """Monta uma visao agregada para explorar riscos e tempo de resposta."""
     pacientes = list(pacientes or [])
@@ -4368,6 +4438,7 @@ def stats_painel(mes_inicio_sintomas: str = "") -> dict:
             log.warning("SFA: tabela 'sfa_sinan_log' não encontrada em stats_painel", exc_info=False)
             sinan_ids_no_mes = set()
     todos = [p for p in todos if _paciente_no_mes_inicio_sintomas(p, mes_inicio_sintomas, sinan_ids_no_mes)]
+    anexar_dados_sinan_pacientes(todos)
     total = len(todos)
 
     def cnt(fn):
@@ -4407,6 +4478,7 @@ def stats_painel(mes_inicio_sintomas: str = "") -> dict:
         "fila": fila,
         "alertas_recentes": alertas_recentes,
         "pacientes_revisao": pendentes_revisao,
+        "sintomas_sinan": montar_resumo_sintomas_sinan(todos),
     }
 
 
