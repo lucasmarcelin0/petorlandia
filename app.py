@@ -809,12 +809,13 @@ def bake_image_rotation(image_url: str, degrees, folder: str = "uploads") -> str
             src = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT)) / image_url.lstrip("/")
             source_image = Image.open(src)
         else:
-            from security.url_safe import is_url_ssrf_safe
-            if not is_url_ssrf_safe(image_url):
-                app.logger.warning("bake_image_rotation blocked unsafe SSRF URL: %s", image_url)
-                return image_url
-            response = requests.get(image_url, timeout=10)
-            response.raise_for_status()
+            from security.url_safe import safe_fetch_url
+
+            response = safe_fetch_url(
+                image_url,
+                timeout=10,
+                max_bytes=10 * 1024 * 1024,
+            )
             source_image = Image.open(BytesIO(response.content))
         source_image = ImageOps.exif_transpose(source_image).convert("RGB")
         # CSS gira no sentido horário; PIL.rotate gira anti-horário -> negar.

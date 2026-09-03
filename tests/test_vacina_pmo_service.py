@@ -598,7 +598,7 @@ def test_pmo_animal_photo_upload_persists_image_url(app, client, monkeypatch):
         def raise_for_status(self):
             return None
 
-    monkeypatch.setattr("app.requests.get", lambda *_args, **_kwargs: _FakeImageResponse())
+    monkeypatch.setattr("security.url_safe.safe_fetch_url", lambda *_args, **_kwargs: _FakeImageResponse())
     photo_response = client.get(f"/vacina-pmo/animal/{pmo_animal_id}/photo-src")
 
     assert photo_response.status_code == 200

@@ -971,24 +971,31 @@ def vacina_pmo_animal_photo_src(animal_id):
     if parsed.scheme not in {'http', 'https'}:
         abort(404)
 
-    from security.url_safe import is_url_ssrf_safe
-    if not is_url_ssrf_safe(image_url):
-        current_app.logger.warning("vacina_pmo_animal_photo_src blocked unsafe SSRF URL: %s", image_url)
-        abort(400)
-
     try:
-        upstream = requests.get(image_url, timeout=8)
-        upstream.raise_for_status()
-    except requests.RequestException:
+        from security.url_safe import (
+            ExternalFetchError,
+            ExternalResponseTooLarge,
+            UnsafeExternalURL,
+            safe_fetch_url,
+        )
+
+        upstream = safe_fetch_url(
+            image_url,
+            timeout=8,
+            max_bytes=10 * 1024 * 1024,
+        )
+    except UnsafeExternalURL:
+        current_app.logger.warning("Foto PMO bloqueada por proteção SSRF: %s", image_url)
+        abort(400)
+    except ExternalResponseTooLarge:
+        abort(413)
+    except ExternalFetchError:
         current_app.logger.exception("Falha ao buscar foto PMO para video")
         abort(502)
 
     content_type = (upstream.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower()
     if content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
         abort(415)
-    if len(upstream.content) > 10 * 1024 * 1024:
-        abort(413)
-
     return send_file(BytesIO(upstream.content), mimetype=content_type, max_age=3600)
 
 
