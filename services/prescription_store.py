@@ -44,6 +44,7 @@ _MIN_TOKEN_LEN = 5
 _WEAK_TOKENS = {'sulfato', 'cloridrato', 'acido', 'oleo', 'extrato', 'sodio'}
 
 _STRENGTH_RE = re.compile(r'(\d+(?:[.,]\d+)?)\s*(mg/g|mg/ml|mcg|mg|ml|g|%)', re.I)
+_NON_ALPHANUMERIC_RE = re.compile(r'[^a-z0-9]+')
 
 
 @dataclass
@@ -121,6 +122,12 @@ def build_prescription_offers(prescricoes, limit_per_item: int = 2) -> list[Pres
     que a receita está incompleta.
     """
     produtos = _sellable_products()
+    # Otimização: pre-calcula tokens e concentrações dos produtos da loja uma
+    # única vez, evitando re-tokenização N*M no loop interno.
+    produtos_preparados = [
+        (produto, _tokens(produto.name or ''), _strengths(produto.name or ''))
+        for produto in produtos
+    ]
     linhas: list[PrescriptionLine] = []
 
     for prescricao in prescricoes:
@@ -129,11 +136,10 @@ def build_prescription_offers(prescricoes, limit_per_item: int = 2) -> list[Pres
         strengths = _strengths(texto)
 
         candidatos: list[ProductMatch] = []
-        for produto in produtos:
-            comuns = tokens & _tokens(produto.name or '')
+        for produto, produto_tokens, produto_strengths in produtos_preparados:
+            comuns = tokens & produto_tokens
             if not _is_real_match(comuns):
                 continue
-            produto_strengths = _strengths(produto.name or '')
             same = bool(strengths) and bool(produto_strengths) and bool(
                 strengths & produto_strengths
             )
@@ -213,9 +219,14 @@ def _sellable_products() -> list:
 
 
 def _normalize(text: str) -> str:
-    sem_acento = unicodedata.normalize('NFKD', text or '')
-    sem_acento = sem_acento.encode('ascii', 'ignore').decode()
-    return re.sub(r'[^a-z0-9]+', ' ', sem_acento.lower()).strip()
+    if not text:
+        return ''
+    # Fast-path para strings puramente ASCII
+    if text.isascii():
+        sem_acento = text
+    else:
+        sem_acento = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode()
+    return _NON_ALPHANUMERIC_RE.sub(' ', sem_acento.lower()).strip()
 
 
 def _tokens(text: str) -> set[str]:
