@@ -42,31 +42,15 @@ def upload_to_s3(*args, **kwargs):
 
 
 
-# Linhas que o proprio sistema escreve na observacao ao mudar o status de um
-# animal: "17:17 - Fred: remarcar." (as vezes prefixadas por "E - " pela
-# planilha). Sao ruido na folha do aplicador — o status ja vai por animal.
-_PMO_STATUS_LOG_RE = re.compile(
-    r'^(?:E\s*-\s*)?(?:\d{1,2}:\d{2}\s*-\s*)?[^:]{1,60}:\s*'
-    r'(?:pendente|vacinad[oa]|ausente|remarcar|recusou|parcial)\.?$',
-    re.IGNORECASE,
+# Desfechos que encerram o animal na visita, e a leitura da observacao (texto
+# livre + horario combinado). Vem do servico para que a folha impressa, a API
+# e a tela nunca discordem sobre o que e 'nada pendente' nem sobre o que conta
+# como observacao de gente (o log de status ja vai por animal).
+from services.vacina_pmo_service import (  # noqa: E402
+    PMO_DONE_STATUSES as _PMO_DONE_STATUSES,
+    extract_pmo_note_highlights as _pmo_note_livre,
+    extract_pmo_schedule_hint as _pmo_horario_combinado,
 )
-_PMO_TIME_PREFIX_RE = re.compile(r'^(?:E\s*-\s*)?\d{1,2}:\d{2}\s*-\s*')
-# Desfechos que encerram o animal na visita. Vem do servico para que a folha
-# impressa e a tela nunca discordem sobre o que e 'nada pendente'.
-from services.vacina_pmo_service import PMO_DONE_STATUSES as _PMO_DONE_STATUSES
-
-
-def _pmo_note_livre(note):
-    """Mantem so o que uma pessoa escreveu, descartando o log de status."""
-    livres = []
-    for parte in str(note or '').split('|'):
-        texto = parte.strip()
-        if not texto or _PMO_STATUS_LOG_RE.match(texto):
-            continue
-        texto = _PMO_TIME_PREFIX_RE.sub('', texto).strip()
-        if texto and texto not in livres:
-            livres.append(texto)
-    return livres
 
 
 def _pmo_split_tutor(raw):
@@ -201,6 +185,7 @@ def _build_pmo_print_rows(visits, sheet_title):
             'tutor': nome or '—',
             'instrucao': instrucao,
             'notas': _pmo_note_livre(visita.note),
+            'horario': _pmo_horario_combinado(visita.note),
             'pendentes': pendentes,
             'vacinados': vacinados,
             'anteriores': historico.get(visita.id, []),
@@ -235,15 +220,19 @@ def _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, animais_por_linha
         # Nos modos compactos os animais correm na linha e quebram a cada N.
         linhas_animais = math.ceil(animais / animais_por_linha) if animais else 0
         linhas_nome = 1 + (1 if row['instrucao'] else 0) + (1 if row['duplicada_de'] else 0)
-        linhas = max(linhas_animais, len(row['notas']), linhas_nome, 1)
+        # O selo de horario combinado ocupa uma linha propria na observacao.
+        linhas_obs = len(row['notas']) + (1 if row['horario'] else 0)
+        linhas = max(linhas_animais, linhas_obs, linhas_nome, 1)
         total += max(altura_minima, linhas * altura_linha + 3)
     return total
 
 
 def _pmo_densidade(rows):
+    # O aviso de horarios combinados come uma faixa do cabecalho quando existe.
+    disponivel = _PMO_ALTURA_TABELA_MM - (6 if any(r['horario'] for r in rows) else 0)
     for nome, altura_minima, altura_linha, por_linha in _PMO_DENSIDADES:
         altura = _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, por_linha)
-        if altura <= _PMO_ALTURA_TABELA_MM:
+        if altura <= disponivel:
             return nome
     # Nao cabe nem no mais apertado: usa o menor e deixa quebrar a pagina.
     return _PMO_DENSIDADES[-1][0]

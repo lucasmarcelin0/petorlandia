@@ -190,6 +190,25 @@
     .obs-row { display: block; line-height: 1.35; }
     .obs-row + .obs-row { margin-top: 2px; }
 
+    /* Horario combinado com o tutor: e o dado da observacao que muda a ordem
+       da rota, entao ganha moldura propria para achar de longe no papel. */
+    .hora {
+      display: inline-block;
+      border: 2px solid #1a1a2e;
+      color: #000;
+      font-weight: 700;
+      font-size: 10pt;
+      border-radius: 3px;
+      padding: 0 5px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    /* Moldura em vez de fundo preto: a impressora do posto costuma sair com
+       "graficos de fundo" desligado e o horario nao pode sumir por causa disso. */
+    .hora::before { content: 'Horário '; font-weight: 400; }
+    .aviso--hora { border-left-color: #1a1a2e; }
+    .aviso--hora .hora { margin: 0 2px; }
+
     /* Altura minima para caber a assinatura. */
     tbody tr { height: 17mm; }
 
@@ -297,6 +316,14 @@
         {{ totals.duplicadas }} linha(s) repetem um tutor que já aparece acima — confira antes de bater na porta.
       </div>
     {% endif %}
+    {% set com_horario = [] %}
+    {% for r in rows %}{% if r.horario %}{% set _ = com_horario.append((loop.index, r)) %}{% endif %}{% endfor %}
+    {% if com_horario %}
+      <div class="aviso aviso--hora">
+        <strong>{{ com_horario|length }} casa(s) com horário combinado:</strong>
+        {% for numero, r in com_horario %}nº {{ numero }} {{ r.tutor }} <span class="hora">{{ r.horario.label }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+      </div>
+    {% endif %}
   </div>
 
   {# Telefone legivel: 5516982116928 -> (16) 98211-6928 #}
@@ -390,6 +417,7 @@
           {% endif %}
         </td>
         <td class="c-obs">
+          {% if r.horario %}<span class="obs-row"><span class="hora">{{ r.horario.label }}</span></span>{% endif %}
           {% for n in r.notas %}<span class="obs-row">{{ n }}</span>{% endfor %}
         </td>
         <td class="c-ok">☐</td>
