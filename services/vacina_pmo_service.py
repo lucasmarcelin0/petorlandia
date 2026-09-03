@@ -1177,9 +1177,12 @@ _NAME_PARTICLES = {"da", "das", "de", "do", "dos", "e", "d"}
 
 
 def _person_name_tokens(value: Any) -> list[str]:
+    raw = str(value or "")
+    if "->" in raw:
+        raw = raw.split("->", 1)[0]
     return [
         token
-        for token in _normalize_person_name(value).split()
+        for token in _normalize_person_name(raw).split()
         if token and token not in _NAME_PARTICLES
     ]
 
@@ -2164,15 +2167,24 @@ def _pmo_same_household(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -
 
     Preferir falso negativo a falso positivo, como no resto do módulo: deixar
     de avisar custa uma dose a mais; avisar errado faria o vacinador pular um
-    animal que nunca foi vacinado.
+    animal que nunca foi vacinado, ou misturar animais de famílias distintas.
+
+    Telefone sozinho NUNCA deve unir moradores quando o nome E o endereço forem
+    completamente divergentes (situação comum quando compartilham telefone
+    comercial, de recado ou de parentes intermediários).
     """
-    if _pmo_visit_phones(left) & _pmo_visit_phones(right):
-        return True
-    if not _same_person_name(left.tutor_name, right.tutor_name):
-        return False
+    phones_match = bool(_pmo_visit_phones(left) & _pmo_visit_phones(right))
+    names_match = _same_person_name(left.tutor_name, right.tutor_name)
     left_address = _pmo_address_slug(left.address)
     right_address = _pmo_address_slug(right.address)
-    return bool(left_address) and left_address == right_address
+    addresses_match = bool(left_address) and left_address == right_address
+
+    if phones_match:
+        # Se os telefones batem, precisa haver coerência de nome OU de endereço.
+        return bool(names_match or addresses_match)
+
+    # Se os telefones não batem (ou um mudou), precisa bater nome E endereço.
+    return bool(names_match and addresses_match)
 
 
 def _pmo_close_slugs(left: str, right: str) -> bool:

@@ -84,15 +84,6 @@ def _pmo_slug(value):
     return re.sub(r'[^a-z0-9]+', '', texto)
 
 
-def _pmo_tutor_key(visit):
-    """Chave para reconhecer o mesmo tutor entre abas (encaixes, remarcacoes)."""
-    digitos = re.sub(r'\D', '', visit.phone1 or '')
-    if len(digitos) >= 10:
-        return ('fone', digitos[-11:])
-    nome, _ = _pmo_split_tutor(visit.tutor_name)
-    return ('nome', _pmo_slug(nome), _pmo_slug(visit.address))
-
-
 def _pmo_sheet_date(sheet_title):
     try:
         return datetime.strptime(str(sheet_title or ''), '%d/%m/%Y').date()
@@ -106,10 +97,15 @@ def _pmo_vacinados_anteriores(visits, sheet_title):
     Resolve a confusao dos encaixes: quando o tutor volta so com o animal que
     faltou, a lista mostrava 1 animal sem dizer que os outros 2 ja estavam
     vacinados. Aqui esse historico volta a aparecer, sem precisar apagar nada.
+
+    Usa _pmo_same_household para garantir que apenas registros do mesmo
+    domicílio/família sejam unificados, nunca misturando tutores diferentes
+    que compartilham telefone de trabalho ou recado.
     """
     from models import PmoVaccinationAnimal, PmoVaccinationVisit
     from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
+    from services.vacina_pmo_service import _pmo_same_household
 
     if not visits:
         return {}
@@ -134,27 +130,35 @@ def _pmo_vacinados_anteriores(visits, sheet_title):
         .all()
     )
 
-    por_chave = {}
-    for visita in anteriores:
-        data_ant = _pmo_sheet_date(visita.sheet_title)
-        # So conta o que aconteceu antes desta lista.
-        if data_atual and data_ant and data_ant >= data_atual:
-            continue
-        for animal in visita.animals:
-            if animal.status not in _PMO_DONE_STATUSES:
-                continue
-            por_chave.setdefault(_pmo_tutor_key(visita), []).append({
-                'name': animal.name,
-                'species': animal.species,
-                'quando': visita.sheet_title,
-                'ordem': data_ant or date.min,
-            })
-
     resultado = {}
     for visita in visits:
-        registros = por_chave.get(_pmo_tutor_key(visita), [])
+        # Busca todas as visitas anteriores que pertencem comprovadamente a este mesmo tutor/domicilio
+        candidatas = [
+            v_ant for v_ant in anteriores
+            if _pmo_same_household(visita, v_ant)
+        ]
+        if not candidatas:
+            continue
+
+        registros = []
+        for v_ant in candidatas:
+            data_ant = _pmo_sheet_date(v_ant.sheet_title)
+            # So conta o que aconteceu antes desta lista.
+            if data_atual and data_ant and data_ant >= data_atual:
+                continue
+            for animal in v_ant.animals:
+                if animal.status not in _PMO_DONE_STATUSES:
+                    continue
+                registros.append({
+                    'name': animal.name,
+                    'species': animal.species,
+                    'quando': v_ant.sheet_title,
+                    'ordem': data_ant or date.min,
+                })
+
         if not registros:
             continue
+
         ja_listados = {_pmo_slug(a.name) for a in visita.animals}
         vistos = set()
         historico = []
@@ -170,7 +174,7 @@ def _pmo_vacinados_anteriores(visits, sheet_title):
 
 
 def _build_pmo_print_rows(visits, sheet_title):
-    from services.vacina_pmo_service import build_previous_immunity_index
+    from services.vacina_pmo_service import build_previous_immunity_index, _pmo_same_household
 
     historico = _pmo_vacinados_anteriores(visits, sheet_title)
     # Dose anterior dos animais que ESTAO na lista de hoje. O historico acima
@@ -178,7 +182,6 @@ def _build_pmo_print_rows(visits, sheet_title):
     # sai no papel como se nunca tivesse tomado a vacina.
     imunidade = build_previous_immunity_index(visits)
     rows = []
-    primeira_ocorrencia = {}
 
     for visita in visits:
         nome, instrucao = _pmo_split_tutor(visita.tutor_name)
@@ -191,10 +194,11 @@ def _build_pmo_print_rows(visits, sheet_title):
             if doses_previas.get(animal.id, {}).get('immune')
         }
 
-        chave = _pmo_tutor_key(visita)
-        duplicada_de = primeira_ocorrencia.get(chave)
-        if duplicada_de is None:
-            primeira_ocorrencia[chave] = len(rows) + 1
+        duplicada_de = None
+        for prev_idx, prev_row in enumerate(rows, start=1):
+            if _pmo_same_household(visita, prev_row['visit']):
+                duplicada_de = prev_idx
+                break
 
         rows.append({
             'visit': visita,

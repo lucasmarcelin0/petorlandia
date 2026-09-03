@@ -142,6 +142,31 @@ def test_mesmo_nome_e_endereco_bastam_quando_o_telefone_mudou(app):
     assert build_previous_immunity_index([hoje])[hoje.id]
 
 
+def test_pessoas_diferentes_com_mesmo_telefone_comercial_nao_misturam_animais(app):
+    """Telefone de trabalho/recado compartilhado não deve fundir famílias diferentes."""
+    _visita(
+        "01/09/2026",
+        tutor="Maria Lucia Rodrigues Caetano",
+        address="Avenida 08, 36, A, Bandeirantes",
+        phone1="5519992440947",
+        animais=[("Nina", "vacinado")],
+    )
+    hoje = _visita(
+        "03/09/2026",
+        tutor="Georgina Ap. Gonçalves Leite",
+        address="Avenida 01, 765, Marcussi",
+        phone1="5519992440947",
+        animais=[("Carvão", "pendente")],
+        row=3,
+    )
+
+    assert build_previous_immunity_index([hoje]) == {}
+
+    from blueprints.vacina_pmo import _pmo_vacinados_anteriores
+    anteriores = _pmo_vacinados_anteriores([hoje], "03/09/2026")
+    assert anteriores.get(hoje.id, []) == []
+
+
 # --------------------------------------------------------------------------
 # Janela de proteção
 # --------------------------------------------------------------------------
