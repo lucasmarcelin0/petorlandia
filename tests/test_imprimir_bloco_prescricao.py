@@ -102,9 +102,10 @@ def test_short_prescription_url_redirect(app):
         bloco_id = bloco.id
 
     client = app.test_client()
-    resp = client.get(f'/r/{bloco_id}')
-    assert resp.status_code == 302
-    assert f'/bloco_prescricao/{bloco_id}/imprimir' in resp.headers['Location']
+    resp = client.get(f'/r/{bloco_id}', follow_redirects=True)
+    assert resp.status_code == 200
+    assert 'Receita M' in resp.get_data(as_text=True)
+    assert 'Max' in resp.get_data(as_text=True)
 
     with app.app_context():
         db.drop_all()
