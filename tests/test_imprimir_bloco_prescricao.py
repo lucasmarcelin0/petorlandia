@@ -74,7 +74,8 @@ def test_imprimir_bloco_prescricao_displays_printing_user(app):
         # prescrição de Vet1, então mostra apenas o nome; o CRMV do
         # responsável (Vet1) aparece na seção "Profissional Responsável".
         assert 'SP-123' in html
-        assert 'Receita Digital & Entrega em Casa:' in html
+        assert 'Receita Digital & Medicamentos:' in html
+        assert 'Mercado Pago' in html
         assert f'/r/{bloco_id}' in html
         assert 'confirme seu celular e crie sua senha' not in html
 
