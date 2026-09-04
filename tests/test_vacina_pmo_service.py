@@ -983,6 +983,126 @@ def test_submit_vacina_pmo_request_creates_local_pending_request(app, monkeypatc
     assert visit.public_token == result["public_token"]
 
 
+class _FakeRequestSheetsService:
+    """Planilha falsa que registra abas criadas e o destino do append."""
+
+    def __init__(self, titles):
+        self.titles = list(titles)
+        self.created_titles = []
+        self.append_range = ""
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    class _Execute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    def get(self, **kwargs):
+        if kwargs.get("fields") == "sheets.properties":
+            return self._Execute(
+                {
+                    "sheets": [
+                        {"properties": {"title": title, "sheetId": 100 + index}}
+                        for index, title in enumerate(self.titles)
+                    ]
+                }
+            )
+        return self._Execute({"values": [PMO_REQUEST_HEADERS]})
+
+    def update(self, **kwargs):
+        return self._Execute({})
+
+    def batchUpdate(self, **kwargs):
+        for item in kwargs.get("body", {}).get("requests", []):
+            title = item.get("addSheet", {}).get("properties", {}).get("title")
+            if title:
+                self.created_titles.append(title)
+                self.titles.append(title)
+        return self._Execute({})
+
+    def append(self, **kwargs):
+        self.append_range = kwargs["range"]
+        sheet = kwargs["range"].split("!")[0].strip("'")
+        return self._Execute({"updates": {"updatedRange": f"'{sheet}'!A2:R2"}})
+
+
+def _submit_minimal_pmo_request(user_id):
+    return submit_vacina_pmo_request({
+        "tutor": "Bruno Henrique",
+        "phone": "(16) 99999-9999",
+        "address_street": "Rua 20",
+        "address_number": "1107",
+        "address_complement": "",
+        "address_neighborhood": "Jardim Benini",
+        "dogs": 1,
+        "cats": 0,
+        "animal_names": "Lunna",
+        "shift": "Manha",
+        "note": "",
+        "user_id": user_id,
+    })
+
+
+def _pmo_request_user(email):
+    user = User(name="Bruno Henrique", email=email, phone="+5516999999999")
+    user.set_password("PMOA9999")
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
+@pytest.mark.parametrize(
+    "existing_title",
+    ["Solicitacoes de vacina", "Solicitações de Vacina", "Solicitacoes"],
+)
+def test_submit_vacina_pmo_request_reuses_existing_sheet(app, monkeypatch, existing_title):
+    """Aba renomeada (ou com o nome antigo) continua recebendo as solicitações.
+
+    Antes o app comparava o título ao pé da letra: qualquer renome fazia ele
+    criar uma aba nova e vazia, e as solicitações sumiam da vista da equipe.
+    """
+    fake_service = _FakeRequestSheetsService([
+        "Vacinação 2026",
+        existing_title,
+        "Solicitacoes Castracao",
+    ])
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        slug = "".join(ch for ch in existing_title.lower() if ch.isalnum())
+        user = _pmo_request_user(f"bruno-{slug}@example.com")
+        _submit_minimal_pmo_request(user.id)
+        visit = PmoVaccinationVisit.query.filter_by(tutor_user_id=user.id).one()
+
+    assert fake_service.created_titles == []
+    assert fake_service.append_range.startswith(f"'{existing_title}'!")
+    assert visit.sheet_title == existing_title
+
+
+def test_submit_vacina_pmo_request_creates_sheet_only_when_missing(app, monkeypatch):
+    fake_service = _FakeRequestSheetsService(["Vacinação 2026", "Solicitacoes Castracao"])
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        user = _pmo_request_user("bruno-sem-aba@example.com")
+        _submit_minimal_pmo_request(user.id)
+
+    # Nunca reaproveita a aba de castração, que tem nome parecido e outras colunas.
+    assert fake_service.created_titles == ["Solicitacoes de vacina"]
+    assert fake_service.append_range.startswith("'Solicitacoes de vacina'!")
+
+
 def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch):
     monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://youtu.be/abcDEF12345")
     row = {

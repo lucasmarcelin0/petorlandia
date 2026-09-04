@@ -1376,12 +1376,15 @@ def vacina_pmo_solicitar():
                 current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
                 flash(_mensagem_falha_solicitacao(exc), 'danger')
 
-    from services.vacina_pmo_service import PMO_REQUEST_SHEET_DEFAULT_TITLE, PMO_REQUEST_SHEET_TITLE_ENV
-    request_sheet_title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+    from services.vacina_pmo_service import pmo_request_sheet_titles
+
+    # Aceita os nomes que a aba de solicitações já teve: renomear a aba na
+    # planilha não pode apagar o histórico que o morador vê aqui.
+    request_sheet_titles = pmo_request_sheet_titles()
     historico = (
         PmoVaccinationVisit.query
         .filter_by(tutor_user_id=current_user.id)
-        .filter(PmoVaccinationVisit.sheet_title == request_sheet_title)
+        .filter(PmoVaccinationVisit.sheet_title.in_(request_sheet_titles))
         .order_by(PmoVaccinationVisit.updated_at.desc(), PmoVaccinationVisit.synced_at.desc())
         .all()
     )
