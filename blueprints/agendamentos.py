@@ -2336,9 +2336,9 @@ def update_appointment_status(appointment_id):
         flash(message, 'error')
         return redirect(redirect_url)
 
-    # "Não compareceu" e "em atendimento" descrevem o que aconteceu na clínica:
+    # "Não compareceu", "em atendimento" e "finalizada" descrevem o que aconteceu na clínica:
     # só quem trabalha nela pode registrar.
-    if status in {'no_show', 'in_progress'} and not (
+    if status in {'no_show', 'in_progress', 'completed'} and not (
         current_user.role == 'admin' or is_vet or is_collaborator
     ):
         message = 'Somente a equipe da clínica pode registrar este status.'
@@ -2379,6 +2379,26 @@ def update_appointment_status(appointment_id):
         return message, 400
 
     appointment.status = status
+    if status == 'completed':
+        if appointment.consulta and appointment.consulta.status != 'finalizada':
+            appointment.consulta.status = 'finalizada'
+            if not appointment.consulta.finalizada_em:
+                appointment.consulta.finalizada_em = utcnow()
+    elif status in {'canceled', 'no_show', 'accepted', 'scheduled'}:
+        consulta = appointment.consulta
+        if consulta and consulta.status == 'in_progress':
+            is_empty_draft = not any([
+                consulta.queixa_principal,
+                consulta.historico_clinico,
+                consulta.exame_fisico,
+                consulta.suspeita_clinica,
+                consulta.conduta,
+                consulta.prescricao,
+                consulta.exames_solicitados,
+            ]) and not (getattr(consulta, 'orcamento_items', None) and len(consulta.orcamento_items) > 0)
+            if is_empty_draft:
+                appointment.consulta = None
+                db.session.delete(consulta)
     db.session.commit()
     # Atualiza o badge da Agenda imediatamente (sem esperar o TTL do cache).
     _invalidate_cached_context(current_user.id, 'pending_appointment_count')
