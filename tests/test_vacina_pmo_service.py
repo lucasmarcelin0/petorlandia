@@ -1211,21 +1211,22 @@ def test_reconcile_pmo_request_sheets_moves_lost_rows_and_repoints_visits(app, m
     monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
 
     with app.app_context():
-        db.session.add(
-            PmoVaccinationVisit(
-                spreadsheet_id="test-sheet-id",
-                sheet_gid="102",
-                sheet_title="Solicitacoes",
-                source_row=2,
-                tutor_name="Tutor Perdido 1",
-                address="Rua 20, 1107, Jardim Benini",
-                phone1="16999999999",
-                dogs=1,
-                cats=0,
-                password="PMOA9995",
-                public_token="token-perdido-1",
+        for index, token in enumerate(("token-perdido-1", "token-perdido-2")):
+            db.session.add(
+                PmoVaccinationVisit(
+                    spreadsheet_id="test-sheet-id",
+                    sheet_gid="102",
+                    sheet_title="Solicitacoes",
+                    source_row=2 + index,
+                    tutor_name=f"Tutor Perdido {index + 1}",
+                    address="Rua 20, 1107, Jardim Benini",
+                    phone1="16999999999",
+                    dogs=1,
+                    cats=0,
+                    password=f"PMOA999{index}",
+                    public_token=token,
+                )
             )
-        )
         db.session.commit()
 
         result = reconcile_pmo_request_sheets()
@@ -1239,11 +1240,37 @@ def test_reconcile_pmo_request_sheets_moves_lost_rows_and_repoints_visits(app, m
     assert result["canonical"] == "Solicitacoes de vacina"
     assert result["duplicates"] == ["Solicitacoes"]
     assert result["moved"] == 2
-    assert result["repointed"] == 1
+    assert result["repointed"] == 2
+    assert result["unmatched"] == 0
     tutores = [row[0] for row in fake_service.sheets["Solicitacoes de vacina"][1:]]
     assert tutores == ["Tutor Antigo", "Tutor Perdido 1", "Tutor Perdido 2"]
     # A aba duplicada fica só com o cabeçalho: o sync não recria visitas repetidas.
     assert fake_service.sheets["Solicitacoes"] == [PMO_REQUEST_HEADERS]
+
+
+def test_reconcile_pmo_request_sheets_keeps_duplicate_when_row_has_no_visit(app, monkeypatch):
+    """Sem registro local para a linha, a aba duplicada não é limpa.
+
+    Limpar ali faria o sync podar visitas que ainda apontam para aquela aba —
+    e com elas o protocolo público já entregue ao morador. Acontece com linha
+    digitada à mão e, principalmente, se a rotina rodar ligada a um banco que
+    não é o de produção.
+    """
+    fake_service = _reconcile_fixture()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets()
+
+    assert result["moved"] == 2
+    assert result["repointed"] == 0
+    assert result["unmatched"] == 2
+    # As linhas chegaram na aba oficial, mas a duplicada continua intacta.
+    assert len(fake_service.sheets["Solicitacoes de vacina"]) == 4
+    assert len(fake_service.sheets["Solicitacoes"]) == 3
+    assert fake_service.cleared == []
 
 
 def test_reconcile_pmo_request_sheets_is_idempotent(app, monkeypatch):

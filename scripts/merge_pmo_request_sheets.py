@@ -59,7 +59,13 @@ def run(dry_run: bool = False) -> int:
         result["moved"],
         result["repointed"],
     )
-    if not dry_run and result["moved"]:
+    if result["unmatched"]:
+        log.warning(
+            "%d linha(s) sem registro local: a aba duplicada nao foi limpa. "
+            "Confira se este comando esta ligado ao banco de producao (DATABASE_URL).",
+            result["unmatched"],
+        )
+    elif not dry_run and result["moved"]:
         log.info("Apague as abas duplicadas vazias a mao quando conferir a planilha.")
     return 0
 

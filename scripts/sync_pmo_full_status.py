@@ -171,6 +171,7 @@ def run_pmo_full_sync(*, apply: bool = True, skip_sheet_sync: bool = False) -> d
                 # a lista de abas em cache e precisa enxergá-la.
                 invalidate_vacina_pmo_sheets_cache()
                 summary["solicitacoes_reunidas"] = reconciled["moved"]
+                summary["solicitacoes_sem_registro"] = reconciled["unmatched"]
                 if reconciled["duplicates"]:
                     log.info(
                         "[PMO] Aba oficial de solicitacoes: %s. Duplicadas: %s. Linhas movidas: %s.",

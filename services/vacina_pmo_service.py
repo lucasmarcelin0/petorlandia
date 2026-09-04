@@ -6179,6 +6179,9 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         "duplicates": [],
         "moved": 0,
         "repointed": 0,
+        # Linhas movidas sem registro local: a aba duplicada não é limpa
+        # enquanto houver alguma (ver o porquê abaixo).
+        "unmatched": 0,
         "applied": bool(apply),
     }
 
@@ -6279,6 +6282,7 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         ).execute()
 
         duplicate_gid = _get_sheet_gid(service, spreadsheet_id, title)
+        unmatched = 0
         try:
             for offset, (source_row, _row) in enumerate(pending):
                 visit = PmoVaccinationVisit.query.filter_by(
@@ -6287,6 +6291,7 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
                     source_row=source_row,
                 ).first()
                 if visit is None:
+                    unmatched += 1
                     continue
                 visit.sheet_gid = canonical_gid
                 visit.sheet_title = canonical
@@ -6298,6 +6303,17 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
             raise
 
         next_row += len(pending)
+        summary["unmatched"] += unmatched
+
+        if unmatched:
+            # Linha movida sem registro local correspondente: ou é linha
+            # digitada à mão na planilha, ou esta execução está ligada a um
+            # banco que não é o de produção. Nos dois casos, apagar a aba
+            # duplicada faria o sync podar visitas que ainda apontam para ela
+            # — junto com o protocolo público já entregue ao morador. As
+            # linhas ficam onde estão; a proxima execução no banco certo
+            # reaponta e limpa.
+            continue
 
         service.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id,
