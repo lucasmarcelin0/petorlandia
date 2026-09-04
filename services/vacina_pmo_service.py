@@ -6133,6 +6133,182 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Reconciliação da aba de solicitações
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Colunas que identificam uma solicitação (ver PMO_REQUEST_HEADERS).
+PMO_REQUEST_TUTOR_INDEX = 0
+PMO_REQUEST_ANIMALS_INDEX = 9
+PMO_REQUEST_TIMESTAMP_INDEX = 15
+
+
+def _request_row_key(row: list[str]) -> tuple[str, str, str]:
+    """Identidade de uma solicitação: carimbo + tutor + animais."""
+
+    def cell(index: int) -> str:
+        value = row[index] if index < len(row) else ""
+        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+
+    return (
+        cell(PMO_REQUEST_TIMESTAMP_INDEX),
+        cell(PMO_REQUEST_TUTOR_INDEX),
+        cell(PMO_REQUEST_ANIMALS_INDEX),
+    )
+
+
+def _request_row_is_empty(row: list[str]) -> bool:
+    return not any(str(cell or "").strip() for cell in row)
+
+
+def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[str, Any]:
+    """Reúne na aba oficial as solicitações que caíram em abas duplicadas.
+
+    Enquanto a busca da aba era literal, um renome na planilha fazia o app
+    criar uma cópia com o nome antigo e gravar ali — as solicitações dos
+    moradores continuavam chegando, mas fora da vista da equipe. Além de
+    corrigir o destino das novas, é preciso trazer de volta as que já ficaram
+    para trás; por isso esta rotina roda junto do sync periódico do PMO.
+
+    Copia só o que falta (compara carimbo + tutor + animais, então rodar de
+    novo não duplica), reaponta o ``PmoVaccinationVisit`` para a linha nova —
+    preservando o protocolo público já entregue ao morador — e limpa a aba
+    duplicada para que o sync não recrie visitas repetidas.
+    """
+    summary: dict[str, Any] = {
+        "canonical": "",
+        "duplicates": [],
+        "moved": 0,
+        "repointed": 0,
+        "applied": bool(apply),
+    }
+
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+
+    service = service or _get_sheets_service_rw()
+    canonical = _resolve_request_sheet_title(
+        service, spreadsheet_id, pmo_request_sheet_titles()[0]
+    )
+    canonical_gid = _get_sheet_gid(service, spreadsheet_id, canonical)
+    summary["canonical"] = canonical
+
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    others = []
+    for sheet in metadata.get("sheets", []):
+        other_title = (sheet.get("properties") or {}).get("title", "")
+        if other_title and other_title != canonical:
+            others.append(other_title)
+    if not others:
+        return summary
+
+    header_response = (
+        service.spreadsheets()
+        .values()
+        .batchGet(
+            spreadsheetId=spreadsheet_id,
+            ranges=[
+                f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}" for title in others
+            ],
+        )
+        .execute()
+    )
+    duplicates = [
+        title
+        for title, value_range in zip(others, header_response.get("valueRanges", []))
+        if _request_sheet_header_matches(value_range.get("values"))
+    ]
+    summary["duplicates"] = duplicates
+    if not duplicates:
+        return summary
+
+    canonical_rows = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(canonical)}!{PMO_REQUEST_RANGE_COLS}",
+        )
+        .execute()
+        .get("values", [])
+    )
+    known = {
+        _request_row_key(row) for row in canonical_rows[1:] if not _request_row_is_empty(row)
+    }
+    next_row = len(canonical_rows) + 1
+
+    for title in duplicates:
+        rows = (
+            service.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
+            )
+            .execute()
+            .get("values", [])
+        )
+        pending: list[tuple[int, list[str]]] = []
+        for source_row, row in enumerate(rows[1:], start=2):
+            if _request_row_is_empty(row):
+                continue
+            key = _request_row_key(row)
+            if key in known:
+                continue
+            known.add(key)
+            pending.append((source_row, row))
+
+        if not pending:
+            continue
+
+        summary["moved"] += len(pending)
+        if not apply:
+            continue
+
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(canonical)}!{PMO_REQUEST_RANGE_COLS}",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row for _source_row, row in pending]},
+        ).execute()
+
+        duplicate_gid = _get_sheet_gid(service, spreadsheet_id, title)
+        try:
+            for offset, (source_row, _row) in enumerate(pending):
+                visit = PmoVaccinationVisit.query.filter_by(
+                    spreadsheet_id=spreadsheet_id,
+                    sheet_gid=duplicate_gid,
+                    source_row=source_row,
+                ).first()
+                if visit is None:
+                    continue
+                visit.sheet_gid = canonical_gid
+                visit.sheet_title = canonical
+                visit.source_row = next_row + offset
+                summary["repointed"] += 1
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+        next_row += len(pending)
+
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A2:R",
+            body={},
+        ).execute()
+
+    return summary
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Cobertura ativa — validade da vacina antirrábica (365 dias)
 # ──────────────────────────────────────────────────────────────────────────────
 

@@ -24,6 +24,7 @@ from services.vacina_pmo_service import (
     infer_visit_status,
     list_vacina_pmo_sheets,
     persist_vacina_pmo_rows,
+    pmo_request_sheet_titles,
     sync_vacina_pmo_sheet,
 )
 
@@ -44,7 +45,6 @@ AUXILIARY_TITLES = {
     "teste do bot",
 }
 TRACKED_NON_DATE_TITLES = {
-    "solicitacoes",
     "agendadas",
     "encaixes",
     "inscrição a agendar",
@@ -116,6 +116,19 @@ def _normalize_text_key(value: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _tracked_non_date_titles() -> set[str]:
+    """Abas de fila/agendamento que o sync periódico acompanha, normalizadas.
+
+    A aba de solicitações entra por ``pmo_request_sheet_titles`` (nome em uso
+    hoje + nomes antigos) em vez de por um literal: quando ela foi renomeada na
+    planilha, a lista fixa deixou de casar e o sync parou de ler as
+    solicitações — elas não chegavam ao banco nem ao compilado de status.
+    """
+    titles = set(TRACKED_NON_DATE_TITLES)
+    titles.update(_normalize_text_key(title) for title in pmo_request_sheet_titles())
+    return titles
+
+
 def _digits(value: str | None) -> str:
     return re.sub(r"\D+", "", value or "")
 
@@ -179,7 +192,7 @@ def _should_sync_sheet(title: str) -> bool:
     normalized = _normalize_text_key(title)
     if normalized in AUXILIARY_TITLES:
         return False
-    return title == MASTER_SHEET_TITLE or DATED_SHEET_RE.match(title or "") or normalized in TRACKED_NON_DATE_TITLES
+    return title == MASTER_SHEET_TITLE or DATED_SHEET_RE.match(title or "") or normalized in _tracked_non_date_titles()
 
 
 def _is_encaixes(visit: PmoVaccinationVisit) -> bool:
@@ -419,7 +432,7 @@ def _build_note(master_visit: PmoVaccinationVisit, matches: list[PmoVaccinationV
 
     scheduled = [
         visit for visit in matches
-        if _normalize_text_key(visit.sheet_title or "") in TRACKED_NON_DATE_TITLES
+        if _normalize_text_key(visit.sheet_title or "") in _tracked_non_date_titles()
     ]
     dated = [
         visit for visit in matches

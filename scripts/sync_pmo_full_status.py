@@ -17,7 +17,9 @@ from services.vacina_pmo_service import (
     _get_sheets_service_rw,
     _row_column_offset,
     infer_visit_status,
+    invalidate_vacina_pmo_sheets_cache,
     list_vacina_pmo_sheets,
+    reconcile_pmo_request_sheets,
 )
 
 from scripts.audit_pmo_sheet_status_colors import (
@@ -154,6 +156,29 @@ def run_pmo_full_sync(*, apply: bool = True, skip_sheet_sync: bool = False) -> d
             raise RuntimeError("Planilha PMO invalida.")
 
         summary: Counter = Counter()
+
+        if apply:
+            # Antes de ler as abas: se um renome fez o app criar uma cópia da
+            # aba de solicitações, traz essas linhas de volta para a oficial.
+            # Assim o sync abaixo já enxerga as solicitações reunidas num lugar
+            # só, e a equipe não precisa rodar nada à mão.
+            try:
+                reconciled = reconcile_pmo_request_sheets(apply=True, service=service)
+            except Exception:
+                log.exception("[PMO] Falha ao reunir solicitacoes em abas duplicadas.")
+            else:
+                # A aba oficial pode ter acabado de ser criada: o sync abaixo lê
+                # a lista de abas em cache e precisa enxergá-la.
+                invalidate_vacina_pmo_sheets_cache()
+                summary["solicitacoes_reunidas"] = reconciled["moved"]
+                if reconciled["duplicates"]:
+                    log.info(
+                        "[PMO] Aba oficial de solicitacoes: %s. Duplicadas: %s. Linhas movidas: %s.",
+                        reconciled["canonical"],
+                        ", ".join(reconciled["duplicates"]),
+                        reconciled["moved"],
+                    )
+
         if not skip_sheet_sync:
             synced_sheets, synced_rows = _sync_relevant_sheets()
             summary["abas_sincronizadas"] = synced_sheets
