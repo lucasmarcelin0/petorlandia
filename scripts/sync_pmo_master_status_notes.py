@@ -188,11 +188,25 @@ def _sheet_sort_key(visit: PmoVaccinationVisit) -> tuple[int, date, str, int]:
     return (1, date.max, visit.sheet_title or "", visit.source_row or 0)
 
 
-def _should_sync_sheet(title: str) -> bool:
+def _should_sync_sheet(title: str, *, request_titles: set[str] | None = None) -> bool:
+    """Decide se a aba entra no sync periódico.
+
+    ``request_titles`` é a aba de solicitações que vale AGORA, resolvida na
+    planilha (normalizada). Quando informada, ela substitui a lista de
+    apelidos: assim uma aba renomeada para um nome desconhecido — que o app
+    reconhece pelo cabeçalho e usa para gravar — também é lida, e as cópias
+    duplicadas que ficaram para trás não são, evitando visita repetida para a
+    mesma solicitação. Sem ela (uso avulso do script) vale a lista de apelidos.
+    """
     normalized = _normalize_text_key(title)
     if normalized in AUXILIARY_TITLES:
         return False
-    return title == MASTER_SHEET_TITLE or DATED_SHEET_RE.match(title or "") or normalized in _tracked_non_date_titles()
+    tracked = (
+        set(TRACKED_NON_DATE_TITLES) | request_titles
+        if request_titles is not None
+        else _tracked_non_date_titles()
+    )
+    return title == MASTER_SHEET_TITLE or DATED_SHEET_RE.match(title or "") or normalized in tracked
 
 
 def _is_encaixes(visit: PmoVaccinationVisit) -> bool:
@@ -227,12 +241,12 @@ def _resolve_sheet_id_by_title(service, spreadsheet_id: str) -> dict[str, int]:
     }
 
 
-def _sync_relevant_sheets() -> tuple[int, int]:
+def _sync_relevant_sheets(*, request_titles: set[str] | None = None) -> tuple[int, int]:
     total_sheets = 0
     total_rows = 0
     for sheet in list_vacina_pmo_sheets():
         title = sheet.get("title") or ""
-        if not _should_sync_sheet(title):
+        if not _should_sync_sheet(title, request_titles=request_titles):
             continue
         result = sync_vacina_pmo_sheet(sheet_gid=sheet.get("gid") or "", sheet_title=title)
         saved = persist_vacina_pmo_rows(

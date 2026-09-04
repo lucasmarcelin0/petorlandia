@@ -4215,3 +4215,96 @@ def test_sync_acompanha_a_aba_de_solicitacoes_mesmo_renomeada():
     assert _should_sync_sheet("Encaixes")
     assert not _should_sync_sheet("Controle de doses")
     assert not _should_sync_sheet("Solicitacoes Castracao")
+
+
+def test_sync_le_a_aba_resolvida_e_ignora_as_duplicadas():
+    """O sync lê a aba que o app usa AGORA, não a lista fixa de apelidos.
+
+    Renomeada para um nome desconhecido, a aba ainda é encontrada pelo
+    cabeçalho e recebe as solicitações — o sync precisa ler a mesma. E as
+    cópias que ficaram para trás não podem ser lidas: a mesma solicitação
+    viraria duas visitas e dois matches no compilado de status.
+    """
+    from scripts.sync_pmo_master_status_notes import _should_sync_sheet
+
+    resolvida = {"fila de vacinacao"}
+    assert _should_sync_sheet("Fila de vacinação", request_titles=resolvida)
+    assert not _should_sync_sheet("Solicitacoes", request_titles=resolvida)
+    assert not _should_sync_sheet("Solicitacoes de vacina", request_titles=resolvida)
+    # As demais abas de fila seguem valendo, com ou sem aba resolvida.
+    assert _should_sync_sheet("Encaixes", request_titles=resolvida)
+    assert _should_sync_sheet("11/08/2026", request_titles=resolvida)
+    assert not _should_sync_sheet("Controle de doses", request_titles=resolvida)
+
+
+def test_reconcile_dry_run_nao_cria_aba_nem_reescreve_cabecalho(app, monkeypatch):
+    """Simulação não toca na planilha, nem quando falta a aba de solicitações."""
+    fake_service = _FakeReconcileSheetsService({"Vacinação 2026": [["Nome completo do tutor"]]})
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets(apply=False)
+
+    assert result["canonical"] == ""
+    assert result["moved"] == 0
+    assert list(fake_service.sheets) == ["Vacinação 2026"]
+
+
+def test_historico_do_morador_encontra_aba_renomeada_pelo_gid(app, client):
+    """Aba renomeada para nome desconhecido: o histórico acha pelo gid."""
+    with app.app_context():
+        user = User(
+            name="Tutor Gid",
+            email="tutor-gid@example.com",
+            phone="+5516999999994",
+        )
+        user.set_password("PMOA9994")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        db.session.add(Animal(name="Lunna", user_id=user.id, species=species, status="ativo"))
+        # Solicitação antiga, gravada quando a aba ainda tinha nome conhecido.
+        db.session.add(
+            PmoVaccinationVisit(
+                spreadsheet_id="request-sheet",
+                sheet_gid="321",
+                sheet_title="Solicitacoes de vacina",
+                source_row=2,
+                tutor_name=user.name,
+                address="Rua antiga, 1, Centro",
+                phone1=user.phone,
+                dogs=1,
+                cats=0,
+                password="PMOA9994",
+                public_token="token-aba-conhecida",
+                tutor_user_id=user.id,
+            )
+        )
+        # Solicitação nova, gravada depois de a aba virar "Fila de vacinação":
+        # mesmo gid, título que não está em nenhum apelido conhecido.
+        db.session.add(
+            PmoVaccinationVisit(
+                spreadsheet_id="request-sheet",
+                sheet_gid="321",
+                sheet_title="Fila de vacinação",
+                source_row=3,
+                tutor_name=user.name,
+                address="Rua nova, 2, Centro",
+                phone1=user.phone,
+                dogs=1,
+                cats=0,
+                password="PMOA9994",
+                public_token="token-aba-renomeada",
+                tutor_user_id=user.id,
+            )
+        )
+        db.session.commit()
+
+    client.post("/login", data={"login": "tutor-gid@example.com", "password": "PMOA9994"})
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b"token-aba-conhecida" in response.data
+    assert b"token-aba-renomeada" in response.data

@@ -3963,6 +3963,24 @@ def pmo_request_sheet_titles() -> list[str]:
     return titles
 
 
+def pmo_request_sheet_gids() -> list[str]:
+    """gids das abas que já receberam solicitações.
+
+    O gid não muda quando a aba é renomeada, então ele é a âncora estável do
+    histórico: se a aba ganhar um nome fora dos apelidos conhecidos — o app
+    ainda a encontra pelo cabeçalho e grava lá —, as solicitações novas
+    continuam aparecendo para o morador, porque caem no mesmo gid de sempre.
+    """
+    rows = (
+        db.session.query(PmoVaccinationVisit.sheet_gid)
+        .filter(PmoVaccinationVisit.sheet_title.in_(pmo_request_sheet_titles()))
+        .filter(PmoVaccinationVisit.sheet_gid.isnot(None))
+        .distinct()
+        .all()
+    )
+    return [gid for (gid,) in rows if gid]
+
+
 def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
     header = (values or [[]])[0] if values else []
     return [_normalize_text(item) for item in header] == PMO_REQUEST_HEADERS
@@ -3993,7 +4011,9 @@ def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str
     return ""
 
 
-def _resolve_request_sheet_title(service, spreadsheet_id: str, title: str) -> str:
+def _resolve_request_sheet_title(
+    service, spreadsheet_id: str, title: str, *, create: bool = True
+) -> str:
     """Devolve o título real da aba de solicitações, criando-a só se faltar.
 
     A comparação é tolerante (sem acento, sem caixa, apelidos antigos) porque a
@@ -4001,6 +4021,10 @@ def _resolve_request_sheet_title(service, spreadsheet_id: str, title: str) -> st
     "Solicitacoes" virou "Solicitacoes de vacina", o app criou uma aba nova e
     vazia no fim da planilha e passou a gravar ali — as solicitações dos
     moradores sumiram da aba que a equipe acompanha.
+
+    Com ``create=False`` a função só consulta: não cria a aba nem reescreve
+    cabeçalho, e devolve ``""`` quando não encontra nada. É o que a simulação
+    (``--dry-run``) usa para não tocar na planilha de produção.
     """
     metadata = (
         service.spreadsheets()
@@ -4031,6 +4055,8 @@ def _resolve_request_sheet_title(service, spreadsheet_id: str, title: str) -> st
         resolved = _find_request_sheet_by_header(service, spreadsheet_id, existing_titles)
 
     if not resolved:
+        if not create:
+            return ""
         service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
@@ -4046,6 +4072,9 @@ def _resolve_request_sheet_title(service, spreadsheet_id: str, title: str) -> st
             body={"values": [PMO_REQUEST_HEADERS]},
         ).execute()
         return title
+
+    if not create:
+        return resolved
 
     header_response = (
         service.spreadsheets()
@@ -6191,11 +6220,17 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         raise RuntimeError("URL/ID da planilha PMO inválido.")
 
     service = service or _get_sheets_service_rw()
+    # Numa simulação a resolução é só consulta: nada de criar aba nem
+    # reescrever cabeçalho na planilha de produção.
     canonical = _resolve_request_sheet_title(
-        service, spreadsheet_id, pmo_request_sheet_titles()[0]
+        service, spreadsheet_id, pmo_request_sheet_titles()[0], create=apply
     )
-    canonical_gid = _get_sheet_gid(service, spreadsheet_id, canonical)
     summary["canonical"] = canonical
+    if not canonical:
+        # Só acontece em simulação, quando não existe aba de solicitações:
+        # não há para onde mover nada.
+        return summary
+    canonical_gid = _get_sheet_gid(service, spreadsheet_id, canonical)
 
     metadata = (
         service.spreadsheets()
