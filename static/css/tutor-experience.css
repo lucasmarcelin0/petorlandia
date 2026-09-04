@@ -35,9 +35,27 @@
   font-weight: 550;
 }
 
+/* Cor do icone como atalho de reconhecimento: o usuario acha o destino pela
+   cor antes de ler o rotulo. Sem classe, o icone cai no azul da marca.
+
+   O minimo de 4.5:1 do WCAG vale para texto; aqui cada icone fica colado ao
+   seu proprio rotulo, que carrega o significado sozinho, entao a cor e
+   decorativa e nao precisa atingir esse piso. Ainda assim quase todos os
+   tons passam AA — a excecao deliberada e a Loja, em amarelo vivo (1.6:1)
+   por decisao de produto: e a cor com que a loja e reconhecida. Se um dia o
+   icone deixar de vir acompanhado do rotulo, esse amarelo precisa mudar. */
 .navbar .nav-link > i:first-child {
-  color: var(--tutor-brand) !important;
+  color: var(--nav-ico, var(--tutor-brand));
 }
+
+.navbar .nav-ico--operacao { --nav-ico: #0f766e; }  /* operacao e logistica */
+.navbar .nav-ico--gestao   { --nav-ico: #4338ca; }  /* administracao e agenda */
+.navbar .nav-ico--saude    { --nav-ico: #bd3347; }  /* clinico e atendimento */
+.navbar .nav-ico--inicio   { --nav-ico: #2458d3; }  /* navegacao */
+.navbar .nav-ico--loja     { --nav-ico: #ffc107; }  /* comercio — amarelo vivo, ver nota acima */
+.navbar .nav-ico--avisos   { --nav-ico: #6d28d9; }  /* alertas, ensino, parcerias */
+.navbar .nav-ico--contato  { --nav-ico: #176b8c; }  /* mensagens e clinica */
+.navbar .nav-ico--conta    { --nav-ico: #61708a; }  /* conta do usuario */
 
 .navbar .nav-link:hover,
 .navbar .nav-link:focus-visible {

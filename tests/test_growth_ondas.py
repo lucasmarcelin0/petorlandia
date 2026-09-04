@@ -631,7 +631,7 @@ def test_menu_publico_exibe_loja_quando_existe_catalogo_real(app, client):
 
     body = client.get('/').data.decode()
     assert 'href="/loja"' in body
-    assert 'fa-shopping-bag' in body
+    assert 'fa-bag-shopping' in body
 
 
 def test_vitrine_mostra_apenas_categorias_com_produto(app, client):

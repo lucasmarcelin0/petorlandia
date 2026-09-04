@@ -56,7 +56,7 @@
         {% if is_admin %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-briefcase me-1 text-success"></i> Operação
+            <i class="fas fa-clipboard-check me-1 nav-ico--operacao"></i> Operação
           </a>
           <ul class="dropdown-menu">
             <li><h6 class="dropdown-header">Rotina diária</h6></li>
@@ -76,7 +76,7 @@
 
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-sliders me-1 text-primary"></i> Gestão
+            <i class="fas fa-sliders me-1 nav-ico--gestao"></i> Gestão
           </a>
           <ul class="dropdown-menu">
             <li><h6 class="dropdown-header">Cadastros</h6></li>
@@ -100,7 +100,7 @@
 
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-stethoscope me-1 text-danger"></i> Clínico
+            <i class="fas fa-stethoscope me-1 nav-ico--saude"></i> Clínico
           </a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('bulario') }}">
@@ -116,22 +116,22 @@
 
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('index') }}">
-            <i class="fas fa-home me-1 text-primary"></i> Início
+            <i class="fas fa-house me-1 nav-ico--inicio"></i> Início
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('servicos') }}">
-            <i class="fas fa-paw me-1 text-danger"></i> Serviços
+            <i class="fas fa-paw me-1 nav-ico--saude"></i> Serviços
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('loja') }}">
-            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+            <i class="fas fa-bag-shopping me-1 nav-ico--loja"></i> Loja
           </a>
         </li>
         <li class="nav-item dropdown position-relative">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-bell me-1 text-warning"></i> Alertas
+            <i class="fas fa-bell me-1 nav-ico--avisos"></i> Alertas
             {% if admin_action_count|default(0) > 0 %}
             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
               {{ admin_action_count }}
@@ -166,13 +166,13 @@
         {% if current_user.worker == 'delivery' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('list_delivery_requests') }}">
-            <i class="fas fa-truck me-1 text-warning"></i> Solicitações
+            <i class="fas fa-truck me-1 nav-ico--operacao"></i> Solicitações
           </a>
         </li>
         {% elif is_active_veterinarian %}
         <li class="nav-item position-relative">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
-            <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
+            <i class="fas fa-calendar-alt me-1 nav-ico--gestao"></i> Agenda
             {% if total_pending > 0 %}
             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
               {{ total_pending }}
@@ -182,7 +182,7 @@
         </li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-briefcase-medical me-1 text-success"></i> Trabalho
+            <i class="fas fa-briefcase-medical me-1 nav-ico--saude"></i> Trabalho
           </a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('solicitacoes_recebidas') }}">
@@ -200,19 +200,19 @@
         {% if internship_roles %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('student_internship_clinic', clinica_id=internship_roles[0].clinic_id) }}">
-            <i class="fas fa-user-graduate me-1 text-info"></i> Estágio supervisionado
+            <i class="fas fa-user-graduate me-1 nav-ico--avisos"></i> Estágio supervisionado
           </a>
         </li>
         {% endif %}
         {% elif current_user.worker == 'colaborador' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
-            <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
+            <i class="fas fa-calendar-alt me-1 nav-ico--gestao"></i> Agenda
           </a>
         </li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-hospital-user me-1 text-info"></i> Clínica
+            <i class="fas fa-hospital-user me-1 nav-ico--contato"></i> Clínica
           </a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('novo_animal') }}">
@@ -229,18 +229,18 @@
         {% if current_user.worker == 'estudante' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('student_hub') }}">
-            <i class="fas fa-graduation-cap me-1 text-info"></i> Estudar
+            <i class="fas fa-graduation-cap me-1 nav-ico--avisos"></i> Estudar
           </a>
         </li>
         {% endif %}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_pets_active else '' }}" href="{{ url_for('list_animals', scope='meus') }}"{% if nav_pets_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-dog me-1 text-primary"></i> Meus pets
+            <i class="fas fa-dog me-1 nav-ico--saude"></i> Meus pets
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_activities_active else '' }}" href="{{ url_for('minhas_solicitacoes') }}"{% if nav_activities_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-list-check me-1 text-primary"></i> Minhas atividades
+            <i class="fas fa-list-check me-1 nav-ico--gestao"></i> Minhas atividades
           </a>
         </li>
         {% endif %}
@@ -248,7 +248,7 @@
         {% if current_user.role == 'parceiro' %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('parceiro_dashboard') }}">
-            <i class="fa-solid fa-handshake me-1 text-primary"></i> Parceiro
+            <i class="fa-solid fa-handshake me-1 nav-ico--avisos"></i> Parceiro
           </a>
         </li>
         {% endif %}
@@ -256,7 +256,7 @@
         {% if minha_casa_de_racao %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('minha_casa_de_racao') }}">
-            <i class="fa-solid fa-store me-1 text-success"></i> Casa de ração
+            <i class="fa-solid fa-store me-1 nav-ico--loja"></i> Casa de ração
           </a>
         </li>
         {% endif %}
@@ -264,54 +264,54 @@
         {# Navegação pessoal e pública permanece disponível depois das áreas de trabalho. #}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_home_active else '' }}" href="{{ url_for('index') }}"{% if nav_home_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-home me-1 text-primary"></i> Início
+            <i class="fas fa-house me-1 nav-ico--inicio"></i> Início
           </a>
         </li>
 
         {% if current_user.worker != 'delivery' %}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_services_active else '' }}" href="{{ url_for('servicos') }}"{% if nav_services_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-paw me-1 text-danger"></i> Serviços
+            <i class="fas fa-paw me-1 nav-ico--saude"></i> Serviços
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_store_active else '' }}" href="{{ url_for('loja') }}"{% if nav_store_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+            <i class="fas fa-bag-shopping me-1 nav-ico--loja"></i> Loja
           </a>
         </li>
         {% endif %}
         {% else %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('para_tutores') }}">
-            <i class="fas fa-heart me-1 text-danger"></i> Para tutores
+            <i class="fas fa-heart me-1 nav-ico--saude"></i> Para tutores
             <span class="nav-badge-free">grátis</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('parceiro_clinica_landing') }}">
-            <i class="fas fa-hospital me-1 text-success"></i> Para clínicas
+            <i class="fas fa-hospital me-1 nav-ico--contato"></i> Para clínicas
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('index') }}#como-funciona">
-            <i class="fas fa-link me-1 text-primary"></i> Como funciona
+            <i class="fas fa-link me-1 nav-ico--inicio"></i> Como funciona
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('servicos') }}">
-            <i class="fas fa-paw me-1 text-danger"></i> Serviços
+            <i class="fas fa-paw me-1 nav-ico--saude"></i> Serviços
           </a>
         </li>
         {% if site_flags.loja_publica %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('loja') }}">
-            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+            <i class="fas fa-bag-shopping me-1 nav-ico--loja"></i> Loja
           </a>
         </li>
         {% endif %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('precos') }}">
-            <i class="fas fa-tag me-1 text-success"></i> Preços
+            <i class="fas fa-tag me-1 nav-ico--operacao"></i> Preços
           </a>
         </li>
         <li class="nav-item public-auth-item">
@@ -343,7 +343,7 @@
         {% if current_user.is_authenticated %}
         <li class="nav-item position-relative">
           <a class="nav-link{{ ' nav-link--active' if nav_messages_active else '' }}" href="{{ url_for('mensagens_admin') if is_admin else url_for('mensagens') }}"{% if nav_messages_active %} aria-current="page"{% endif %}>
-            <i class="fas fa-comments me-1 text-info"></i> Mensagens
+            <i class="fas fa-comments me-1 nav-ico--contato"></i> Mensagens
             {% if unread_total > 0 %}
             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
               {{ unread_total }}
@@ -354,7 +354,7 @@
 
         <li class="nav-item dropdown nav-account">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-user-circle me-1 text-primary"></i> {{ first_name or 'Conta' }}
+            <i class="fas fa-circle-user me-1 nav-ico--conta"></i> {{ first_name or 'Conta' }}
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li class="nav-account__logout-mobile">
