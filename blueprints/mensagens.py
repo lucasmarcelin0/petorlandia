@@ -37,6 +37,7 @@ from forms import (
 )
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
 from models import Animal, Interest, Message, User
+from services.messages import admin_unread_counts_by_sender, admin_user_ids
 
 # Helpers ainda hospedados no app.py (serão realocados em fases futuras).
 # Import seguro: blueprints só são importados após o app.py executar por completo.
@@ -348,7 +349,7 @@ def conversa_admin(user_id=None):
             flash('Selecione um usuário para conversar.', 'warning')
             return redirect(url_for('mensagens_admin'))
         interlocutor = get_user_or_404(user_id)
-        admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+        admin_ids = admin_user_ids()
         participant_id = interlocutor.id
         promotion_form = VeterinarianPromotionForm()
         delivery_promotion_form = DeliveryPromotionForm()
@@ -363,7 +364,7 @@ def conversa_admin(user_id=None):
                 db.session.flush()
     else:
         interlocutor = admin_user
-        admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+        admin_ids = admin_user_ids()
         participant_id = current_user.id
         if has_veterinarian_profile(current_user):
             target_membership = getattr(current_user.veterinario, 'membership', None)
@@ -521,7 +522,7 @@ def mensagens_admin():
     per_page = max(1, min(per_page or 10, 50))
     kind = request.args.get('kind', 'animals')
 
-    admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+    admin_ids = admin_user_ids()
 
     def _build_query(target_kind):
         query = (
@@ -583,13 +584,9 @@ def mensagens_admin():
                     break
         return page_items, has_more
 
-    unread = (
-        db.session.query(Message.sender_id, db.func.count())
-        .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-        .group_by(Message.sender_id)
-        .all()
-    )
-    unread_counts = {u[0]: u[1] for u in unread}
+    # Mesmo escopo do badge da navbar (services.messages): so conta o que
+    # _collect_threads consegue transformar em thread clicavel.
+    unread_counts = admin_unread_counts_by_sender(admin_ids)
 
     if wants_json:
         query = _build_query(kind)
@@ -635,7 +632,7 @@ def mensagens_admin_marcar_lidas():
     if current_user.role != 'admin':
         abort(403)
 
-    admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+    admin_ids = admin_user_ids()
     atualizadas = (
         Message.query
         .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))

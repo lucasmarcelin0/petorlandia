@@ -56,11 +56,11 @@ def _invalidate_cached_context(user_id: int, key: str) -> None:
 
 def _invalidate_admin_unread_cache() -> None:
     """Invalida o contador de mensagens não lidas de todos os admins."""
-    from models import User
+    from services.messages import admin_user_ids
 
     try:
-        for admin in User.query.filter_by(role='admin').all():
-            _invalidate_cached_context(admin.id, 'unread_messages')
+        for admin_id in admin_user_ids():
+            _invalidate_cached_context(admin_id, 'unread_messages')
     except Exception:
         pass
 
@@ -93,7 +93,14 @@ def _invalidate_admin_action_cache(user_id: int | None = None) -> None:
 
 
 def inject_unread_count():
-    from models import Message, User
+    """Badge de mensagens da navbar.
+
+    Delega a services.messages para o contador ficar preso ao mesmo escopo
+    da caixa de entrada que o link do badge abre. Contar mais do que a
+    listagem mostra produz notificação fantasma: badge aceso e nenhuma
+    conversa com mensagem para ler.
+    """
+    from services.messages import admin_unread_count, personal_unread_count
 
     try:
         if getattr(current_user, "is_authenticated", False):
@@ -102,19 +109,10 @@ def inject_unread_count():
             if cached is not None:
                 return dict(unread_messages=cached)
 
-            if current_user.role == 'admin':
-                admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-                unread = (
-                    Message.query
-                    .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                    .count()
-                )
+            if (getattr(current_user, 'role', '') or '').lower() == 'admin':
+                unread = admin_unread_count()
             else:
-                unread = (
-                    Message.query
-                    .filter_by(receiver_id=current_user.id, lida=False)
-                    .count()
-                )
+                unread = personal_unread_count(user_id)
             _set_cached_context(user_id, 'unread_messages', unread)
         else:
             unread = 0
