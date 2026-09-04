@@ -17,6 +17,7 @@ from services.vacina_pmo_service import (
     _normalize_text,
     _quote_sheet_title,
     normalize_pmo_request_address,
+    resolve_request_sheet_title,
 )
 from time_utils import utcnow
 
@@ -28,6 +29,9 @@ PMO_CASTRATION_DEFAULT_SHEET_URL = (
 )
 PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV = "PMO_CASTRATION_REQUEST_SHEET_TITLE"
 PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE = "Solicitacoes Castracao"
+# Nomes que esta aba já teve. Serve para reencontrá-la depois de um renome e
+# para o histórico do morador não sumir junto.
+PMO_CASTRATION_REQUEST_SHEET_LEGACY_TITLES: tuple[str, ...] = ()
 PMO_CASTRATION_REQUEST_RANGE_COLS = "A:U"
 PMO_CASTRATION_REQUEST_HEADER_RANGE = "A1:U1"
 PMO_CASTRATION_REQUEST_HEADERS = [
@@ -73,46 +77,39 @@ def _ensure_public_token(request_obj: PmoCastrationRequest) -> None:
             return
 
 
-def _ensure_castration_request_sheet(service, spreadsheet_id: str, title: str) -> None:
-    metadata = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
-        .execute()
-    )
-    existing = {
-        sheet["properties"].get("title", ""): sheet["properties"]
-        for sheet in metadata.get("sheets", [])
-    }
-    if title not in existing:
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={"requests": [{"addSheet": {"properties": {"title": title}}}]},
-        ).execute()
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A1",
-            valueInputOption="RAW",
-            body={"values": [PMO_CASTRATION_REQUEST_HEADERS]},
-        ).execute()
-        return
+def pmo_castration_request_sheet_titles() -> list[str]:
+    """Títulos aceitos para a aba de solicitações de castração."""
+    configurado = _normalize_text(os.getenv(PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV, ""))
+    titulos = [configurado or PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE]
+    for legado in (
+        PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE,
+        *PMO_CASTRATION_REQUEST_SHEET_LEGACY_TITLES,
+    ):
+        if legado and legado not in titulos:
+            titulos.append(legado)
+    return titulos
 
-    header_response = (
-        service.spreadsheets()
-        .values()
-        .get(
-            spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!{PMO_CASTRATION_REQUEST_HEADER_RANGE}",
-        )
-        .execute()
+
+def _resolve_castration_request_sheet_title(
+    service, spreadsheet_id: str, title: str, *, create: bool = True
+) -> str:
+    """Aba de solicitações da CASTRAÇÃO, encontrada mesmo se renomeada.
+
+    A busca era literal e criava uma cópia vazia quando o nome não batia — a
+    mesma falha que escondeu as solicitações de vacina da equipe. Aqui o risco
+    é maior: a castração não tem painel nem sincronização, então essa aba é a
+    única janela para as inscrições. O cabeçalho de 21 colunas distingue esta
+    aba da de vacina, que tem nome parecido e colunas diferentes.
+    """
+    return resolve_request_sheet_title(
+        service,
+        spreadsheet_id,
+        title,
+        aliases=pmo_castration_request_sheet_titles(),
+        headers=PMO_CASTRATION_REQUEST_HEADERS,
+        header_range=PMO_CASTRATION_REQUEST_HEADER_RANGE,
+        create=create,
     )
-    current_header = (header_response.get("values") or [[]])[0]
-    if [_normalize_text(item) for item in current_header] != PMO_CASTRATION_REQUEST_HEADERS:
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A1",
-            valueInputOption="RAW",
-            body={"values": [PMO_CASTRATION_REQUEST_HEADERS]},
-        ).execute()
 
 
 def _species_key(animal: Animal) -> str:
@@ -178,10 +175,7 @@ def submit_castracao_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     if not spreadsheet_id:
         raise RuntimeError("URL/ID da planilha PMO invalido.")
 
-    title = os.getenv(
-        PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
-        PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE,
-    )
+    title = pmo_castration_request_sheet_titles()[0]
     address = normalize_pmo_request_address(payload)
     animal_items = list(payload.get("animals") or [])
     dogs = sum(1 for item in animal_items if item.get("species") == "cao")
@@ -190,7 +184,8 @@ def submit_castracao_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     animal_details = format_castration_animal_details(animal_items)
 
     service = _get_sheets_service_rw()
-    _ensure_castration_request_sheet(service, spreadsheet_id, title)
+    # Grava na aba que já existe (mesmo renomeada), nunca numa cópia nova.
+    title = _resolve_castration_request_sheet_title(service, spreadsheet_id, title)
 
     submitted_at = utcnow()
     timestamp = submitted_at.astimezone().strftime("%d/%m/%Y %H:%M:%S")

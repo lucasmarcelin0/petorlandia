@@ -3981,21 +3981,27 @@ def pmo_request_sheet_gids() -> list[str]:
     return [gid for (gid,) in rows if gid]
 
 
-def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
+def _sheet_header_matches(values: list[list[str]] | None, headers: list[str]) -> bool:
     header = (values or [[]])[0] if values else []
-    return [_normalize_text(item) for item in header] == PMO_REQUEST_HEADERS
+    return [_normalize_text(item) for item in header] == headers
 
 
-def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str]) -> str:
-    """Último recurso: acha a aba de solicitações pelo cabeçalho, não pelo nome.
+def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
+    return _sheet_header_matches(values, PMO_REQUEST_HEADERS)
+
+
+def _find_sheet_by_header(
+    service, spreadsheet_id: str, titles: list[str], *, headers: list[str], header_range: str
+) -> str:
+    """Último recurso: acha a aba pelo cabeçalho, não pelo nome.
 
     Cobre um renome que nenhum apelido conhecido alcança. Comparar o cabeçalho
-    (e não só o nome) evita cair na aba de castração, que tem nome parecido e
-    colunas diferentes.
+    (e não só o nome) impede confundir as abas de vacina e de castração, que
+    têm nome parecido e colunas diferentes.
     """
     if not titles:
         return ""
-    ranges = [f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}" for title in titles]
+    ranges = [f"{_quote_sheet_title(title)}!{header_range}" for title in titles]
     try:
         response = (
             service.spreadsheets()
@@ -4006,25 +4012,32 @@ def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str
     except Exception:
         return ""
     for title, value_range in zip(titles, response.get("valueRanges", [])):
-        if _request_sheet_header_matches(value_range.get("values")):
+        if _sheet_header_matches(value_range.get("values"), headers):
             return title
     return ""
 
 
-def _resolve_request_sheet_title(
-    service, spreadsheet_id: str, title: str, *, create: bool = True
+def resolve_request_sheet_title(
+    service,
+    spreadsheet_id: str,
+    wanted: str,
+    *,
+    aliases: list[str],
+    headers: list[str],
+    header_range: str,
+    create: bool = True,
 ) -> str:
-    """Devolve o título real da aba de solicitações, criando-a só se faltar.
+    """Título real de uma aba de solicitações, criando-a só se faltar mesmo.
 
-    A comparação é tolerante (sem acento, sem caixa, apelidos antigos) porque a
-    equipe renomeia a aba na planilha. Antes a busca era literal: quando
-    "Solicitacoes" virou "Solicitacoes de vacina", o app criou uma aba nova e
-    vazia no fim da planilha e passou a gravar ali — as solicitações dos
-    moradores sumiram da aba que a equipe acompanha.
+    A busca é tolerante de propósito — sem acento, sem caixa, apelidos antigos
+    e, em último caso, pelo cabeçalho — porque a equipe renomeia as abas na
+    planilha. Com busca literal, um renome fazia o app criar uma cópia vazia e
+    gravar ali: as solicitações continuavam chegando, mas fora da vista de
+    quem trabalha na fila. Foi o que aconteceu com a aba da vacina quando
+    "Solicitacoes" virou "Solicitacoes de vacina".
 
-    Com ``create=False`` a função só consulta: não cria a aba nem reescreve
-    cabeçalho, e devolve ``""`` quando não encontra nada. É o que a simulação
-    (``--dry-run``) usa para não tocar na planilha de produção.
+    Com ``create=False`` a função só consulta — não cria aba nem reescreve
+    cabeçalho — e devolve ``""`` quando não encontra nada.
     """
     metadata = (
         service.spreadsheets()
@@ -4039,7 +4052,7 @@ def _resolve_request_sheet_title(
 
     resolved = ""
     seen: set[str] = set()
-    for candidate in [title, *pmo_request_sheet_titles()]:
+    for candidate in [wanted, *aliases]:
         key = _pmo_normalize_title(candidate)
         if not key or key in seen:
             continue
@@ -4052,26 +4065,24 @@ def _resolve_request_sheet_title(
             break
 
     if not resolved:
-        resolved = _find_request_sheet_by_header(service, spreadsheet_id, existing_titles)
+        resolved = _find_sheet_by_header(
+            service, spreadsheet_id, existing_titles, headers=headers, header_range=header_range
+        )
 
     if not resolved:
         if not create:
             return ""
         service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
-            body={
-                "requests": [
-                    {"addSheet": {"properties": {"title": title}}}
-                ]
-            },
+            body={"requests": [{"addSheet": {"properties": {"title": wanted}}}]},
         ).execute()
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A1",
+            range=f"{_quote_sheet_title(wanted)}!A1",
             valueInputOption="RAW",
-            body={"values": [PMO_REQUEST_HEADERS]},
+            body={"values": [headers]},
         ).execute()
-        return title
+        return wanted
 
     if not create:
         return resolved
@@ -4081,18 +4092,33 @@ def _resolve_request_sheet_title(
         .values()
         .get(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(resolved)}!{PMO_REQUEST_HEADER_RANGE}",
+            range=f"{_quote_sheet_title(resolved)}!{header_range}",
         )
         .execute()
     )
-    if not _request_sheet_header_matches(header_response.get("values")):
+    if not _sheet_header_matches(header_response.get("values"), headers):
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=f"{_quote_sheet_title(resolved)}!A1",
             valueInputOption="RAW",
-            body={"values": [PMO_REQUEST_HEADERS]},
+            body={"values": [headers]},
         ).execute()
     return resolved
+
+
+def _resolve_request_sheet_title(
+    service, spreadsheet_id: str, title: str, *, create: bool = True
+) -> str:
+    """Aba de solicitações da VACINA — ver ``resolve_request_sheet_title``."""
+    return resolve_request_sheet_title(
+        service,
+        spreadsheet_id,
+        title,
+        aliases=pmo_request_sheet_titles(),
+        headers=PMO_REQUEST_HEADERS,
+        header_range=PMO_REQUEST_HEADER_RANGE,
+        create=create,
+    )
 
 
 def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
