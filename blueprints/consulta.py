@@ -2253,6 +2253,31 @@ def atualizar_bloco_prescricao(bloco_id):
     return jsonify({'success': True})
 
 
+@bp.route('/r/<int:bloco_id>')
+def short_prescription_url(bloco_id):
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    tutor = bloco.animal.owner if bloco.animal else None
+    target = url_for('imprimir_bloco_prescricao', bloco_id=bloco.id)
+    if current_user.is_authenticated:
+        return redirect(target)
+    if tutor:
+        return redirect(_first_access_url_for_user(tutor, next_url=target, _external=True))
+    return redirect(target)
+
+
+@bp.route('/t/<int:tratamento_id>')
+def short_treatment_url(tratamento_id):
+    from models.consulta import TratamentoAcompanhamento
+    acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
+    tutor = acompanhamento.animal.owner if acompanhamento.animal else None
+    target = url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id)
+    if current_user.is_authenticated:
+        return redirect(target)
+    if tutor:
+        return redirect(_first_access_url_for_user(tutor, next_url=target, _external=True))
+    return redirect(target)
+
+
 @bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
 @login_required
 def imprimir_bloco_prescricao(bloco_id):
@@ -2316,6 +2341,12 @@ def imprimir_bloco_prescricao(bloco_id):
         ofertas_receita = build_prescription_offers(bloco.prescricoes)
         compra_em_lote = bulk_buyable_products(ofertas_receita)
 
+    short_prescription_url = url_for('consulta_routes.short_prescription_url', bloco_id=bloco.id, _external=True)
+    short_treatment_url = (
+        url_for('consulta_routes.short_treatment_url', tratamento_id=acompanhamento.id, _external=True)
+        if acompanhamento else None
+    )
+
     return render_template(
         'orcamentos/imprimir_bloco.html',
         bloco=bloco,
@@ -2331,6 +2362,8 @@ def imprimir_bloco_prescricao(bloco_id):
         printed_at=datetime.now(BR_TZ),
         first_access_url=first_access_url,
         prescription_public_url=prescription_public_url,
+        short_prescription_url=short_prescription_url,
+        short_treatment_url=short_treatment_url,
         acompanhamento=acompanhamento,
         pode_ativar_acompanhamento=pode_ativar_acompanhamento,
         pode_enviar_assinatura=pode_enviar_assinatura,

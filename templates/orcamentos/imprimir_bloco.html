@@ -195,6 +195,8 @@
 
 <script>
   const numeroWhatsApp = "{{ bloco.animal.owner.phone | digits_only if bloco.animal.owner and bloco.animal.owner.phone else '' }}";
+  const shortPrescriptionUrl = {{ short_prescription_url|tojson }};
+  const shortTratamentoUrl = {{ short_treatment_url|tojson }};
   const firstAccessUrl = {{ first_access_url|tojson }};
   const prescriptionUrl = {{ prescription_public_url|tojson }};
   const tratamentoUrl = {{ tratamento_first_access_url|tojson }};
@@ -216,32 +218,30 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const nomeTutor = {{ (bloco.animal.owner.name if bloco.animal and bloco.animal.owner and bloco.animal.owner.name else 'Tutor')|tojson }};
+    const nomeCompleto = {{ (bloco.animal.owner.name if bloco.animal and bloco.animal.owner and bloco.animal.owner.name else 'Tutor')|tojson }};
+    const primeiroNome = nomeCompleto.trim().split(/\s+/)[0] || 'Tutor';
     const nomePet = {{ (bloco.animal.name if bloco.animal and bloco.animal.name else 'seu pet')|tojson }};
     const nomeClinica = {{ (clinica.nome if clinica and clinica.nome else 'PetOrlândia')|tojson }};
 
     const introReceita = assinaturaEnviada
-      ? `A receita veterinária assinada de *${nomePet}* já está disponível!`
-      : `Segue a receita veterinária de *${nomePet}*. 🐾`;
+      ? `A receita veterinária assinada de *${nomePet}* já está pronta.`
+      : `A receita veterinária de *${nomePet}* já está pronta.`;
 
-    const linkReceita = firstAccessUrl || prescriptionUrl;
+    const linkReceita = shortPrescriptionUrl || firstAccessUrl || prescriptionUrl;
+    const linkTratamento = shortTratamentoUrl || tratamentoUrl;
 
-    const chamadaMedicamentos = temProdutosLoja
-      ? `\n\n💊 *Quer receber esses medicamentos na sua casa em Orlândia hoje?*\nPelo link da receita você pode pedir os medicamentos prescritos com entrega rápida em 1 clique!`
-      : `\n\n💊 *Quer receber os medicamentos na sua casa em Orlândia hoje?*\nNo link da receita você confere as opções de compra e entrega rápida dos medicamentos prescritos!`;
-
-    const blocoAcompanhamento = tratamentoUrl
-      ? `\n\n📋 *Acompanhamento do tratamento:*\nMarque as doses dadas, horários e acompanhe a evolução de ${nomePet}:\n👉 ${tratamentoUrl}`
+    const blocoAcompanhamento = linkTratamento
+      ? `\n\n*Acompanhamento do Tratamento:*\nMarque as doses dadas, horários e acompanhe a evolução de ${nomePet}:\n${linkTratamento}`
       : '';
 
     const textoMensagem =
-      `Olá, *${nomeTutor}*! ${introReceita}\n\n` +
-      `📄 *Receita Digital:*\n` +
-      `Acesse a receita completa com as orientações do veterinário:\n` +
-      `👉 ${linkReceita}` +
-      chamadaMedicamentos +
+      `Olá, *${primeiroNome}*! ${introReceita}\n\n` +
+      `*Receita Digital & Entrega em Casa:*\n` +
+      `Acesse a receita completa e peça os medicamentos com entrega rápida em Orlândia:\n` +
+      `${linkReceita}` +
       blocoAcompanhamento +
-      `\n\nQualquer dúvida, estamos à disposição!\n` +
+      `\n\n*Dica:* Se preferir receber em casa hoje, você pode pedir pelo link acima ou apenas responder esta mensagem informando seu endereço que organizamos a entrega para você!\n\n` +
+      `Qualquer dúvida, estamos à disposição.\n` +
       `Atenciosamente,\n` +
       `*Equipe ${nomeClinica}*`;
 
