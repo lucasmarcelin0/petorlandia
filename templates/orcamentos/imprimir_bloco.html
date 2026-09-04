@@ -199,6 +199,7 @@
   const prescriptionUrl = {{ prescription_public_url|tojson }};
   const tratamentoUrl = {{ tratamento_first_access_url|tojson }};
   const assinaturaEnviada = {{ bloco.assinatura_enviada|tojson }};
+  const temProdutosLoja = {{ 'true' if compra_em_lote else 'false' }};
   const btnWhats = document.getElementById('btn-whatsapp');
   if (!numeroWhatsApp && btnWhats) {
     btnWhats.style.display = 'none';
@@ -215,13 +216,36 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const blocoAcompanhamento = tratamentoUrl
-      ? `\n\nAcompanhe o tratamento pelo link abaixo: marque os medicamentos comprados, as doses dadas e envie fotos da evolução.\nAcompanhamento: ${tratamentoUrl}`
-      : '';
+    const nomeTutor = {{ (bloco.animal.owner.name if bloco.animal and bloco.animal.owner and bloco.animal.owner.name else 'Tutor')|tojson }};
+    const nomePet = {{ (bloco.animal.name if bloco.animal and bloco.animal.name else 'seu pet')|tojson }};
+    const nomeClinica = {{ (clinica.nome if clinica and clinica.nome else 'PetOrlândia')|tojson }};
+
     const introReceita = assinaturaEnviada
-      ? `Sua receita veterinária assinada de {{ bloco.animal.name }} já está disponível no site.`
-      : `Segue a receita veterinária de {{ bloco.animal.name }}.`;
-    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! ${introReceita}\n\nAcesse pelo primeiro acesso PetOrlandia, confirme seu celular e crie sua senha: ${firstAccessUrl}\n\nSe você já tem senha, use o mesmo link e toque em "Já tenho senha".\n\nLink da receita: ${prescriptionUrl}${blocoAcompanhamento}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+      ? `A receita veterinária assinada de *${nomePet}* já está disponível!`
+      : `Segue a receita veterinária de *${nomePet}*. 🐾`;
+
+    const linkReceita = firstAccessUrl || prescriptionUrl;
+
+    const chamadaMedicamentos = temProdutosLoja
+      ? `\n\n💊 *Quer receber esses medicamentos na sua casa em Orlândia hoje?*\nPelo link da receita você pode pedir os medicamentos prescritos com entrega rápida em 1 clique!`
+      : `\n\n💊 *Quer receber os medicamentos na sua casa em Orlândia hoje?*\nNo link da receita você confere as opções de compra e entrega rápida dos medicamentos prescritos!`;
+
+    const blocoAcompanhamento = tratamentoUrl
+      ? `\n\n📋 *Acompanhamento do tratamento:*\nMarque as doses dadas, horários e acompanhe a evolução de ${nomePet}:\n👉 ${tratamentoUrl}`
+      : '';
+
+    const textoMensagem =
+      `Olá, *${nomeTutor}*! ${introReceita}\n\n` +
+      `📄 *Receita Digital:*\n` +
+      `Acesse a receita completa com as orientações do veterinário:\n` +
+      `👉 ${linkReceita}` +
+      chamadaMedicamentos +
+      blocoAcompanhamento +
+      `\n\nQualquer dúvida, estamos à disposição!\n` +
+      `Atenciosamente,\n` +
+      `*Equipe ${nomeClinica}*`;
+
+    const mensagem = encodeURIComponent(textoMensagem);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

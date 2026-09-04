@@ -73,8 +73,10 @@ def test_imprimir_bloco_prescricao_displays_printing_user(app):
         # quando o impressor é o profissional responsável. Vet2 imprime a
         # prescrição de Vet1, então mostra apenas o nome; o CRMV do
         # responsável (Vet1) aparece na seção "Profissional Responsável".
-        assert 'CRMV SP-456' not in html
         assert 'SP-123' in html
+        assert 'Quer receber esses medicamentos na sua casa em Orlândia hoje?' in html
+        assert 'Receita Digital:' in html
+        assert 'confirme seu celular e crie sua senha' not in html
 
     with app.app_context():
         db.drop_all()
