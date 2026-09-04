@@ -12,6 +12,7 @@ rápida em Orlândia.' %}
 {% include 'partials/_em_breve_overlay.html' %}
 
 {% if not ativo %}
+<div class="loja-page tutor-page-shell">
 <!-- Cabeçalho -->
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
@@ -178,9 +179,9 @@ rápida em Orlândia.' %}
 
 <!-- Styles -->
 <style>
-  :root {
-    --primary-color: #4e73df;
-    --primary-dark: #3d5bd6;
+  .loja-page {
+    --primary-color: var(--tutor-brand);
+    --primary-dark: var(--tutor-brand-strong);
   }
 
   /* Chips */
@@ -313,6 +314,7 @@ rápida em Orlândia.' %}
   }
 </style>
 
+</div>
 
 
 {% block scripts %}

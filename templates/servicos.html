@@ -22,6 +22,7 @@
 </script>
 {% endblock %}
 {% block main %}
+<div class="services-page tutor-page-shell">
 
 {% if is_admin %}
 <section class="mb-4" id="rec-servico-panel">
@@ -248,13 +249,14 @@
 {% endif %}
 
 
-<section class="pb-2 pb-lg-4">
-  <div class="text-center">
+<section class="service-page-heading">
+  <div>
+    <p class="tutor-page-heading__eyebrow">Cuidado para o seu pet</p>
     <h1 class="fw-bold mb-2 text-primary">
       <i class="fa-solid fa-paw me-2"></i>
       {% if selected_city %}Serviços PetOrlândia em {{ selected_city }}{% else %}Serviços PetOrlândia disponíveis{% endif %}
     </h1>
-    <p class="text-muted mx-auto" style="max-width: 780px;">
+    <p class="tutor-page-heading__description">
       Agende vacinas, consultas, exames e outros cuidados para o seu pet.
     </p>
   </div>
@@ -498,6 +500,7 @@
   </div>
 </section>
 
+</div>
 <style>
   .service-city-picker {
     padding: 1.25rem;

@@ -94,6 +94,11 @@
   margin: 0;
 }
 
+.tutor-page-shell .text-primary,
+.tutor-page-heading .text-primary {
+  color: var(--tutor-brand) !important;
+}
+
 .tutor-page-heading__description {
   color: var(--tutor-muted);
   margin: .45rem 0 0;
@@ -105,6 +110,31 @@
   border: 1px solid var(--tutor-line);
   border-radius: var(--tutor-radius);
   box-shadow: var(--tutor-shadow);
+}
+
+.tutor-page-shell .btn-primary,
+.messages-page .btn-primary {
+  background-color: var(--tutor-brand);
+  border-color: var(--tutor-brand);
+}
+
+.tutor-page-shell .btn-primary:hover,
+.messages-page .btn-primary:hover {
+  background-color: var(--tutor-brand-strong);
+  border-color: var(--tutor-brand-strong);
+}
+
+.tutor-page-shell .btn-outline-primary,
+.messages-page .btn-outline-primary {
+  border-color: var(--tutor-brand);
+  color: var(--tutor-brand-strong);
+}
+
+.tutor-page-shell .btn-outline-primary:hover,
+.messages-page .btn-outline-primary:hover {
+  background-color: var(--tutor-brand);
+  border-color: var(--tutor-brand);
+  color: #fff;
 }
 
 .tutor-empty-state {
@@ -241,6 +271,16 @@
   box-shadow: var(--tutor-shadow);
 }
 
+.service-page-heading {
+  margin-bottom: 1.5rem;
+}
+
+.service-page-heading h1 {
+  color: var(--tutor-ink) !important;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  letter-spacing: -.035em;
+}
+
 .service-card {
   border: 1px solid var(--tutor-line) !important;
   box-shadow: var(--tutor-shadow) !important;
@@ -256,6 +296,14 @@
 .loja-page .alert-info { background: #edf6fb; color: #24516b; }
 .loja-page .chip-active { background: var(--tutor-brand) !important; }
 .loja-page .chip { border-color: var(--tutor-line); color: var(--tutor-ink); font-weight: 600; }
+
+.dashboard-home .dashboard-personal-area {
+  border: 1px solid var(--tutor-line);
+  box-shadow: var(--tutor-shadow) !important;
+}
+
+.dashboard-home .dashboard-personal-area > h1,
+.dashboard-home .dashboard-personal-area > h2 { color: var(--tutor-ink); }
 
 /* Rodapé institucional, legível e estável ao quebrar em telas pequenas. */
 .site-footer {

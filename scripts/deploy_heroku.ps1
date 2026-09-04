@@ -129,8 +129,13 @@ Nao use --force: isso pode apagar correcoes que ja estao em producao.
 
     $publishedCommit = ""
     foreach ($attempt in 1..5) {
-        $publishedLine = (& git -c "safe.directory=$repository" -C $repository ls-remote heroku refs/heads/main 2>$null)
-        if ($LASTEXITCODE -eq 0 -and $publishedLine) {
+        try {
+            $lines = & git -c "safe.directory=$repository" -C $repository ls-remote heroku refs/heads/main 2>&1
+            $publishedLine = ($lines | Where-Object { $_ -match 'refs/heads/main' }) -join ""
+        } catch {
+            $publishedLine = ""
+        }
+        if ($publishedLine) {
             $publishedCommit = ($publishedLine -split '\s+')[0]
             if ($publishedCommit -eq $headCommit) { break }
         }
