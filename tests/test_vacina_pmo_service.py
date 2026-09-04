@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 from io import BytesIO
 
@@ -1162,13 +1163,45 @@ class _FakeReconcileSheetsService:
         rows.extend(list(row) for row in kwargs["body"]["values"])
         return self._Execute({"updates": {"updatedRange": f"'{title}'!A{first}:R{len(rows)}"}})
 
+    @staticmethod
+    def _bounds(range_value):
+        """(primeira linha, última linha ou None) da parte A2:R9 da faixa."""
+        trecho = range_value.split("!", 1)[1]
+        inicio, _, fim = trecho.partition(":")
+        primeira = int(re.sub(r"[^0-9]", "", inicio) or 1)
+        ultima = re.sub(r"[^0-9]", "", fim)
+        return primeira, (int(ultima) if ultima else None)
+
     def clear(self, **kwargs):
         title = self._title_of(kwargs["range"])
         self.cleared.append(title)
-        self.sheets[title] = self.sheets[title][:1]
+        primeira, ultima = self._bounds(kwargs["range"])
+        rows = self.sheets.setdefault(title, [])
+        limite = len(rows) if ultima is None else min(ultima, len(rows))
+        for indice in range(primeira - 1, limite):
+            rows[indice] = [""] * 18
+        # Faixa aberta (A2:R) zera tudo abaixo do cabeçalho.
+        if ultima is None:
+            self.sheets[title] = rows[:1]
         return self._Execute({})
 
     def update(self, **kwargs):
+        title = self._title_of(kwargs["range"])
+        primeira, _ultima = self._bounds(kwargs["range"])
+        coluna = re.sub(r"[^A-Z]", "", kwargs["range"].split("!", 1)[1].split(":")[0])
+        rows = self.sheets.setdefault(title, [])
+        for deslocamento, valores in enumerate(kwargs["body"]["values"]):
+            indice = primeira - 1 + deslocamento
+            while len(rows) <= indice:
+                rows.append([""] * 18)
+            linha = (list(rows[indice]) + [""] * 18)[:18]
+            if coluna == "A":
+                linha = (list(valores) + [""] * 18)[:18]
+            else:
+                # Atualização de uma coluna só (ex.: o carimbo em P).
+                posicao = ord(coluna) - ord("A")
+                linha[posicao] = valores[0] if valores else ""
+            rows[indice] = linha
         return self._Execute({})
 
     def batchUpdate(self, **kwargs):
@@ -1270,7 +1303,8 @@ def test_reconcile_pmo_request_sheets_keeps_duplicate_when_row_has_no_visit(app,
     # As linhas chegaram na aba oficial, mas a duplicada continua intacta.
     assert len(fake_service.sheets["Solicitacoes de vacina"]) == 4
     assert len(fake_service.sheets["Solicitacoes"]) == 3
-    assert fake_service.cleared == []
+    # A duplicada em si continua intacta (a oficial pode ser reescrita pela fusão).
+    assert "Solicitacoes" not in fake_service.cleared
 
 
 def test_reconcile_pmo_request_sheets_is_idempotent(app, monkeypatch):
@@ -4308,3 +4342,131 @@ def test_historico_do_morador_encontra_aba_renomeada_pelo_gid(app, client):
     assert response.status_code == 200
     assert b"token-aba-conhecida" in response.data
     assert b"token-aba-renomeada" in response.data
+
+
+def _pmo_request_row_full(tutor, carimbo, animais, *, user_id="", dogs="1", atendida=False):
+    row = [""] * 18
+    row[0] = tutor
+    row[1] = "Rua 20"
+    row[2] = "1107"
+    row[4] = "Jardim Benini"
+    row[5] = "16999999999"
+    row[7] = dogs
+    row[8] = "0"
+    row[9] = animais
+    row[10] = "Turno preferencial: Manha"
+    if atendida:
+        row[11] = "11/08/2026"
+        row[12] = "1"
+    row[15] = carimbo
+    row[16] = "PetOrlandia"
+    row[17] = str(user_id)
+    return row
+
+
+def test_reconcile_reune_inscricoes_repetidas_do_mesmo_morador(app, monkeypatch):
+    """Mesma pessoa inscrita várias vezes vira uma linha só, com o último envio.
+
+    Dois cliques no botão, ou o morador voltando para corrigir um dado,
+    rendiam uma linha por envio e a equipe via a mesma casa repetida na fila.
+    """
+    fake_service = _FakeReconcileSheetsService(
+        {
+            "Solicitacoes de vacina": [
+                PMO_REQUEST_HEADERS,
+                _pmo_request_row_full("Gislene Pimenta", "22/08/2026 18:31:08", "Jujuba", user_id="4522"),
+                _pmo_request_row_full("Juliana Santos", "01/09/2026 16:48:47", "Bela", user_id="2"),
+                _pmo_request_row_full(
+                    "Gislene Pimenta", "22/08/2026 18:35:25", "Caramelo, Jujuba",
+                    user_id="4522", dogs="2",
+                ),
+                _pmo_request_row_full("Juliana Santos", "03/09/2026 23:51:40", "Bela, Duds", user_id="2"),
+                _pmo_request_row_full("Juliana Santos", "03/09/2026 23:51:42", "Bela, Duds", user_id="2"),
+            ]
+        }
+    )
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets()
+
+    assert result["merged"] == 3
+    linhas = fake_service.sheets["Solicitacoes de vacina"][1:]
+    linhas = [linha for linha in linhas if any(str(c).strip() for c in linha)]
+    assert len(linhas) == 2
+
+    # A posição é a da primeira inscrição: quem chegou antes não perde a vez.
+    gislene, juliana = linhas
+    assert gislene[0] == "Gislene Pimenta"
+    assert juliana[0] == "Juliana Santos"
+
+    # O conteúdo é o do último envio.
+    assert gislene[9] == "Caramelo, Jujuba"
+    assert gislene[7] == "2"
+    assert gislene[15] == "22/08/2026 18:35:25"
+    assert juliana[9] == "Bela, Duds"
+    assert juliana[15] == "03/09/2026 23:51:42"
+
+    # E a observação diz quantas vezes a pessoa se inscreveu, e quando foi a 1ª.
+    assert "2 envios (1º em 22/08/2026 18:31:08)" in gislene[10]
+    assert "3 envios (1º em 01/09/2026 16:48:47)" in juliana[10]
+    assert "Turno preferencial: Manha" in juliana[10]
+
+
+def test_reconcile_nao_funde_linha_ja_atendida(app, monkeypatch):
+    """Linha com trabalho de campo é histórico: não funde nem muda de lugar."""
+    fake_service = _FakeReconcileSheetsService(
+        {
+            "Solicitacoes de vacina": [
+                PMO_REQUEST_HEADERS,
+                _pmo_request_row_full(
+                    "Gislene Pimenta", "10/06/2026 09:00:00", "Jujuba",
+                    user_id="4522", atendida=True,
+                ),
+                _pmo_request_row_full("Gislene Pimenta", "22/08/2026 18:31:08", "Jujuba", user_id="4522"),
+                _pmo_request_row_full("Gislene Pimenta", "22/08/2026 18:35:25", "Caramelo", user_id="4522"),
+            ]
+        }
+    )
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets()
+
+    linhas = [l for l in fake_service.sheets["Solicitacoes de vacina"][1:] if any(str(c).strip() for c in l)]
+    assert result["merged"] == 1
+    # A visita de junho continua de pé, sozinha; as duas pendentes viram uma.
+    assert len(linhas) == 2
+    assert linhas[0][11] == "11/08/2026"
+    assert linhas[1][9] == "Caramelo"
+
+
+def test_reconcile_fusao_e_idempotente(app, monkeypatch):
+    fake_service = _FakeReconcileSheetsService(
+        {
+            "Solicitacoes de vacina": [
+                PMO_REQUEST_HEADERS,
+                _pmo_request_row_full("Gislene Pimenta", "22/08/2026 18:31:08", "Jujuba", user_id="4522"),
+                _pmo_request_row_full("Gislene Pimenta", "22/08/2026 18:35:25", "Caramelo", user_id="4522"),
+            ]
+        }
+    )
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        primeiro = reconcile_pmo_request_sheets()
+        segundo = reconcile_pmo_request_sheets()
+
+    assert primeiro["merged"] == 1
+    assert segundo["merged"] == 0
+    linhas = [l for l in fake_service.sheets["Solicitacoes de vacina"][1:] if any(str(c).strip() for c in l)]
+    assert len(linhas) == 1
+    # A marca de envios não se acumula a cada passagem.
+    assert linhas[0][10].count("envios") == 1
+    assert "2 envios" in linhas[0][10]
