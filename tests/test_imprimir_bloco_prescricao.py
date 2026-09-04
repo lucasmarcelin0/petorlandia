@@ -101,11 +101,55 @@ def test_short_prescription_url_redirect(app):
         db.session.commit()
         bloco_id = bloco.id
 
+    # O link que o tutor recebe carrega o token assinado: com ele, o link curto
+    # abre a receita direto, sem senha e sem 404 — que é o objetivo do /r/.
+    with app.app_context():
+        from app import _first_access_token_for_user
+
+        tutor = User.query.filter_by(email='isabela@example.com').one()
+        token = _first_access_token_for_user(tutor)
+
     client = app.test_client()
-    resp = client.get(f'/r/{bloco_id}', follow_redirects=True)
+    resp = client.get(f'/r/{bloco_id}?token={token}', follow_redirects=True)
     assert resp.status_code == 200
     assert 'Receita M' in resp.get_data(as_text=True)
     assert 'Max' in resp.get_data(as_text=True)
+
+    with app.app_context():
+        db.drop_all()
+
+
+def test_short_prescription_url_nao_autentica_visitante_sem_token(app):
+    """Sem o token assinado, o link curto não pode logar ninguém.
+
+    Autenticar o tutor a partir do id numérico da URL entregaria a conta dele
+    — e o prontuário do animal — a quem chutasse o número.
+    """
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica Prescricao')
+        db.session.add(clinica)
+        db.session.flush()
+        vet = _create_veterinarian('Vet1', 'vet1@example.com', 'pw1', 'SP-123', clinic=clinica)
+        tutor = User(name='Isabela Abreu', email='isabela@example.com', phone='+5516999999999')
+        tutor.set_password('pw3')
+        animal = Animal(name='Max', owner=tutor, clinica=clinica)
+        db.session.add_all([tutor, animal])
+        db.session.flush()
+        bloco = BlocoPrescricao(animal=animal, saved_by=vet, clinica=clinica)
+        db.session.add(bloco)
+        db.session.commit()
+        bloco_id = bloco.id
+
+    anonimo = app.test_client()
+    corpo = anonimo.get(f'/r/{bloco_id}', follow_redirects=True).get_data(as_text=True)
+    assert 'Max' not in corpo
+    assert 'Isabela Abreu' not in corpo
+
+    # E a sessão segue anônima: nada de cookie de "lembrar" como o tutor.
+    with anonimo.session_transaction() as sessao:
+        assert '_user_id' not in sessao
 
     with app.app_context():
         db.drop_all()

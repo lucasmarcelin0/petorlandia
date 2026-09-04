@@ -2255,29 +2255,30 @@ def atualizar_bloco_prescricao(bloco_id):
     return jsonify({'success': True})
 
 
+# Os links curtos são só um atalho de URL: quem decide quem pode ver é a
+# página de destino. Eles NUNCA autenticam ninguém por conta própria — logar
+# como o tutor a partir de um id numérico na URL entregaria a conta dele a
+# qualquer visitante que chutasse o número. O token assinado viaja adiante,
+# porque é ele que identifica quem recebeu o link.
 @bp.route('/r/<int:bloco_id>')
 def short_prescription_url(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
-    animal = bloco.animal
-    tutor = animal.owner if animal else None
-
-    if tutor and not current_user.is_authenticated:
-        login_user(tutor, remember=True)
-
-    return redirect(url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id))
+    token = (request.args.get('token') or '').strip()
+    kwargs = {'bloco_id': bloco.id}
+    if token:
+        kwargs['token'] = token
+    return redirect(url_for('consulta_routes.imprimir_bloco_prescricao', **kwargs))
 
 
 @bp.route('/t/<int:tratamento_id>')
 def short_treatment_url(tratamento_id):
     from models.consulta import TratamentoAcompanhamento
     acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
-    animal = acompanhamento.animal
-    tutor = animal.owner if animal else None
-
-    if tutor and not current_user.is_authenticated:
-        login_user(tutor, remember=True)
-
-    return redirect(url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id))
+    token = (request.args.get('token') or '').strip()
+    kwargs = {'tratamento_id': acompanhamento.id}
+    if token:
+        kwargs['token'] = token
+    return redirect(url_for('consulta_routes.acompanhamento_tratamento', **kwargs))
 
 
 @bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
@@ -2286,12 +2287,31 @@ def imprimir_bloco_prescricao(bloco_id):
     animal = bloco.animal
     tutor = animal.owner if animal else None
 
-    if tutor and not current_user.is_authenticated:
-        login_user(tutor, remember=True)
+    # Quem chega pelo link enviado ao tutor traz o token assinado — é ele, e só
+    # ele, que autentica automaticamente. Sem token, o visitante anônimo vai
+    # para o login: entrar como o tutor a partir do id da URL entregaria a
+    # conta dele (e o prontuário do animal) a qualquer um.
+    token = request.args.get('token')
+    token_user = _first_access_user_from_signed_token(token) if token else None
+    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
 
-    owner_access = _current_user_owns_animal(animal)
+    if has_token_access and not current_user.is_authenticated:
+        login_user(token_user, remember=True)
+
+    if not current_user.is_authenticated and not has_token_access:
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    owner_access = _current_user_owns_animal(animal) or has_token_access
     is_vet = current_user.is_authenticated and is_veterinarian(current_user)
     is_admin = current_user.is_authenticated and _is_global_admin(current_user)
+    clinic_access = current_user.is_authenticated and can_view_clinic(current_user, bloco.clinica_id)
+
+    if not owner_access and not is_admin and not clinic_access:
+        abort(404)
+
+    if not owner_access and not is_admin and not is_vet:
+        flash('Apenas veterinários podem imprimir prescrições.', 'danger')
+        return redirect(url_for('index'))
 
     consulta = animal.consultas[-1] if animal and animal.consultas else None
     veterinario = consulta.veterinario if consulta else bloco.saved_by
@@ -2452,10 +2472,27 @@ def acompanhamento_tratamento(tratamento_id):
     animal = acompanhamento.animal
     tutor = animal.owner if animal else None
 
-    if tutor and not current_user.is_authenticated:
-        login_user(tutor, remember=True)
+    # Mesma regra da receita: só o token assinado do link autentica sozinho.
+    token = request.args.get('token')
+    token_user = _first_access_user_from_signed_token(token) if token else None
+    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
 
-    is_owner = _current_user_owns_animal(animal)
+    if has_token_access and not current_user.is_authenticated:
+        login_user(token_user, remember=True)
+
+    if not current_user.is_authenticated and not has_token_access:
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    is_owner = _current_user_owns_animal(animal) or has_token_access
+    is_admin = current_user.is_authenticated and _is_global_admin(current_user)
+    clinic_id = acompanhamento.bloco.clinica_id if acompanhamento.bloco else None
+    clinic_access = current_user.is_authenticated and bool(
+        clinic_id and can_view_clinic(current_user, clinic_id)
+    )
+
+    if not is_owner and not is_admin and not clinic_access:
+        abort(404)
+
     animal = acompanhamento.animal
     bloco = acompanhamento.bloco
     agora = now_in_brazil()

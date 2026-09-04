@@ -1376,12 +1376,26 @@ def vacina_pmo_solicitar():
                 current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
                 flash(_mensagem_falha_solicitacao(exc), 'danger')
 
-    from services.vacina_pmo_service import PMO_REQUEST_SHEET_DEFAULT_TITLE, PMO_REQUEST_SHEET_TITLE_ENV
-    request_sheet_title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+    from sqlalchemy import or_
+
+    from services.vacina_pmo_service import pmo_request_sheet_gids, pmo_request_sheet_titles
+
+    # Renomear a aba na planilha não pode apagar o histórico que o morador vê
+    # aqui. Aceita os nomes que a aba já teve e, além deles, o gid da aba —
+    # que não muda com o renome e cobre até um nome novo desconhecido, que o
+    # app encontra pelo cabeçalho e passa a usar para gravar.
+    request_sheet_titles = pmo_request_sheet_titles()
+    request_sheet_gids = pmo_request_sheet_gids()
+    aba_de_solicitacoes = PmoVaccinationVisit.sheet_title.in_(request_sheet_titles)
+    if request_sheet_gids:
+        aba_de_solicitacoes = or_(
+            aba_de_solicitacoes,
+            PmoVaccinationVisit.sheet_gid.in_(request_sheet_gids),
+        )
     historico = (
         PmoVaccinationVisit.query
         .filter_by(tutor_user_id=current_user.id)
-        .filter(PmoVaccinationVisit.sheet_title == request_sheet_title)
+        .filter(aba_de_solicitacoes)
         .order_by(PmoVaccinationVisit.updated_at.desc(), PmoVaccinationVisit.synced_at.desc())
         .all()
     )

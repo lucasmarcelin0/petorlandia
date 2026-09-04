@@ -52,7 +52,15 @@ PMO_EDUCATIONAL_VIDEO_URL_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEO_URL"
 PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
 
 PMO_REQUEST_SHEET_TITLE_ENV = "PMO_VACCINE_REQUEST_SHEET_TITLE"
-PMO_REQUEST_SHEET_DEFAULT_TITLE = "Solicitacoes"
+# Aba onde caem as solicitações enviadas pelos moradores no site. A busca é
+# tolerante (ver ``_resolve_request_sheet_title``): renomear a aba na planilha
+# — inclusive só trocando acento/caixa — não pode fazer o app criar uma aba
+# nova e escondida, que foi o que aconteceu quando "Solicitacoes" virou
+# "Solicitacoes de vacina" e as solicitações sumiram da vista da equipe.
+PMO_REQUEST_SHEET_DEFAULT_TITLE = "Solicitacoes de vacina"
+# Títulos já usados por esta aba. Servem tanto para reencontrá-la na planilha
+# quanto para não perder o histórico de quem solicitou antes da renomeação.
+PMO_REQUEST_SHEET_LEGACY_TITLES = ("Solicitacoes",)
 PMO_REQUEST_HEADERS = [
     "Nome completo do tutor",
     "Endereço",
@@ -3937,17 +3945,118 @@ def _get_sheets_service_rw():
     return build("sheets", "v4", credentials=creds)
 
 
-def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
+def pmo_request_sheet_titles() -> list[str]:
+    """Títulos aceitos para a aba de solicitações, do preferido ao mais antigo.
+
+    O primeiro é o configurado (env) ou o padrão atual; os demais são nomes que
+    a aba já teve. Serve para reencontrar a aba na planilha e para o histórico
+    do morador continuar listando o que foi enviado antes de cada renomeação.
+    """
+    configured = _normalize_text(os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, ""))
+    titles = [configured or PMO_REQUEST_SHEET_DEFAULT_TITLE]
+    seen = {_pmo_normalize_title(titles[0])}
+    for legacy in (PMO_REQUEST_SHEET_DEFAULT_TITLE, *PMO_REQUEST_SHEET_LEGACY_TITLES):
+        key = _pmo_normalize_title(legacy)
+        if key and key not in seen:
+            seen.add(key)
+            titles.append(legacy)
+    return titles
+
+
+def pmo_request_sheet_gids() -> list[str]:
+    """gids das abas que já receberam solicitações.
+
+    O gid não muda quando a aba é renomeada, então ele é a âncora estável do
+    histórico: se a aba ganhar um nome fora dos apelidos conhecidos — o app
+    ainda a encontra pelo cabeçalho e grava lá —, as solicitações novas
+    continuam aparecendo para o morador, porque caem no mesmo gid de sempre.
+    """
+    rows = (
+        db.session.query(PmoVaccinationVisit.sheet_gid)
+        .filter(PmoVaccinationVisit.sheet_title.in_(pmo_request_sheet_titles()))
+        .filter(PmoVaccinationVisit.sheet_gid.isnot(None))
+        .distinct()
+        .all()
+    )
+    return [gid for (gid,) in rows if gid]
+
+
+def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
+    header = (values or [[]])[0] if values else []
+    return [_normalize_text(item) for item in header] == PMO_REQUEST_HEADERS
+
+
+def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str]) -> str:
+    """Último recurso: acha a aba de solicitações pelo cabeçalho, não pelo nome.
+
+    Cobre um renome que nenhum apelido conhecido alcança. Comparar o cabeçalho
+    (e não só o nome) evita cair na aba de castração, que tem nome parecido e
+    colunas diferentes.
+    """
+    if not titles:
+        return ""
+    ranges = [f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}" for title in titles]
+    try:
+        response = (
+            service.spreadsheets()
+            .values()
+            .batchGet(spreadsheetId=spreadsheet_id, ranges=ranges)
+            .execute()
+        )
+    except Exception:
+        return ""
+    for title, value_range in zip(titles, response.get("valueRanges", [])):
+        if _request_sheet_header_matches(value_range.get("values")):
+            return title
+    return ""
+
+
+def _resolve_request_sheet_title(
+    service, spreadsheet_id: str, title: str, *, create: bool = True
+) -> str:
+    """Devolve o título real da aba de solicitações, criando-a só se faltar.
+
+    A comparação é tolerante (sem acento, sem caixa, apelidos antigos) porque a
+    equipe renomeia a aba na planilha. Antes a busca era literal: quando
+    "Solicitacoes" virou "Solicitacoes de vacina", o app criou uma aba nova e
+    vazia no fim da planilha e passou a gravar ali — as solicitações dos
+    moradores sumiram da aba que a equipe acompanha.
+
+    Com ``create=False`` a função só consulta: não cria a aba nem reescreve
+    cabeçalho, e devolve ``""`` quando não encontra nada. É o que a simulação
+    (``--dry-run``) usa para não tocar na planilha de produção.
+    """
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
         .execute()
     )
-    existing = {
-        sheet["properties"].get("title", ""): sheet["properties"]
-        for sheet in metadata.get("sheets", [])
-    }
-    if title not in existing:
+    existing_titles = []
+    for sheet in metadata.get("sheets", []):
+        existing_title = (sheet.get("properties") or {}).get("title", "")
+        if existing_title:
+            existing_titles.append(existing_title)
+
+    resolved = ""
+    seen: set[str] = set()
+    for candidate in [title, *pmo_request_sheet_titles()]:
+        key = _pmo_normalize_title(candidate)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        for existing_title in existing_titles:
+            if _pmo_normalize_title(existing_title) == key:
+                resolved = existing_title
+                break
+        if resolved:
+            break
+
+    if not resolved:
+        resolved = _find_request_sheet_by_header(service, spreadsheet_id, existing_titles)
+
+    if not resolved:
+        if not create:
+            return ""
         service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
@@ -3962,25 +4071,28 @@ def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
             valueInputOption="RAW",
             body={"values": [PMO_REQUEST_HEADERS]},
         ).execute()
-        return
+        return title
+
+    if not create:
+        return resolved
 
     header_response = (
         service.spreadsheets()
         .values()
         .get(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}",
+            range=f"{_quote_sheet_title(resolved)}!{PMO_REQUEST_HEADER_RANGE}",
         )
         .execute()
     )
-    current_header = (header_response.get("values") or [[]])[0]
-    if [_normalize_text(item) for item in current_header] != PMO_REQUEST_HEADERS:
+    if not _request_sheet_header_matches(header_response.get("values")):
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A1",
+            range=f"{_quote_sheet_title(resolved)}!A1",
             valueInputOption="RAW",
             body={"values": [PMO_REQUEST_HEADERS]},
         ).execute()
+    return resolved
 
 
 def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
@@ -5912,11 +6024,12 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     if not spreadsheet_id:
         raise RuntimeError("URL/ID da planilha PMO inválido.")
 
-    title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+    title = pmo_request_sheet_titles()[0]
     address = normalize_pmo_request_address(payload)
 
     service = _get_sheets_service_rw()
-    _ensure_request_sheet(service, spreadsheet_id, title)
+    # Escreve na aba que já existe (mesmo renomeada), nunca numa cópia nova.
+    title = _resolve_request_sheet_title(service, spreadsheet_id, title)
 
     submitted_at = utcnow()
     timestamp = submitted_at.astimezone().strftime("%d/%m/%Y %H:%M:%S")
@@ -6046,6 +6159,204 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         "address": address,
         "submitted_at": submitted_at.isoformat(),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reconciliação da aba de solicitações
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Colunas que identificam uma solicitação (ver PMO_REQUEST_HEADERS).
+PMO_REQUEST_TUTOR_INDEX = 0
+PMO_REQUEST_ANIMALS_INDEX = 9
+PMO_REQUEST_TIMESTAMP_INDEX = 15
+
+
+def _request_row_key(row: list[str]) -> tuple[str, str, str]:
+    """Identidade de uma solicitação: carimbo + tutor + animais."""
+
+    def cell(index: int) -> str:
+        value = row[index] if index < len(row) else ""
+        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+
+    return (
+        cell(PMO_REQUEST_TIMESTAMP_INDEX),
+        cell(PMO_REQUEST_TUTOR_INDEX),
+        cell(PMO_REQUEST_ANIMALS_INDEX),
+    )
+
+
+def _request_row_is_empty(row: list[str]) -> bool:
+    return not any(str(cell or "").strip() for cell in row)
+
+
+def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[str, Any]:
+    """Reúne na aba oficial as solicitações que caíram em abas duplicadas.
+
+    Enquanto a busca da aba era literal, um renome na planilha fazia o app
+    criar uma cópia com o nome antigo e gravar ali — as solicitações dos
+    moradores continuavam chegando, mas fora da vista da equipe. Além de
+    corrigir o destino das novas, é preciso trazer de volta as que já ficaram
+    para trás; por isso esta rotina roda junto do sync periódico do PMO.
+
+    Copia só o que falta (compara carimbo + tutor + animais, então rodar de
+    novo não duplica), reaponta o ``PmoVaccinationVisit`` para a linha nova —
+    preservando o protocolo público já entregue ao morador — e limpa a aba
+    duplicada para que o sync não recrie visitas repetidas.
+    """
+    summary: dict[str, Any] = {
+        "canonical": "",
+        "duplicates": [],
+        "moved": 0,
+        "repointed": 0,
+        # Linhas movidas sem registro local: a aba duplicada não é limpa
+        # enquanto houver alguma (ver o porquê abaixo).
+        "unmatched": 0,
+        "applied": bool(apply),
+    }
+
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+
+    service = service or _get_sheets_service_rw()
+    # Numa simulação a resolução é só consulta: nada de criar aba nem
+    # reescrever cabeçalho na planilha de produção.
+    canonical = _resolve_request_sheet_title(
+        service, spreadsheet_id, pmo_request_sheet_titles()[0], create=apply
+    )
+    summary["canonical"] = canonical
+    if not canonical:
+        # Só acontece em simulação, quando não existe aba de solicitações:
+        # não há para onde mover nada.
+        return summary
+    canonical_gid = _get_sheet_gid(service, spreadsheet_id, canonical)
+
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    others = []
+    for sheet in metadata.get("sheets", []):
+        other_title = (sheet.get("properties") or {}).get("title", "")
+        if other_title and other_title != canonical:
+            others.append(other_title)
+    if not others:
+        return summary
+
+    header_response = (
+        service.spreadsheets()
+        .values()
+        .batchGet(
+            spreadsheetId=spreadsheet_id,
+            ranges=[
+                f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}" for title in others
+            ],
+        )
+        .execute()
+    )
+    duplicates = [
+        title
+        for title, value_range in zip(others, header_response.get("valueRanges", []))
+        if _request_sheet_header_matches(value_range.get("values"))
+    ]
+    summary["duplicates"] = duplicates
+    if not duplicates:
+        return summary
+
+    canonical_rows = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(canonical)}!{PMO_REQUEST_RANGE_COLS}",
+        )
+        .execute()
+        .get("values", [])
+    )
+    known = {
+        _request_row_key(row) for row in canonical_rows[1:] if not _request_row_is_empty(row)
+    }
+    next_row = len(canonical_rows) + 1
+
+    for title in duplicates:
+        rows = (
+            service.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
+            )
+            .execute()
+            .get("values", [])
+        )
+        pending: list[tuple[int, list[str]]] = []
+        for source_row, row in enumerate(rows[1:], start=2):
+            if _request_row_is_empty(row):
+                continue
+            key = _request_row_key(row)
+            if key in known:
+                continue
+            known.add(key)
+            pending.append((source_row, row))
+
+        if not pending:
+            continue
+
+        summary["moved"] += len(pending)
+        if not apply:
+            continue
+
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(canonical)}!{PMO_REQUEST_RANGE_COLS}",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row for _source_row, row in pending]},
+        ).execute()
+
+        duplicate_gid = _get_sheet_gid(service, spreadsheet_id, title)
+        unmatched = 0
+        try:
+            for offset, (source_row, _row) in enumerate(pending):
+                visit = PmoVaccinationVisit.query.filter_by(
+                    spreadsheet_id=spreadsheet_id,
+                    sheet_gid=duplicate_gid,
+                    source_row=source_row,
+                ).first()
+                if visit is None:
+                    unmatched += 1
+                    continue
+                visit.sheet_gid = canonical_gid
+                visit.sheet_title = canonical
+                visit.source_row = next_row + offset
+                summary["repointed"] += 1
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+        next_row += len(pending)
+        summary["unmatched"] += unmatched
+
+        if unmatched:
+            # Linha movida sem registro local correspondente: ou é linha
+            # digitada à mão na planilha, ou esta execução está ligada a um
+            # banco que não é o de produção. Nos dois casos, apagar a aba
+            # duplicada faria o sync podar visitas que ainda apontam para ela
+            # — junto com o protocolo público já entregue ao morador. As
+            # linhas ficam onde estão; a proxima execução no banco certo
+            # reaponta e limpa.
+            continue
+
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A2:R",
+            body={},
+        ).execute()
+
+    return summary
 
 
 # ──────────────────────────────────────────────────────────────────────────────

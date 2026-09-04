@@ -25,6 +25,7 @@ from services.vacina_pmo_service import (
     preview_vacina_pmo_route,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
+    reconcile_pmo_request_sheets,
     save_vacina_pmo_evaluation,
     submit_vacina_pmo_request,
     undo_last_vacina_pmo_route_optimization,
@@ -981,6 +982,328 @@ def test_submit_vacina_pmo_request_creates_local_pending_request(app, monkeypatc
     assert visit.address == "Rua 20, 1107, Cond.torino casa 73, Jardim Benini"
     assert visit.vaccine_date is None
     assert visit.public_token == result["public_token"]
+
+
+class _FakeRequestSheetsService:
+    """Planilha falsa que registra abas criadas e o destino do append."""
+
+    def __init__(self, titles):
+        self.titles = list(titles)
+        self.created_titles = []
+        self.append_range = ""
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    class _Execute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    def get(self, **kwargs):
+        if kwargs.get("fields") == "sheets.properties":
+            return self._Execute(
+                {
+                    "sheets": [
+                        {"properties": {"title": title, "sheetId": 100 + index}}
+                        for index, title in enumerate(self.titles)
+                    ]
+                }
+            )
+        return self._Execute({"values": [PMO_REQUEST_HEADERS]})
+
+    def update(self, **kwargs):
+        return self._Execute({})
+
+    def batchUpdate(self, **kwargs):
+        for item in kwargs.get("body", {}).get("requests", []):
+            title = item.get("addSheet", {}).get("properties", {}).get("title")
+            if title:
+                self.created_titles.append(title)
+                self.titles.append(title)
+        return self._Execute({})
+
+    def append(self, **kwargs):
+        self.append_range = kwargs["range"]
+        sheet = kwargs["range"].split("!")[0].strip("'")
+        return self._Execute({"updates": {"updatedRange": f"'{sheet}'!A2:R2"}})
+
+
+def _submit_minimal_pmo_request(user_id):
+    return submit_vacina_pmo_request({
+        "tutor": "Bruno Henrique",
+        "phone": "(16) 99999-9999",
+        "address_street": "Rua 20",
+        "address_number": "1107",
+        "address_complement": "",
+        "address_neighborhood": "Jardim Benini",
+        "dogs": 1,
+        "cats": 0,
+        "animal_names": "Lunna",
+        "shift": "Manha",
+        "note": "",
+        "user_id": user_id,
+    })
+
+
+def _pmo_request_user(email):
+    user = User(name="Bruno Henrique", email=email, phone="+5516999999999")
+    user.set_password("PMOA9999")
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
+@pytest.mark.parametrize(
+    "existing_title",
+    ["Solicitacoes de vacina", "Solicitações de Vacina", "Solicitacoes"],
+)
+def test_submit_vacina_pmo_request_reuses_existing_sheet(app, monkeypatch, existing_title):
+    """Aba renomeada (ou com o nome antigo) continua recebendo as solicitações.
+
+    Antes o app comparava o título ao pé da letra: qualquer renome fazia ele
+    criar uma aba nova e vazia, e as solicitações sumiam da vista da equipe.
+    """
+    fake_service = _FakeRequestSheetsService([
+        "Vacinação 2026",
+        existing_title,
+        "Solicitacoes Castracao",
+    ])
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        slug = "".join(ch for ch in existing_title.lower() if ch.isalnum())
+        user = _pmo_request_user(f"bruno-{slug}@example.com")
+        _submit_minimal_pmo_request(user.id)
+        visit = PmoVaccinationVisit.query.filter_by(tutor_user_id=user.id).one()
+
+    assert fake_service.created_titles == []
+    assert fake_service.append_range.startswith(f"'{existing_title}'!")
+    assert visit.sheet_title == existing_title
+
+
+def test_submit_vacina_pmo_request_creates_sheet_only_when_missing(app, monkeypatch):
+    fake_service = _FakeRequestSheetsService(["Vacinação 2026", "Solicitacoes Castracao"])
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        user = _pmo_request_user("bruno-sem-aba@example.com")
+        _submit_minimal_pmo_request(user.id)
+
+    # Nunca reaproveita a aba de castração, que tem nome parecido e outras colunas.
+    assert fake_service.created_titles == ["Solicitacoes de vacina"]
+    assert fake_service.append_range.startswith("'Solicitacoes de vacina'!")
+
+
+class _FakeReconcileSheetsService:
+    """Planilha falsa com abas e valores em memória, para a reconciliação."""
+
+    def __init__(self, sheets):
+        # sheets: {titulo: [linhas]}
+        self.sheets = {title: [list(row) for row in rows] for title, rows in sheets.items()}
+        self.cleared = []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    class _Execute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    @staticmethod
+    def _title_of(range_value):
+        return range_value.split("!")[0].strip("'")
+
+    def get(self, **kwargs):
+        if kwargs.get("fields") == "sheets.properties":
+            return self._Execute(
+                {
+                    "sheets": [
+                        {"properties": {"title": title, "sheetId": 100 + index}}
+                        for index, title in enumerate(self.sheets)
+                    ]
+                }
+            )
+        title = self._title_of(kwargs["range"])
+        rows = self.sheets.get(title, [])
+        if kwargs["range"].endswith("A1:R1"):
+            rows = rows[:1]
+        return self._Execute({"values": [list(row) for row in rows]})
+
+    def batchGet(self, **kwargs):
+        return self._Execute(
+            {
+                "valueRanges": [
+                    {"values": self.sheets.get(self._title_of(item), [[]])[:1]}
+                    for item in kwargs["ranges"]
+                ]
+            }
+        )
+
+    def append(self, **kwargs):
+        title = self._title_of(kwargs["range"])
+        rows = self.sheets.setdefault(title, [])
+        first = len(rows) + 1
+        rows.extend(list(row) for row in kwargs["body"]["values"])
+        return self._Execute({"updates": {"updatedRange": f"'{title}'!A{first}:R{len(rows)}"}})
+
+    def clear(self, **kwargs):
+        title = self._title_of(kwargs["range"])
+        self.cleared.append(title)
+        self.sheets[title] = self.sheets[title][:1]
+        return self._Execute({})
+
+    def update(self, **kwargs):
+        return self._Execute({})
+
+    def batchUpdate(self, **kwargs):
+        return self._Execute({})
+
+
+def _pmo_request_row(tutor, carimbo, animais="Lunna"):
+    row = [""] * 18
+    row[0] = tutor
+    row[1] = "Rua 20"
+    row[2] = "1107"
+    row[4] = "Jardim Benini"
+    row[5] = "16999999999"
+    row[7] = "1"
+    row[8] = "0"
+    row[9] = animais
+    row[15] = carimbo
+    row[16] = "PetOrlandia"
+    return row
+
+
+def _reconcile_fixture():
+    oficial = _pmo_request_row("Tutor Antigo", "10/06/2026 11:03:20")
+    perdida_1 = _pmo_request_row("Tutor Perdido 1", "22/08/2026 18:31:08", "Jujuba")
+    perdida_2 = _pmo_request_row("Tutor Perdido 2", "01/09/2026 16:48:47", "Bela, Duds")
+    return _FakeReconcileSheetsService(
+        {
+            "Vacinação 2026": [["Nome completo do tutor", "Endereço"]],
+            "Solicitacoes de vacina": [PMO_REQUEST_HEADERS, oficial],
+            "Solicitacoes": [PMO_REQUEST_HEADERS, perdida_1, perdida_2],
+        }
+    )
+
+
+def test_reconcile_pmo_request_sheets_moves_lost_rows_and_repoints_visits(app, monkeypatch):
+    """As solicitações que caíram na aba duplicada voltam para a aba oficial."""
+    fake_service = _reconcile_fixture()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        for index, token in enumerate(("token-perdido-1", "token-perdido-2")):
+            db.session.add(
+                PmoVaccinationVisit(
+                    spreadsheet_id="test-sheet-id",
+                    sheet_gid="102",
+                    sheet_title="Solicitacoes",
+                    source_row=2 + index,
+                    tutor_name=f"Tutor Perdido {index + 1}",
+                    address="Rua 20, 1107, Jardim Benini",
+                    phone1="16999999999",
+                    dogs=1,
+                    cats=0,
+                    password=f"PMOA999{index}",
+                    public_token=token,
+                )
+            )
+        db.session.commit()
+
+        result = reconcile_pmo_request_sheets()
+
+        visit = PmoVaccinationVisit.query.filter_by(public_token="token-perdido-1").one()
+        # Protocolo preservado: o morador continua abrindo o mesmo comprovante.
+        assert visit.sheet_title == "Solicitacoes de vacina"
+        assert visit.sheet_gid == "101"
+        assert visit.source_row == 3
+
+    assert result["canonical"] == "Solicitacoes de vacina"
+    assert result["duplicates"] == ["Solicitacoes"]
+    assert result["moved"] == 2
+    assert result["repointed"] == 2
+    assert result["unmatched"] == 0
+    tutores = [row[0] for row in fake_service.sheets["Solicitacoes de vacina"][1:]]
+    assert tutores == ["Tutor Antigo", "Tutor Perdido 1", "Tutor Perdido 2"]
+    # A aba duplicada fica só com o cabeçalho: o sync não recria visitas repetidas.
+    assert fake_service.sheets["Solicitacoes"] == [PMO_REQUEST_HEADERS]
+
+
+def test_reconcile_pmo_request_sheets_keeps_duplicate_when_row_has_no_visit(app, monkeypatch):
+    """Sem registro local para a linha, a aba duplicada não é limpa.
+
+    Limpar ali faria o sync podar visitas que ainda apontam para aquela aba —
+    e com elas o protocolo público já entregue ao morador. Acontece com linha
+    digitada à mão e, principalmente, se a rotina rodar ligada a um banco que
+    não é o de produção.
+    """
+    fake_service = _reconcile_fixture()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets()
+
+    assert result["moved"] == 2
+    assert result["repointed"] == 0
+    assert result["unmatched"] == 2
+    # As linhas chegaram na aba oficial, mas a duplicada continua intacta.
+    assert len(fake_service.sheets["Solicitacoes de vacina"]) == 4
+    assert len(fake_service.sheets["Solicitacoes"]) == 3
+    assert fake_service.cleared == []
+
+
+def test_reconcile_pmo_request_sheets_is_idempotent(app, monkeypatch):
+    fake_service = _reconcile_fixture()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        reconcile_pmo_request_sheets()
+        # Recoloca as mesmas linhas na aba duplicada: rodar de novo não duplica.
+        fake_service.sheets["Solicitacoes"] = [
+            PMO_REQUEST_HEADERS,
+            _pmo_request_row("Tutor Perdido 1", "22/08/2026 18:31:08", "Jujuba"),
+        ]
+        again = reconcile_pmo_request_sheets()
+
+    assert again["moved"] == 0
+    assert len(fake_service.sheets["Solicitacoes de vacina"]) == 4
+
+
+def test_reconcile_pmo_request_sheets_dry_run_does_not_write(app, monkeypatch):
+    fake_service = _reconcile_fixture()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets(apply=False)
+
+    assert result["moved"] == 2
+    assert len(fake_service.sheets["Solicitacoes de vacina"]) == 2
+    assert fake_service.cleared == []
 
 
 def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch):
@@ -3875,3 +4198,113 @@ def test_endpoint_de_frascos_do_dia_le_e_grava(app, client):
 
     aba_sem_data = client.get("/vacina-pmo/dia/Encaixes/frascos")
     assert aba_sem_data.status_code == 400
+
+
+def test_sync_acompanha_a_aba_de_solicitacoes_mesmo_renomeada():
+    """O sync periódico precisa ler a aba de solicitações com o nome atual.
+
+    A lista de abas acompanhadas era literal e só continha "solicitacoes":
+    depois do renome na planilha, o sync parou de ler as solicitações — elas
+    não chegavam ao banco nem ao compilado de status da aba mestre.
+    """
+    from scripts.sync_pmo_master_status_notes import _should_sync_sheet
+
+    assert _should_sync_sheet("Solicitacoes de vacina")
+    assert _should_sync_sheet("Solicitações de Vacina")
+    assert _should_sync_sheet("Solicitacoes")
+    assert _should_sync_sheet("Encaixes")
+    assert not _should_sync_sheet("Controle de doses")
+    assert not _should_sync_sheet("Solicitacoes Castracao")
+
+
+def test_sync_le_a_aba_resolvida_e_ignora_as_duplicadas():
+    """O sync lê a aba que o app usa AGORA, não a lista fixa de apelidos.
+
+    Renomeada para um nome desconhecido, a aba ainda é encontrada pelo
+    cabeçalho e recebe as solicitações — o sync precisa ler a mesma. E as
+    cópias que ficaram para trás não podem ser lidas: a mesma solicitação
+    viraria duas visitas e dois matches no compilado de status.
+    """
+    from scripts.sync_pmo_master_status_notes import _should_sync_sheet
+
+    resolvida = {"fila de vacinacao"}
+    assert _should_sync_sheet("Fila de vacinação", request_titles=resolvida)
+    assert not _should_sync_sheet("Solicitacoes", request_titles=resolvida)
+    assert not _should_sync_sheet("Solicitacoes de vacina", request_titles=resolvida)
+    # As demais abas de fila seguem valendo, com ou sem aba resolvida.
+    assert _should_sync_sheet("Encaixes", request_titles=resolvida)
+    assert _should_sync_sheet("11/08/2026", request_titles=resolvida)
+    assert not _should_sync_sheet("Controle de doses", request_titles=resolvida)
+
+
+def test_reconcile_dry_run_nao_cria_aba_nem_reescreve_cabecalho(app, monkeypatch):
+    """Simulação não toca na planilha, nem quando falta a aba de solicitações."""
+    fake_service = _FakeReconcileSheetsService({"Vacinação 2026": [["Nome completo do tutor"]]})
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        result = reconcile_pmo_request_sheets(apply=False)
+
+    assert result["canonical"] == ""
+    assert result["moved"] == 0
+    assert list(fake_service.sheets) == ["Vacinação 2026"]
+
+
+def test_historico_do_morador_encontra_aba_renomeada_pelo_gid(app, client):
+    """Aba renomeada para nome desconhecido: o histórico acha pelo gid."""
+    with app.app_context():
+        user = User(
+            name="Tutor Gid",
+            email="tutor-gid@example.com",
+            phone="+5516999999994",
+        )
+        user.set_password("PMOA9994")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        db.session.add(Animal(name="Lunna", user_id=user.id, species=species, status="ativo"))
+        # Solicitação antiga, gravada quando a aba ainda tinha nome conhecido.
+        db.session.add(
+            PmoVaccinationVisit(
+                spreadsheet_id="request-sheet",
+                sheet_gid="321",
+                sheet_title="Solicitacoes de vacina",
+                source_row=2,
+                tutor_name=user.name,
+                address="Rua antiga, 1, Centro",
+                phone1=user.phone,
+                dogs=1,
+                cats=0,
+                password="PMOA9994",
+                public_token="token-aba-conhecida",
+                tutor_user_id=user.id,
+            )
+        )
+        # Solicitação nova, gravada depois de a aba virar "Fila de vacinação":
+        # mesmo gid, título que não está em nenhum apelido conhecido.
+        db.session.add(
+            PmoVaccinationVisit(
+                spreadsheet_id="request-sheet",
+                sheet_gid="321",
+                sheet_title="Fila de vacinação",
+                source_row=3,
+                tutor_name=user.name,
+                address="Rua nova, 2, Centro",
+                phone1=user.phone,
+                dogs=1,
+                cats=0,
+                password="PMOA9994",
+                public_token="token-aba-renomeada",
+                tutor_user_id=user.id,
+            )
+        )
+        db.session.commit()
+
+    client.post("/login", data={"login": "tutor-gid@example.com", "password": "PMOA9994"})
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b"token-aba-conhecida" in response.data
+    assert b"token-aba-renomeada" in response.data
