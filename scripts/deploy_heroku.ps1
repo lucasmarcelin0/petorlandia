@@ -53,9 +53,9 @@ function Resolve-Python {
         ((Get-Command python -ErrorAction SilentlyContinue).Source)
     )
     foreach ($candidate in $candidates) {
-        if (-not (Test-Path -LiteralPath $candidate)) { continue }
+        if (-not $candidate -or -not (Test-Path -LiteralPath $candidate)) { continue }
         try {
-            & $candidate --version *> $null
+            & $candidate -c "import flask, alembic" *> $null
         } catch {
             continue
         }
