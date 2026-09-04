@@ -195,10 +195,13 @@
 
 <script>
   const numeroWhatsApp = "{{ bloco.animal.owner.phone | digits_only if bloco.animal.owner and bloco.animal.owner.phone else '' }}";
+  const shortPrescriptionUrl = {{ short_prescription_url|tojson }};
+  const shortTratamentoUrl = {{ short_treatment_url|tojson }};
   const firstAccessUrl = {{ first_access_url|tojson }};
   const prescriptionUrl = {{ prescription_public_url|tojson }};
   const tratamentoUrl = {{ tratamento_first_access_url|tojson }};
   const assinaturaEnviada = {{ bloco.assinatura_enviada|tojson }};
+  const temProdutosLoja = {{ 'true' if compra_em_lote else 'false' }};
   const btnWhats = document.getElementById('btn-whatsapp');
   if (!numeroWhatsApp && btnWhats) {
     btnWhats.style.display = 'none';
@@ -215,13 +218,33 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const blocoAcompanhamento = tratamentoUrl
-      ? `\n\nAcompanhe o tratamento pelo link abaixo: marque os medicamentos comprados, as doses dadas e envie fotos da evolução.\nAcompanhamento: ${tratamentoUrl}`
-      : '';
+    const nomeCompleto = {{ (bloco.animal.owner.name if bloco.animal and bloco.animal.owner and bloco.animal.owner.name else 'Tutor')|tojson }};
+    const primeiroNome = nomeCompleto.trim().split(/\s+/)[0] || 'Tutor';
+    const nomePet = {{ (bloco.animal.name if bloco.animal and bloco.animal.name else 'seu pet')|tojson }};
+    const nomeClinica = {{ (clinica.nome if clinica and clinica.nome else 'PetOrlândia')|tojson }};
+
     const introReceita = assinaturaEnviada
-      ? `Sua receita veterinária assinada de {{ bloco.animal.name }} já está disponível no site.`
-      : `Segue a receita veterinária de {{ bloco.animal.name }}.`;
-    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! ${introReceita}\n\nAcesse pelo primeiro acesso PetOrlandia, confirme seu celular e crie sua senha: ${firstAccessUrl}\n\nSe você já tem senha, use o mesmo link e toque em "Já tenho senha".\n\nLink da receita: ${prescriptionUrl}${blocoAcompanhamento}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+      ? `A receita veterinária assinada de *${nomePet}* já está pronta.`
+      : `A receita veterinária de *${nomePet}* já está pronta.`;
+
+    const linkReceita = shortPrescriptionUrl || firstAccessUrl || prescriptionUrl;
+    const linkTratamento = shortTratamentoUrl || tratamentoUrl;
+
+    const blocoAcompanhamento = linkTratamento
+      ? `\n\n*Acompanhamento do Tratamento:*\nMarque as doses dadas, horários e acompanhe a evolução de ${nomePet}:\n${linkTratamento}`
+      : '';
+
+    const textoMensagem =
+      `Olá, *${primeiroNome}*! ${introReceita}\n\n` +
+      `*Receita Digital & Medicamentos:*\n` +
+      `Acesse a receita oficial para ver as orientações do veterinário e pedir os medicamentos com entrega em Orlândia (compra segura pelo site via Mercado Pago):\n` +
+      `${linkReceita}` +
+      blocoAcompanhamento +
+      `\n\nQualquer dúvida, estamos à disposição.\n` +
+      `Atenciosamente,\n` +
+      `*Equipe ${nomeClinica}*`;
+
+    const mensagem = encodeURIComponent(textoMensagem);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

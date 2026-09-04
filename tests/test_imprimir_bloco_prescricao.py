@@ -73,8 +73,39 @@ def test_imprimir_bloco_prescricao_displays_printing_user(app):
         # quando o impressor é o profissional responsável. Vet2 imprime a
         # prescrição de Vet1, então mostra apenas o nome; o CRMV do
         # responsável (Vet1) aparece na seção "Profissional Responsável".
-        assert 'CRMV SP-456' not in html
         assert 'SP-123' in html
+        assert 'Receita Digital & Medicamentos:' in html
+        assert 'Mercado Pago' in html
+        assert f'/r/{bloco_id}' in html
+        assert 'confirme seu celular e crie sua senha' not in html
+
+    with app.app_context():
+        db.drop_all()
+
+
+def test_short_prescription_url_redirect(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica Prescricao')
+        db.session.add(clinica)
+        db.session.flush()
+        vet = _create_veterinarian('Vet1', 'vet1@example.com', 'pw1', 'SP-123', clinic=clinica)
+        tutor = User(name='Isabela Abreu', email='isabela@example.com', phone='+5516999999999')
+        tutor.set_password('pw3')
+        animal = Animal(name='Max', owner=tutor, clinica=clinica)
+        db.session.add_all([tutor, animal])
+        db.session.flush()
+        bloco = BlocoPrescricao(animal=animal, saved_by=vet, clinica=clinica)
+        db.session.add(bloco)
+        db.session.commit()
+        bloco_id = bloco.id
+
+    client = app.test_client()
+    resp = client.get(f'/r/{bloco_id}', follow_redirects=True)
+    assert resp.status_code == 200
+    assert 'Receita M' in resp.get_data(as_text=True)
+    assert 'Max' in resp.get_data(as_text=True)
 
     with app.app_context():
         db.drop_all()

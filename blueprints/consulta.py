@@ -1,14 +1,14 @@
 """Views do domínio consulta_routes (migrado do app.py)."""
 from flask import Blueprint
 import json, os, re, unicodedata, uuid
-from authz import can_manage_budget, can_view_budget
+from authz import can_manage_budget, can_view_budget, can_view_clinic, _is_global_admin
 from context_processors import _invalidate_cached_context
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from extensions import db
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
-from flask_login import current_user, login_required
+from flask_login import current_user, login_required, login_user
 from forms import AnimalForm, AppointmentForm, EditProfileForm
 from helpers import group_appointments_by_day
 from models import (
@@ -71,7 +71,9 @@ from app import (  # noqa: E402
     _current_user_owns_animal,
     _ensure_clinic_notifications_table,
     _find_protocol_item,
+    _first_access_token_for_user,
     _first_access_url_for_user,
+    _first_access_user_from_signed_token,
     _get_medication_search_cache,
     _mercadopago_notification_url,
     _mp_auto_return_enabled,
@@ -2253,16 +2255,82 @@ def atualizar_bloco_prescricao(bloco_id):
     return jsonify({'success': True})
 
 
+@bp.route('/r/<int:bloco_id>')
+def short_prescription_url(bloco_id):
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    animal = bloco.animal
+    tutor = animal.owner if animal else None
+    target = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
+
+    if current_user.is_authenticated:
+        has_access = (
+            _current_user_owns_animal(animal)
+            or can_view_clinic(current_user, bloco.clinica_id)
+            or _is_global_admin(current_user)
+        )
+        if has_access:
+            return redirect(target)
+
+    if tutor:
+        token = _first_access_token_for_user(tutor)
+        if not current_user.is_authenticated:
+            login_user(tutor, remember=True)
+        return redirect(url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, token=token))
+
+    return redirect(target)
+
+
+@bp.route('/t/<int:tratamento_id>')
+def short_treatment_url(tratamento_id):
+    from models.consulta import TratamentoAcompanhamento
+    acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
+    animal = acompanhamento.animal
+    tutor = animal.owner if animal else None
+    target = url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id)
+
+    if current_user.is_authenticated:
+        clinic_id = acompanhamento.bloco.clinica_id if acompanhamento.bloco else None
+        has_access = (
+            _current_user_owns_animal(animal)
+            or (clinic_id and can_view_clinic(current_user, clinic_id))
+            or _is_global_admin(current_user)
+        )
+        if has_access:
+            return redirect(target)
+
+    if tutor:
+        token = _first_access_token_for_user(tutor)
+        if not current_user.is_authenticated:
+            login_user(tutor, remember=True)
+        return redirect(url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id, token=token))
+
+    return redirect(target)
+
+
 @bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
-@login_required
 def imprimir_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     animal = bloco.animal
-    owner_access = _current_user_owns_animal(animal)
-    if not owner_access:
-        ensure_clinic_access(bloco.clinica_id)
+    tutor = animal.owner if animal else None
 
-    if not owner_access and not is_veterinarian(current_user):
+    token = request.args.get('token')
+    token_user = _first_access_user_from_signed_token(token) if token else None
+    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
+
+    if has_token_access and not current_user.is_authenticated:
+        login_user(token_user, remember=True)
+
+    if not current_user.is_authenticated and not has_token_access:
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    owner_access = _current_user_owns_animal(animal) or has_token_access
+    is_admin = current_user.is_authenticated and _is_global_admin(current_user)
+    clinic_access = current_user.is_authenticated and can_view_clinic(current_user, bloco.clinica_id)
+
+    if not owner_access and not is_admin and not clinic_access:
+        abort(404)
+
+    if not owner_access and not is_admin and not is_veterinarian(current_user):
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
         return redirect(url_for('index'))
 
@@ -2316,6 +2384,12 @@ def imprimir_bloco_prescricao(bloco_id):
         ofertas_receita = build_prescription_offers(bloco.prescricoes)
         compra_em_lote = bulk_buyable_products(ofertas_receita)
 
+    short_prescription_url = url_for('consulta_routes.short_prescription_url', bloco_id=bloco.id, _external=True)
+    short_treatment_url = (
+        url_for('consulta_routes.short_treatment_url', tratamento_id=acompanhamento.id, _external=True)
+        if acompanhamento else None
+    )
+
     return render_template(
         'orcamentos/imprimir_bloco.html',
         bloco=bloco,
@@ -2331,6 +2405,8 @@ def imprimir_bloco_prescricao(bloco_id):
         printed_at=datetime.now(BR_TZ),
         first_access_url=first_access_url,
         prescription_public_url=prescription_public_url,
+        short_prescription_url=short_prescription_url,
+        short_treatment_url=short_treatment_url,
         acompanhamento=acompanhamento,
         pode_ativar_acompanhamento=pode_ativar_acompanhamento,
         pode_enviar_assinatura=pode_enviar_assinatura,
@@ -2411,11 +2487,31 @@ def ativar_acompanhamento_tratamento(bloco_id):
 
 
 @bp.route('/tratamento/<int:tratamento_id>')
-@login_required
 def acompanhamento_tratamento(tratamento_id):
     from services.tratamento import resumo_progresso
+    from models.consulta import TratamentoAcompanhamento
 
-    acompanhamento, is_owner = _tratamento_acompanhamento_or_404(tratamento_id)
+    acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
+    animal = acompanhamento.animal
+    tutor = animal.owner if animal else None
+
+    token = request.args.get('token')
+    token_user = _first_access_user_from_signed_token(token) if token else None
+    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
+
+    if has_token_access and not current_user.is_authenticated:
+        login_user(token_user, remember=True)
+
+    if not current_user.is_authenticated and not has_token_access:
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    is_owner = _current_user_owns_animal(animal) or has_token_access
+    is_admin = current_user.is_authenticated and _is_global_admin(current_user)
+    clinic_id = acompanhamento.bloco.clinica_id if acompanhamento.bloco else None
+    clinic_access = current_user.is_authenticated and bool(clinic_id and can_view_clinic(current_user, clinic_id))
+
+    if not is_owner and not is_admin and not clinic_access:
+        abort(404)
     animal = acompanhamento.animal
     bloco = acompanhamento.bloco
     agora = now_in_brazil()
