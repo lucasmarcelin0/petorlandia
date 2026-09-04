@@ -15,17 +15,27 @@ from extensions import db
 from models import AuditoriaSugestaoClinica, ProtocoloClinico
 
 
+# Pre-compiled regex patterns for token normalization
+_RE_NON_ALPHANUMERIC_SPACES = re.compile(r"[^a-z0-9\s]+")
+_RE_SPACES = re.compile(r"\s+")
+
+
 def _strip_accents(value: str | None) -> str:
     if not value:
         return ""
+    # Fast-path for pure ASCII strings to avoid unicodedata normalization overhead
+    if value.isascii():
+        return value
     normalized = unicodedata.normalize("NFKD", value)
     return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
 def _normalize_token(value: str | None) -> str:
+    if not value:
+        return ""
     text = _strip_accents(value).lower().strip()
-    text = re.sub(r"[^a-z0-9\s]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = _RE_NON_ALPHANUMERIC_SPACES.sub(" ", text)
+    return _RE_SPACES.sub(" ", text).strip()
 
 
 def _tokenize(value: str | None) -> list[str]:
