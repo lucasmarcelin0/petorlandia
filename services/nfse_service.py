@@ -31,6 +31,7 @@ from models import (
     NfseXml,
 )
 from security.crypto import MissingMasterKeyError, decrypt_text, encrypt_text_for_clinic
+from security.redact import redact_sensitive_text, redact_xml
 from services.fiscal.nfse_service import (
     NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY,
     VETERINARY_NFSE_SERVICE_DEFAULTS,
@@ -610,17 +611,9 @@ def _compact_xml(xml_text: str, max_length: int = 500) -> str:
 
 
 def _redact_sensitive_xml_text(xml_text: str) -> str:
-    text = xml_text or ""
-    for tag in ("Cpf", "Cnpj", "InscricaoMunicipal", "Senha", "Password", "Token"):
-        text = re.sub(
-            rf"(<(?:\w+:)?{tag}\b[^>]*>)(.*?)(</(?:\w+:)?{tag}>)",
-            rf"\1***\3",
-            text,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-    text = re.sub(r"\b\d{11}\b", "***", text)
-    text = re.sub(r"\b\d{14}\b", "***", text)
-    return text
+    if not xml_text:
+        return ""
+    return redact_xml(xml_text) or redact_sensitive_text(xml_text) or ""
 
 
 def _credentials_from_env(clinica: Clinica, municipio_key: str) -> NfseCredentials:

@@ -105,3 +105,21 @@ def test_xml_redaction_mascara_conteudo_de_tags_e_digitos_sensiveis():
     assert "10987654321" not in compact
     assert "00998877000166" not in compact
     assert "<Cpf>***</Cpf>" in redacted
+
+
+def test_compact_xml_redacts_masked_pii_and_sensitive_tags():
+    xml = (
+        "<Resposta>"
+        "<Mensagem>Erro para CPF mascarado 123.456.789-00 e CNPJ 12.345.678/0001-90</Mensagem>"
+        "<InscricaoEstadual>999888777</InscricaoEstadual>"
+        "<ChaveAcesso>33333333333333333333333333333333333333333333</ChaveAcesso>"
+        "</Resposta>"
+    )
+
+    compact = _compact_xml(xml)
+
+    assert "123.456.789-00" not in compact
+    assert "12.345.678/0001-90" not in compact
+    assert "999888777" not in compact
+    assert "33333333333333333333333333333333333333333333" not in compact
+    assert "***" in compact
