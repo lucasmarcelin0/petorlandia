@@ -11,35 +11,51 @@
   </script>
 {% endblock %}
 {% block main %}
-<div class="container mt-4">
-  <h1 class="mb-1 text-center h2">🐾 Animais 🐾</h1>
-  <p class="text-center text-muted mb-3">Encontre animais para adoção, à venda ou perdidos — ou veja só os seus.</p>
+<div class="pets-page tutor-page-shell mt-4">
+  <header class="tutor-page-heading">
+    <div>
+      {% if scope == 'meus' %}
+      <p class="tutor-page-heading__eyebrow">Área de cuidado</p>
+      <h1><i class="fa-solid fa-paw me-2 text-primary" aria-hidden="true"></i>Meus pets</h1>
+      <p class="tutor-page-heading__description">Acompanhe os seus animais, histórico e próximos cuidados com privacidade.</p>
+      {% else %}
+      <p class="tutor-page-heading__eyebrow">Comunidade PetOrlândia</p>
+      <h1><i class="fa-solid fa-paw me-2 text-primary" aria-hidden="true"></i>Explorar pets</h1>
+      <p class="tutor-page-heading__description">Encontre animais para adoção, à venda ou procure um pet perdido.</p>
+      {% endif %}
+    </div>
+    {% if current_user.is_authenticated and scope == 'meus' %}
+    <a href="{{ url_for('add_animal') }}" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Adicionar pet
+    </a>
+    {% endif %}
+  </header>
 
-  <!-- Escopos rápidos: deixa claro o que está sendo listado -->
-  <div class="d-flex justify-content-center flex-wrap gap-2 mb-4">
+  <!-- Os modos públicos continuam disponíveis, mas a gestão pessoal é uma área distinta. -->
+  <nav class="pets-page__scope" aria-label="Escolher o que deseja visualizar">
     {% if current_user.is_authenticated %}
     <a href="{{ url_for('list_animals', scope='meus') }}"
        class="btn btn-sm rounded-pill px-3 {{ 'btn-primary' if scope == 'meus' else 'btn-outline-primary' }}">
-      🐶 Meus pets
+      <i class="fa-solid fa-heart me-1" aria-hidden="true"></i>Meus pets
     </a>
     {% endif %}
     <a href="{{ url_for('list_animals', modo='doação') }}"
        class="btn btn-sm rounded-pill px-3 {{ 'btn-success' if modo == 'doação' and scope != 'meus' else 'btn-outline-success' }}">
-      💚 Adoção
+      Adoção
     </a>
     <a href="{{ url_for('list_animals', modo='venda') }}"
        class="btn btn-sm rounded-pill px-3 {{ 'btn-warning' if modo == 'venda' and scope != 'meus' else 'btn-outline-warning' }}">
-      🛒 Venda
+      Venda
     </a>
     <a href="{{ url_for('list_animals', modo='perdido') }}"
        class="btn btn-sm rounded-pill px-3 {{ 'btn-danger' if modo == 'perdido' and scope != 'meus' else 'btn-outline-danger' }}">
-      📢 Perdidos
+      Pets perdidos
     </a>
     <a href="{{ url_for('list_animals') }}"
        class="btn btn-sm rounded-pill px-3 {{ 'btn-secondary' if not scope and (not modo or modo == 'todos') else 'btn-outline-secondary' }}">
-      Todos
+      Explorar todos
     </a>
-  </div>
+  </nav>
 
   {% if is_admin %}
   <div class="text-end mb-3">
@@ -51,13 +67,16 @@
   </div>
   {% endif %}
 
-  <!-- Filtro -->
-  <form id="filterForm" method="GET" action="{{ url_for('list_animals') }}" class="mb-4">
+  <!-- Filtros ficam recolhidos na área pessoal para a saúde dos pets vir primeiro. -->
+  <details class="pets-page__filters mb-4"{% if scope != 'meus' %} open{% endif %}>
+    <summary>{% if scope == 'meus' %}Filtrar meus pets{% else %}Filtrar animais{% endif %}</summary>
+  <form id="filterForm" method="GET" action="{{ url_for('list_animals') }}">
     {% if scope %}<input type="hidden" name="scope" value="{{ scope }}">{% endif %}
     <div class="row g-2 justify-content-center">
       <div class="col-md-3">
         <input type="text" name="name" value="{{ name or '' }}" class="form-control rounded-pill" placeholder="Nome do pet">
       </div>
+      {% if scope != 'meus' %}
       <div class="col-md-3">
         {% if is_admin %}
         <input type="search" name="tutor_search" value="{{ tutor_search or tutor_name or '' }}" class="form-control rounded-pill" placeholder="Tutor: nome, CPF, telefone, e-mail..." aria-label="Buscar tutor por nome, CPF, telefone, e-mail, RG ou endereço">
@@ -65,6 +84,7 @@
         <input type="text" name="tutor_name" value="{{ tutor_name or '' }}" class="form-control rounded-pill" placeholder="Nome do tutor">
         {% endif %}
       </div>
+      {% endif %}
       <div class="col-md-2">
         <select name="modo" class="form-select rounded-pill">
           <option value="todos">Todos os Modos</option>
@@ -108,6 +128,7 @@
       </div>
     </div>
   </form>
+  </details>
 
   <!-- Cards -->
   <div id="animals-container">
