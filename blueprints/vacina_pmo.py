@@ -1580,14 +1580,33 @@ def castracao_pmo_solicitar():
                 current_app.logger.exception("Falha ao enviar solicitação Castração PMO")
                 flash(_mensagem_falha_solicitacao(exc), 'danger')
 
-    request_sheet_title = os.getenv(
-        PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
-        PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE,
-    )
+    from sqlalchemy import or_
+
+    from services.castracao_pmo_service import pmo_castration_request_sheet_titles
+
+    # Mesma regra da vacina: aceita os nomes que a aba já teve e, além deles, o
+    # gid — que não muda com o renome —, para o morador não perder de vista a
+    # solicitação que ele mesmo enviou.
+    request_sheet_titles = pmo_castration_request_sheet_titles()
+    request_sheet_gids = [
+        gid
+        for (gid,) in db.session.query(PmoCastrationRequest.sheet_gid)
+        .filter(PmoCastrationRequest.sheet_title.in_(request_sheet_titles))
+        .filter(PmoCastrationRequest.sheet_gid.isnot(None))
+        .distinct()
+        .all()
+        if gid
+    ]
+    aba_de_solicitacoes = PmoCastrationRequest.sheet_title.in_(request_sheet_titles)
+    if request_sheet_gids:
+        aba_de_solicitacoes = or_(
+            aba_de_solicitacoes,
+            PmoCastrationRequest.sheet_gid.in_(request_sheet_gids),
+        )
     historico = (
         PmoCastrationRequest.query
         .filter_by(tutor_user_id=current_user.id)
-        .filter(PmoCastrationRequest.sheet_title == request_sheet_title)
+        .filter(aba_de_solicitacoes)
         .order_by(PmoCastrationRequest.updated_at.desc(), PmoCastrationRequest.synced_at.desc())
         .all()
     )

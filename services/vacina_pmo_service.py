@@ -3981,21 +3981,27 @@ def pmo_request_sheet_gids() -> list[str]:
     return [gid for (gid,) in rows if gid]
 
 
-def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
+def _sheet_header_matches(values: list[list[str]] | None, headers: list[str]) -> bool:
     header = (values or [[]])[0] if values else []
-    return [_normalize_text(item) for item in header] == PMO_REQUEST_HEADERS
+    return [_normalize_text(item) for item in header] == headers
 
 
-def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str]) -> str:
-    """Último recurso: acha a aba de solicitações pelo cabeçalho, não pelo nome.
+def _request_sheet_header_matches(values: list[list[str]] | None) -> bool:
+    return _sheet_header_matches(values, PMO_REQUEST_HEADERS)
+
+
+def _find_sheet_by_header(
+    service, spreadsheet_id: str, titles: list[str], *, headers: list[str], header_range: str
+) -> str:
+    """Último recurso: acha a aba pelo cabeçalho, não pelo nome.
 
     Cobre um renome que nenhum apelido conhecido alcança. Comparar o cabeçalho
-    (e não só o nome) evita cair na aba de castração, que tem nome parecido e
-    colunas diferentes.
+    (e não só o nome) impede confundir as abas de vacina e de castração, que
+    têm nome parecido e colunas diferentes.
     """
     if not titles:
         return ""
-    ranges = [f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}" for title in titles]
+    ranges = [f"{_quote_sheet_title(title)}!{header_range}" for title in titles]
     try:
         response = (
             service.spreadsheets()
@@ -4006,25 +4012,32 @@ def _find_request_sheet_by_header(service, spreadsheet_id: str, titles: list[str
     except Exception:
         return ""
     for title, value_range in zip(titles, response.get("valueRanges", [])):
-        if _request_sheet_header_matches(value_range.get("values")):
+        if _sheet_header_matches(value_range.get("values"), headers):
             return title
     return ""
 
 
-def _resolve_request_sheet_title(
-    service, spreadsheet_id: str, title: str, *, create: bool = True
+def resolve_request_sheet_title(
+    service,
+    spreadsheet_id: str,
+    wanted: str,
+    *,
+    aliases: list[str],
+    headers: list[str],
+    header_range: str,
+    create: bool = True,
 ) -> str:
-    """Devolve o título real da aba de solicitações, criando-a só se faltar.
+    """Título real de uma aba de solicitações, criando-a só se faltar mesmo.
 
-    A comparação é tolerante (sem acento, sem caixa, apelidos antigos) porque a
-    equipe renomeia a aba na planilha. Antes a busca era literal: quando
-    "Solicitacoes" virou "Solicitacoes de vacina", o app criou uma aba nova e
-    vazia no fim da planilha e passou a gravar ali — as solicitações dos
-    moradores sumiram da aba que a equipe acompanha.
+    A busca é tolerante de propósito — sem acento, sem caixa, apelidos antigos
+    e, em último caso, pelo cabeçalho — porque a equipe renomeia as abas na
+    planilha. Com busca literal, um renome fazia o app criar uma cópia vazia e
+    gravar ali: as solicitações continuavam chegando, mas fora da vista de
+    quem trabalha na fila. Foi o que aconteceu com a aba da vacina quando
+    "Solicitacoes" virou "Solicitacoes de vacina".
 
-    Com ``create=False`` a função só consulta: não cria a aba nem reescreve
-    cabeçalho, e devolve ``""`` quando não encontra nada. É o que a simulação
-    (``--dry-run``) usa para não tocar na planilha de produção.
+    Com ``create=False`` a função só consulta — não cria aba nem reescreve
+    cabeçalho — e devolve ``""`` quando não encontra nada.
     """
     metadata = (
         service.spreadsheets()
@@ -4039,7 +4052,7 @@ def _resolve_request_sheet_title(
 
     resolved = ""
     seen: set[str] = set()
-    for candidate in [title, *pmo_request_sheet_titles()]:
+    for candidate in [wanted, *aliases]:
         key = _pmo_normalize_title(candidate)
         if not key or key in seen:
             continue
@@ -4052,26 +4065,24 @@ def _resolve_request_sheet_title(
             break
 
     if not resolved:
-        resolved = _find_request_sheet_by_header(service, spreadsheet_id, existing_titles)
+        resolved = _find_sheet_by_header(
+            service, spreadsheet_id, existing_titles, headers=headers, header_range=header_range
+        )
 
     if not resolved:
         if not create:
             return ""
         service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
-            body={
-                "requests": [
-                    {"addSheet": {"properties": {"title": title}}}
-                ]
-            },
+            body={"requests": [{"addSheet": {"properties": {"title": wanted}}}]},
         ).execute()
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A1",
+            range=f"{_quote_sheet_title(wanted)}!A1",
             valueInputOption="RAW",
-            body={"values": [PMO_REQUEST_HEADERS]},
+            body={"values": [headers]},
         ).execute()
-        return title
+        return wanted
 
     if not create:
         return resolved
@@ -4081,18 +4092,33 @@ def _resolve_request_sheet_title(
         .values()
         .get(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(resolved)}!{PMO_REQUEST_HEADER_RANGE}",
+            range=f"{_quote_sheet_title(resolved)}!{header_range}",
         )
         .execute()
     )
-    if not _request_sheet_header_matches(header_response.get("values")):
+    if not _sheet_header_matches(header_response.get("values"), headers):
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=f"{_quote_sheet_title(resolved)}!A1",
             valueInputOption="RAW",
-            body={"values": [PMO_REQUEST_HEADERS]},
+            body={"values": [headers]},
         ).execute()
     return resolved
+
+
+def _resolve_request_sheet_title(
+    service, spreadsheet_id: str, title: str, *, create: bool = True
+) -> str:
+    """Aba de solicitações da VACINA — ver ``resolve_request_sheet_title``."""
+    return resolve_request_sheet_title(
+        service,
+        spreadsheet_id,
+        title,
+        aliases=pmo_request_sheet_titles(),
+        headers=PMO_REQUEST_HEADERS,
+        header_range=PMO_REQUEST_HEADER_RANGE,
+        create=create,
+    )
 
 
 def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
@@ -6049,6 +6075,49 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         note_parts.append(f"CPF: {cpf_value}")
     observacao = " | ".join(note_parts)
 
+    # Quem já se inscreveu e ainda não foi atendido não vira linha nova: a
+    # linha dele é atualizada com os dados deste envio (que são os mais
+    # recentes) e ganha a marca de quantos envios houve. A posição na aba é a
+    # da primeira inscrição — quem se inscreveu antes não perde a vez.
+    existing_rows = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
+        )
+        .execute()
+        .get("values", [])
+    )
+    identity = _request_row_identity(
+        [
+            _normalize_text(payload.get("tutor")), "", "", "", "",
+            _normalize_text(payload.get("phone")), "", "", "", "", "", "", "", "", "", "", "",
+            str(payload.get("user_id") or ""),
+        ]
+    )
+    target_row = 0
+    first_timestamp = timestamp
+    submissions = 1
+    if identity:
+        for index, existing in enumerate(existing_rows[1:], start=2):
+            if _request_row_identity(existing) != identity:
+                continue
+            if not _request_row_is_pending(existing):
+                continue
+            target_row = index
+            previous_first, previous_count = _request_note_submission_info(
+                _cell(existing, PMO_REQUEST_NOTE_INDEX)
+            )
+            previous_stamp = _normalize_text(_cell(existing, PMO_REQUEST_TIMESTAMP_INDEX))
+            first_timestamp = previous_first or previous_stamp or timestamp
+            submissions = previous_count + 1
+            break
+
+    observacao = _request_note_with_submissions(
+        observacao, first_timestamp=first_timestamp, count=submissions
+    )
+
     row = [
         _normalize_text(payload.get("tutor")),
         address["street"],
@@ -6070,27 +6139,57 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         str(payload.get("user_id") or ""),
     ]
 
-    response = (
-        service.spreadsheets()
-        .values()
-        .append(
-            spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
-            valueInputOption="USER_ENTERED",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [row]},
+    if target_row:
+        updated_range = (
+            service.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=spreadsheet_id,
+                range=f"{_quote_sheet_title(title)}!A{target_row}:R{target_row}",
+                valueInputOption="USER_ENTERED",
+                body={"values": [row]},
+            )
+            .execute()
+            .get("updatedRange", "")
         )
-        .execute()
-    )
+        source_row = target_row
+    else:
+        response = (
+            service.spreadsheets()
+            .values()
+            .append(
+                spreadsheetId=spreadsheet_id,
+                range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body={"values": [row]},
+            )
+            .execute()
+        )
 
-    updated_range = response.get("updates", {}).get("updatedRange", "")
+        updated_range = response.get("updates", {}).get("updatedRange", "")
 
-    # Determina o número da linha inserida para compor o source_row
-    source_row = 0
-    import re as _re
-    m = _re.search(r"!A(\d+)", updated_range)
-    if m:
-        source_row = int(m.group(1))
+        # Determina o número da linha inserida para compor o source_row
+        source_row = 0
+        m = re.search(r"!A(\d+)", updated_range)
+        if m:
+            source_row = int(m.group(1))
+
+    # O carimbo vai como texto literal. Com USER_ENTERED o Google interpreta
+    # "22/08/2026 18:31:08" pelo locale da planilha e guarda um número de série
+    # — foi assim que parte das linhas antigas ficou com carimbo ilegível.
+    if source_row:
+        try:
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"{_quote_sheet_title(title)}!P{source_row}",
+                valueInputOption="RAW",
+                body={"values": [[timestamp]]},
+            ).execute()
+        except Exception:
+            current_app.logger.warning(
+                "Nao consegui gravar o carimbo da solicitacao como texto.", exc_info=True
+            )
 
     # Obtém o gid da aba de solicitações
     sheet_gid = _get_sheet_gid(service, spreadsheet_id, title)
@@ -6167,8 +6266,79 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
 
 # Colunas que identificam uma solicitação (ver PMO_REQUEST_HEADERS).
 PMO_REQUEST_TUTOR_INDEX = 0
+PMO_REQUEST_PHONE_INDEX = 5
+PMO_REQUEST_NOTE_INDEX = 10
 PMO_REQUEST_ANIMALS_INDEX = 9
 PMO_REQUEST_TIMESTAMP_INDEX = 15
+PMO_REQUEST_USER_ID_INDEX = 17
+# Colunas preenchidas quando a casa já foi atendida (data da visita, contagem
+# de vacinados, quem atendeu). Uma linha com qualquer uma delas é histórico: o
+# reenvio do morador nunca a sobrescreve nem a funde com outra.
+PMO_REQUEST_DONE_INDEXES = (11, 12, 13, 14)
+# Marca de reenvio dentro da observação. Uma pessoa que se inscreve de novo não
+# vira linha nova: a linha dela é atualizada com os dados do último envio e
+# ganha esta marca, para a equipe saber que houve mais de uma inscrição.
+_PMO_RESUBMISSION_RE = re.compile(
+    r"\s*\|?\s*(\d+)\s+envios(?:\s+\(1º em ([^)]*)\))?", re.IGNORECASE
+)
+
+
+def _pmo_request_timestamp_is_readable(value: str) -> bool:
+    """O Sheets às vezes converte o carimbo em número de série; ignore esses."""
+    return bool(re.match(r"^\d{2}/\d{2}/\d{4}", _normalize_text(value)))
+
+
+def _request_note_submission_info(note: Any) -> tuple[str, int]:
+    """Lê da observação quantos envios já houve e a data do primeiro."""
+    match = _PMO_RESUBMISSION_RE.search(_normalize_text(note))
+    if not match:
+        return "", 1
+    try:
+        count = int(match.group(1))
+    except (TypeError, ValueError):
+        count = 1
+    return _normalize_text(match.group(2) or ""), max(count, 1)
+
+
+def _request_note_with_submissions(note: Any, *, first_timestamp: str, count: int) -> str:
+    """Devolve a observação com a marca de reenvio atualizada (sem duplicar)."""
+    base = _PMO_RESUBMISSION_RE.sub("", _normalize_text(note)).strip(" |")
+    if count <= 1:
+        return base
+    if _pmo_request_timestamp_is_readable(first_timestamp):
+        marca = f"{count} envios (1º em {first_timestamp})"
+    else:
+        marca = f"{count} envios"
+    return f"{base} | {marca}" if base else marca
+
+
+def _request_row_identity(row: list[Any]) -> str:
+    """Quem é o solicitante desta linha, para reconhecer o mesmo morador.
+
+    O id do usuário PetOrlândia é o mais confiável — é o próprio app que grava.
+    Sem ele (linha digitada à mão), exige nome E telefone juntos: telefone
+    sozinho junta gente diferente que usa o mesmo número comercial ou de
+    recado, e nome sozinho junta homônimos. Sem os dois, a linha não é
+    candidata a fusão — repetir é menos grave do que misturar duas famílias.
+    """
+    user_id = _normalize_text(_cell(row, PMO_REQUEST_USER_ID_INDEX))
+    # O Sheets devolve número inteiro como "4522.0"; normaliza para casar.
+    if user_id:
+        if re.fullmatch(r"\d+\.0+", user_id):
+            user_id = user_id.split(".")[0]
+        if user_id not in {"", "0"}:
+            return f"user:{user_id}"
+
+    phone = re.sub(r"\D+", "", _cell(row, PMO_REQUEST_PHONE_INDEX))
+    name = _pmo_normalize_title(_cell(row, PMO_REQUEST_TUTOR_INDEX))
+    if name and len(phone) >= 8:
+        return f"nome+fone:{name}|{phone[-11:]}"
+    return ""
+
+
+def _request_row_is_pending(row: list[Any]) -> bool:
+    """A casa ainda não foi atendida — a linha pode receber um novo envio."""
+    return not any(_normalize_text(_cell(row, index)) for index in PMO_REQUEST_DONE_INDEXES)
 
 
 def _request_row_key(row: list[str]) -> tuple[str, str, str]:
@@ -6211,6 +6381,8 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         # Linhas movidas sem registro local: a aba duplicada não é limpa
         # enquanto houver alguma (ver o porquê abaixo).
         "unmatched": 0,
+        # Inscrições repetidas do mesmo morador reunidas numa linha só.
+        "merged": 0,
         "applied": bool(apply),
     }
 
@@ -6232,6 +6404,14 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         return summary
     canonical_gid = _get_sheet_gid(service, spreadsheet_id, canonical)
 
+    def _finalizar(resumo: dict[str, Any]) -> dict[str, Any]:
+        # A aba oficial pode ter repetições mesmo sem nenhuma aba duplicada,
+        # então a fusão roda em todos os caminhos de saída.
+        resumo["merged"] = _merge_duplicate_request_rows(
+            service, spreadsheet_id, canonical, canonical_gid, apply=apply
+        )
+        return resumo
+
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
@@ -6243,7 +6423,7 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         if other_title and other_title != canonical:
             others.append(other_title)
     if not others:
-        return summary
+        return _finalizar(summary)
 
     header_response = (
         service.spreadsheets()
@@ -6263,7 +6443,7 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
     ]
     summary["duplicates"] = duplicates
     if not duplicates:
-        return summary
+        return _finalizar(summary)
 
     canonical_rows = (
         service.spreadsheets()
@@ -6356,7 +6536,153 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
             body={},
         ).execute()
 
-    return summary
+    return _finalizar(summary)
+
+
+def _merge_duplicate_request_rows(
+    service, spreadsheet_id: str, title: str, sheet_gid: str, *, apply: bool = True
+) -> int:
+    """Reúne numa linha só as inscrições repetidas do mesmo morador.
+
+    A mesma pessoa se inscrevendo de novo (dois cliques, ou voltando para
+    corrigir um dado) rendia uma linha por envio, e a equipe via a mesma casa
+    várias vezes na fila. Aqui cada morador fica com uma linha: a posição é a
+    da primeira inscrição — quem chegou antes não perde a vez — e o conteúdo é
+    o do último envio, que é o dado mais atual. A observação registra quantos
+    envios houve.
+
+    Linhas já atendidas (com data da visita, contagem de vacinados ou quem
+    atendeu) nunca são fundidas nem movidas: ali houve trabalho de campo.
+    """
+    rows = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
+        )
+        .execute()
+        .get("values", [])
+    )
+    if len(rows) < 2:
+        return 0
+
+    entries: list[dict[str, Any]] = []
+    by_identity: dict[str, int] = {}
+    for source_row, row in enumerate(rows[1:], start=2):
+        if _request_row_is_empty(row):
+            continue
+        padded = (list(row) + [""] * 18)[:18]
+        identity = _request_row_identity(padded)
+        position = by_identity.get(identity) if identity else None
+        if position is None or not _request_row_is_pending(padded):
+            if identity and _request_row_is_pending(padded):
+                by_identity[identity] = len(entries)
+            entries.append({"row": padded, "sources": [source_row]})
+            continue
+
+        # Repetição: fica o conteúdo do envio mais recente, na posição do
+        # primeiro. A contagem soma o que cada linha já registrava.
+        entry = entries[position]
+        first_stamp, first_count = _request_note_submission_info(
+            _cell(entry["row"], PMO_REQUEST_NOTE_INDEX)
+        )
+        _new_stamp, new_count = _request_note_submission_info(
+            _cell(padded, PMO_REQUEST_NOTE_INDEX)
+        )
+        stamp = first_stamp or _normalize_text(
+            _cell(entry["row"], PMO_REQUEST_TIMESTAMP_INDEX)
+        )
+        padded[PMO_REQUEST_NOTE_INDEX] = _request_note_with_submissions(
+            _cell(padded, PMO_REQUEST_NOTE_INDEX),
+            first_timestamp=stamp,
+            count=first_count + new_count,
+        )
+        entry["row"] = padded
+        entry["sources"].append(source_row)
+
+    merged = sum(len(entry["sources"]) - 1 for entry in entries)
+    if not merged or not apply:
+        return merged
+
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{_quote_sheet_title(title)}!A2:R{len(entries) + 1}",
+        valueInputOption="USER_ENTERED",
+        body={"values": [entry["row"] for entry in entries]},
+    ).execute()
+    if len(entries) + 1 < len(rows):
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A{len(entries) + 2}:R{len(rows)}",
+            body={},
+        ).execute()
+
+    # Os carimbos voltam como texto literal (ver submit_vacina_pmo_request).
+    stamps = [[_cell(entry["row"], PMO_REQUEST_TIMESTAMP_INDEX)] for entry in entries]
+    try:
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!P2:P{len(entries) + 1}",
+            valueInputOption="RAW",
+            body={"values": stamps},
+        ).execute()
+    except Exception:
+        current_app.logger.warning(
+            "Nao consegui regravar os carimbos como texto.", exc_info=True
+        )
+
+    _repoint_visits_after_merge(spreadsheet_id, sheet_gid, title, entries)
+    return merged
+
+
+def _repoint_visits_after_merge(
+    spreadsheet_id: str, sheet_gid: str, title: str, entries: list[dict[str, Any]]
+) -> None:
+    """Reaponta os registros locais para as linhas depois da fusão.
+
+    Cada grupo fundido guarda a visita do envio mais recente — é dela que vêm
+    os dados que ficaram na planilha. As demais só são apagadas se não tiverem
+    trabalho de campo registrado; com vacina aplicada, a visita fica (mesma
+    trava que o sync usa em ``prune_orphans``).
+    """
+    if not sheet_gid:
+        return
+    visits = {
+        visit.source_row: visit
+        for visit in PmoVaccinationVisit.query.filter_by(
+            spreadsheet_id=spreadsheet_id, sheet_gid=sheet_gid
+        ).all()
+    }
+    if not visits:
+        return
+
+    try:
+        # Duas fases: as linhas só encolhem, então mover direto faria uma
+        # visita cair em cima do source_row de outra ainda não movida.
+        parked: list[tuple[PmoVaccinationVisit, int]] = []
+        for position, entry in enumerate(entries, start=2):
+            keep_from = entry["sources"][-1]
+            for source_row in entry["sources"]:
+                visit = visits.get(source_row)
+                if visit is None:
+                    continue
+                if source_row == keep_from:
+                    parked.append((visit, position))
+                elif _pmo_visit_has_field_record(visit):
+                    parked.append((visit, position))
+                else:
+                    db.session.delete(visit)
+        for visit, _destino in parked:
+            visit.source_row = -abs(visit.id or 1) - 100000
+        db.session.flush()
+        for visit, destino in parked:
+            visit.source_row = destino
+            visit.sheet_title = title
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 # ──────────────────────────────────────────────────────────────────────────────
