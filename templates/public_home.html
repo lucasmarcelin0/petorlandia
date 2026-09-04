@@ -1,7 +1,8 @@
 {% extends "layout.html" %}
 
-{% block page_title %}PetOrlândia — toda a jornada veterinária em um só lugar{% endblock %}
-{% block meta_description %}Tutores, clínicas, veterinários e estudantes conectados à mesma jornada de cuidado: serviços, histórico, agenda e aprendizado em uma única plataforma.{% endblock %}
+{% block page_title %}PetOrlândia (Pet Orlândia) — Plataforma e Gestão Veterinária{% endblock %}
+{% block meta_description %}A PetOrlândia (Pet Orlândia) conecta tutores, clínicas, veterinários e estudantes à mesma jornada de cuidado: serviços, histórico, agenda e aprendizado em uma única plataforma.{% endblock %}
+{% block meta_keywords %}petorlandia, pet orlandia, pet orlândia, sistema clinica veterinaria, software veterinario, prontuario veterinario, carteira de vacinacao pet, saude animal orlandia{% endblock %}
 {% block structured_data %}
 <script type="application/ld+json">
   {{ {
@@ -11,13 +12,24 @@
         "@type": "Organization",
         "@id": url_for("index", _external=True) ~ "#organization",
         "name": "PetOrlândia",
+        "alternateName": [
+          "Pet Orlândia",
+          "Petorlandia",
+          "Pet Orlandia"
+        ],
         "url": url_for("index", _external=True),
+        "logo": url_for("static", filename="img/og-petorlandia.png", _external=True),
         "email": support_contact_email,
         "founder": {"@type": "Person", "name": "Lucas Marcelino Campos Ferreira"}
       },
       {
         "@type": "SoftwareApplication",
         "name": "PetOrlândia",
+        "alternateName": [
+          "Pet Orlândia",
+          "Petorlandia",
+          "Pet Orlandia"
+        ],
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
         "description": self.meta_description()|trim,
@@ -40,13 +52,13 @@
     <div class="unified-hero__copy">
       <span class="unified-kicker">
         <i class="fa-solid fa-link" aria-hidden="true"></i>
-        Uma plataforma. Toda a rede de cuidado.
+        PetOrlândia (Pet Orlândia) — Uma plataforma. Toda a rede de cuidado.
       </span>
       <h1 id="unified-home-title">
         Agenda, prontuário e vacinas da sua clínica por R$ {{ '%.0f'|format(monthly_price) }} por veterinário.
       </h1>
       <p>
-        {{ trial_days }} dias grátis, sem cadastrar cartão. E porque o histórico do pet acompanha
+        A <strong>PetOrlândia (Pet Orlândia)</strong> oferece {{ trial_days }} dias grátis para clínicas, sem cadastrar cartão. E porque o histórico do pet acompanha
         o tutor — não a clínica — cada atendimento continua de onde o anterior parou.
       </p>
       <div class="unified-hero__actions">

@@ -93,9 +93,21 @@ def _set_request_id_header(response):
 def _redirect_insecure_request():
     if current_app.config.get("TESTING") or not current_app.config.get("FORCE_HTTPS", True):
         return None
-    forwarded = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
     host = request.host.split(":", 1)[0].lower()
-    if host in {"localhost", "127.0.0.1", "::1"} or request.is_secure or forwarded == "https":
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return None
+
+    # Redirecionamento canônico de apex domain (petorlandia.com.br -> www.petorlandia.com.br).
+    # Garante que qualquer requisição que atinja o servidor sem www seja redirecionada
+    # diretamente para https://www.petorlandia.com.br com status 301, sem passar por
+    # downgrade HTTP inseguro intermediário.
+    if host == "petorlandia.com.br":
+        parts = urlsplit(request.url)
+        canonical_url = urlunsplit(("https", "www.petorlandia.com.br", parts.path, parts.query, parts.fragment))
+        return redirect(canonical_url, code=301)
+
+    forwarded = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    if request.is_secure or forwarded == "https":
         return None
     parts = urlsplit(request.url)
     secure_url = urlunsplit(("https", parts.netloc, parts.path, parts.query, parts.fragment))

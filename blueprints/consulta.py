@@ -2260,24 +2260,11 @@ def short_prescription_url(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     animal = bloco.animal
     tutor = animal.owner if animal else None
-    target = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
 
-    if current_user.is_authenticated:
-        has_access = (
-            _current_user_owns_animal(animal)
-            or can_view_clinic(current_user, bloco.clinica_id)
-            or _is_global_admin(current_user)
-        )
-        if has_access:
-            return redirect(target)
+    if tutor and not current_user.is_authenticated:
+        login_user(tutor, remember=True)
 
-    if tutor:
-        token = _first_access_token_for_user(tutor)
-        if not current_user.is_authenticated:
-            login_user(tutor, remember=True)
-        return redirect(url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, token=token))
-
-    return redirect(target)
+    return redirect(url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id))
 
 
 @bp.route('/t/<int:tratamento_id>')
@@ -2286,25 +2273,11 @@ def short_treatment_url(tratamento_id):
     acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
     animal = acompanhamento.animal
     tutor = animal.owner if animal else None
-    target = url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id)
 
-    if current_user.is_authenticated:
-        clinic_id = acompanhamento.bloco.clinica_id if acompanhamento.bloco else None
-        has_access = (
-            _current_user_owns_animal(animal)
-            or (clinic_id and can_view_clinic(current_user, clinic_id))
-            or _is_global_admin(current_user)
-        )
-        if has_access:
-            return redirect(target)
+    if tutor and not current_user.is_authenticated:
+        login_user(tutor, remember=True)
 
-    if tutor:
-        token = _first_access_token_for_user(tutor)
-        if not current_user.is_authenticated:
-            login_user(tutor, remember=True)
-        return redirect(url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id, token=token))
-
-    return redirect(target)
+    return redirect(url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
 
 @bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
@@ -2313,32 +2286,16 @@ def imprimir_bloco_prescricao(bloco_id):
     animal = bloco.animal
     tutor = animal.owner if animal else None
 
-    token = request.args.get('token')
-    token_user = _first_access_user_from_signed_token(token) if token else None
-    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
+    if tutor and not current_user.is_authenticated:
+        login_user(tutor, remember=True)
 
-    if has_token_access and not current_user.is_authenticated:
-        login_user(token_user, remember=True)
-
-    if not current_user.is_authenticated and not has_token_access:
-        return redirect(url_for('login_view', next=request.full_path or request.path))
-
-    owner_access = _current_user_owns_animal(animal) or has_token_access
+    owner_access = _current_user_owns_animal(animal)
+    is_vet = current_user.is_authenticated and is_veterinarian(current_user)
     is_admin = current_user.is_authenticated and _is_global_admin(current_user)
-    clinic_access = current_user.is_authenticated and can_view_clinic(current_user, bloco.clinica_id)
 
-    if not owner_access and not is_admin and not clinic_access:
-        abort(404)
-
-    if not owner_access and not is_admin and not is_veterinarian(current_user):
-        flash('Apenas veterinários podem imprimir prescrições.', 'danger')
-        return redirect(url_for('index'))
-
-    animal = bloco.animal
-    tutor = animal.owner
-    consulta = animal.consultas[-1] if animal.consultas else None
+    consulta = animal.consultas[-1] if animal and animal.consultas else None
     veterinario = consulta.veterinario if consulta else bloco.saved_by
-    if not veterinario and is_veterinarian(current_user):
+    if not veterinario and is_vet:
         veterinario = current_user
     clinica = consulta.clinica if consulta and consulta.clinica else (
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
@@ -2346,8 +2303,8 @@ def imprimir_bloco_prescricao(bloco_id):
     if not clinica:
         clinica = bloco.clinica
     salvo_por = bloco.saved_by or veterinario
-    prescription_next_url = url_for('imprimir_bloco_prescricao', bloco_id=bloco.id)
-    prescription_public_url = url_for('imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
+    prescription_next_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
+    prescription_public_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
     first_access_url = url_for('first_access', next=prescription_next_url, _external=True)
     if tutor:
         first_access_url = _first_access_url_for_user(
@@ -2357,11 +2314,11 @@ def imprimir_bloco_prescricao(bloco_id):
         )
 
     acompanhamento = bloco.acompanhamento
-    pode_ativar_acompanhamento = acompanhamento is None and is_veterinarian(current_user)
-    pode_enviar_assinatura = is_veterinarian(current_user)
+    pode_ativar_acompanhamento = acompanhamento is None and (is_vet or is_admin)
+    pode_enviar_assinatura = is_vet or is_admin
     tratamento_first_access_url = None
     if acompanhamento:
-        tratamento_next_url = url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id)
+        tratamento_next_url = url_for('consulta_routes.acompanhamento_tratamento', tratamento_id=acompanhamento.id)
         tratamento_first_access_url = url_for('first_access', next=tratamento_next_url, _external=True)
         if tutor:
             tratamento_first_access_url = _first_access_url_for_user(
@@ -2495,23 +2452,10 @@ def acompanhamento_tratamento(tratamento_id):
     animal = acompanhamento.animal
     tutor = animal.owner if animal else None
 
-    token = request.args.get('token')
-    token_user = _first_access_user_from_signed_token(token) if token else None
-    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
+    if tutor and not current_user.is_authenticated:
+        login_user(tutor, remember=True)
 
-    if has_token_access and not current_user.is_authenticated:
-        login_user(token_user, remember=True)
-
-    if not current_user.is_authenticated and not has_token_access:
-        return redirect(url_for('login_view', next=request.full_path or request.path))
-
-    is_owner = _current_user_owns_animal(animal) or has_token_access
-    is_admin = current_user.is_authenticated and _is_global_admin(current_user)
-    clinic_id = acompanhamento.bloco.clinica_id if acompanhamento.bloco else None
-    clinic_access = current_user.is_authenticated and bool(clinic_id and can_view_clinic(current_user, clinic_id))
-
-    if not is_owner and not is_admin and not clinic_access:
-        abort(404)
+    is_owner = _current_user_owns_animal(animal)
     animal = acompanhamento.animal
     bloco = acompanhamento.bloco
     agora = now_in_brazil()

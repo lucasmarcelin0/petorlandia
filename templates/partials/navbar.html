@@ -3,11 +3,19 @@
 {% set total_pending = (pending_exam_count|default(0)) + (pending_appointment_count|default(0)) %}
 {% set unread_total = unread_messages|default(0) %}
 {% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}
+{% set nav_endpoint = request.endpoint or '' %}
+{% set nav_path = request.path or '' %}
+{% set nav_pets_active = nav_endpoint in ['list_animals', 'add_animal', 'novo_animal', 'editar_animal', 'ficha_animal', 'planosaude_animal'] %}
+{% set nav_activities_active = nav_endpoint in ['minhas_solicitacoes', 'petsitter_routes.petsitter_minhas', 'grooming_minhas_assinaturas', 'minhas_compras', 'minhas_assinaturas_racao'] %}
+{% set nav_home_active = nav_endpoint == 'index' %}
+{% set nav_services_active = nav_endpoint in ['servicos', 'servicos_exames', 'servicos_ultrassom'] or nav_path.startswith('/servicos') %}
+{% set nav_store_active = nav_endpoint in ['loja', 'ver_carrinho', 'create_order', 'checkout_confirm', 'payment_status', 'product_detail', 'detalhes_racao', 'assinar_racao', 'edit_address'] or nav_path.startswith('/loja') or nav_path.startswith('/carrinho') %}
+{% set nav_messages_active = nav_endpoint in ['mensagens', 'conversa', 'conversa_admin', 'enviar_mensagem'] %}
 
 <nav class="navbar {% if is_admin %}navbar-expand-xxl navbar--admin{% else %}navbar-expand-lg{% endif %} fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
   <div class="container-fluid">
     <a href="{{ url_for('painel_admin.index') if is_admin else url_for('index') }}" class="navbar-brand">
-      <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
+      <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="PetOrlândia" class="logo-img" width="96" height="91">
       <span>PetOrlândia</span>
     </a>
 
@@ -226,12 +234,12 @@
         </li>
         {% endif %}
         <li class="nav-item">
-          <a class="nav-link{% if current_user.worker != 'estudante' %} nav-link--primary{% endif %}" href="{{ url_for('list_animals', scope='meus') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_pets_active else '' }}" href="{{ url_for('list_animals', scope='meus') }}"{% if nav_pets_active %} aria-current="page"{% endif %}>
             <i class="fas fa-dog me-1 text-primary"></i> Meus pets
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('minhas_solicitacoes') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_activities_active else '' }}" href="{{ url_for('minhas_solicitacoes') }}"{% if nav_activities_active %} aria-current="page"{% endif %}>
             <i class="fas fa-list-check me-1 text-primary"></i> Minhas atividades
           </a>
         </li>
@@ -255,19 +263,19 @@
 
         {# Navegação pessoal e pública permanece disponível depois das áreas de trabalho. #}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('index') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_home_active else '' }}" href="{{ url_for('index') }}"{% if nav_home_active %} aria-current="page"{% endif %}>
             <i class="fas fa-home me-1 text-primary"></i> Início
           </a>
         </li>
 
         {% if current_user.worker != 'delivery' %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('servicos') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_services_active else '' }}" href="{{ url_for('servicos') }}"{% if nav_services_active %} aria-current="page"{% endif %}>
             <i class="fas fa-paw me-1 text-danger"></i> Serviços
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('loja') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_store_active else '' }}" href="{{ url_for('loja') }}"{% if nav_store_active %} aria-current="page"{% endif %}>
             <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
           </a>
         </li>
@@ -334,7 +342,7 @@
 
         {% if current_user.is_authenticated %}
         <li class="nav-item position-relative">
-          <a class="nav-link" href="{{ url_for('mensagens_admin') if is_admin else url_for('mensagens') }}">
+          <a class="nav-link{{ ' nav-link--active' if nav_messages_active else '' }}" href="{{ url_for('mensagens_admin') if is_admin else url_for('mensagens') }}"{% if nav_messages_active %} aria-current="page"{% endif %}>
             <i class="fas fa-comments me-1 text-info"></i> Mensagens
             {% if unread_total > 0 %}
             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
