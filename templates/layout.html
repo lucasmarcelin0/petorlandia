@@ -102,6 +102,9 @@
      alertas e responsividade). Mantê-la global evita que páginas públicas
      percam essas regras até a separação definitiva em base-shell.css. #}
   <link href="{{ url_for('static', filename='css/clinic.css', v='20260802-mobile-navbar2') }}" rel="stylesheet">
+  {# Camada visual do portal do tutor. Mantida separada da base clínica para
+     que os padrões de navegação, cards e rodapé evoluam juntos. #}
+  <link href="{{ url_for('static', filename='css/tutor-experience.css', v='20260903') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
   <!-- Analytics opcionais: nenhum recurso do Google é carregado antes da
@@ -353,35 +356,44 @@
   </main>
 
   <!-- Footer -->
-  <footer>
-    &copy; Lucas Marcelino • PetOrlândia 2026
-    <span class="mx-1">|</span>
-    <a href="{{ url_for('privacy') }}" class="text-decoration-none">Privacidade</a>
-    <span class="mx-1">|</span>
-    <a href="{{ url_for('terms') }}" class="text-decoration-none">Termos</a>
-    <span class="mx-1">|</span>
-    <a href="{{ url_for('support') }}" class="text-decoration-none">Suporte</a>
-    {% if config.GA_MEASUREMENT_ID %}
-    <span class="mx-1">|</span>
-    <a href="#preferencias-analytics" class="text-decoration-none" data-analytics-preferences>Cookies</a>
-    {% endif %}
-    <span class="mx-1">|</span>
-    <a href="{{ url_for('petsitter_routes.carreiras') }}" class="text-decoration-none">Carreiras</a>
-    {% if current_user.is_authenticated %}
-    <span class="mx-1">|</span>
-    <a href="{{ url_for('petsitter_routes.indicacao') }}" class="text-decoration-none">Indique amigos</a>
-    {% if current_user.is_authenticated and current_user.role == 'admin' %}
-    <span class="mx-2 text-muted">·</span>
-    <a href="{{ url_for('admin_home_editor') }}" class="text-decoration-none" title="Editar elementos da página inicial">
-      <i class="fa-solid fa-house-pen me-1"></i>Editar início
-    </a>
-    {% endif %}
-    {% endif %}
-    <a href="{{ url_for('secret_game') }}" target="_blank" rel="noopener" class="ms-1 text-decoration-none text-primary"
-      title="Surpresa!">
-      <i class="fas fa-paw text-primary"></i>
-      <span class="visually-hidden">Abrir o easter egg</span>
-    </a>
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <div class="site-footer__brand">
+        <a href="{{ url_for('index') }}" class="site-footer__logo" aria-label="PetOrlândia — página inicial">
+          <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="" width="40" height="40">
+          <span>PetOrlândia</span>
+        </a>
+        <p>Cuidado, saúde e rotina do seu pet em um só lugar.</p>
+      </div>
+
+      <nav class="site-footer__group" aria-label="Explorar PetOrlândia">
+        <h2>Explorar</h2>
+        <a href="{{ url_for('servicos') }}">Serviços</a>
+        <a href="{{ url_for('loja') }}">Loja</a>
+        <a href="{{ url_for('petsitter_routes.carreiras') }}">Carreiras</a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('petsitter_routes.indicacao') }}">Indicar amigos</a>
+        {% endif %}
+      </nav>
+
+      <nav class="site-footer__group" aria-label="Ajuda e informações legais">
+        <h2>Ajuda e confiança</h2>
+        <a href="{{ url_for('support') }}">Central de suporte</a>
+        <a href="{{ url_for('privacy') }}">Privacidade</a>
+        <a href="{{ url_for('terms') }}">Termos de uso</a>
+        {% if config.GA_MEASUREMENT_ID %}
+        <a href="#preferencias-analytics" data-analytics-preferences>Preferências de cookies</a>
+        {% endif %}
+      </nav>
+    </div>
+    <div class="site-footer__bottom">
+      <span>&copy; 2026 PetOrlândia. Todos os direitos reservados.</span>
+      {% if current_user.is_authenticated and current_user.role == 'admin' %}
+      <a href="{{ url_for('admin_home_editor') }}" title="Editar elementos da página inicial">
+        <i class="fa-solid fa-house-pen me-1" aria-hidden="true"></i>Editar início
+      </a>
+      {% endif %}
+    </div>
   </footer>
   {% if config.GA_MEASUREMENT_ID %}
   <aside id="analytics-consent" hidden class="position-fixed bottom-0 start-0 end-0 p-3" style="z-index:1085;" aria-labelledby="analytics-consent-title">
