@@ -48,7 +48,9 @@ function Resolve-Python {
     # testado de verdade antes de ser escolhido.
     $candidates = @(
         (Join-Path $repository ".venv\Scripts\python.exe"),
-        (Join-Path $repository ".venv-codex\Scripts\python.exe")
+        (Join-Path $repository ".venv-codex\Scripts\python.exe"),
+        (Join-Path (Split-Path -Parent $repository) "venv\Scripts\python.exe"),
+        ((Get-Command python -ErrorAction SilentlyContinue).Source)
     )
     foreach ($candidate in $candidates) {
         if (-not (Test-Path -LiteralPath $candidate)) { continue }
