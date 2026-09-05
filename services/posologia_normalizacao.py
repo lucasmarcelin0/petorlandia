@@ -32,7 +32,12 @@ def _sa(s: str) -> str:
     """strip accents + lower."""
     if not s:
         return ""
-    nfkd = unicodedata.normalize("NFKD", str(s))
+    str_s = str(s)
+    # Bolt performance optimization: fast-path for ASCII strings to bypass
+    # unicodedata normalization overhead.
+    if str_s.isascii():
+        return str_s.lower()
+    nfkd = unicodedata.normalize("NFKD", str_s)
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
