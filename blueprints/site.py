@@ -1347,6 +1347,18 @@ def openai_apps_challenge():
     return response
 
 
+@bp.route('/favicon.ico')
+def favicon_ico():
+    """Serve o icone no caminho que o navegador pede sozinho.
+
+    Todo navegador busca /favicon.ico mesmo com <link rel="icon"> na pagina, e
+    o caminho nao existia: cada visita anonima deixava um 404 no log, o que
+    esconde os 404 que importam. Redirect permanente para o PNG de 32px que o
+    layout ja usa -- evita duplicar o arquivo em .ico.
+    """
+    return redirect(url_for('static', filename='pastorgato-32.png'), code=301)
+
+
 @bp.route('/robots.txt')
 def robots_txt():
     """Expose crawler guidance for the public marketing and catalog pages."""

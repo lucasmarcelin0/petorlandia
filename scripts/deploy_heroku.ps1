@@ -135,8 +135,8 @@ Nao use --force: isso pode apagar correcoes que ja estao em producao.
         } catch {
             $publishedLine = ""
         }
-        if ($publishedLine) {
-            $publishedCommit = ($publishedLine -split '\s+')[0]
+        if ($publishedLine -match '([0-9a-fA-F]{40})\s+refs/heads/main') {
+            $publishedCommit = $Matches[1]
             if ($publishedCommit -eq $headCommit) { break }
         }
         Start-Sleep -Seconds 3
