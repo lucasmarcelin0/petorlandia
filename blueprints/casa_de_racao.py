@@ -366,9 +366,6 @@ def casa_de_racao_dashboard(casa_id):
 
     if request.method == 'POST':
         if request.form.get('_action') == 'add_product':
-            if casa.status == 'pendente' and not _is_admin():
-                flash('Sua loja ainda está aguardando aprovação. Produtos poderão ser publicados em breve.', 'warning')
-                return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             from forms import CasaDeRacaoProductForm
             product_form = CasaDeRacaoProductForm()
             if product_form.validate_on_submit():
@@ -388,12 +385,14 @@ def casa_de_racao_dashboard(casa_id):
                     subscription_enabled=bool(product_form.subscription_enabled.data),
                     subscription_discount_percent=product_form.subscription_discount_percent.data or Decimal('0'),
                     subscription_shipping_fee=product_form.subscription_shipping_fee.data or Decimal('0'),
-                    status='active',
+                    status='active' if casa.status == 'ativa' else 'pending',
                 )
                 db.session.add(product)
                 _create_initial_variant(product, product_form)
                 db.session.commit()
-                flash('Produto publicado com sucesso!', 'success')
+                from services.offer_availability import invalidate_cache
+                invalidate_cache()
+                flash('Produto publicado com sucesso!' if casa.status == 'ativa' else 'Produto salvo em preparação. Você poderá ativá-lo após a aprovação da loja.', 'success')
                 return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             flash('Verifique os campos do produto.', 'warning')
             return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
@@ -681,10 +680,6 @@ def mercadopago_direct_save(casa_id):
 @login_required
 def casa_de_racao_produtos(casa_id):
     casa = _casa_loja_access(casa_id)
-    if casa.status == 'pendente' and not _is_admin():
-        flash('Sua loja ainda está aguardando aprovação. Você poderá publicar produtos em breve.', 'warning')
-        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
-
     form = CasaDeRacaoProductForm()
     if form.validate_on_submit():
         image_url = None
@@ -704,12 +699,14 @@ def casa_de_racao_produtos(casa_id):
             subscription_enabled=bool(form.subscription_enabled.data),
             subscription_discount_percent=form.subscription_discount_percent.data or Decimal('0'),
             subscription_shipping_fee=form.subscription_shipping_fee.data or Decimal('0'),
-            status='active',
+            status='active' if casa.status == 'ativa' else 'pending',
         )
         db.session.add(product)
         _create_initial_variant(product, form)
         db.session.commit()
-        flash('Produto publicado na loja com sucesso!', 'success')
+        from services.offer_availability import invalidate_cache
+        invalidate_cache()
+        flash('Produto publicado na loja com sucesso!' if casa.status == 'ativa' else 'Produto salvo em preparação. Você poderá ativá-lo após a aprovação da loja.', 'success')
         return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
 
     produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()
@@ -751,12 +748,17 @@ def casa_produto_editar(casa_id, product_id):
 def casa_produto_toggle(casa_id, product_id):
     casa = _casa_loja_access(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
+    if product.status != 'active' and casa.status != 'ativa':
+        flash('O produto está salvo. A publicação fica disponível quando a loja estiver ativa.', 'warning')
+        return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
     has_sellable_variant = any((v.status == 'active' and (v.price or 0) > 0) for v in product.variants)
     if product.status != 'active' and not has_sellable_variant and product.price <= 0:
         flash('Defina ao menos uma apresentação com preço maior que zero antes de ativar o produto.', 'warning')
         return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
     product.status = 'inactive' if product.status == 'active' else 'active'
     db.session.commit()
+    from services.offer_availability import invalidate_cache
+    invalidate_cache()
     state = 'ativado' if product.status == 'active' else 'desativado'
     flash(f'Produto {state} na loja.', 'success')
     return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))

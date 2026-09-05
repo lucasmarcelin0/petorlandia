@@ -38,8 +38,8 @@ def capabilities_for(kind: str) -> EstablishmentCapabilities:
 
 def establishment_label(kind: str) -> str:
     labels = {
-        "clinica": "Clinica",
-        "casa_de_racao": "Casa de racao",
+        "clinica": "Cl\u00ednica",
+        "casa_de_racao": "Casa de ra\u00e7\u00e3o",
         "petshop": "Pet shop",
         "banho_tosa": "Banho e tosa",
     }
