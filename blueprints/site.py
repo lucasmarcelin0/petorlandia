@@ -852,8 +852,12 @@ def index():
         'pets_title': 'Meus pets',
         'pets_add_button': 'Cadastrar pet',
     }
+    from services.workspaces import current_experience, home_next_actions
+
+    experience = current_experience()
     return render_template(
         'index.html',
+        next_actions=home_next_actions(current_user, experience, meus_pets, doses_atrasadas, proximos_agendamentos),
         meus_pets=meus_pets,
         doses_atrasadas=doses_atrasadas,
         proximas_vacinas=proximas_vacinas,

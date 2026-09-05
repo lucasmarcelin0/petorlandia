@@ -6,8 +6,7 @@
   </div>
 </div>
 
-<h5 class="mb-3">Documentos</h5>
-{% if current_user.worker == 'veterinario' %}
+{% if is_veterinarian(current_user) %}
 <div class="mb-3">
   <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
   <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
@@ -41,7 +40,7 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
               {% if tutor.phone %}
                 <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
               {% endif %}
-              {% if current_user.role == 'admin' or (current_user.worker == 'veterinario' and current_user.id == d.veterinario_id) %}
+              {% if current_user.role == 'admin' or (is_veterinarian(current_user) and current_user.id == d.veterinario_id) %}
               <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
@@ -56,15 +55,17 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
   <p class="text-muted">Nenhum documento enviado.</p>
 {% endif %}
 
-{% if current_user.worker == 'veterinario' %}
+{% if is_veterinarian(current_user) %}
 <form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-2">
-    <input type="file" name="documento" class="form-control form-control-sm" multiple required>
+    <label for="documento-{{ animal.id }}" class="form-label">Arquivos</label>
+    <input id="documento-{{ animal.id }}" type="file" name="documento" class="form-control form-control-sm" multiple required>
     <div class="form-text">Selecione at&eacute; 5 arquivos por envio.</div>
   </div>
   <div class="mb-2">
-    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição (opcional)">
+    <label for="descricao-{{ animal.id }}" class="form-label">Descrição (opcional)</label>
+    <input id="descricao-{{ animal.id }}" type="text" name="descricao" class="form-control form-control-sm">
   </div>
   <button class="btn btn-sm btn-outline-success">📤 Enviar</button>
 </form>

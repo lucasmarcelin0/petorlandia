@@ -12,7 +12,7 @@
    calendário e das listas da agenda. #}
 {% set status_label = appt.status_label %}
 {% set card_classes = 'appointment-card appointment-row ' + (appt.status or '') %}
-{% set can_start_consulta = current_user.worker in ['veterinario', 'colaborador'] %}
+{% set may_start_consultation = can_start_consulta(current_user) %}
 {% set nfse_doc = nfse_documents_by_appointment.get(appt.id) if nfse_documents_by_appointment is defined else None %}
 {% set nfse_status = nfse_doc.status.value if nfse_doc and nfse_doc.status else (nfse_doc.status if nfse_doc else None) %}
 {% set nfse_status_label = 'Emitindo…' if nfse_status in ['QUEUED', 'PROCESSING'] else nfse_status %}
@@ -66,7 +66,7 @@
             <i class="fa-solid fa-file-medical me-1"></i>
             Ficha do Animal
           </a>
-          {% if can_start_consulta %}
+          {% if may_start_consultation %}
             <a
               href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
               class="btn btn-sm btn-outline-success"
