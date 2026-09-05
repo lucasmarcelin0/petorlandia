@@ -24,14 +24,15 @@
 {%- endmacro %}
 
 {% block main %}
-<div class="clinic-page-shell" data-clinic-workspace>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workspaces.css', v='1') }}">
+<div class="clinic-page-shell store-workspace" data-clinic-workspace>
 
   {% if casa.status == 'pendente' %}
   <div class="alert alert-warning d-flex align-items-start gap-3 shadow-sm">
     <i class="fa-solid fa-hourglass-half fs-4 mt-1" aria-hidden="true"></i>
     <div class="flex-grow-1">
-      <strong>Sua loja está em análise.</strong> Nossa equipe já foi avisada e você receberá um e-mail assim que ela for aprovada (normalmente em até 1 dia útil).<br>
-      <span class="small">Enquanto isso, adiante o que puder: cadastre seus produtos com fotos e preços, defina os horários de funcionamento e conecte o Mercado Pago. Assim, quando a aprovação sair, sua loja já começa vendendo.</span>
+      <strong>Sua loja está em análise.</strong> Você receberá um e-mail quando ela for aprovada.<br>
+      <span class="small">Prepare produtos, horários e recebimentos. Seus produtos ficam salvos e ocultos da loja pública até você ativá-los após a aprovação.</span>
     </div>
     {% if is_admin %}
     <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}" class="ms-auto">
@@ -88,6 +89,12 @@
   </section>
 
   {# ── Tabs ── #}
+  <nav class="store-activation" aria-label="Ativação e operação da loja">
+    <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i>{{ 'Preparar catálogo' if not produtos else 'Revisar catálogo' }}</a>
+    <a href="#recebimentos"><i class="fa-solid fa-wallet" aria-hidden="true"></i>{{ 'Recebimentos conectados' if payment_account and payment_account.status == 'connected' else 'Configurar recebimentos' }}</a>
+    <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Vendas</a>
+    <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"><i class="fa-solid fa-truck" aria-hidden="true"></i>Entregas{% if entregas_pendentes %} ({{ entregas_pendentes }}){% endif %}</a>
+  </nav>
   <nav class="clinic-tabs-shell" aria-label="Seções da loja">
     <ul class="nav clinic-tabs pet-nav" id="storeTabs" role="tablist">
       {{ store_tab('loja',     'Loja',     'fa-solid fa-store',      'is-clinic',  'Dados e pagamento', True) }}
@@ -182,7 +189,7 @@
       </div>
 
       {# Mercado Pago #}
-      <div class="card shadow-sm border-0 rounded-3 mb-4">
+      <div class="card shadow-sm border-0 rounded-3 mb-4" id="recebimentos" tabindex="-1">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
             <div>
@@ -317,7 +324,7 @@
       {# Atalhos #}
       <div class="d-flex gap-2 flex-wrap">
         <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
-           class="btn btn-primary {% if casa.status == 'pendente' and not is_admin %}disabled{% endif %}">
+           class="btn btn-primary">
           <i class="fa-solid fa-plus me-1"></i>Publicar produto
         </a>
         <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
@@ -413,10 +420,8 @@
         <div class="col-lg-4">
           <div class="card shadow-sm border-0 rounded-3">
             <div class="card-body">
-              <h5 class="fw-bold mb-3"><i class="fa-solid fa-plus-circle me-2 text-success"></i>Publicar novo produto</h5>
-              {% if casa.status == 'pendente' and not is_admin %}
-              <div class="alert alert-warning py-2 small">Sua loja está em análise. Produtos poderão ser publicados após aprovação.</div>
-              {% else %}
+              <h5 class="fw-bold mb-3"><i class="fa-solid fa-plus-circle me-2 text-success"></i>{{ 'Publicar novo produto' if casa.status == 'ativa' else 'Preparar produto' }}</h5>
+              {% if casa.status != 'ativa' %}<p class="text-muted small">O produto ficará salvo e oculto da loja pública até a aprovação e sua confirmação.</p>{% endif %}
               <form method="post" enctype="multipart/form-data" novalidate
                     action="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}">
                 {{ product_form.hidden_tag() }}
@@ -468,10 +473,9 @@
                   {{ product_form.image_upload(class="form-control") }}
                 </div>
                 <button type="submit" class="btn btn-success w-100">
-                  <i class="fa-solid fa-plus me-1"></i>Publicar produto
+                  <i class="fa-solid fa-plus me-1"></i>{{ 'Publicar produto' if casa.status == 'ativa' else 'Salvar produto' }}
                 </button>
               </form>
-              {% endif %}
             </div>
           </div>
         </div>
@@ -490,6 +494,8 @@
                     <h6 class="fw-semibold mb-0 text-truncate" style="max-width:75%">{{ p.name }}</h6>
                     {% if p.status == 'active' %}
                       <span class="badge bg-success-subtle text-success">Ativo</span>
+                    {% elif p.status == 'pending' %}
+                      <span class="badge bg-warning-subtle text-dark">Em preparação</span>
                     {% else %}
                       <span class="badge bg-secondary-subtle text-secondary">Inativo</span>
                     {% endif %}

@@ -395,7 +395,8 @@ def casa_de_racao_dashboard(casa_id):
                 flash('Produto publicado com sucesso!' if casa.status == 'ativa' else 'Produto salvo em preparação. Você poderá ativá-lo após a aprovação da loja.', 'success')
                 return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             flash('Verifique os campos do produto.', 'warning')
-            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
+            produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()
+            return render_template('casa_de_racao/produtos.html', casa=casa, produtos=produtos, form=product_form), 400
 
         if request.form.get('_action') == 'update_info' and store_form.validate_on_submit():
             casa.nome = store_form.nome.data
