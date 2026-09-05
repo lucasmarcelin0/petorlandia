@@ -56,34 +56,34 @@
 
             <ul class="list-unstyled profile-card-details mb-0">
               <li>
-                <i class="fa-solid fa-paw"></i>
+                <i class="fa-solid fa-paw" aria-hidden="true"></i>
                 <span>{{ animal.species }}</span>
               </li>
               {% if animal.breed %}
               <li>
-                <i class="fa-solid fa-dna"></i>
+                <i class="fa-solid fa-dna" aria-hidden="true"></i>
                 <span>{{ animal.breed }}</span>
               </li>
               {% endif %}
               {% if animal.age_display %}
               <li>
-                <i class="fa-solid fa-hourglass-half"></i>
+                <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i>
                 <span>{{ animal.age_display }}</span>
               </li>
               {% endif %}
               {% if animal.sex %}
               <li>
-                <i class="fa-solid fa-venus-mars"></i>
+                <i class="fa-solid fa-venus-mars" aria-hidden="true"></i>
                 <span>{{ animal.sex }}</span>
               </li>
               {% endif %}
               <li>
-                <i class="fa-solid fa-tag"></i>
+                <i class="fa-solid fa-tag" aria-hidden="true"></i>
                 <span>{{ animal.modo|capitalize }}</span>
               </li>
               {% if animal.modo == 'venda' and animal.price is not none %}
               <li>
-                <i class="fa-solid fa-coins"></i>
+                <i class="fa-solid fa-coins" aria-hidden="true"></i>
                 <span>R$ {{ "%.2f"|format(animal.price) }}</span>
               </li>
               {% endif %}
@@ -132,10 +132,13 @@
 
               {% if is_admin %}
               <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-                    class="btn btn-outline-secondary btn-sm rounded-pill delete-animal-form"
+                    class="d-inline delete-animal-form"
                     data-animal-id="{{ animal.id }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" title="Excluir">❌</button>
+                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill"
+                        aria-label="Excluir {{ animal.name }}" title="Excluir {{ animal.name }}">
+                  <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Excluir
+                </button>
               </form>
               {% endif %}
             </div>
