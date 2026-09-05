@@ -25,12 +25,24 @@ REVIEW = "review"
 BLOCKED = "blocked"
 MANUAL = "manual"
 
+# Pre-compiled regex patterns for performance optimization
+_RE_NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
+_RE_SPACES = re.compile(r"\s+")
+_RE_DAYS_RANGE = re.compile(r"^\d+(?:\s+a\s+\d+)?\s+dias?$")
+
 
 def _normalize(value: str | None) -> str:
-    text = unicodedata.normalize("NFKD", (value or "").strip().lower())
-    text = "".join(char for char in text if not unicodedata.combining(char))
-    text = re.sub(r"[^a-z0-9]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    if not value:
+        return ""
+    text = value.strip().lower()
+    if not text:
+        return ""
+    # Fast-path for pure ASCII strings to avoid unicodedata normalization overhead
+    if not text.isascii():
+        nfkd = unicodedata.normalize("NFKD", text)
+        text = "".join(char for char in nfkd if not unicodedata.combining(char))
+    text = _RE_NON_ALPHANUMERIC.sub(" ", text)
+    return _RE_SPACES.sub(" ", text).strip()
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -80,7 +92,7 @@ def _pluralize(unit: str, amount: float) -> str:
 
 
 def _unit_key(unit: str | None) -> str:
-    return re.sub(r"\s+", "", _normalize(unit))
+    return _RE_SPACES.sub("", _normalize(unit))
 
 
 def _format_whole_unit(amount: float, singular: str, plural: str) -> str:
@@ -138,13 +150,13 @@ def _text_value(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, str):
-        return re.sub(r"\s+", " ", value).strip()
+        return _RE_SPACES.sub(" ", value).strip()
     if isinstance(value, dict):
         parts = [_text_value(value.get(key)) for key in ("principal", "secundario", "forma", "concentracao")]
         return " - ".join(part for part in parts if part)
     if isinstance(value, (list, tuple, set)):
         return " - ".join(part for part in (_text_value(item) for item in value) if part)
-    return re.sub(r"\s+", " ", str(value)).strip()
+    return _RE_SPACES.sub(" ", str(value)).strip()
 
 
 def _presentation_label(ap: dict[str, Any]) -> str:
@@ -288,7 +300,7 @@ def _normalize_textual_duration(value: str) -> str:
         return ""
     if _normalize(text).startswith(("por ", "ate ", "criterio ")):
         return text
-    if re.match(r"^\d+(?:\s+a\s+\d+)?\s+dias?$", _normalize(text)):
+    if _RE_DAYS_RANGE.match(_normalize(text)):
         return f"por {text}"
     return text
 
