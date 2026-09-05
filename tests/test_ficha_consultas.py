@@ -55,3 +55,31 @@ def test_tutor_sees_consultas_from_all_clinics(monkeypatch, app):
         html_lower = payload["html"].lower()
         assert "vetone" in html_lower
         assert "vettwo" in html_lower
+
+
+def test_veterinarian_and_admin_open_ficha_animal_and_render_documents(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        clinica = Clinica(nome="Clinic Test")
+        tutor = User(name="Tutor Test", email="tutor_test@example.com", password_hash="x")
+        animal = Animal(name="Bob", owner=tutor, clinica=clinica)
+        vet_user = User(name="Vet User", email="vet_test@example.com", password_hash="x", worker="veterinario")
+        vet = Veterinario(user=vet_user, crmv="999", clinica=clinica)
+        admin_user = User(name="Admin User", email="admin_test@example.com", password_hash="x", role="admin")
+        db.session.add_all([clinica, tutor, animal, vet_user, vet, admin_user])
+        db.session.commit()
+
+        # Veterinário acessa a ficha: deve renderizar documentos.html sem UndefinedError
+        login(monkeypatch, vet_user)
+        resp_vet = client.get(f"/animal/{animal.id}/ficha")
+        assert resp_vet.status_code == 200
+        assert "Documentos".encode("utf-8") in resp_vet.data
+        assert "Ver termos".encode("utf-8") in resp_vet.data
+
+        # Admin acessa a ficha: deve renderizar documentos.html sem erro
+        login(monkeypatch, admin_user)
+        resp_admin = client.get(f"/animal/{animal.id}/ficha")
+        assert resp_admin.status_code == 200
+        assert "Documentos".encode("utf-8") in resp_admin.data
+

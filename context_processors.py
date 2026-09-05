@@ -290,6 +290,7 @@ def inject_clinic_pending_appointment_count():
 def inject_veterinarian_membership_context():
     if not getattr(current_user, "is_authenticated", False):
         return dict(
+            is_veterinarian=is_veterinarian,
             is_active_veterinarian=False,
             has_veterinarian_profile_flag=False,
             current_veterinarian_membership=None,
@@ -302,6 +303,7 @@ def inject_veterinarian_membership_context():
         membership = ensure_veterinarian_membership(getattr(current_user, 'veterinario', None))
 
     return dict(
+        is_veterinarian=is_veterinarian,
         is_active_veterinarian=has_profile and is_veterinarian(current_user),
         has_veterinarian_profile_flag=has_profile,
         has_professional_access=has_professional_access(current_user),
@@ -548,3 +550,4 @@ _PROCESSORS = (
 def register_context_processors(app):
     for func in _PROCESSORS:
         app.context_processor(func)
+    app.jinja_env.globals['is_veterinarian'] = is_veterinarian
