@@ -139,7 +139,7 @@
             {% endif %}
           </a>
           <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
-            <li><h6 class="dropdown-header">Acoes abertas</h6></li>
+            <li><h6 class="dropdown-header">Ações abertas</h6></li>
             {% if admin_action_recent|default([]) %}
               {% for note in admin_action_recent %}
               <li>
@@ -156,20 +156,36 @@
             {% endif %}
             <li>
               <a class="dropdown-item" href="{{ url_for('admin_notifications') }}">
-                <i class="fas fa-list-check me-2 text-primary"></i> Ver painel de notificacoes
+                <i class="fas fa-list-check me-2 text-primary"></i> Ver painel de notificações
               </a>
             </li>
           </ul>
         </li>
         {% elif current_user.is_authenticated %}
         {# Ações de trabalho vêm primeiro para perfis que usam a plataforma profissionalmente. #}
+        {% for workspace in user_experience.visible_nav if workspace.key not in ['professional', 'delivery'] %}
+        <li class="nav-item{% if workspace.actions|length > 1 %} dropdown{% endif %}">
+          {% if workspace.actions|length > 1 %}
+          <a class="nav-link nav-link--primary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ 'Casa de ração' if workspace.key == 'store' else workspace.label }}
+          </a>
+          <ul class="dropdown-menu">
+            {% for action in workspace.actions %}
+            <li><a class="dropdown-item" href="{{ action.url }}"><i class="fa-solid {{ action.icon }} me-2" aria-hidden="true"></i>{{ action.label }}</a></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <a class="nav-link nav-link--primary" href="{{ workspace.actions[0].url }}"><i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ workspace.label }}</a>
+          {% endif %}
+        </li>
+        {% endfor %}
         {% if current_user.worker == 'delivery' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('list_delivery_requests') }}">
             <i class="fas fa-truck me-1 nav-ico--operacao"></i> Solicitações
           </a>
         </li>
-        {% elif is_active_veterinarian %}
+        {% elif 'documents' in user_experience.capabilities %}
         <li class="nav-item position-relative">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
             <i class="fas fa-calendar-alt me-1 nav-ico--gestao"></i> Agenda
@@ -197,13 +213,6 @@
             {% endif %}
           </ul>
         </li>
-        {% if internship_roles %}
-        <li class="nav-item">
-          <a class="nav-link nav-link--primary" href="{{ url_for('student_internship_clinic', clinica_id=internship_roles[0].clinic_id) }}">
-            <i class="fas fa-user-graduate me-1 nav-ico--avisos"></i> Estágio supervisionado
-          </a>
-        </li>
-        {% endif %}
         {% elif current_user.worker == 'colaborador' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
@@ -226,13 +235,6 @@
           </ul>
         </li>
         {% else %}
-        {% if current_user.worker == 'estudante' %}
-        <li class="nav-item">
-          <a class="nav-link nav-link--primary" href="{{ url_for('student_hub') }}">
-            <i class="fas fa-graduation-cap me-1 nav-ico--avisos"></i> Estudar
-          </a>
-        </li>
-        {% endif %}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_pets_active else '' }}" href="{{ url_for('list_animals', scope='meus') }}"{% if nav_pets_active %} aria-current="page"{% endif %}>
             <i class="fas fa-dog me-1 nav-ico--saude"></i> Meus pets
@@ -241,22 +243,6 @@
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_activities_active else '' }}" href="{{ url_for('minhas_solicitacoes') }}"{% if nav_activities_active %} aria-current="page"{% endif %}>
             <i class="fas fa-list-check me-1 nav-ico--gestao"></i> Minhas atividades
-          </a>
-        </li>
-        {% endif %}
-
-        {% if current_user.role == 'parceiro' %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('parceiro_dashboard') }}">
-            <i class="fa-solid fa-handshake me-1 nav-ico--avisos"></i> Parceiro
-          </a>
-        </li>
-        {% endif %}
-
-        {% if minha_casa_de_racao %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('minha_casa_de_racao') }}">
-            <i class="fa-solid fa-store me-1 nav-ico--loja"></i> Casa de ração
           </a>
         </li>
         {% endif %}
