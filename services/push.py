@@ -77,17 +77,32 @@ def delete_subscription(user_id: int, endpoint: str) -> bool:
     return True
 
 
-def push_to_user(user_id: int, title: str, body: str, url: str | None = None, tag: str | None = None) -> int:
+def push_to_user(
+    user_id: int,
+    title: str,
+    body: str,
+    url: str | None = None,
+    tag: str | None = None,
+    session=None,
+) -> int:
     """Envia push para todos os dispositivos do usuário. Retorna nº de envios OK.
 
     Best-effort: erros são logados, inscrições mortas (404/410) removidas.
+
+    ``session`` permite passar uma sessão própria. É obrigatório quando o
+    chamador está dentro de um gancho ``after_commit`` do SQLAlchemy: ali a
+    sessão global está em estado 'committed' e qualquer SQL levanta
+    ``InvalidRequestError`` — era o que fazia todo push de agendamento falhar
+    em produção. Sem o argumento, usa a sessão global de sempre.
     """
     if not push_enabled():
         return 0
 
     from models import PushSubscription
 
-    subs = PushSubscription.query.filter_by(user_id=user_id).all()
+    session = session if session is not None else db.session
+
+    subs = session.query(PushSubscription).filter_by(user_id=user_id).all()
     if not subs:
         return 0
 
@@ -127,24 +142,24 @@ def push_to_user(user_id: int, title: str, body: str, url: str | None = None, ta
         except WebPushException as exc:
             status = getattr(getattr(exc, 'response', None), 'status_code', None)
             if status in (404, 410):
-                db.session.delete(sub)
+                session.delete(sub)
             else:
                 sub.fail_count = (sub.fail_count or 0) + 1
                 if sub.fail_count >= _MAX_FAILS:
-                    db.session.delete(sub)
+                    session.delete(sub)
                 current_app.logger.warning('Falha de push (%s) p/ user %s: %s', status, user_id, exc)
         except Exception as exc:  # noqa: BLE001 - push nunca derruba o chamador
             current_app.logger.warning('Erro inesperado de push p/ user %s: %s', user_id, exc)
 
     try:
-        db.session.commit()
+        session.commit()
     except Exception:  # noqa: BLE001
-        db.session.rollback()
+        session.rollback()
     return sent
 
 
-def push_to_users(user_ids, title: str, body: str, url: str | None = None, tag: str | None = None) -> int:
+def push_to_users(user_ids, title: str, body: str, url: str | None = None, tag: str | None = None, session=None) -> int:
     total = 0
     for uid in set(u for u in user_ids if u):
-        total += push_to_user(uid, title, body, url=url, tag=tag)
+        total += push_to_user(uid, title, body, url=url, tag=tag, session=session)
     return total

@@ -279,14 +279,36 @@ def _handle_after_commit(session):
     if not pending:
         return
 
-    for payload in pending:
-        try:
-            _deliver(payload)
-        except Exception:  # noqa: BLE001 — entrega é best-effort
-            current_app.logger.exception(
-                'Falha ao entregar notificacao de agendamento (%s)',
-                payload.get('kind'),
-            )
+    # A sessao que acabou de commitar esta em estado 'committed': qualquer SQL
+    # nela levanta InvalidRequestError. E a entrega precisa de SQL - ler o
+    # e-mail do destinatario e as inscricoes de push. Por isso abrimos uma
+    # sessao curta e propria, na mesma engine, so para a entrega.
+    #
+    # Sem isso o push de TODO agendamento falhava em producao, e a excecao
+    # ainda interrompia o laco: quem viesse depois do primeiro destinatario
+    # nao recebia nem e-mail.
+    from sqlalchemy.orm import Session as SASession
+
+    from extensions import db
+
+    try:
+        delivery_session = SASession(bind=db.engine)
+    except Exception:  # noqa: BLE001 - sem sessao nao ha entrega, mas nada quebra
+        current_app.logger.exception('Falha ao abrir sessao de entrega de notificacao')
+        return
+
+    try:
+        for payload in pending:
+            try:
+                _deliver(payload, delivery_session)
+            except Exception:  # noqa: BLE001 - entrega e best-effort
+                delivery_session.rollback()
+                current_app.logger.exception(
+                    'Falha ao entregar notificacao de agendamento (%s)',
+                    payload.get('kind'),
+                )
+    finally:
+        delivery_session.close()
 
 
 def _handle_rollback(session, previous_transaction=None):
@@ -294,14 +316,16 @@ def _handle_rollback(session, previous_transaction=None):
     session.info.pop(_SEEN_KEY, None)
 
 
-def _deliver(payload):
+def _deliver(payload, session):
+    """Entrega e-mail e push. Todo SQL passa por ``session``, nunca pela global."""
+
     from models import User
     from services.notifications import _send_email
     from services.push import push_to_user
 
     message = payload['message']
     for user_id in payload['recipients']:
-        user = User.query.get(user_id)
+        user = session.get(User, user_id)
         if user is None:
             continue
 
@@ -310,7 +334,14 @@ def _deliver(payload):
         if email and not email.endswith('@convite.petorlandia.local'):
             _send_email([email], payload['subject'], message)
 
-        push_to_user(user_id, APP_TITLE, message, url='/appointments', tag='agendamento')
+        push_to_user(
+            user_id,
+            APP_TITLE,
+            message,
+            url='/appointments',
+            tag='agendamento',
+            session=session,
+        )
 
 
 def register_appointment_notifications(db):

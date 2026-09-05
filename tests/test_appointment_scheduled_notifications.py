@@ -245,3 +245,62 @@ def test_retorno_criado_pelo_servico_tambem_avisa(app_ctx):
     msgs = _notifications_for(TUTOR_ID)
     assert len(msgs) == 1
     assert msgs[0].message.startswith('Retorno de Rex')
+
+def test_entrega_de_push_roda_apos_o_commit_sem_quebrar_a_sessao(app_ctx, monkeypatch):
+    """O push do agendamento precisa realmente sair.
+
+    Regressao vista em producao: `_deliver` rodava dentro do gancho
+    `after_commit`, onde a sessao esta em estado 'committed' e qualquer SQL
+    levanta `InvalidRequestError`. `push_to_user` comeca justamente com um
+    SELECT em PushSubscription, entao TODO push falhava -- e a excecao ainda
+    abortava o laco, deixando os destinatarios seguintes sem nem o e-mail.
+
+    Os demais testes deste arquivo so olham as linhas de Notification, gravadas
+    em `before_flush`, e por isso nao viam nada disso.
+    """
+
+    import pywebpush
+
+    from models import PushSubscription
+    from services.push import _endpoint_hash
+
+    flask_app.config.update(
+        VAPID_PUBLIC_KEY='pub-teste',
+        VAPID_PRIVATE_KEY='priv-teste',
+        VAPID_CLAIM_EMAIL='mailto:contato@petorlandia.com.br',
+    )
+
+    def _inscricao(user_id, endpoint):
+        return PushSubscription(
+            user_id=user_id,
+            endpoint=endpoint,
+            endpoint_hash=_endpoint_hash(endpoint),
+            p256dh='k-%s' % user_id,
+            auth='a-%s' % user_id,
+        )
+
+    db.session.add_all([
+        _inscricao(TUTOR_ID, 'https://push.example/tutor'),
+        _inscricao(VET_USER_ID, 'https://push.example/vet'),
+    ])
+    db.session.commit()
+
+    enviados = []
+    monkeypatch.setattr(
+        pywebpush, 'webpush',
+        lambda **kwargs: enviados.append(kwargs['subscription_info']['endpoint']),
+    )
+
+    erros = []
+    monkeypatch.setattr(
+        flask_app.logger, 'exception',
+        lambda *args, **kwargs: erros.append(args[0] if args else ''),
+    )
+
+    _agendar(created_by=None)
+
+    assert erros == [], 'a entrega registrou excecao: %s' % (erros,)
+    assert sorted(enviados) == [
+        'https://push.example/tutor',
+        'https://push.example/vet',
+    ], 'tutor e profissional precisam receber push'
