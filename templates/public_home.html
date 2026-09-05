@@ -47,7 +47,8 @@
 {% endblock %}
 
 {% block main %}
-<main class="unified-home" aria-labelledby="unified-home-title">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/public_home.css', v='1') }}">
+<div class="unified-home" aria-labelledby="unified-home-title">
   <section class="unified-hero">
     <div class="unified-hero__copy">
       <span class="unified-kicker">
@@ -55,49 +56,32 @@
         PetOrlândia (Pet Orlândia) — Uma plataforma. Toda a rede de cuidado.
       </span>
       <h1 id="unified-home-title">
-        Agenda, prontuário e vacinas da sua clínica por R$ {{ '%.0f'|format(monthly_price) }} por veterinário.
+        PetOrlândia
       </h1>
-      <p>
-        A <strong>PetOrlândia (Pet Orlândia)</strong> oferece {{ trial_days }} dias grátis para clínicas, sem cadastrar cartão. E porque o histórico do pet acompanha
-        o tutor — não a clínica — cada atendimento continua de onde o anterior parou.
-      </p>
+      <p data-profile-description>{{ profile.description }}</p>
       <div class="unified-hero__actions">
-        <a href="{{ url_for('register', next=url_for('minha_clinica')) }}"
-           class="unified-btn unified-btn--primary" data-cta="home_clinic_trial">
-          Testar na minha clínica <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        <a href="{{ profile.primary_url }}"
+           class="unified-btn unified-btn--primary" data-profile-primary data-cta="home_{{ selected_profile }}_hero">
+          <span>{{ profile.primary_label }}</span> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
         </a>
         <a href="#perfis" class="unified-btn unified-btn--secondary">
-          Sou tutor, veterinário ou estudante
+          Escolher outro perfil
         </a>
       </div>
       <ul class="unified-hero__trust" aria-label="Compromissos da plataforma">
-        <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i> {{ trial_days }} dias grátis para clínicas</li>
+        <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span data-profile-reassurance>{{ profile.reassurance }}</span></li>
         <li><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Dados protegidos</li>
         <li><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> Funciona no celular</li>
       </ul>
     </div>
 
-    <div class="unified-network" aria-label="A jornada conectada na PetOrlândia">
-      <div class="unified-network__center">
-        <img src="{{ url_for('static', filename='pastorgato-96.png') }}"
-             alt="" width="96" height="91">
-        <strong>PetOrlândia</strong>
-        <span>um histórico compartilhado com permissão</span>
-      </div>
-      <div class="unified-network__role unified-network__role--tutor">
-        <i class="fa-solid fa-heart" aria-hidden="true"></i><span>Tutor</span>
-      </div>
-      <div class="unified-network__role unified-network__role--clinic">
-        <i class="fa-solid fa-hospital" aria-hidden="true"></i><span>Clínica</span>
-      </div>
-      <div class="unified-network__role unified-network__role--vet">
-        <i class="fa-solid fa-user-doctor" aria-hidden="true"></i><span>Veterinário</span>
-      </div>
-      <div class="unified-network__role unified-network__role--student">
-        <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i><span>Estudante</span>
-      </div>
-    </div>
   </section>
+  {% if landing_screenshot %}
+  <figure class="product-proof">
+    <img src="{{ url_for('static', filename=landing_screenshot) }}" alt="Página de trabalho do PetOrlândia com agenda, pacientes e próximos cuidados." width="1440" height="1000" fetchpriority="high" decoding="async">
+    <figcaption>O sistema por dentro. Tela real com dados de demonstração.</figcaption>
+  </figure>
+  {% endif %}
 
   <section id="como-funciona" class="unified-section" aria-labelledby="journey-title">
     <header class="unified-section__heading">
@@ -150,7 +134,10 @@
       <a href="{{ url_for('index', perfil=key) }}#perfis"
          class="unified-profile-tab{% if key == selected_profile %} is-active{% endif %}"
          role="tab"
+         id="profile-tab-{{ key }}" aria-controls="unified-profile-content"
+         tabindex="{{ '0' if key == selected_profile else '-1' }}"
          aria-selected="{{ 'true' if key == selected_profile else 'false' }}"
+         data-profile-url="{{ url_for('public_profile_panel', profile_key=key) }}"
          data-profile="{{ key }}">
         <i class="fa-solid {{ profile_labels[key][0] }}" aria-hidden="true"></i>
         {{ profile_labels[key][1] }}
@@ -158,7 +145,7 @@
       {% endfor %}
     </div>
 
-    <div id="unified-profile-content" class="unified-profile-content" aria-live="polite">
+    <div id="unified-profile-content" class="unified-profile-content" role="tabpanel" aria-labelledby="profile-tab-{{ selected_profile }}" tabindex="0" aria-live="polite">
       {% include 'partials/public_profile_panel.html' %}
     </div>
     <p id="unified-profile-status" class="visually-hidden" role="status" aria-live="polite"></p>
@@ -195,58 +182,9 @@
       <span class="unified-kicker">Comece pelo que importa agora</span>
       <h2 id="unified-final-title">Seu próximo cuidado já pode nascer organizado.</h2>
     </div>
-    <a href="#perfis" class="unified-btn unified-btn--light">Escolher meu perfil</a>
+    <a href="{{ profile.primary_url }}" class="unified-btn unified-btn--light" data-profile-primary data-cta="home_{{ selected_profile }}_final"><span>{{ profile.primary_label }}</span></a>
   </section>
-</main>
+</div>
 
-<script>
-(function () {
-  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-profile]'));
-  var content = document.getElementById('unified-profile-content');
-  var status = document.getElementById('unified-profile-status');
-  if (!tabs.length || !content) return;
-  var controller;
-
-  function selectTab(selected) {
-    tabs.forEach(function (tab) {
-      var active = tab === selected;
-      tab.classList.toggle('is-active', active);
-      tab.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
-  }
-
-  tabs.forEach(function (tab) {
-    tab.addEventListener('click', function (event) {
-      if (!window.fetch) return;
-      event.preventDefault();
-      var profile = tab.dataset.profile;
-      if (controller) controller.abort();
-      controller = new AbortController();
-      selectTab(tab);
-      content.classList.add('is-loading');
-      if (status) status.textContent = 'Atualizando conteúdo para ' + tab.textContent.trim() + '.';
-      fetch('/inicio/perfil/' + encodeURIComponent(profile), {
-        headers: {'Accept': 'text/html'},
-        signal: controller.signal
-      })
-        .then(function (response) {
-          if (!response.ok) throw new Error('profile_failed');
-          return response.text();
-        })
-        .then(function (html) {
-          content.innerHTML = html;
-          window.history.replaceState({}, '', '/?perfil=' + encodeURIComponent(profile) + '#perfis');
-          if (status) status.textContent = 'Conteúdo atualizado.';
-        })
-        .catch(function (error) {
-          if (error.name === 'AbortError') return;
-          window.location.href = tab.href;
-        })
-        .finally(function () {
-          content.classList.remove('is-loading');
-        });
-    });
-  });
-})();
-</script>
+<script src="{{ url_for('static', filename='js/public_home.js', v='1') }}" defer></script>
 {% endblock %}

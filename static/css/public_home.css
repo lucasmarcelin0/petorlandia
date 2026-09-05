@@ -1,0 +1,23 @@
+.unified-home .unified-hero { display: block; padding: 36px 0 24px; background: transparent; min-height: 0; }
+.unified-home .unified-hero__copy { max-width: 850px; }
+.unified-home #unified-home-title { font-size: 3rem; line-height: 1.1; letter-spacing: 0; }
+.unified-home .unified-hero__copy > p { font-size: 1.125rem; line-height: 1.65; }
+.unified-home .unified-hero::before, .unified-home .unified-hero::after { display: none; }
+.unified-home .unified-btn { border-radius: 6px; white-space: normal; min-height: 44px; text-align: center; }
+.unified-home .unified-profile-tabs { gap: 8px; }
+.unified-home .unified-profile-tab { min-height: 44px; white-space: normal; }
+.unified-home .unified-profile-content { min-height: 350px; border-radius: 8px; }
+.unified-home .unified-profile-content[aria-busy="true"] { opacity: .65; }
+.unified-home .product-proof { margin: 0; padding: 16px 0 32px; border-bottom: 1px solid #dce4df; }
+.unified-home .product-proof img { width: 100%; height: auto; display: block; border: 1px solid #dce4df; border-radius: 6px; }
+.unified-home .product-proof figcaption { padding-top: 10px; font-size: .8rem; color: #536259; }
+.unified-home .unified-hero__trust { flex-wrap: wrap; }
+.unified-home .unified-hero__trust li { min-width: 0; }
+.unified-home .unified-section__heading h2 { letter-spacing: 0; }
+@media (max-width: 575.98px) {
+  .unified-home #unified-home-title { font-size: 2.25rem; }
+  .unified-home .unified-hero { padding-top: 16px; }
+  .unified-home .unified-hero__copy > p { font-size: 1rem; }
+  .unified-home .unified-profile-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .unified-home .unified-profile-tab { font-size: .875rem; padding: 10px 6px; }
+}
