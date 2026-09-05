@@ -370,8 +370,8 @@
                 </td>
                 <td>
                   {% if p._link_whatsapp %}
-                  <a href="{{ p._link_whatsapp }}" target="_blank" class="btn btn-sm btn-success py-0 px-2">
-                    <i class="fab fa-whatsapp"></i>
+                  <a href="{{ p._link_whatsapp }}" target="_blank" class="btn btn-sm btn-success py-0 px-2" aria-label="Abrir conversa no WhatsApp com o paciente" title="Abrir conversa no WhatsApp">
+                    <i class="fab fa-whatsapp" aria-hidden="true"></i>
                   </a>
                   {% else %}
                   <span class="text-muted">—</span>
