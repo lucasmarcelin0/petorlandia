@@ -1,0 +1,7 @@
+# Arquivos cuja integridade e verificada por hash precisam ter os MESMOS bytes
+# em qualquer sistema. Com core.autocrlf=true (padrao no Windows) o checkout
+# converte LF em CRLF e o sha256 deixa de bater: os instrumentos arquivados do
+# SFA falhavam a verificacao de integridade em toda maquina Windows, ainda que
+# o conteudo versionado estivesse intacto.
+config/sfa_instrument_history/** -text
+config/sfa_*_form.json -text
