@@ -126,10 +126,34 @@
 
 /* A marca cede espaço primeiro: encolhe o nome no celular e, só em telas bem
    estreitas, deixa o logotipo sozinho — o nome segue legível a leitores de
-   tela para o link continuar com rótulo acessível. */
-.navbar--public .navbar-brand {
-  flex-shrink: 1;
-  min-width: 0;
+   tela para o link continuar com rótulo acessível.
+
+   A regra vale só enquanto o menu está colapsado. A partir de `lg` o
+   `.navbar-collapse` vira um item flex de base larga; com `min-width: 0` a
+   marca era o único item que podia encolher e ia a zero, deixando o nome
+   "PetOrlândia" desenhado por baixo dos links (213px de sobreposição em
+   1024–1440px). Acima do breakpoint a marca reserva o próprio conteúdo e quem
+   cede espaço é o menu. */
+@media (max-width: 991.98px) {
+  .navbar--public .navbar-brand {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 992px) {
+  .navbar--public .navbar-brand {
+    flex-shrink: 0;
+  }
+
+  .navbar--public .navbar-collapse {
+    min-width: 0;
+  }
+
+  .navbar--public .navbar-collapse .navbar-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 575.98px) {

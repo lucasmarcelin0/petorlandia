@@ -1,4 +1,46 @@
 {% extends "layout.html" %}
+
+{# Página de maior intenção comercial do site ("vacina a domicílio em X") e,
+   até aqui, a única do funil pago sem título próprio: herdava o <title>
+   genérico "PetOrlândia" e a descrição padrão do layout, o que a deixava
+   indistinguível na busca e sem prévia útil no WhatsApp. O título acompanha a
+   cidade selecionada porque é assim que a busca acontece. #}
+{% set _cidade = cidade_selecionada %}
+{% set _precos = items | map(attribute='preco') | select('!=', None) | list %}
+{% set _preco_min = _precos | min if _precos else None %}
+
+{% block page_title %}Vacinação de cães e gatos a domicílio{% if _cidade %} em {{ _cidade }}{% endif %} — PetOrlândia{% endblock %}
+
+{% block meta_description %}Agende vacina para cachorro e gato em casa{% if _cidade %} em {{ _cidade }}{% endif %}: veterinário vai até você, preço à vista antes de agendar{% if _preco_min %}, a partir de R$ {{ '%.0f'|format(_preco_min) }}{% endif %}, e a carteirinha digital fica no histórico do pet.{% endblock %}
+
+{% block meta_keywords %}vacina a domicilio{% if _cidade %} {{ _cidade|lower }}{% endif %}, vacinar cachorro em casa, vacina gato domicilio, v8 v10 preco, antirrabica cachorro, veterinario a domicilio{% if _cidade %} {{ _cidade|lower }}{% endif %}{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "serviceType": "Vacinação veterinária a domicílio",
+    "name": ("Vacinação de cães e gatos a domicílio" ~ (" em " ~ _cidade if _cidade else "")),
+    "description": self.meta_description()|trim,
+    "url": request.base_url,
+    "areaServed": ({"@type": "City", "name": _cidade} if _cidade else "Brasil"),
+    "provider": {
+      "@type": "Organization",
+      "name": "PetOrlândia",
+      "url": url_for("index", _external=True)
+    },
+    "offers": {
+      "@type": "AggregateOffer",
+      "priceCurrency": "BRL",
+      "lowPrice": ('%.2f' % _preco_min) if _preco_min else None,
+      "offerCount": items | length,
+      "availability": "https://schema.org/InStock"
+    }
+  } | tojson }}
+</script>
+{% endblock %}
+
 {% block main %}
 <style>
   .vacserv-page {

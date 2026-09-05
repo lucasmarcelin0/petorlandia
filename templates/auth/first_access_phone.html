@@ -54,7 +54,7 @@
             {% if next_url %}
                 <input type="hidden" name="next" value="{{ next_url }}">
             {% endif %}
-            {{ render_field(form.phone, classes='form-control rounded-pill', placeholder='Celular com DDD') }}
+            {{ render_field(form.phone, classes='form-control rounded-pill', placeholder='Celular com DDD', type='tel', autocomplete='tel') }}
             <p class="text-muted small text-center mt-1 mb-3">
                 Use o mesmo celular que você informou no atendimento.
             </p>

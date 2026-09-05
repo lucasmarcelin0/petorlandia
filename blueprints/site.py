@@ -1405,12 +1405,21 @@ def _sitemap_dynamic_paths() -> list[str]:
             for city in _vet_all_public_cities(vet)
             if city
         }
-        cidades.update(city for city in _vaccine_cities() if city)
+        vaccine_cities = [city for city in _vaccine_cities() if city]
+        cidades.update(vaccine_cities)
 
         for cidade in sorted(cidades):
             encoded = quote(cidade, safe='')
             paths.append(f'/servicos?cidade={encoded}')
             paths.append(f'/veterinarios?cidade={encoded}')
+
+        # A vacina a domicílio é a página de maior intenção de compra do site e
+        # ficava fora do sitemap: o rastreador só chegava nela por link interno.
+        # Entra apenas quando existe item ativo — mesma regra da loja.
+        if vaccine_cities:
+            paths.append('/servicos/vacinas')
+            for cidade in sorted(vaccine_cities):
+                paths.append(f'/servicos/vacinas?cidade={quote(cidade, safe="")}')
 
         for vet in vets:
             paths.append(f'/veterinario/{vet.id}/solicitar')

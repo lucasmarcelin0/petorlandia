@@ -1,5 +1,11 @@
 {% extends "layout.html" %}
 
+{# Página no sitemap que herdava o <title> genérico do layout: aparecia na
+   busca como "PetOrlândia", sem dizer do que se trata. #}
+{% block page_title %}PetOrlândia no ChatGPT — prontuário e agenda por conversa{% endblock %}
+{% block meta_description %}Conecte a PetOrlândia ao ChatGPT e consulte agenda, histórico do paciente e vacinas conversando. Integração oficial, com as permissões da sua clínica.{% endblock %}
+{% block meta_keywords %}petorlandia chatgpt, app veterinario chatgpt, prontuario veterinario por chat, integracao chatgpt clinica veterinaria{% endblock %}
+
 {% block main %}
 <style>
   .chatgpt-page {

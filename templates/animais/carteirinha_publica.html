@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carteirinha de {{ animal.name }} — PetOrlândia</title>
   <meta name="robots" content="noindex">
-  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
+  {# favicon.png tem 1,4 MB (é a arte em tamanho cheio). Esta é a página mais
+     compartilhada do produto — o tutor manda a carteirinha por WhatsApp — e
+     cada abertura baixava 1,4 MB só para desenhar o ícone da aba. O mesmo
+     ícone de 32px já usado no layout resolve em 2,8 KB. #}
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato-32.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
   <style>
     body { background: #f4f7f8; }

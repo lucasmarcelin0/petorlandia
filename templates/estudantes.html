@@ -35,8 +35,8 @@
         {{ form.hidden_tag() }}
         <input type="hidden" name="next" value="{{ student_next }}">
         <input type="hidden" name="audience" value="student">
-        {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular') }}
-        {{ render_field(form.password, classes='form-control rounded-pill') }}
+        {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular', autocomplete='username') }}
+        {{ render_field(form.password, classes='form-control rounded-pill', autocomplete='current-password') }}
         {{ render_checkbox(form.remember) }}
         {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
         <div class="student-login-card__links">

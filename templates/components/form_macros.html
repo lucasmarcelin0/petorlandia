@@ -1,7 +1,15 @@
-{% macro render_field(field, type='text', label=None, placeholder='', classes='form-control') %}
+{# `type` fica sem default de propósito. Com `type='text'` a macro sobrescrevia
+   o tipo nativo do widget e todo PasswordField virava um input de texto: a
+   senha aparecia na tela enquanto era digitada e nenhum gerenciador de senhas
+   reconhecia o campo para salvar ou preencher. Passe `type` só quando quiser
+   mesmo trocar o tipo (ex.: `type='tel'` num StringField). #}
+{% macro render_field(field, type=None, label=None, placeholder='', classes='form-control', autocomplete=None) %}
 <div class="mb-3">
   <label for="{{ field.id }}" class="form-label">{{ label if label is not none else field.label.text }}</label>
-  {{ field(class=classes, id=field.id, placeholder=placeholder, type=type) }}
+  {% set extra = {} %}
+  {% if type %}{% set _ = extra.update({'type': type}) %}{% endif %}
+  {% if autocomplete %}{% set _ = extra.update({'autocomplete': autocomplete}) %}{% endif %}
+  {{ field(class=classes, id=field.id, placeholder=placeholder, **extra) }}
   {% for error in field.errors %}
   <div class="text-danger">{{ error }}</div>
   {% endfor %}

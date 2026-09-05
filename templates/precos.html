@@ -13,14 +13,42 @@
   "image": "{{ url_for('static', filename='img/og-petorlandia.png', _external=True) }}",
   "description": "Software completo para clínicas veterinárias: prontuário, agenda integrada, controle de vacinas e relatórios financeiros.",
   "offers": {
-    "@type": "Offer",
+    "@type": "AggregateOffer",
     "url": "{{ url_for('precos', _external=True) }}",
     "priceCurrency": "BRL",
-    "price": "{{ '%.2f'|format(monthly_price) }}",
+    "lowPrice": "{{ '%.2f'|format(annual_monthly_price) }}",
+    "highPrice": "{{ '%.2f'|format(monthly_price) }}",
+    "offerCount": 2,
     "priceValidUntil": "2027-12-31",
     "availability": "https://schema.org/InStock"
   }
 }
+</script>
+{# As mesmas perguntas que aparecem na página, em FAQPage: o resultado de busca
+   passa a ocupar as respostas em vez de uma linha só, e as objeções de preço
+   já são respondidas antes do clique. Se editar o texto visível abaixo, edite
+   aqui também — o Google exige que os dois coincidam. #}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {"@type": "Question", "name": "Os dados dos meus pacientes são meus?",
+       "acceptedAnswer": {"@type": "Answer", "text": "São. O prontuário, o histórico e a lista de clientes pertencem à clínica. A qualquer momento o responsável pode baixar uma exportação da clínica, e se decidir sair leva os dados com você."}},
+      {"@type": "Question", "name": "Consigo trazer a agenda e os clientes que já tenho?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Sim. Se hoje está em planilha, caderno ou outro sistema, mandamos o modelo de planilha e fazemos a importação junto com você antes de o teste começar a contar."}},
+      {"@type": "Question", "name": "E se eu quiser cancelar?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Cancela pelo próprio sistema, sem ligar para ninguém e sem multa. O acesso continua até o fim do período já pago e depois a cobrança simplesmente para."}},
+      {"@type": "Question", "name": "Preciso instalar alguma coisa?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Não. Funciona no navegador do computador e do celular. Se a internet cair no meio de um atendimento, o sistema guarda o que você digitou e envia quando a conexão voltar."}},
+      {"@type": "Question", "name": "Quem cobra do tutor: eu ou a PetOrlândia?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Você. A PetOrlândia cobra apenas a mensalidade do sistema — o que o tutor paga pela consulta é da clínica, e não retemos nenhum percentual do seu atendimento."}},
+      {"@type": "Question", "name": "O que acontece quando os " ~ trial_days ~ " dias acabam?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Se você configurar o pagamento durante o teste, a primeira cobrança acontece ao fim da avaliação e o sistema continua sem interrupção. Sem pagamento configurado, as ferramentas profissionais pausam ao fim do teste, e agenda, prontuários e histórico ficam guardados para quando você decidir voltar."}},
+      {"@type": "Question", "name": "Preciso cadastrar cartão para testar?",
+       "acceptedAnswer": {"@type": "Answer", "text": "Não. Você pode usar a avaliação primeiro e configurar o pagamento quando decidir continuar. Nenhum valor é cobrado durante o teste, e os dados do cartão ficam no Mercado Pago, não conosco."}}
+    ]
+  } | tojson }}
 </script>
 {% endblock %}
 
