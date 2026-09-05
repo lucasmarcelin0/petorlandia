@@ -247,24 +247,30 @@ def can_manage_clinic(user: Any, clinic_id: int | None) -> bool:
 
 def can_view_budget(user: Any, clinic_id: int | None, consultation_id: int | None = None) -> bool:
     del consultation_id
-    return bool(clinic_id) and _can(user, "budget", "view") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    return _can_clinic_resource(user, clinic_id, "budget", "view")
 
 
 def can_manage_budget(user: Any, clinic_id: int | None, consultation_id: int | None = None) -> bool:
     del consultation_id
-    return bool(clinic_id) and _can(user, "budget", "manage") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    return _can_clinic_resource(user, clinic_id, "budget", "manage")
 
 
 def can_view_financial(user: Any, clinic_id: int | None) -> bool:
-    return bool(clinic_id) and _can(user, "financial", "view") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    return _can_clinic_resource(user, clinic_id, "financial", "view")
 
 
 def can_view_fiscal_documents(user: Any, clinic_id: int | None) -> bool:
-    return bool(clinic_id) and _can(user, "fiscal_documents", "view") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    return _can_clinic_resource(user, clinic_id, "fiscal_documents", "view")
 
 
 def can_manage_fiscal_documents(user: Any, clinic_id: int | None) -> bool:
-    return bool(clinic_id) and _can(user, "fiscal_documents", "manage") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    return _can_clinic_resource(user, clinic_id, "fiscal_documents", "manage")
+
+
+def _can_clinic_resource(user, clinic_id, resource, action):
+    if not clinic_id or not _can(user, resource, action):
+        return False
+    return _is_global_admin(user) or int(clinic_id) in _viewer_operational_clinic_ids(user)
 
 
 def can_view_personal_data(user: Any, owner_user_id: int | None) -> bool:

@@ -62,7 +62,11 @@
         </div>
       </div>
       <div class="header-powered-by">
-        <img src="{{ url_for('static', filename='logo_pet.png') }}" alt="" aria-hidden="true">
+        {# Renderizado a 18px de altura (print.css). O arquivo cheio é 1024x1024
+           com 1,4 MB; a versão de 320px pesa 118 KB e continua nítida na
+           impressão. #}
+        <img src="{{ url_for('static', filename='logo_pet-320.png') }}" alt="" aria-hidden="true"
+             width="320" height="320">
         <span>Fornecido com tecnologia <strong>PetOrlândia</strong></span>
       </div>
     </div>

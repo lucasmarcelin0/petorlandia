@@ -8588,8 +8588,17 @@ def verificar_datas_proximas() -> None:
                     recipients=[tutor.email],
                     body=texto,
                 )
-                mail.send(msg)
-                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='appointment'))
+                # Um endereço inválido ou uma queda do SMTP não pode cancelar o
+                # lembrete de todo mundo: sem este try o job inteiro abortava no
+                # primeiro erro e o commit lá embaixo nunca acontecia, perdendo
+                # também os avisos já enfileirados. O WhatsApp logo abaixo já
+                # seguia essa regra.
+                try:
+                    mail.send(msg)
+                except Exception as exc:  # noqa: BLE001
+                    current_app.logger.error("Erro ao enviar e-mail de lembrete: %s", exc)
+                else:
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='appointment'))
             if tutor.phone:
                 numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
                 try:
@@ -8623,8 +8632,17 @@ def verificar_datas_proximas() -> None:
                     recipients=[tutor.email],
                     body=texto,
                 )
-                mail.send(msg)
-                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='exam'))
+                # Um endereço inválido ou uma queda do SMTP não pode cancelar o
+                # lembrete de todo mundo: sem este try o job inteiro abortava no
+                # primeiro erro e o commit lá embaixo nunca acontecia, perdendo
+                # também os avisos já enfileirados. O WhatsApp logo abaixo já
+                # seguia essa regra.
+                try:
+                    mail.send(msg)
+                except Exception as exc:  # noqa: BLE001
+                    current_app.logger.error("Erro ao enviar e-mail de lembrete: %s", exc)
+                else:
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='exam'))
             if tutor.phone:
                 numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
                 try:
@@ -8653,8 +8671,17 @@ def verificar_datas_proximas() -> None:
                     recipients=[tutor.email],
                     body=texto,
                 )
-                mail.send(msg)
-                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='vaccine'))
+                # Um endereço inválido ou uma queda do SMTP não pode cancelar o
+                # lembrete de todo mundo: sem este try o job inteiro abortava no
+                # primeiro erro e o commit lá embaixo nunca acontecia, perdendo
+                # também os avisos já enfileirados. O WhatsApp logo abaixo já
+                # seguia essa regra.
+                try:
+                    mail.send(msg)
+                except Exception as exc:  # noqa: BLE001
+                    current_app.logger.error("Erro ao enviar e-mail de lembrete: %s", exc)
+                else:
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='vaccine'))
             if tutor.phone:
                 numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
                 try:

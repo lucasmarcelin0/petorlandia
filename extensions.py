@@ -42,6 +42,53 @@ class TestingAwareSQLAlchemy(SQLAlchemy):
             return super().create_all(bind_key=bind)
 
 
+def _install_smtp_timeout() -> None:
+    """Dá timeout ao socket SMTP do Flask-Mail.
+
+    ``flask_mail.Connection.configure_host`` chama ``smtplib.SMTP(host, port)``
+    sem ``timeout``, então o socket herda o default do módulo — ``None``, ou
+    seja, espera para sempre. Como os e-mails são enviados dentro da requisição,
+    um SMTP que aceita a conexão e não responde prende a thread do gunicorn até
+    o ``--timeout 60`` matar o worker inteiro; com um worker de quatro threads,
+    quatro envios travados derrubam o site.
+
+    O valor vem de ``MAIL_TIMEOUT`` (segundos). Envio de e-mail é best-effort em
+    todo o app: estourar o tempo vira um warning, não um 500.
+    """
+    import smtplib
+
+    from flask_mail import Connection
+
+    if getattr(Connection, "_petorlandia_timeout_patch", False):
+        return
+
+    def configure_host(self):  # type: ignore[override]
+        timeout = 10
+        try:
+            if has_app_context():
+                timeout = int(current_app.config.get("MAIL_TIMEOUT", 10) or 10)
+        except (TypeError, ValueError):
+            timeout = 10
+
+        if self.mail.use_ssl:
+            host = smtplib.SMTP_SSL(self.mail.server, self.mail.port, timeout=timeout)
+        else:
+            host = smtplib.SMTP(self.mail.server, self.mail.port, timeout=timeout)
+
+        host.set_debuglevel(int(self.mail.debug))
+        if self.mail.use_tls:
+            host.starttls()
+        if self.mail.username and self.mail.password:
+            host.login(self.mail.username, self.mail.password)
+        return host
+
+    Connection.configure_host = configure_host
+    Connection._petorlandia_timeout_patch = True
+
+
+_install_smtp_timeout()
+
+
 db = TestingAwareSQLAlchemy()
 migrate = Migrate()
 mail = Mail()

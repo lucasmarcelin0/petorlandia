@@ -1,115 +1,12 @@
-{% if current_user.role == 'admin' or current_user.worker == 'colaborador' or is_active_veterinarian %}
-<div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white dashboard-work-area" data-dashboard-area="professional">
-    <h2 class="mb-2 h5">Área profissional</h2>
-    <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
-    {% set _clinicas_proprias = current_user.clinicas or [] %}
-    {% set clinica_do_usuario = _clinicas_proprias[0] if _clinicas_proprias else current_user.clinica %}
-    <div class="d-flex justify-content-center mb-3">
-        {% if clinica_do_usuario %}
-        <a href="{{ url_for('minha_clinica') }}"
-           class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-4 border bg-light text-decoration-none"
-           data-bs-toggle="tooltip" title="Abre a página da sua clínica para editar dados, horários e equipe.">
-            {% if clinica_do_usuario.logotipo %}
-            <img src="{{ clinica_do_usuario.logotipo }}" alt="Logo de {{ clinica_do_usuario.nome }}"
-                 width="42" height="42" class="rounded-circle border" style="object-fit: cover;">
-            {% else %}
-            <span class="rounded-circle border d-inline-flex align-items-center justify-content-center bg-white"
-                  style="width:42px;height:42px;">🏥</span>
-            {% endif %}
-            <span class="text-start">
-                <span class="fw-semibold text-body d-block">{{ clinica_do_usuario.nome }}</span>
-                <span class="small text-muted">
-                    {% if clinica_do_usuario.status == 'pendente' %}
-                        <i class="fa-regular fa-clock me-1"></i>Cadastro em análise
-                    {% else %}
-                        Gerenciar minha clínica
-                    {% endif %}
-                </span>
-            </span>
-            <i class="fa-solid fa-chevron-right small text-muted ms-2"></i>
-        </a>
-        {% else %}
-        <a href="{{ url_for('minha_clinica') }}" class="btn btn-success rounded-pill shadow-sm px-4 py-2"
-           data-bs-toggle="tooltip" title="Cadastre sua clínica para gerenciar equipe, agenda e atendimentos.">
-            <i class="fa-solid fa-house-medical me-1"></i> Cadastrar minha clínica
-        </a>
-        {% endif %}
-    </div>
-    <div class="d-flex flex-wrap justify-content-center gap-3">
-        <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Abre a lista de animais para editar vínculos e dados.">
-            🐶 Animais
-        </a>
-        <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Visualiza tutores e permite atualizar contatos.">
-            👥 Tutores
-        </a>
-        {% if current_user.role == 'admin' or current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
-        <a href="{{ url_for('appointments') }}" class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Abre a agenda para marcar e revisar atendimentos.">
-            🗓️ Agenda
-        </a>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-{% if current_user.role in ['admin', 'vacinador'] %}
-<div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white dashboard-work-area" data-dashboard-area="vaccinator">
-    <h2 class="mb-2 h5">Área do Vacinador</h2>
-    <p class="text-muted small">Acesse a lista de animais a vacinar no dia.</p>
-    <div class="d-flex flex-wrap justify-content-center gap-3">
-        <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Lista de tutores e animais por turno.">
-            💉 Vacinação — Agenda de Turnos
-        </a>
-    </div>
-</div>
-{% endif %}
-
-{% if current_user.role in ['parceiro', 'admin'] %}
-<div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white dashboard-work-area" data-dashboard-area="partner">
-    <h2 class="mb-2 h5">Área do Parceiro</h2>
-    <p class="text-muted small">Cadastre estabelecimentos, produtos e novos usuários.</p>
-    <div class="d-flex flex-wrap justify-content-center gap-3">
-        <a href="{{ url_for('parceiro_dashboard') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Abre o painel para acompanhar os estabelecimentos cadastrados.">
-            <i class="fa-solid fa-handshake me-1"></i> Painel do parceiro
-        </a>
-        <a href="{{ url_for('parceiro_novo_estabelecimento') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-            data-bs-toggle="tooltip" title="Cadastrar clínica, petshop, banho e tosa, casa de ração ou petsitter.">
-            <i class="fa-solid fa-store me-1"></i> Cadastrar estabelecimento
-        </a>
-    </div>
-</div>
-{% endif %}
-
-{% if current_user.worker == 'delivery' or current_user.role == 'admin' %}
-<div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white dashboard-work-area" data-dashboard-area="delivery">
-    <h2 class="mb-2 h5">Área de Entregas</h2>
-    <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
-    <div class="d-flex flex-wrap justify-content-center gap-3">
-        <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
-            🚚 Solicitações
-        </a>
-    </div>
-</div>
-{% endif %}
-
-{% set owned_clinics = current_user.clinicas or [] %}
-{% set has_admin_role = current_user.role in ['admin', 'master'] %}
-{% set admin_worker_roles = ['gestor', 'administrador', 'admin_clinica', 'master'] %}
-{% set has_admin_worker = current_user.worker in admin_worker_roles %}
-{% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
-{% if has_admin_role or has_admin_worker or owner_with_access %}
-<div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card card-surface-white dashboard-work-area" data-dashboard-area="accounting">
-    <h2 class="mb-2 text-center h5">Contabilidade</h2>
-    <p class="text-muted small text-center">Escolha um painel para acompanhar receitas, pagamentos e obrigações.</p>
-    <div class="d-flex flex-wrap justify-content-center gap-3">
-        <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--finance"><i class="fa-solid fa-chart-line"></i><span>Financeiro</span></a>
-        <a href="/contabilidade/pagamentos" class="btn accounting-btn accounting-btn--payments"><i class="fa-solid fa-briefcase"></i><span>Pagamentos / PJs</span></a>
-        <a href="/contabilidade/obrigacoes" class="btn accounting-btn accounting-btn--obligations"><i class="fa-solid fa-file-invoice-dollar"></i><span>Obrigações</span></a>
-        <a href="/contabilidade/nfse" class="btn accounting-btn accounting-btn--obligations"><i class="fa-solid fa-receipt"></i><span>NFS-e</span></a>
-    </div>
-</div>
-{% endif %}
+{% for workspace in user_experience.workspaces %}
+<section class="dashboard-work-area workspace-band" data-dashboard-area="{{ workspace.key }}" aria-labelledby="workspace-{{ workspace.key }}">
+  <h2 id="workspace-{{ workspace.key }}" class="h5"><i class="fa-solid {{ workspace.icon }} me-2" aria-hidden="true"></i>{{ workspace.label }}</h2>
+  <div class="workspace-actions">
+    {% for action in workspace.actions %}
+    <a href="{{ action.url }}" class="btn {{ 'btn-primary' if loop.first else 'btn-outline-secondary' }}" data-cta="workspace_{{ workspace.key }}_{{ loop.index }}">
+      <i class="fa-solid {{ action.icon }} me-2" aria-hidden="true"></i>{{ action.label }}
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}

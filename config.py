@@ -147,6 +147,9 @@ class Config:
     MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
     MAIL_USE_TLS = _env_bool("MAIL_USE_TLS", True)
     MAIL_USE_SSL = _env_bool("MAIL_USE_SSL", False)
+    # Timeout do socket SMTP. Sem ele o smtplib espera indefinidamente e o
+    # envio — que acontece dentro da requisição — prende uma thread do gunicorn.
+    MAIL_TIMEOUT = int(os.environ.get("MAIL_TIMEOUT", "10"))
     MAIL_USERNAME = _env_optional("MAIL_USERNAME")
     MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
     _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")

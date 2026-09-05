@@ -516,6 +516,12 @@ def inject_activation_progress():
     return dict(activation_progress=progress)
 
 
+def inject_user_experience():
+    from services.workspaces import current_experience
+
+    return dict(user_experience=current_experience())
+
+
 _PROCESSORS = (
     inject_unread_count,
     inject_admin_action_notifications,
@@ -535,6 +541,7 @@ _PROCESSORS = (
     inject_ga_events,
     inject_default_pickup_address,
     inject_activation_progress,
+    inject_user_experience,
 )
 
 
