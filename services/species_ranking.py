@@ -64,15 +64,9 @@ _TOKENS_OUTRO = (
 )
 
 
-# Bolt performance optimization: pre-compile regex pattern for collapsing spaces
-_RE_SPACES = re.compile(r'\s+')
-
-
 def _normalizar(texto: str) -> str:
     """Lowercase + colapsa espaços."""
-    if not texto:
-        return ""
-    return _RE_SPACES.sub(' ', texto.lower()).strip()
+    return re.sub(r'\s+', ' ', (texto or '').lower()).strip()
 
 
 def especie_para_scope(especie_texto: Optional[str]) -> Optional[str]:
