@@ -207,6 +207,109 @@ def _pmo_event_time_label() -> str:
     return now_in_brazil().strftime("%H:%M")
 
 
+# --- Observação da planilha (coluna K) ------------------------------------
+#
+# A observação guarda DOIS conteúdos misturados no mesmo campo: o que uma
+# pessoa escreveu ("só depois das 17h", "portão do fundo") e o log que o
+# próprio sistema empilha a cada mudança de status ("17:17 - Fred: vacinado.").
+# Para o vacinador só o primeiro grupo importa, e é justamente o que ficava
+# escondido no meio do log. As funções abaixo separam os dois e são a fonte
+# única usada pela folha impressa, pela API e pela tela.
+PMO_STATUS_LOG_RE = re.compile(
+    r"^(?:E\s*-\s*)?(?:\d{1,2}:\d{2}\s*-\s*)?[^:]{1,60}:\s*"
+    r"(?:pendente|vacinad[oa]|ausente|remarcar|recusou|parcial)\.?$",
+    re.IGNORECASE,
+)
+PMO_NOTE_TIME_PREFIX_RE = re.compile(r"^(?:E\s*-\s*)?\d{1,2}:\d{2}\s*-\s*")
+
+# Horário combinado dentro do texto livre. Só aceita o número quando ele vem
+# com marca de hora ("14h", "14:30") ou logo depois de uma palavra de agenda
+# ("às 8", "das 8 às 11"), para não confundir com "2 cães" nem com datas.
+_PMO_SCHEDULE_STRONG_PREFIX = r"(?:às|as|ate|até|apos|após|antes\s+d[aeo]s?|depois\s+d[aeo]s?|a\s+partir\s+d[aeo]s?|por\s+volta\s+d[aeo]s?|entre)"
+_PMO_SCHEDULE_WEAK_PREFIX = r"(?:das|dos|de|do)"
+_PMO_SCHEDULE_TIME_RE = re.compile(
+    rf"(?:(?P<strong>{_PMO_SCHEDULE_STRONG_PREFIX})|(?P<weak>{_PMO_SCHEDULE_WEAK_PREFIX}))?\s*"
+    r"(?<![\d/:.])(?P<hour>\d{1,2})"
+    r"(?:\s*[:.]\s*(?P<minute>\d{2})|\s*h(?:oras?|s)?\s*(?P<minute2>\d{2})?)?"
+    r"(?![\d/])",
+    re.IGNORECASE,
+)
+# Depois de um número sem marca de hora ("das 8 às 11h"), só aceitamos o
+# horário quando o texto seguinte continua a faixa.
+_PMO_SCHEDULE_RANGE_TAIL_RE = re.compile(r"^\s*(?:às|as|até|ate|a)\b", re.IGNORECASE)
+
+
+def _pmo_format_clock(hour: int, minute: int) -> str:
+    return f"{hour}h{minute:02d}" if minute else f"{hour}h"
+
+
+def _pmo_schedule_matches(text: str) -> list[dict[str, Any]]:
+    """Horários citados no texto, na ordem em que aparecem."""
+    encontrados: list[dict[str, Any]] = []
+    for match in _PMO_SCHEDULE_TIME_RE.finditer(text or ""):
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute") or match.group("minute2") or 0)
+        if hour > 23 or minute > 59:
+            continue
+        marcado = bool(
+            match.group("minute")
+            or match.group("minute2")
+            or re.search(r"h(?:oras?|s)?\s*$", match.group(0), re.IGNORECASE)
+        )
+        strong = (match.group("strong") or "").strip().lower()
+        weak = (match.group("weak") or "").strip().lower()
+        # Sem "h" nem ":" o número só vira horário com contexto de agenda:
+        # "às 8" conta, "das 8 às 11" conta, "2 cães" e "Rua 15" não.
+        faixa = bool(weak) and bool(_PMO_SCHEDULE_RANGE_TAIL_RE.match(text[match.end():]))
+        if not (marcado or strong or faixa):
+            continue
+        encontrados.append({
+            "hour": hour,
+            "minute": minute,
+            "minutes": hour * 60 + minute,
+            "label": _pmo_format_clock(hour, minute),
+            "prefix": strong,
+        })
+    return encontrados
+
+
+def extract_pmo_note_highlights(note: Any) -> list[str]:
+    """Mantém só o que uma pessoa escreveu, descartando o log de status."""
+    livres: list[str] = []
+    for parte in str(note or "").split("|"):
+        texto = parte.strip()
+        if not texto or PMO_STATUS_LOG_RE.match(texto):
+            continue
+        texto = PMO_NOTE_TIME_PREFIX_RE.sub("", texto).strip()
+        if texto and texto not in livres:
+            livres.append(texto)
+    return livres
+
+
+def extract_pmo_schedule_hint(note: Any) -> dict[str, Any] | None:
+    """Horário combinado citado na observação, para destacar na rota.
+
+    Devolve ``None`` quando o texto livre não fala de hora — a observação
+    continua aparecendo inteira na tela, o destaque de horário é um extra.
+    """
+    for texto in extract_pmo_note_highlights(note):
+        horarios = _pmo_schedule_matches(texto)
+        if not horarios:
+            continue
+        primeiro = horarios[0]
+        label = primeiro["label"]
+        if len(horarios) > 1:
+            label = f"{label} às {horarios[1]['label']}"
+        else:
+            prefixo = primeiro["prefix"]
+            if prefixo.startswith(("apos", "após", "depois", "a partir")):
+                label = f"a partir de {label}"
+            elif prefixo.startswith(("ate", "até", "antes")):
+                label = f"até {label}"
+        return {"label": label, "minutes": primeiro["minutes"], "text": texto}
+    return None
+
+
 def _status_note_line(animal: PmoVaccinationAnimal, status: str) -> str:
     labels = {
         "pendente": "pendente",
@@ -2487,6 +2590,10 @@ def _serialize_visit(
         "cats": visit.cats or 0,
         "animals": animals,
         "note": visit.note or "",
+        # Observação sem o log de status e o horário combinado que ela cita:
+        # é o que o vacinador precisa ver antes de sair para a casa.
+        "noteHighlights": extract_pmo_note_highlights(visit.note),
+        "scheduleHint": extract_pmo_schedule_hint(visit.note),
         "requestedDate": visit.requested_date.isoformat() if visit.requested_date else "",
         "date": visit.vaccine_date.isoformat() if visit.vaccine_date else "",
         "shift": visit.shift or "",

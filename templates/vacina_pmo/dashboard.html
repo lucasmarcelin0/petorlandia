@@ -291,6 +291,134 @@
     padding-top: 6px;
   }
 
+  .pmo-note-text__label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    margin-bottom: 2px;
+  }
+
+  /* Observacao escrita por gente (planilha ou anotada na rota). Sobe para o
+     topo do card porque e o que muda a ordem e o jeito da visita; o texto
+     completo, com o log de status, continua no rodape. */
+  .pmo-note-highlight {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #fcd34d;
+    border-left: 5px solid #f59e0b;
+    background: #fffbeb;
+    color: #7c2d12;
+  }
+
+  .pmo-note-highlight--hora {
+    border-color: #fca5a5;
+    border-left-color: #dc2626;
+    background: #fef2f2;
+    color: #7f1d1d;
+  }
+
+  .pmo-note-highlight__head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+  }
+
+  .pmo-note-highlight__text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: pre-wrap;
+  }
+
+  .pmo-note-highlight__text + .pmo-note-highlight__text {
+    margin-top: 3px;
+  }
+
+  /* Na tabela o destaque e o primeiro item da celula de observacao. */
+  .pmo-note .pmo-note-highlight {
+    margin: 0 0 6px;
+  }
+
+  .pmo-hora-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* Resumo dos horarios do dia, acima da lista. */
+  .pmo-schedule-banner {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #fca5a5;
+    background: #fff5f5;
+  }
+
+  .pmo-schedule-banner__head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: #991b1b;
+    margin-bottom: 8px;
+  }
+
+  .pmo-schedule-banner__head .text-muted {
+    font-size: 0.8rem;
+  }
+
+  .pmo-schedule-banner__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .pmo-schedule-banner__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 4px 12px 4px 6px;
+    border-radius: 999px;
+    border: 1px solid #fecaca;
+    background: #ffffff;
+    color: #7f1d1d;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pmo-schedule-banner__item:hover {
+    border-color: #dc2626;
+  }
+
+  .pmo-schedule-banner__tutor {
+    font-size: 0.9rem;
+  }
+
+  /* Piscada curta ao chegar pelo aviso de horarios. */
+  .is-focus {
+    outline: 3px solid #dc2626;
+    outline-offset: 2px;
+    transition: outline-color 0.4s ease;
+  }
+
   .pmo-address {
     max-width: 300px;
   }
@@ -1891,6 +2019,7 @@
             </button>
           </div>
         </div>
+        <div class="pmo-schedule-banner" id="pmo-schedule-banner" role="note" hidden></div>
         <div class="pmo-table-wrap">
           <table class="table table-hover align-middle pmo-table">
             <thead>
@@ -6453,6 +6582,91 @@
     `;
   }
 
+  // --- Observacao da planilha ---------------------------------------------
+  //
+  // Espelho de extract_pmo_note_highlights/extract_pmo_schedule_hint no
+  // servidor. A leitura acontece aqui, a partir de row.note, para que a lista
+  // guardada no aparelho (modo offline, salva antes desta versao) tambem mostre
+  // o destaque sem precisar sincronizar de novo.
+  const PMO_STATUS_LOG_RE = /^(?:E\s*-\s*)?(?:\d{1,2}:\d{2}\s*-\s*)?[^:]{1,60}:\s*(?:pendente|vacinad[oa]|ausente|remarcar|recusou|parcial)\.?$/i;
+  const PMO_NOTE_TIME_PREFIX_RE = /^(?:E\s*-\s*)?\d{1,2}:\d{2}\s*-\s*/;
+  const PMO_SCHEDULE_TIME_RE = /(?:(às|as|ate|até|apos|após|antes\s+d[aeo]s?|depois\s+d[aeo]s?|a\s+partir\s+d[aeo]s?|por\s+volta\s+d[aeo]s?|entre)|(das|dos|de|do))?\s*(?:^|[^\d/:.])(\d{1,2})(?:\s*[:.]\s*(\d{2})|\s*h(?:oras?|s)?\s*(\d{2})?)?(?![\d/])/gi;
+  const PMO_SCHEDULE_RANGE_TAIL_RE = /^\s*(?:às|as|até|ate|a)\b/i;
+
+  function noteHighlights(note) {
+    const livres = [];
+    String(note || '').split('|').forEach((parte) => {
+      const texto = parte.trim();
+      if (!texto || PMO_STATUS_LOG_RE.test(texto)) return;
+      const limpo = texto.replace(PMO_NOTE_TIME_PREFIX_RE, '').trim();
+      if (limpo && !livres.includes(limpo)) livres.push(limpo);
+    });
+    return livres;
+  }
+
+  function formatClock(hour, minute) {
+    return minute ? `${hour}h${String(minute).padStart(2, '0')}` : `${hour}h`;
+  }
+
+  function scheduleTimesIn(text) {
+    const encontrados = [];
+    PMO_SCHEDULE_TIME_RE.lastIndex = 0;
+    let match = PMO_SCHEDULE_TIME_RE.exec(text);
+    while (match) {
+      const hour = Number(match[3]);
+      const minute = Number(match[4] || match[5] || 0);
+      const marcado = Boolean(match[4] || match[5] || /h(?:oras?|s)?\s*$/i.test(match[0]));
+      const forte = (match[1] || '').trim().toLowerCase();
+      const fraco = (match[2] || '').trim().toLowerCase();
+      const resto = text.slice(match.index + match[0].length);
+      // Sem "h" nem ":" o numero so vira horario quando o contexto e de agenda:
+      // assim "2 caes bravos" e "Rua 15" continuam fora do destaque.
+      const aceita = marcado || Boolean(forte) || (Boolean(fraco) && PMO_SCHEDULE_RANGE_TAIL_RE.test(resto));
+      if (aceita && hour <= 23 && minute <= 59) {
+        encontrados.push({ minutes: hour * 60 + minute, label: formatClock(hour, minute), prefix: forte });
+      }
+      match = PMO_SCHEDULE_TIME_RE.exec(text);
+    }
+    return encontrados;
+  }
+
+  function scheduleHint(note) {
+    const linhas = noteHighlights(note);
+    for (const texto of linhas) {
+      const horarios = scheduleTimesIn(texto);
+      if (!horarios.length) continue;
+      const primeiro = horarios[0];
+      let label = primeiro.label;
+      if (horarios.length > 1) {
+        label = `${label} às ${horarios[1].label}`;
+      } else if (/^(apos|após|depois|a partir)/.test(primeiro.prefix)) {
+        label = `a partir de ${label}`;
+      } else if (/^(ate|até|antes)/.test(primeiro.prefix)) {
+        label = `até ${label}`;
+      }
+      return { label, minutes: primeiro.minutes, text: texto };
+    }
+    return null;
+  }
+
+  // Destaque da observacao no topo do card e na tabela: o texto escrito por
+  // gente primeiro, com o horario combinado em selo proprio.
+  function renderNoteHighlight(row) {
+    const livres = noteHighlights(row.note);
+    if (!livres.length) return '';
+    const hora = scheduleHint(row.note);
+    return `
+      <div class="pmo-note-highlight${hora ? ' pmo-note-highlight--hora' : ''}">
+        <div class="pmo-note-highlight__head">
+          <i class="fas ${hora ? 'fa-clock' : 'fa-circle-exclamation'}" aria-hidden="true"></i>
+          <span>Observação</span>
+          ${hora ? `<span class="pmo-hora-chip">${escapeHtml(hora.label)}</span>` : ''}
+        </div>
+        ${livres.map((texto) => `<div class="pmo-note-highlight__text">${escapeHtml(texto)}</div>`).join('')}
+      </div>
+    `;
+  }
+
   function renderNote(row) {
     if (row.editingNote) {
       return `
@@ -6663,6 +6877,7 @@
           </div>
           <span class="pmo-status-badge" data-status="${row.status}"><i class="fas ${status.icon}"></i>${escapeHtml(status.label)}</span>
         </div>
+        ${renderNoteHighlight(row)}
         <div class="pmo-card-meta">
           <span class="pmo-meta-chip"><i class="fas fa-calendar-day"></i>${escapeHtml(displayDate(row.date) || '-')}</span>
           <span class="pmo-meta-chip"><i class="fas fa-clock"></i>${escapeHtml(row.shift || '-')}</span>
@@ -6684,6 +6899,7 @@
           ${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-wa-btn" href="${wa2}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp 2</a>` : ''}
         </div>
         <div class="pmo-card-note">
+          ${row.note ? '<div class="pmo-note-text__label">Histórico da observação</div>' : ''}
           <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
         </div>
       </article>
@@ -7068,12 +7284,63 @@
       </div>`;
   }
 
+  // Aviso do dia: as casas que combinaram hora aparecem juntas, em ordem de
+  // relogio, antes da lista. E o resumo que o vacinador olha ao sair.
+  const scheduleBannerEl = document.getElementById('pmo-schedule-banner');
+
+  function renderScheduleBanner(rows) {
+    if (!scheduleBannerEl) return;
+    const comHora = rows
+      .map((row) => ({ row, hint: scheduleHint(row.note) }))
+      .filter((item) => item.hint)
+      .sort((a, b) => a.hint.minutes - b.hint.minutes);
+    if (!comHora.length) {
+      scheduleBannerEl.hidden = true;
+      scheduleBannerEl.innerHTML = '';
+      return;
+    }
+    const itens = comHora.map(({ row, hint }) => `
+      <button type="button" class="pmo-schedule-banner__item" data-action="focus-visit" data-id="${escapeHtml(row.id)}"
+        title="${escapeHtml(hint.text)}">
+        <span class="pmo-hora-chip">${escapeHtml(hint.label)}</span>
+        <span class="pmo-schedule-banner__tutor">${escapeHtml(row.tutor || 'Sem nome')}</span>
+      </button>
+    `).join('');
+    scheduleBannerEl.hidden = false;
+    scheduleBannerEl.innerHTML = `
+      <div class="pmo-schedule-banner__head">
+        <i class="fas fa-clock" aria-hidden="true"></i>
+        <strong>${comHora.length} ${comHora.length === 1 ? 'casa pediu horário' : 'casas pediram horário'}</strong>
+        <span class="text-muted">toque para achar a casa na lista</span>
+      </div>
+      <div class="pmo-schedule-banner__list">${itens}</div>
+    `;
+  }
+
+  function focusVisitCard(id) {
+    const alvos = Array.from(document.querySelectorAll(`[data-id="${CSS.escape(id)}"]`))
+      .filter((el) => el.offsetParent !== null);
+    const alvo = alvos[0];
+    if (!alvo) return;
+    alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    alvo.classList.add('is-focus');
+    setTimeout(() => alvo.classList.remove('is-focus'), 2200);
+  }
+
+  if (scheduleBannerEl) {
+    scheduleBannerEl.addEventListener('click', (event) => {
+      const botao = event.target.closest('[data-action="focus-visit"]');
+      if (botao) focusVisitCard(botao.dataset.id);
+    });
+  }
+
   function render() {
     renderStats(state.rows);
     scheduleDayStockRefresh();
     renderEvaluationScope();
     updateFullRouteMapsButton();
     const visible = state.rows.filter(rowMatchesFilters);
+    renderScheduleBanner(visible);
     if (!visible.length) {
       tbody.innerHTML = `<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>${newVisitFooter()}</td></tr>`;
       cardsEl.innerHTML = `<div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>${newVisitFooter()}`;
@@ -7103,7 +7370,7 @@
           <td>${escapeHtml(row.shift || '-')}</td>
           <td>${wa1 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa1}" target="_blank" rel="noopener">WhatsApp 1</a>` : '<span class="text-muted">-</span>'}</td>
           <td>${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa2}" target="_blank" rel="noopener">WhatsApp 2</a>` : '<span class="text-muted">-</span>'}</td>
-          <td class="pmo-note"><div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div></td>
+          <td class="pmo-note">${renderNoteHighlight(row)}<div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div></td>
         </tr>
       `;
     }).join('')
