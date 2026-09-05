@@ -1,3 +1,8 @@
+{# `is_active_veterinarian` vem de `inject_veterinarian_membership_context`
+   (context_processors.py). NAO chame `is_veterinarian(...)` daqui: o helper
+   nao esta exposto ao Jinja, e a chamada derrubava /consulta/<id> inteiro com
+   UndefinedError. O booleano e equivalente -- `is_veterinarian` ja comeca
+   checando o perfil de veterinario. #}
 <div class="consultation-section-heading consultation-section-heading--documentos mb-4">
   <span class="consultation-section-heading__icon"><i class="fa-solid fa-file-lines"></i></span>
   <div>
@@ -6,7 +11,7 @@
   </div>
 </div>
 
-{% if is_veterinarian(current_user) %}
+{% if is_active_veterinarian %}
 <div class="mb-3">
   <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
   <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
@@ -40,7 +45,7 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
               {% if tutor.phone %}
                 <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
               {% endif %}
-              {% if current_user.role == 'admin' or (is_veterinarian(current_user) and current_user.id == d.veterinario_id) %}
+              {% if current_user.role == 'admin' or (is_active_veterinarian and current_user.id == d.veterinario_id) %}
               <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
@@ -55,7 +60,7 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
   <p class="text-muted">Nenhum documento enviado.</p>
 {% endif %}
 
-{% if is_veterinarian(current_user) %}
+{% if is_active_veterinarian %}
 <form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-2">
