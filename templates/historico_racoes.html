@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+
+{# A rota `historico_animal` (blueprints/pacientes.py) sempre renderizou este
+   template, que nunca existiu no repositório: toda visita a
+   /historico_animal/<id> terminava em TemplateNotFound e 500. O conteúdo
+   segue o mesmo formato do histórico já usado em
+   `casa_de_racao/animal_racoes.html`, para o tutor reconhecer a mesma lista
+   nos dois lugares. #}
+
+{% block page_title %}Histórico de ração de {{ animal.name }} — PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, follow{% endblock %}
+
+{% block main %}
+<div class="container mt-4" style="max-width: 900px;">
+
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="small text-decoration-none">
+        <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Ficha de {{ animal.name }}
+      </a>
+      <h1 class="h3 fw-bold mb-1">Histórico de ração</h1>
+      <p class="text-muted mb-0">
+        Alimentos registrados para {{ animal.name }}, do mais recente para o mais antigo.
+      </p>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      {% if racoes %}
+      <div class="list-group list-group-flush">
+        {% for racao in racoes %}
+        <div class="list-group-item px-0">
+          <div class="fw-semibold">
+            {% if racao.tipo_racao %}
+              {{ racao.tipo_racao.marca }}{% if racao.tipo_racao.linha %} {{ racao.tipo_racao.linha }}{% endif %}
+            {% else %}
+              Ração sem marca informada
+            {% endif %}
+          </div>
+          <div class="small text-muted">
+            {% if racao.tamanho_embalagem %}{{ racao.tamanho_embalagem }}{% endif %}
+            {% if racao.preco_pago %} · R$ {{ '%.2f'|format(racao.preco_pago)|replace('.', ',') }}{% endif %}
+            {% if racao.data_cadastro %} · {{ racao.data_cadastro.strftime('%d/%m/%Y') }}{% endif %}
+          </div>
+          {% if racao.observacoes_racao %}
+          <p class="small mb-0 mt-1">{{ racao.observacoes_racao }}</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">Nenhuma ração registrada para {{ animal.name }} ainda.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
