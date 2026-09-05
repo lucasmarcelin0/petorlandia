@@ -127,3 +127,21 @@ def test_safe_fetch_rejects_mixed_public_and_private_dns(mock_dns):
 
     with pytest.raises(UnsafeExternalURL, match="privado"):
         safe_fetch_url("https://images.example.com/pet.jpg")
+
+
+def test_mcp_integration_download_helpers_ssrf_protection():
+    from app import _integration_download_and_store_carteirinha_file, _integration_download_and_store_laudo_file
+
+    unsafe_urls = [
+        "https://127.0.0.1/laudo.pdf",
+        "https://10.0.0.1/laudo.pdf",
+        "https://169.254.169.254/latest/meta-data/",
+        "https://localhost/carteirinha.jpg",
+    ]
+
+    for url in unsafe_urls:
+        with pytest.raises(ValueError, match="download_url invalido"):
+            _integration_download_and_store_laudo_file({"download_url": url})
+
+        with pytest.raises(ValueError, match="URL HTTPS autorizada"):
+            _integration_download_and_store_carteirinha_file({"download_url": url})

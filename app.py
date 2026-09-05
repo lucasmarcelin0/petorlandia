@@ -192,6 +192,7 @@ from security.crypto import (
     encrypt_text,
 )
 from security.csv_safe import safe_csv_writer
+from security.url_safe import is_url_ssrf_safe
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -7268,7 +7269,8 @@ def _integration_extract_pdf_file_reference(payload: dict) -> dict | None:
 def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc:
+    # SSRF Protection: strictly validate URL scheme/host and ensure it resolves to a public IP
+    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
         raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo-chatgpt.pdf').strip()
@@ -7305,7 +7307,8 @@ def _integration_download_and_store_carteirinha_file(file_ref: dict) -> tuple[st
     """Baixa e preserva uma foto autorizada pelo ChatGPT para auditoria."""
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc:
+    # SSRF Protection: strictly validate URL scheme/host and ensure it resolves to a public IP
+    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
         raise ValueError('A foto da carteirinha precisa ter uma URL HTTPS autorizada pelo ChatGPT.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'carteirinha.jpg').strip()
