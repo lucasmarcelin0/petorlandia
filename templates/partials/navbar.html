@@ -353,8 +353,25 @@
         </li>
 
         <li class="nav-item dropdown nav-account">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-circle-user me-1 nav-ico--conta"></i> {{ first_name or 'Conta' }}
+          <a class="nav-link dropdown-toggle nav-account__toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            {% if current_user.profile_photo %}
+              {% set _user_photo = current_user.profile_photo %}
+              {% set _user_photo_url = _user_photo if _user_photo.startswith('http://') or _user_photo.startswith('https://') or _user_photo.startswith('/') else url_for('static', filename=_user_photo|replace('static/', '', 1)) %}
+              <span class="nav-account__avatar-wrap me-2" aria-hidden="true">
+                <img src="{{ _user_photo_url }}"
+                     alt="Foto de perfil de {{ first_name or current_user.name or 'Perfil' }}"
+                     class="nav-account__avatar"
+                     width="28"
+                     height="28"
+                     loading="lazy"
+                     decoding="async"
+                     onerror="this.style.display='none'; if (this.nextElementSibling) { this.nextElementSibling.style.display='inline-flex'; }">
+                <i class="fas fa-circle-user nav-ico--conta nav-account__avatar-fallback" style="display: none;"></i>
+              </span>
+            {% else %}
+              <i class="fas fa-circle-user me-1 nav-ico--conta"></i>
+            {% endif %}
+            <span class="nav-account__name">{{ first_name or 'Conta' }}</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li class="nav-account__logout-mobile">

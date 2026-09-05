@@ -127,3 +127,56 @@ def test_mobile_navbar_css_limits_menu_to_visible_viewport():
     assert '.nav-account__logout-mobile' in css
     assert 'flex: 0 0 100%;' in css
     assert 'width: 100%;' in css
+
+
+def test_navbar_renders_user_profile_photo_avatar_when_present(client, app):
+    with app.app_context():
+        user = User(
+            name='Juliana Ferreira',
+            email='juliana-nav-avatar@example.test',
+            password_hash='x',
+            profile_photo='https://images.example.test/juliana.jpg',
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    page = client.get('/').get_data(as_text=True)
+
+    assert 'nav-account__avatar-wrap' in page
+    assert 'nav-account__avatar' in page
+    assert 'https://images.example.test/juliana.jpg' in page
+    assert 'Foto de perfil de Juliana' in page
+    assert 'Juliana' in page
+
+
+def test_navbar_falls_back_to_icon_when_user_has_no_photo(client, app):
+    with app.app_context():
+        user = User(
+            name='Carlos Santos',
+            email='carlos-nav-no-photo@example.test',
+            password_hash='x',
+            profile_photo=None,
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    page = client.get('/').get_data(as_text=True)
+
+    assert 'nav-account__avatar-wrap' not in page
+    assert 'nav-account__avatar' not in page
+    assert 'fa-circle-user' in page
+    assert 'Carlos' in page
+
+
+def test_navbar_avatar_css_rules_present():
+    css = (Path(__file__).parents[1] / 'static' / 'css' / 'tutor-experience.css').read_text(encoding='utf-8')
+
+    assert '.nav-account__avatar-wrap' in css
+    assert '.nav-account__avatar' in css
+    assert 'border-radius: 50%;' in css
+    assert 'object-fit: cover;' in css
+
