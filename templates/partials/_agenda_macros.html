@@ -164,6 +164,28 @@
         </a>
       </li>
       <li><hr class="dropdown-divider"></li>
+      {% if appt.status in ['in_progress', 'accepted'] %}
+      <li>
+        <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="completed">
+          <button type="submit" class="dropdown-item text-success">
+            <i class="fa-solid fa-clipboard-check me-2" aria-hidden="true"></i>Finalizar atendimento
+          </button>
+        </form>
+      </li>
+      {% endif %}
+      {% if appt.status == 'in_progress' %}
+      <li>
+        <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="accepted">
+          <button type="submit" class="dropdown-item">
+            <i class="fa-solid fa-rotate-left me-2" aria-hidden="true"></i>Voltar para confirmada
+          </button>
+        </form>
+      </li>
+      {% endif %}
       <li>
         <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

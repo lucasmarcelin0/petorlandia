@@ -109,14 +109,16 @@
                   <i class="fa-solid fa-pen me-1"></i> Editar
                 </a>
                 <a href="{{ url_for('clinic_grooming_assinantes', clinica_id=clinica.id, plan_id=p.id) }}"
-                   class="btn btn-outline-secondary btn-sm">
-                  <i class="fa-solid fa-users"></i>
+                   class="btn btn-outline-secondary btn-sm"
+                   aria-label="Ver assinantes do plano {{ p.name }}">
+                  <i class="fa-solid fa-users" aria-hidden="true"></i>
                 </a>
                 <form method="post" action="{{ url_for('clinic_grooming_plano_toggle', clinica_id=clinica.id, plan_id=p.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm {% if p.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
-                          title="{% if p.active %}Desativar{% else %}Ativar{% endif %}">
-                    <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                          title="{% if p.active %}Desativar{% else %}Ativar{% endif %}"
+                          aria-label="{% if p.active %}Desativar{% else %}Ativar{% endif %} o plano {{ p.name }}">
+                    <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i>
                   </button>
                 </form>
               </div>

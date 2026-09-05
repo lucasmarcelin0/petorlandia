@@ -137,3 +137,79 @@ def test_unrelated_tutor_cannot_update_or_delete(client, monkeypatch):
     assert resp.status_code == 404
     with flask_app.app_context():
         assert Appointment.query.get(appt_id) is not None
+
+
+def test_complete_appointment_syncs_linked_consulta(client, monkeypatch):
+    from models import Consulta
+    with flask_app.app_context():
+        appt_id, clinic_id = _setup_data()
+        appt = Appointment.query.get(appt_id)
+        consulta = Consulta(
+            animal_id=appt.animal_id,
+            created_by=appt.tutor_id,
+            clinica_id=clinic_id,
+            status='in_progress',
+        )
+        db.session.add(consulta)
+        db.session.commit()
+        appt.consulta_id = consulta.id
+        appt.status = 'in_progress'
+        db.session.commit()
+        consulta_id = consulta.id
+
+    user = type('U', (), {
+        'id': 99,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': clinic_id,
+    })()
+    login(monkeypatch, user)
+
+    resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'completed'})
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        updated_appt = Appointment.query.get(appt_id)
+        assert updated_appt.status == 'completed'
+        updated_consulta = Consulta.query.get(consulta_id)
+        assert updated_consulta.status == 'finalizada'
+        assert updated_consulta.finalizada_em is not None
+
+
+def test_cancel_appointment_cleans_empty_in_progress_consulta(client, monkeypatch):
+    from models import Consulta
+    with flask_app.app_context():
+        appt_id, clinic_id = _setup_data()
+        appt = Appointment.query.get(appt_id)
+        consulta = Consulta(
+            animal_id=appt.animal_id,
+            created_by=appt.tutor_id,
+            clinica_id=clinic_id,
+            status='in_progress',
+        )
+        db.session.add(consulta)
+        db.session.commit()
+        appt.consulta_id = consulta.id
+        appt.status = 'in_progress'
+        db.session.commit()
+        consulta_id = consulta.id
+
+    user = type('U', (), {
+        'id': 99,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': clinic_id,
+    })()
+    login(monkeypatch, user)
+
+    resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'canceled'})
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        updated_appt = Appointment.query.get(appt_id)
+        assert updated_appt.status == 'canceled'
+        assert updated_appt.consulta_id is None
+        assert Consulta.query.get(consulta_id) is None
+

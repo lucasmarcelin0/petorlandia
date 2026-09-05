@@ -160,6 +160,26 @@ class TestUrlSanitization:
             assert _sanitize_login_next_url('javascript:alert(1)') == default_url
             assert _sanitize_login_next_url('/vacina-pmo/c/token123/pet/456') == default_url
 
+    def test_update_vet_profile_open_redirect(self, client, multi_user_setup, app):
+        """Test that update_vet_profile prevents open redirect via next parameter."""
+        app.config['WTF_CSRF_ENABLED'] = False
+        login(client, multi_user_setup['vet1_id'])
+        with app.app_context():
+            vet = Veterinario.query.filter_by(user_id=multi_user_setup['vet1_id']).first()
+            vet_id = vet.id
+
+        # POST to update_vet_profile with malicious next parameter
+        response = client.post(
+            f'/veterinario/{vet_id}/profile',
+            data={
+                f'vetprofile_{vet_id}-name': 'Vet 1 Updated',
+                'next': 'https://attacker.com'
+            }
+        )
+        assert response.status_code == 302
+        assert response.headers['Location'] != 'https://attacker.com'
+        assert 'attacker.com' not in response.headers['Location']
+
 
 class TestAuthentication:
     """Test authentication mechanisms."""

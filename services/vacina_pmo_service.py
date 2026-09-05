@@ -1547,21 +1547,36 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     if pmo_animal.animal_id or not visit.tutor_user_id:
         return
 
+    # Dois bichos da MESMA visita nunca podem apontar para o mesmo cadastro.
+    # Quando a planilha repete o nome (duas linhas "Luna" antes de o vacinador
+    # renomear uma para "Mia"), o candidato por nome era o mesmo para as duas:
+    # a foto tirada de um aparecia no outro e a dose de um sobrescrevia a do
+    # outro, porque ``_ensure_pmo_vaccine_record`` deduplica por ``animal_id``.
+    # Um cadastro ja usado por um irmao desta visita sai da disputa; sem
+    # candidato livre, o bloco abaixo cria o cadastro proprio.
+    taken_by_siblings = {
+        sibling.animal_id
+        for sibling in (visit.animals or [])
+        if sibling is not pmo_animal and sibling.animal_id
+    }
+
     # O mesmo tutor pode ter cadastros repetidos do mesmo bicho (digitação
     # diferente entre campanhas, corrida entre o sync e a tela). Escolher com
     # ``.first()`` sem ordem fazia o vínculo pular de um para outro a cada
     # religação — e a foto que estava no cadastro antigo "sumia" da
     # carteirinha. A ordem abaixo é estável: primeiro quem tem foto, depois o
     # cadastro mais antigo, que é o que acumula histórico.
-    candidate = (
+    candidates = (
         Animal.query.filter_by(user_id=visit.tutor_user_id)
         .filter(func.lower(Animal.name) == pmo_animal.name.lower())
         .order_by(
             case((Animal.image.isnot(None), 0), else_=1),
             Animal.id.asc(),
         )
-        .first()
     )
+    if taken_by_siblings:
+        candidates = candidates.filter(~Animal.id.in_(taken_by_siblings))
+    candidate = candidates.first()
     if candidate:
         pmo_animal.animal = candidate
         return
@@ -1593,6 +1608,76 @@ def ensure_vacina_pmo_real_animal(animal_id: int) -> Animal | None:
     if not pmo_animal.animal_id:
         return None
     return db.session.get(Animal, pmo_animal.animal_id)
+
+
+def repair_pmo_duplicate_animal_links(dry_run: bool = True) -> dict:
+    """Separa bichos da mesma visita que ficaram no mesmo cadastro real.
+
+    Causa: ``_ensure_real_animal`` escolhia o cadastro pelo nome do tutor sem
+    olhar para os irmaos da visita. Duas linhas com o mesmo nome (antes de o
+    vacinador renomear uma delas na tela) apontavam para o mesmo ``Animal`` --
+    a foto de um aparecia no outro e a dose de um era deduplicada na do outro.
+
+    Fica com o cadastro quem tem o nome igual ao do ``Animal`` real (empate:
+    a menor posicao na visita). Os demais recebem cadastro proprio e, se ja
+    estavam vacinados, ganham o registro de dose e o reforco que faltavam. A
+    foto NAO e copiada: ela pertence a um bicho so e precisa ser tirada de novo.
+
+    Em ``dry_run`` apenas conta o que seria alterado, sem gravar nada.
+    """
+    stats = {
+        "visitas_afetadas": 0,
+        "animais_separados": 0,
+        "doses_recriadas": 0,
+        "detalhes": [],
+    }
+    for visit in PmoVaccinationVisit.query.all():
+        por_cadastro: dict[int, list[PmoVaccinationAnimal]] = {}
+        for pmo_animal in visit.animals:
+            if pmo_animal.animal_id:
+                por_cadastro.setdefault(pmo_animal.animal_id, []).append(pmo_animal)
+
+        duplicados = {
+            animal_id: linhas
+            for animal_id, linhas in por_cadastro.items()
+            if len(linhas) > 1
+        }
+        if not duplicados:
+            continue
+        stats["visitas_afetadas"] += 1
+
+        for animal_id, linhas in duplicados.items():
+            real = db.session.get(Animal, animal_id)
+            nome_real = _strip_accents(real.name or "").casefold().strip() if real else ""
+
+            def _prioridade(linha: PmoVaccinationAnimal) -> tuple[int, int]:
+                mesmo_nome = _strip_accents(linha.name or "").casefold().strip() == nome_real
+                return (0 if mesmo_nome else 1, linha.position or 0)
+
+            ordenadas = sorted(linhas, key=_prioridade)
+            for linha in ordenadas[1:]:
+                stats["animais_separados"] += 1
+                stats["detalhes"].append({
+                    "visita": visit.id,
+                    "tutor": visit.tutor_name,
+                    "animal_pmo": linha.id,
+                    "nome": linha.name,
+                    "cadastro_compartilhado": animal_id,
+                    "status": linha.status,
+                })
+                if dry_run:
+                    continue
+                linha.animal_id = None
+                _ensure_real_animal(linha)
+                db.session.flush()
+                if linha.status == "vacinado" and linha.animal_id:
+                    linha.vaccine_id = None
+                    _ensure_pmo_vaccine_record(linha)
+                    stats["doses_recriadas"] += 1
+
+    if not dry_run:
+        db.session.commit()
+    return stats
 
 
 def repair_pmo_tutor_links(dry_run: bool = True) -> dict:

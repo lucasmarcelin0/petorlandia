@@ -54,6 +54,7 @@ from app import (  # noqa: E402
     EASTER_EGG_STATIC_DIR,
     PaymentPreferenceError,
     SERVICE_RECOMMENDATION_CATALOG,
+    _sanitize_login_next_url,
     _apply_professional_service_form,
     _appointment_request_within_vet_schedule,
     _build_service_recommendation,
@@ -1893,7 +1894,7 @@ def update_vet_profile(veterinario_id):
         # não decide a própria habilitação.
         form.habilitacao.data = vet.habilitacao or HABILITACAO_CRMV
         form.supervisor_id.data = vet.supervisor_id or 0
-    next_url = request.form.get('next') or url_for('index')
+    next_url = _sanitize_login_next_url(request.form.get('next'))
     if form.validate_on_submit():
         vet.user.name = form.name.data.strip()
         if form.phone.data is not None:

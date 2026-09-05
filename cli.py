@@ -188,7 +188,35 @@ def reconcile_veterinarian_billing(limit):
         raise click.ClickException("A reconciliação terminou com falhas")
 
 
+@click.command('repair-pmo-duplicate-animals')
+@click.option('--apply', 'apply_changes', is_flag=True,
+              help='Executa a separacao. Sem esta opcao, apenas mostra a previa.')
+@with_appcontext
+def repair_pmo_duplicate_animals(apply_changes):
+    """Separa bichos da mesma visita PMO presos no mesmo cadastro real.
+
+    Sintoma em campo: a foto tirada de um animal aparece em outro da mesma casa
+    e continua la depois de recarregar. Sem ``--apply`` nada e gravado.
+    """
+    from services.vacina_pmo_service import repair_pmo_duplicate_animal_links
+
+    resultado = repair_pmo_duplicate_animal_links(dry_run=not apply_changes)
+    for item in resultado['detalhes']:
+        click.echo(
+            "visita={visita} tutor={tutor!r} animal_pmo={animal_pmo} "
+            "nome={nome!r} cadastro_compartilhado={cadastro_compartilhado} "
+            "status={status}".format(**item)
+        )
+    click.echo(
+        "visitas_afetadas={visitas_afetadas} animais_separados={animais_separados} "
+        "doses_recriadas={doses_recriadas}".format(**resultado)
+    )
+    if not apply_changes:
+        click.echo('Previa apenas. Rode de novo com --apply para gravar.')
+
+
 def register_cli_commands(app):
     app.cli.add_command(classify_transactions_history)
     app.cli.add_command(cleanup_test_users)
     app.cli.add_command(reconcile_veterinarian_billing)
+    app.cli.add_command(repair_pmo_duplicate_animals)
