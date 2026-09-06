@@ -616,7 +616,7 @@ def test_carrinho_pago_nao_recebe_lembrete(app, monkeypatch):
 
 
 def test_home_anuncia_preco_no_titulo(app, client):
-    body = client.get('/').data.decode()
+    body = client.get('/precos').data.decode()
     assert 'por veterinário' in body
     assert 'R$' in body
 

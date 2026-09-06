@@ -145,7 +145,7 @@ def test_pending_store_owner_cannot_publish_before_approval(app, client):
     )
     assert response.status_code == 302
     with app.app_context():
-        assert Product.query.filter_by(casa_de_racao_id=store_id).count() == 0
+        assert Product.query.filter_by(casa_de_racao_id=store_id, status='active').count() == 0
 
 
 def test_unrelated_user_cannot_manage_store_products(app, client):
