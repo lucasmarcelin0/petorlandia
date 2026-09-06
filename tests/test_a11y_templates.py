@@ -46,3 +46,26 @@ def test_sfa_templates_icon_a11y_labels():
     with open("templates/sfa/pacientes.html", "r", encoding="utf-8") as f:
         pacientes_content = f.read()
     assert 'aria-label="Ver detalhes do paciente {{ p.id_estudo }}"' in pacientes_content
+
+
+def test_global_modal_dialog_accessibility_attributes():
+    with open("templates/layout.html", "r", encoding="utf-8") as f:
+        layout_content = f.read()
+    assert 'id="confirmModal"' in layout_content
+    assert 'role="dialog"' in layout_content
+    assert 'aria-modal="true"' in layout_content
+    assert 'aria-labelledby="confirmModalLabel"' in layout_content
+
+    with open("templates/partials/schedule_modal.html", "r", encoding="utf-8") as f:
+        schedule_content = f.read()
+    assert 'id="scheduleModal"' in schedule_content
+    assert 'role="dialog"' in schedule_content
+    assert 'aria-modal="true"' in schedule_content
+    assert 'aria-labelledby="scheduleModalTitle"' in schedule_content
+
+    with open("templates/partials/_lead_capture.html", "r", encoding="utf-8") as f:
+        lead_content = f.read()
+    assert 'id="leadCaptureModal"' in lead_content
+    assert 'role="dialog"' in lead_content
+    assert 'aria-modal="true"' in lead_content
+    assert 'aria-labelledby="leadCaptureTitle"' in lead_content
