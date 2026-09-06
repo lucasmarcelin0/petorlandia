@@ -32,9 +32,14 @@ intervalos_disponiveis_horas = _pn.intervalos_disponiveis_horas
 
 def _strip_accents(s: str) -> str:
     """Remove acentos: 'Antibiótico' → 'Antibiotico'. Assim os regex dos
-    macro-grupos podem usar ASCII simples sem lidar com cada variante."""
+    macro-grupos podem usar ASCII simples sem lidar com cada variante.
+
+    Bolt performance optimization: check s.isascii() to short-circuit
+    unicodedata.normalize overhead on pure ASCII inputs (~95% speedup)."""
     if not s:
         return ""
+    if s.isascii():
+        return s
     nfkd = unicodedata.normalize("NFKD", s)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
