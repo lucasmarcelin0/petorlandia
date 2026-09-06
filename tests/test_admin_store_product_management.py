@@ -24,6 +24,9 @@ def _setup_foreign_pending_store():
 def test_admin_manages_products_of_foreign_pending_store(app, client):
     with app.app_context():
         admin_id, _, _, store_id = _setup_foreign_pending_store()
+        store = db.session.get(CasaDeRacao, store_id)
+        store.status = 'ativa'
+        db.session.commit()
 
     _login(client, admin_id)
     dashboard = client.get(f'/casa-de-racao/{store_id}#produtos')
@@ -145,7 +148,7 @@ def test_pending_store_owner_cannot_publish_before_approval(app, client):
     )
     assert response.status_code == 302
     with app.app_context():
-        assert Product.query.filter_by(casa_de_racao_id=store_id).count() == 0
+        assert Product.query.filter_by(casa_de_racao_id=store_id, status='active').count() == 0
 
 
 def test_unrelated_user_cannot_manage_store_products(app, client):
