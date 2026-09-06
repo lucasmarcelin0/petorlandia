@@ -704,7 +704,6 @@ def _public_profile_data(profile_key: str) -> dict:
             'primary_url': url_for('register'),
             'secondary_label': 'Ver serviços na minha cidade',
             'secondary_url': url_for('servicos'),
-            'price': f'R$ {monthly_price:.0f}/mês por veterinário',
             'reassurance': 'Grátis para tutores. Seus dados continuam seus.',
         },
         'clinica': {
