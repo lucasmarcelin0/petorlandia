@@ -12,3 +12,8 @@
 **Vulnerability:** `services/nfse_service.py` used an ad-hoc `_redact_sensitive_xml_text` implementation that missed formatted CPFs/CNPJs (`123.456.789-00`, `12.345.678/0001-90`), 44-digit keys, and sensitive XML tags (`InscricaoEstadual`, `ChaveAcesso`, `Secret`).
 **Learning:** Ad-hoc regexes for redaction miss edge cases and diverge from the application's central redaction policy.
 **Prevention:** Always delegate XML and text redaction to `security.redact` (`redact_xml` or `redact_sensitive_text`) to ensure consistent PII sanitization.
+
+## 2026-04-13 - SSRF Vulnerability in Integration File Downloads
+**Vulnerability:** `_integration_download_and_store_laudo_file` and `_integration_download_and_store_carteirinha_file` in `app.py` checked `parsed.scheme == 'https'` and `parsed.netloc`, but did not validate whether the host resolved to internal IP addresses (loopback, RFC1918 private ranges, or cloud metadata endpoints).
+**Learning:** Checking scheme and netloc via `urllib.parse.urlparse` does not protect against SSRF when fetching user- or integration-supplied external URLs.
+**Prevention:** All server-side fetches of external URLs from user/integration payloads must be validated with `security.url_safe.is_url_ssrf_safe` or performed via `security.url_safe.safe_fetch_url`.
