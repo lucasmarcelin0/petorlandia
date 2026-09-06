@@ -29,7 +29,7 @@
     <div class="appointment-card__top">
       <div class="appointment-card__main-info">
         <div class="appointment-card__time" aria-label="Horário do agendamento">
-          <span class="appointment-card__icon is-time"><i class="fa-regular fa-clock"></i></span>
+          <span class="appointment-card__icon is-time"><i class="fa-regular fa-clock" aria-hidden="true"></i></span>
           <div class="appointment-card__time-text">
             <span class="appointment-card__time-label">Horário</span>
             <span class="appointment-card__time-value">{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</span>
@@ -45,7 +45,7 @@
                 decoding="async"
               >
             {% else %}
-              <i class="fa-solid fa-paw"></i>
+              <i class="fa-solid fa-paw" aria-hidden="true"></i>
             {% endif %}
           </span>
           <div class="appointment-card__patient-text">
@@ -63,7 +63,7 @@
             class="btn btn-sm btn-primary"
             title="Ficha do Animal"
           >
-            <i class="fa-solid fa-file-medical me-1"></i>
+            <i class="fa-solid fa-file-medical me-1" aria-hidden="true"></i>
             Ficha do Animal
           </a>
           {% if may_start_consultation %}
@@ -72,7 +72,7 @@
               class="btn btn-sm btn-outline-success"
               title="Iniciar Consulta"
             >
-              <i class="fa-solid fa-stethoscope me-1"></i>
+              <i class="fa-solid fa-stethoscope me-1" aria-hidden="true"></i>
               Iniciar Consulta
             </a>
           {% else %}
@@ -81,7 +81,7 @@
               class="btn btn-sm btn-outline-info"
               title="Propor novo horário"
             >
-              <i class="fa-solid fa-arrows-rotate me-1"></i>
+              <i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>
               Propor novo horário
             </a>
           {% endif %}
@@ -93,7 +93,7 @@
               aria-expanded="false"
               aria-label="Mais ações"
             >
-              <i class="fa-solid fa-ellipsis"></i>
+              <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
               {% if can_emit_nfse %}
@@ -101,7 +101,7 @@
                 <form method="POST" action="{{ url_for('appointment_emit_nfse', appointment_id=appt.id) }}">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <button class="dropdown-item d-flex align-items-center gap-2" title="Emitir NFS-e">
-                    <i class="fa-solid fa-file-invoice"></i>
+                    <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
                     Emitir NFS-e
                   </button>
                 </form>
@@ -110,20 +110,20 @@
               {% endif %}
               <li>
                 <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}">
-                  <i class="fa-solid fa-user"></i>
+                  <i class="fa-solid fa-user" aria-hidden="true"></i>
                   Ficha do Tutor
                 </a>
               </li>
               <li>
                 <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('appointment_close', appointment_id=appt.id) }}">
-                  <i class="fa-solid fa-file-invoice"></i>
+                  <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
                   Fechar atendimento
                 </a>
               </li>
               {% if may_start_consultation %}
                 <li>
                   <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('edit_appointment', appointment_id=appt.id) }}">
-                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
                     Propor novo horário
                   </a>
                 </li>
@@ -135,7 +135,7 @@
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="completed">
                   <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como finalizada">
-                    <i class="fa-solid fa-clipboard-check text-success"></i>
+                    <i class="fa-solid fa-clipboard-check text-success" aria-hidden="true"></i>
                     Finalizada
                   </button>
                 </form>
@@ -145,7 +145,7 @@
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="canceled">
                   <button class="dropdown-item d-flex align-items-center gap-2" title="Cancelar">
-                    <i class="fa-solid fa-xmark text-warning"></i>
+                    <i class="fa-solid fa-xmark text-warning" aria-hidden="true"></i>
                     Cancelar
                   </button>
                 </form>
@@ -155,7 +155,7 @@
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="scheduled">
                   <button class="dropdown-item d-flex align-items-center gap-2" title="Voltar para a confirmar">
-                    <i class="fa-solid fa-hourglass-half text-info"></i>
+                    <i class="fa-solid fa-hourglass-half text-info" aria-hidden="true"></i>
                     A confirmar
                   </button>
                 </form>
@@ -165,7 +165,7 @@
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="no_show">
                   <button class="dropdown-item d-flex align-items-center gap-2" title="Registrar falta do paciente">
-                    <i class="fa-solid fa-user-slash text-danger"></i>
+                    <i class="fa-solid fa-user-slash text-danger" aria-hidden="true"></i>
                     Não compareceu
                   </button>
                 </form>
@@ -180,7 +180,7 @@
                 >
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <button class="dropdown-item d-flex align-items-center gap-2 text-danger" title="Excluir">
-                    <i class="fa-solid fa-trash"></i>
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     Excluir agendamento
                   </button>
                 </form>
@@ -201,7 +201,7 @@
               decoding="async"
             >
           {% else %}
-            <i class="fa-solid fa-user"></i>
+            <i class="fa-solid fa-user" aria-hidden="true"></i>
           {% endif %}
         </span>
         <div>
@@ -219,7 +219,7 @@
               decoding="async"
             >
           {% else %}
-            <i class="fa-solid fa-user-doctor"></i>
+            <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>
           {% endif %}
         </span>
         <div>
@@ -228,7 +228,7 @@
         </div>
       </div>
       <div class="appointment-card__meta-item">
-        <span class="appointment-card__icon is-kind"><i class="fa-solid fa-notes-medical"></i></span>
+        <span class="appointment-card__icon is-kind"><i class="fa-solid fa-notes-medical" aria-hidden="true"></i></span>
         <div>
           <span class="appointment-card__meta-label">Tipo</span>
           <span class="appointment-card__meta-value">{{ appt.kind_display or appt.kind|capitalize }}</span>
@@ -236,7 +236,7 @@
       </div>
       {% if nfse_doc %}
       <div class="appointment-card__meta-item">
-        <span class="appointment-card__icon is-kind"><i class="fa-solid fa-file-invoice"></i></span>
+        <span class="appointment-card__icon is-kind"><i class="fa-solid fa-file-invoice" aria-hidden="true"></i></span>
         <div>
           <span class="appointment-card__meta-label">NFS-e</span>
           <span class="appointment-card__meta-value">
