@@ -366,6 +366,9 @@ def casa_de_racao_dashboard(casa_id):
 
     if request.method == 'POST':
         if request.form.get('_action') == 'add_product':
+            if casa.status != 'ativa' and not _is_admin():
+                flash('Sua loja está aguardando aprovação. Você poderá cadastrar produtos após a ativação.', 'warning')
+                return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             from forms import CasaDeRacaoProductForm
             product_form = CasaDeRacaoProductForm()
             if product_form.validate_on_submit():
@@ -385,7 +388,7 @@ def casa_de_racao_dashboard(casa_id):
                     subscription_enabled=bool(product_form.subscription_enabled.data),
                     subscription_discount_percent=product_form.subscription_discount_percent.data or Decimal('0'),
                     subscription_shipping_fee=product_form.subscription_shipping_fee.data or Decimal('0'),
-                    status='active' if casa.status == 'ativa' else 'pending',
+                    status='active' if (casa.status == 'ativa' or _is_admin()) else 'pending',
                 )
                 db.session.add(product)
                 _create_initial_variant(product, product_form)
@@ -749,7 +752,7 @@ def casa_produto_editar(casa_id, product_id):
 def casa_produto_toggle(casa_id, product_id):
     casa = _casa_loja_access(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
-    if product.status != 'active' and casa.status != 'ativa':
+    if product.status != 'active' and casa.status != 'ativa' and not _is_admin():
         flash('O produto está salvo. A publicação fica disponível quando a loja estiver ativa.', 'warning')
         return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
     has_sellable_variant = any((v.status == 'active' and (v.price or 0) > 0) for v in product.variants)

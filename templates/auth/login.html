@@ -30,7 +30,20 @@
             <input type="hidden" name="next" value="{{ next_url }}">
             {% if audience %}<input type="hidden" name="audience" value="{{ audience }}">{% endif %}
             {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular', autocomplete='username') }}
-            {{ render_field(form.password, classes='form-control rounded-pill', autocomplete='current-password') }}
+            <div class="mb-3">
+                <label for="password" class="form-label">Senha</label>
+                <div class="input-group auth-password-group">
+                    {{ form.password(class="form-control", id="password", placeholder="Sua senha", autocomplete="current-password") }}
+                    <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                        data-password-toggle aria-controls="password" aria-pressed="false"
+                        aria-label="Mostrar senha" title="Mostrar senha">
+                        <i class="fa fa-eye" aria-hidden="true"></i>
+                    </button>
+                </div>
+                {% for error in form.password.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
             {{ render_checkbox(form.remember) }}
             {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
             <div class="text-center mt-3">
