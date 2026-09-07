@@ -160,6 +160,21 @@ class TestUrlSanitization:
             assert _sanitize_login_next_url('javascript:alert(1)') == default_url
             assert _sanitize_login_next_url('/vacina-pmo/c/token123/pet/456') == default_url
 
+    def test_cep_lookup_ssrf_validation(self, client, app, monkeypatch):
+        """Test that api_cep_lookup uses is_url_ssrf_safe to reject unsafe external URLs."""
+        # When is_url_ssrf_safe returns False, no request should be made and 404 returned
+        monkeypatch.setattr("blueprints.api.is_url_ssrf_safe", lambda url: False)
+        response = client.get('/api/cep/14820000')
+        assert response.status_code == 404
+        assert response.get_json()['error'] == 'CEP não encontrado'
+
+    def test_reverse_geocode_ssrf_validation(self, client, app, monkeypatch):
+        """Test that api_reverse_geocode uses is_url_ssrf_safe to reject unsafe external URLs."""
+        monkeypatch.setattr("blueprints.api.is_url_ssrf_safe", lambda url: False)
+        response = client.get('/api/geocode/reverse?lat=-20.7166&lon=-47.8614')
+        assert response.status_code == 502
+        assert response.get_json()['error'] == 'Não foi possível obter o endereço'
+
     def test_update_vet_profile_open_redirect(self, client, multi_user_setup, app):
         """Test that update_vet_profile prevents open redirect via next parameter."""
         app.config['WTF_CSRF_ENABLED'] = False
