@@ -66,7 +66,7 @@
                     <button class="btn btn-outline-secondary auth-password-toggle" type="button"
                         data-password-toggle aria-controls="password" aria-pressed="false"
                         aria-label="Mostrar senha" title="Mostrar senha">
-                        <i class="fa fa-eye"></i>
+                        <i class="fa fa-eye" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="form-text">Pelo menos 6 caracteres.</div>
@@ -118,22 +118,6 @@
         const pwdInput = document.getElementById('password');
         const bar = document.getElementById('password-strength');
         const strengthText = document.getElementById('password-strength-text');
-        const toggle = document.querySelector('[data-password-toggle]');
-        if (pwdInput && toggle) {
-            toggle.addEventListener('click', () => {
-                const showing = pwdInput.type === 'text';
-                pwdInput.type = showing ? 'password' : 'text';
-                toggle.setAttribute('aria-pressed', showing ? 'false' : 'true');
-                toggle.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
-                toggle.title = showing ? 'Mostrar senha' : 'Ocultar senha';
-                const icon = toggle.querySelector('i');
-                if (icon) {
-                    icon.classList.toggle('fa-eye', showing);
-                    icon.classList.toggle('fa-eye-slash', !showing);
-                }
-                pwdInput.focus();
-            });
-        }
         if (pwdInput && bar) {
             pwdInput.addEventListener('input', () => {
                 const width = evaluateStrength(pwdInput.value);

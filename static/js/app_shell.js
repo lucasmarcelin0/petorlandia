@@ -1014,3 +1014,27 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally { clearTimeout(tid); }
     };
   })();
+
+/* ---- Alternador de visibilidade de senha global ---- */
+document.addEventListener('click', (ev) => {
+  const toggle = ev.target.closest('[data-password-toggle]');
+  if (!toggle) return;
+  const targetId = toggle.getAttribute('aria-controls');
+  const group = toggle.closest('.input-group');
+  const input = targetId ? document.getElementById(targetId) : group?.querySelector('input');
+  if (!input) return;
+
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  toggle.setAttribute('aria-pressed', showing ? 'false' : 'true');
+  const labelText = showing ? 'Mostrar senha' : 'Ocultar senha';
+  toggle.setAttribute('aria-label', labelText);
+  toggle.title = labelText;
+
+  const icon = toggle.querySelector('i');
+  if (icon) {
+    icon.classList.toggle('fa-eye', showing);
+    icon.classList.toggle('fa-eye-slash', !showing);
+  }
+  input.focus();
+});
