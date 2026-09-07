@@ -46,3 +46,12 @@ def test_sfa_templates_icon_a11y_labels():
     with open("templates/sfa/pacientes.html", "r", encoding="utf-8") as f:
         pacientes_content = f.read()
     assert 'aria-label="Ver detalhes do paciente {{ p.id_estudo }}"' in pacientes_content
+
+def test_layout_confirm_modal_a11y():
+    with open("templates/layout.html", "r", encoding="utf-8") as f:
+        layout_content = f.read()
+    assert 'id="confirmModal"' in layout_content
+    assert 'role="dialog"' in layout_content
+    assert 'aria-modal="true"' in layout_content
+    assert 'aria-labelledby="confirmModalLabel"' in layout_content
+    assert 'id="confirmModalLabel"' in layout_content
