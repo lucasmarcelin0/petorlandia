@@ -51,6 +51,7 @@ from models import (
     Vacina,
     Veterinario,
 )
+from security.url_safe import is_url_ssrf_safe
 from services import (
     build_usage_history,
     coverage_label,
@@ -228,6 +229,8 @@ def api_cep_lookup(cep: str):
 
     for template, provider in providers:
         url = template.format(cep=sanitized)
+        if not is_url_ssrf_safe(url):
+            continue
         try:
             response = requests.get(url, timeout=5)
             response.raise_for_status()
@@ -283,8 +286,12 @@ def api_reverse_geocode():
     }
 
     headers = {'User-Agent': 'petorlandia-geocoder/1.0'}
+    target_url = 'https://nominatim.openstreetmap.org/reverse'
+    if not is_url_ssrf_safe(target_url):
+        return jsonify(success=False, error='Não foi possível obter o endereço'), 502
+
     try:
-        response = requests.get('https://nominatim.openstreetmap.org/reverse', params=params, headers=headers, timeout=8)
+        response = requests.get(target_url, params=params, headers=headers, timeout=8)
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError):
