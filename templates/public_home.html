@@ -70,6 +70,7 @@
       </div>
       <ul class="unified-hero__trust" aria-label="Compromissos da plataforma">
         <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span data-profile-reassurance>{{ profile.reassurance }}</span></li>
+        <li><i class="fa-solid fa-tag" aria-hidden="true"></i> R$ {{ '%.0f'|format(monthly_price if monthly_price is defined and monthly_price else 60) }}/mês por veterinário</li>
         <li><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Dados protegidos</li>
         <li><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> Funciona no celular</li>
       </ul>
