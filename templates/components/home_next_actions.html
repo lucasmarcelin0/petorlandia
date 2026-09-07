@@ -1,16 +1,28 @@
-{% if next_actions %}
 <section class="next-actions workspace-band" aria-labelledby="next-actions-title">
-  <h2 id="next-actions-title" class="h5">Precisa de atenção</h2>
+  <div class="home-alert-heading">
+    <h2 id="next-actions-title" class="h5">{{ 'Central de alertas' if home_alert_center else 'Precisa de atenção' }}</h2>
+    <a href="{{ url_for('index') if home_alert_center else url_for('index', alertas='1', _anchor='next-actions-title') }}">{{ 'Voltar ao início' if home_alert_center else 'Central de alertas' }} <span aria-hidden="true">→</span></a>
+  </div>
+  {% if home_alert_center %}<p class="text-muted small">Consulte suas pendências, incluindo os alertas dispensados do início.</p>{% endif %}
   <ul class="next-actions-list">
     {% for action in next_actions %}
-    <li>
-      <a href="{{ action.url }}" class="next-action next-action--{{ action.tone }}" data-cta="home_next_action">
-        <i class="fa-solid {{ action.icon }}" aria-hidden="true"></i>
-        <span><strong>{{ action.label }}</strong><small>{{ action.detail }}</small></span>
-        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-      </a>
+    <li class="home-alert home-alert--{{ action.tone }}">
+      <div class="home-alert-copy">
+        <span class="workspace-emoji" aria-hidden="true">{{ '💉' if action.tone == 'attention' else '📌' }}</span>
+        <div><strong>{{ action.label }}</strong><small>{{ action.detail }}</small>{% if action.dismissed %}<small class="home-alert-dismissed">Dispensado do início</small>{% endif %}</div>
+      </div>
+      <div class="home-alert-actions">
+        <a href="{{ action.url }}" class="btn btn-primary" data-cta="home_next_action" aria-label="Resolver agora: {{ action.label }}">Resolver agora</a>
+        {% if not action.dismissed %}
+        <form method="post" action="{{ url_for('dismiss_home_alert') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="token" value="{{ action.dismiss_token }}">
+          <input type="hidden" name="central" value="{{ '1' if home_alert_center else '0' }}">
+          <button type="submit" class="btn btn-outline-secondary" aria-label="Dispensar: {{ action.label }}">Dispensar</button>
+        </form>
+        {% endif %}
+      </div>
     </li>
-    {% endfor %}
+    {% else %}<li class="text-muted py-3">{{ 'Nenhuma pendência no momento.' if home_alert_center else 'Tudo certo por aqui. Os alertas dispensados continuam na central.' }}</li>{% endfor %}
   </ul>
 </section>
-{% endif %}

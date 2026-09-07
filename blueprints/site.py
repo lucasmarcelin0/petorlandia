@@ -856,9 +856,16 @@ def index():
     from services.workspaces import current_experience, home_next_actions
 
     experience = current_experience()
+    from services.home_alerts import prepare_alerts
+    home_alert_center = request.args.get('alertas') == '1'
+    actions = prepare_alerts(current_user.id, home_next_actions(
+        current_user, experience, meus_pets, doses_atrasadas, proximos_agendamentos))
+    if not home_alert_center:
+        actions = [action for action in actions if not action['dismissed']][:6]
     return render_template(
         'index.html',
-        next_actions=home_next_actions(current_user, experience, meus_pets, doses_atrasadas, proximos_agendamentos),
+        next_actions=actions,
+        home_alert_center=home_alert_center,
         meus_pets=meus_pets,
         doses_atrasadas=doses_atrasadas,
         proximas_vacinas=proximas_vacinas,
@@ -873,6 +880,19 @@ def index():
         home_sections=home_sections,
         home_texts={key: SiteText.get(key, default) for key, default in home_text_defaults.items()},
     )
+
+
+@bp.route('/inicio/alertas/dispensar', methods=['POST'])
+@login_required
+def dismiss_home_alert():
+    from itsdangerous import BadSignature
+    from services.home_alerts import dismiss_alert
+    try:
+        dismiss_alert(current_user.id, request.form.get('token', ''))
+    except (BadSignature, ValueError, KeyError, TypeError):
+        abort(400)
+    flash('Alerta dispensado. Você pode consultá-lo na Central de alertas.', 'success')
+    return redirect(url_for('index', alertas='1') if request.form.get('central') == '1' else url_for('index'))
 
 
 @bp.route('/inicio/perfil/<profile_key>')

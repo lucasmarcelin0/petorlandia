@@ -176,4 +176,4 @@ def home_next_actions(user, experience, pets, overdue, appointments):
             'add_animal', 'fa-paw')
     # Clinical reminders stay visible even when a user also owns a business.
     actions.sort(key=lambda item: item['tone'] != 'attention')
-    return actions[:6]
+    return actions

@@ -1,10 +1,12 @@
+{% set area_icons = {'admin': '🧭', 'professional': '🩺', 'clinic': '🏥', 'store': '🏪', 'delivery': '🚚', 'partner': '🤝', 'vaccinator': '💉', 'accounting': '📊', 'student': '🎓', 'internship': '📚', 'membership': '🪪'} %}
+{% set action_icons = {'fa-gauge': '🎛️', 'fa-bell': '🔔', 'fa-chart-line': '📈', 'fa-calendar-check': '🗓️', 'fa-paw': '🐾', 'fa-users': '👥', 'fa-hospital': '🏥', 'fa-store': '🏪', 'fa-box-open': '📦', 'fa-truck': '🚚', 'fa-handshake': '🤝', 'fa-plus': '🏗️', 'fa-syringe': '💉', 'fa-wallet': '💳', 'fa-file-invoice': '🗂️', 'fa-receipt': '🧾', 'fa-book': '📚', 'fa-graduation-cap': '🎓', 'fa-id-card': '🪪'} %}
 {% for workspace in user_experience.workspaces %}
 <section class="dashboard-work-area workspace-band" data-dashboard-area="{{ workspace.key }}" aria-labelledby="workspace-{{ workspace.key }}">
-  <h2 id="workspace-{{ workspace.key }}" class="h5"><i class="fa-solid {{ workspace.icon }} me-2" aria-hidden="true"></i>{{ workspace.label }}</h2>
+  <h2 id="workspace-{{ workspace.key }}" class="h5"><span class="workspace-emoji" aria-hidden="true">{{ area_icons.get(workspace.key, '🗂️') }}</span>{{ workspace.label }}</h2>
   <div class="workspace-actions">
     {% for action in workspace.actions %}
-    <a href="{{ action.url }}" class="btn {{ 'btn-primary' if loop.first else 'btn-outline-secondary' }}" data-cta="workspace_{{ workspace.key }}_{{ loop.index }}">
-      <i class="fa-solid {{ action.icon }} me-2" aria-hidden="true"></i>{{ action.label }}
+    <a href="{{ action.url }}" class="btn workspace-action workspace-action--{{ loop.index }}" data-cta="workspace_{{ workspace.key }}_{{ loop.index }}">
+      <span class="workspace-emoji" aria-hidden="true">{{ action_icons.get(action.icon, '📌') }}</span>{{ action.label }}
     </a>
     {% endfor %}
   </div>
