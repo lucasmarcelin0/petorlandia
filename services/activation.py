@@ -93,12 +93,40 @@ def _compute(user) -> list[dict]:
     ]
 
 
-def activation_progress(user) -> dict | None:
+def membership_attention(membership) -> str | None:
+    """Require attention only for expired access or imminent manual renewal."""
+    if not membership:
+        return None
+    from datetime import timedelta
+    from time_utils import utcnow
+
+    now = utcnow()
+    dates = [membership._as_timezone_aware(value) for value in
+             (membership.trial_ends_at, membership.paid_until) if value is not None]
+    if not dates:
+        return None
+    access_until = max(dates)
+    if access_until < now:
+        return ('Período pago encerrado. Revise sua assinatura.' if membership.paid_until
+                else 'Avaliação encerrada. Ative sua assinatura para continuar.')
+    if access_until <= now + timedelta(days=3) and not membership.has_payment_method():
+        return 'Seu acesso vence em até 3 dias. Configure a renovação.'
+    return None
+
+
+def activation_progress(user, *, include_dismissed=False) -> dict | None:
     """Resumo para a faixa persistente, ou ``None`` quando não há o que mostrar.
 
     Some sozinha quando todos os passos estão concluídos: um lembrete que não
     sabe terminar vira ruído.
     """
+    if not getattr(user, 'is_authenticated', False):
+        return None
+    membership = getattr(getattr(user, 'veterinario', None), 'membership', None)
+    urgent = membership_attention(membership)
+    if urgent:
+        return dict(urgent=True, next_label=urgent, next_url=url_for('veterinarian_membership'),
+                    next_cta='Ver assinatura')
     steps = activation_steps(user)
     if not steps:
         return None
@@ -109,7 +137,8 @@ def activation_progress(user) -> dict | None:
 
     done = len(steps) - len(pending)
     nxt = pending[0]
-    return {
+    progress = {
+        'urgent': False,
         'done': done,
         'total': len(steps),
         'percent': round(done * 100 / len(steps)),
@@ -117,3 +146,10 @@ def activation_progress(user) -> dict | None:
         'next_url': nxt['url'],
         'next_cta': nxt['cta'],
     }
+    from services.home_alerts import prepare_alerts
+    reminder = prepare_alerts(user.id, [dict(url=url_for('veterinarian_membership'),
+        label='Configuração inicial da clínica', detail='activation-bar-v1')])[0]
+    if reminder['dismissed'] and not include_dismissed:
+        return None
+    progress['dismiss_token'] = reminder['dismiss_token']
+    return progress

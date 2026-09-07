@@ -1,3 +1,4 @@
+{% if next_actions or home_alert_center %}
 <section class="next-actions workspace-band" aria-labelledby="next-actions-title">
   <div class="home-alert-heading">
     <h2 id="next-actions-title" class="h5">{{ 'Central de alertas' if home_alert_center else 'Precisa de atenção' }}</h2>
@@ -26,3 +27,4 @@
     {% else %}<li class="text-muted py-3">{{ 'Nenhuma pendência no momento.' if home_alert_center else 'Tudo certo por aqui. Os alertas dispensados continuam na central.' }}</li>{% endfor %}
   </ul>
 </section>
+{% endif %}

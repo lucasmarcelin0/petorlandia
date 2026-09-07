@@ -74,17 +74,18 @@
 {% block main %}
 {% if current_user.is_authenticated %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workspaces.css', v='1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/home_profiles.css', v='1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/home_profiles.css', v='2') }}">
 <div class="tutor-page-shell dashboard-home">
     {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
     {% set dashboard_work_first = user_experience.primary_workspace is not none %}
     <header class="workspace-heading">
       <h1>{{ home_texts.shortcuts_title }}{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}!</h1>
       {% if user_experience.primary_workspace %}<p>{{ user_experience.primary_workspace.label }}</p>{% endif %}
+      {% if not next_actions and not home_alert_center %}<a class="home-central-link" href="{{ url_for('index', alertas='1') }}">Central de alertas →</a>{% endif %}
     </header>
     {% include 'components/home_next_actions.html' %}
     {% if dashboard_work_first and home_sections.work_areas %}
-    <section aria-label="Áreas de trabalho">
+    <section class="dashboard-work-grid" aria-label="Áreas de trabalho">
         {% include 'components/dashboard_work_areas.html' %}
     </section>
     {% endif %}

@@ -891,8 +891,21 @@ def dismiss_home_alert():
         dismiss_alert(current_user.id, request.form.get('token', ''))
     except (BadSignature, ValueError, KeyError, TypeError):
         abort(400)
-    flash('Alerta dispensado. Você pode consultá-lo na Central de alertas.', 'success')
     return redirect(url_for('index', alertas='1') if request.form.get('central') == '1' else url_for('index'))
+
+
+@bp.route('/inicio/ativacao/dispensar', methods=['POST'])
+@login_required
+def dismiss_activation_bar():
+    from services.activation import activation_progress
+    from services.home_alerts import dismiss_alert
+    progress = activation_progress(current_user, include_dismissed=True)
+    if progress and progress.get('urgent'):
+        abort(409)
+    if progress:
+        # Compute the token server-side and never accept another recipient or notice.
+        dismiss_alert(current_user.id, progress['dismiss_token'])
+    return redirect(url_for('index'))
 
 
 @bp.route('/inicio/perfil/<profile_key>')

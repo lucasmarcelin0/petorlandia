@@ -2,20 +2,26 @@
    primeiros passos, e some sozinha quando termina. #}
 {% set progresso = activation_progress %}
 {% if progresso %}
-<div class="activation-bar" role="status">
+<div class="activation-bar{{ ' activation-bar--urgent' if progresso.urgent else '' }}" role="status">
   <div class="activation-bar__inner">
-    <div class="activation-bar__meter" aria-hidden="true">
+    {% if not progresso.urgent %}<div class="activation-bar__meter" aria-hidden="true">
       <div class="activation-bar__fill" style="width: {{ progresso.percent }}%"></div>
     </div>
     <span class="activation-bar__count">
       {{ progresso.done }} de {{ progresso.total }}
-    </span>
+    </span>{% endif %}
     <span class="activation-bar__next">
-      Próximo: {{ progresso.next_label }}
+      {{ '' if progresso.urgent else 'Próximo: ' }}{{ progresso.next_label }}
     </span>
     <a href="{{ progresso.next_url }}" class="activation-bar__cta" data-cta="activation_bar_next">
       {{ progresso.next_cta }} <i class="fa-solid fa-arrow-right ms-1" aria-hidden="true"></i>
     </a>
+    {% if not progresso.urgent %}
+    <form method="post" action="{{ url_for('dismiss_activation_bar') }}" class="activation-bar__dismiss">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" aria-label="Dispensar aviso de configuração">Dispensar <span aria-hidden="true">×</span></button>
+    </form>
+    {% endif %}
   </div>
 </div>
 
@@ -25,6 +31,14 @@
     color: #eaf4f7;
     font-size: .875rem;
   }
+  .activation-bar--urgent { background: #873629; }
+  .activation-bar__dismiss { margin: 0; }
+  .activation-bar__dismiss button {
+    border: 1px solid rgba(255,255,255,.5); border-radius: 6px; background: transparent;
+    color: inherit; padding: .35rem .65rem; font: inherit; min-height: 36px;
+  }
+  .activation-bar__dismiss button:hover { background: rgba(255,255,255,.12); }
+  .activation-bar__dismiss button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
 
   .activation-bar__inner {
     max-width: 1200px;
