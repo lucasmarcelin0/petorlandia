@@ -169,7 +169,7 @@
   "StableAge": 30,
   "LuaScripts": [ "C:/Orthanc/petorlandia-webhook.lua" ]
 }</textarea>
-          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="orthanc-config">
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="orthanc-config" aria-label="Copiar orthanc.json" aria-live="polite">
             <i class="fa-regular fa-copy" aria-hidden="true"></i>
             Copiar
           </button>
@@ -216,7 +216,7 @@ function OnStableStudy(studyId, tags, metadata)
     print('PetOrlandia webhook FALHOU: ' .. tostring(err))
   end
 end</textarea>
-          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="webhook-script">
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="webhook-script" aria-label="Copiar petorlandia-webhook.lua" aria-live="polite">
             <i class="fa-regular fa-copy" aria-hidden="true"></i>
             Copiar
           </button>
@@ -283,16 +283,19 @@ end</textarea>
         const targetId = button.dataset.copyTarget;
         const target = targetId ? document.getElementById(targetId) : null;
         const value = target ? target.value : (button.dataset.copy || '');
+        const originalLabel = button.getAttribute('aria-label') || 'Copiar';
         try {
           await navigator.clipboard.writeText(value);
           button.classList.remove('btn-outline-secondary');
           button.classList.add('btn-success');
           const original = button.innerHTML;
           button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          button.setAttribute('aria-label', 'Copiado para a área de transferência');
           window.setTimeout(function () {
             button.classList.add('btn-outline-secondary');
             button.classList.remove('btn-success');
             button.innerHTML = original;
+            button.setAttribute('aria-label', originalLabel);
           }, 1600);
         } catch (error) {
           if (target) {
