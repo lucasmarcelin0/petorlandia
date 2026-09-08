@@ -5223,6 +5223,112 @@ def _integration_prescription_items(block: BlocoPrescricao):
     return items
 
 
+def _build_animal_summary_dict(animal: Animal) -> dict:
+    return {
+        'id': animal.id,
+        'nome': animal.name,
+        'especie': animal.species.name if animal.species else None,
+        'raca': animal.breed.name if animal.breed else None,
+        'sexo': animal.sex,
+        'idade': animal.age_display,
+        'peso_kg': animal.peso,
+        'clinica_id': animal.clinica_id,
+        'clinica_nome': animal.clinica.nome if animal.clinica else None,
+    }
+
+
+def _build_tutor_summary_dict(animal: Animal) -> dict:
+    return {
+        'id': animal.owner.id if getattr(animal, 'owner', None) else None,
+        'nome': animal.owner.name if getattr(animal, 'owner', None) else None,
+        'email': animal.owner.email if getattr(animal, 'owner', None) else None,
+        'telefone': animal.owner.phone if getattr(animal, 'owner', None) else None,
+    }
+
+
+def _build_consulta_dict(consulta: Consulta) -> dict:
+    return {
+        'id': consulta.id,
+        'status': consulta.status,
+        'finalizada_em': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
+        'queixa_principal': consulta.queixa_principal,
+        'conduta': consulta.conduta,
+        'exames_solicitados': consulta.exames_solicitados,
+    }
+
+
+def _build_prescription_dict(latest_prescription: BlocoPrescricao) -> dict:
+    return {
+        'id': latest_prescription.id,
+        'emitida_em': _integration_format_datetime(latest_prescription.data_criacao),
+        'instrucoes_gerais': latest_prescription.instrucoes_gerais,
+        'itens': _integration_prescription_items(latest_prescription),
+    }
+
+
+def _build_exam_dict(exam: ExameSolicitado) -> dict:
+    return {
+        'id': exam.id,
+        'nome': exam.nome,
+        'status': exam.status,
+        'justificativa': exam.justificativa,
+        'resultado': exam.resultado,
+    }
+
+
+def _build_pendencies_dict(pendencias: dict) -> dict:
+    return {
+        'vacinas_atrasadas': [
+            {
+                'id': vaccine.id,
+                'nome': vaccine.nome,
+                'tipo': vaccine.tipo,
+                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+            }
+            for vaccine in pendencias['vacinas_atrasadas']
+        ],
+        'proximas_vacinas': [
+            {
+                'id': vaccine.id,
+                'nome': vaccine.nome,
+                'tipo': vaccine.tipo,
+                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+            }
+            for vaccine in pendencias['proximas_vacinas'][:5]
+        ],
+        'retornos_agendados': [
+            {
+                'id': appointment.id,
+                'data': _integration_format_datetime(appointment.scheduled_at),
+                'status': appointment.status,
+                'observacoes': appointment.notes,
+            }
+            for appointment in pendencias['retornos_agendados'][:5]
+        ],
+        'exames_agendados': [
+            {
+                'id': exam.id,
+                'data': _integration_format_datetime(exam.scheduled_at),
+                'status': exam.status,
+                'especialista': (
+                    exam.specialist.user.name
+                    if getattr(getattr(exam, 'specialist', None), 'user', None) else None
+                ),
+            }
+            for exam in pendencias['exames_agendados'][:5]
+        ],
+        'exames_pendentes': [
+            {
+                'id': exam.id,
+                'nome': exam.nome,
+                'status': exam.status,
+                'justificativa': exam.justificativa,
+            }
+            for exam in pendencias['exames_pendentes'][:5]
+        ],
+    }
+
+
 def _integration_build_clinical_summary(user: User, animal: Animal):
     latest_consulta = (
         _integration_accessible_consultas_query(user)
@@ -5252,120 +5358,29 @@ def _integration_build_clinical_summary(user: User, animal: Animal):
     )
     pendencias = _integration_collect_animal_pendencies(animal)
 
+    ultima_consulta_dict = _build_consulta_dict(latest_consulta) if latest_consulta else None
+    if ultima_consulta_dict and latest_consulta:
+        ultima_consulta_dict['historico_clinico'] = latest_consulta.historico_clinico
+        ultima_consulta_dict['exame_fisico'] = latest_consulta.exame_fisico
+        ultima_consulta_dict['retorno_de_id'] = latest_consulta.retorno_de_id
+
     return {
-        'animal': {
-            'id': animal.id,
-            'nome': animal.name,
-            'especie': animal.species.name if animal.species else None,
-            'raca': animal.breed.name if animal.breed else None,
-            'sexo': animal.sex,
-            'idade': animal.age_display,
-            'peso_kg': animal.peso,
-            'clinica_id': animal.clinica_id,
-            'clinica_nome': animal.clinica.nome if animal.clinica else None,
-        },
-        'tutor': {
-            'id': animal.owner.id if getattr(animal, 'owner', None) else None,
-            'nome': animal.owner.name if getattr(animal, 'owner', None) else None,
-            'email': animal.owner.email if getattr(animal, 'owner', None) else None,
-            'telefone': animal.owner.phone if getattr(animal, 'owner', None) else None,
-        },
-        'ultima_consulta': (
-            {
-                'id': latest_consulta.id,
-                'status': latest_consulta.status,
-                'finalizada_em': _integration_format_datetime(
-                    latest_consulta.finalizada_em or latest_consulta.created_at
-                ),
-                'queixa_principal': latest_consulta.queixa_principal,
-                'historico_clinico': latest_consulta.historico_clinico,
-                'exame_fisico': latest_consulta.exame_fisico,
-                'conduta': latest_consulta.conduta,
-                'exames_solicitados': latest_consulta.exames_solicitados,
-                'retorno_de_id': latest_consulta.retorno_de_id,
-            }
-            if latest_consulta else None
-        ),
+        'animal': _build_animal_summary_dict(animal),
+        'tutor': _build_tutor_summary_dict(animal),
+        'ultima_consulta': ultima_consulta_dict,
         'consultas_recentes': [
-            {
-                'id': consulta.id,
-                'status': consulta.status,
-                'finalizada_em': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
-                'queixa_principal': consulta.queixa_principal,
-                'conduta': consulta.conduta,
-                'exames_solicitados': consulta.exames_solicitados,
-            }
+            _build_consulta_dict(consulta)
             for consulta in recent_consultas
         ],
         'prescricao_mais_recente': (
-            {
-                'id': latest_prescription.id,
-                'emitida_em': _integration_format_datetime(latest_prescription.data_criacao),
-                'instrucoes_gerais': latest_prescription.instrucoes_gerais,
-                'itens': _integration_prescription_items(latest_prescription),
-            }
+            _build_prescription_dict(latest_prescription)
             if latest_prescription else None
         ),
         'exames_recentes': [
-            {
-                'id': exam.id,
-                'nome': exam.nome,
-                'status': exam.status,
-                'justificativa': exam.justificativa,
-                'resultado': exam.resultado,
-            }
+            _build_exam_dict(exam)
             for exam in recent_exam_requests
         ],
-        'pendencias': {
-            'vacinas_atrasadas': [
-                {
-                    'id': vaccine.id,
-                    'nome': vaccine.nome,
-                    'tipo': vaccine.tipo,
-                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
-                }
-                for vaccine in pendencias['vacinas_atrasadas']
-            ],
-            'proximas_vacinas': [
-                {
-                    'id': vaccine.id,
-                    'nome': vaccine.nome,
-                    'tipo': vaccine.tipo,
-                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
-                }
-                for vaccine in pendencias['proximas_vacinas'][:5]
-            ],
-            'retornos_agendados': [
-                {
-                    'id': appointment.id,
-                    'data': _integration_format_datetime(appointment.scheduled_at),
-                    'status': appointment.status,
-                    'observacoes': appointment.notes,
-                }
-                for appointment in pendencias['retornos_agendados'][:5]
-            ],
-            'exames_agendados': [
-                {
-                    'id': exam.id,
-                    'data': _integration_format_datetime(exam.scheduled_at),
-                    'status': exam.status,
-                    'especialista': (
-                        exam.specialist.user.name
-                        if getattr(getattr(exam, 'specialist', None), 'user', None) else None
-                    ),
-                }
-                for exam in pendencias['exames_agendados'][:5]
-            ],
-            'exames_pendentes': [
-                {
-                    'id': exam.id,
-                    'nome': exam.nome,
-                    'status': exam.status,
-                    'justificativa': exam.justificativa,
-                }
-                for exam in pendencias['exames_pendentes'][:5]
-            ],
-        },
+        'pendencias': _build_pendencies_dict(pendencias),
     }
 
 
