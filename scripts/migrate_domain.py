@@ -64,7 +64,7 @@ def convert_app_routes(chunk: str, extra_routes) -> str:
     return out
 
 
-def build_header(bp_name, body_path):
+def build_header(bp_name, body_path, routes_extra):
     buf = io.StringIO()
     check(Path(body_path).read_text(encoding="utf-8"), str(body_path), Reporter(buf, buf))
     undef = sorted({
@@ -110,6 +110,8 @@ def build_header(bp_name, body_path):
             from_app.append(n)
         elif n in model_names:
             by_module["models"].append((n, n))
+        elif n in routes_extra:
+            from_app.append(n)
         else:
             missing.append(n)
 
@@ -185,7 +187,7 @@ def main():
         del lines[s - 1:e]
     APP.write_text("".join(lines), encoding="utf-8")
 
-    header, missing = build_header(bp_name, tmp)
+    header, missing = build_header(bp_name, tmp, routes_extra)
     tmp.write_text(header + body, encoding="utf-8")
 
     print(f"OK: {len(ordered)} views -> {out_path}; app.py atualizado")
