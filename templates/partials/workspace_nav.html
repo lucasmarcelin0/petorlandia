@@ -1,0 +1,16 @@
+{% for workspace in user_experience.visible_nav if workspace.key not in ['professional', 'delivery'] %}
+<li class="nav-item{% if workspace.actions|length > 1 %} dropdown{% endif %}">
+  {% if workspace.actions|length > 1 %}
+  <a class="nav-link nav-link--primary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ 'Minha loja' if workspace.key == 'store' else workspace.label }}
+  </a>
+  <ul class="dropdown-menu">
+    {% for action in workspace.actions %}
+    <li><a class="dropdown-item" href="{{ action.url }}"><i class="fa-solid {{ action.icon }} me-2" aria-hidden="true"></i>{{ action.label }}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <a class="nav-link nav-link--primary" href="{{ workspace.actions[0].url }}"><i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ workspace.label }}</a>
+  {% endif %}
+</li>
+{% endfor %}

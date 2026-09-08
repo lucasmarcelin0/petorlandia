@@ -24,7 +24,7 @@
       <input type="hidden" name="classe" value="{{ classificacao }}">
       <input type="hidden" name="especie" value="{{ especie }}">
       <div class="bulario-search mx-auto">
-        <i class="fas fa-search bulario-search__icon"></i>
+        <i class="fas fa-search bulario-search__icon" aria-hidden="true"></i>
         <input
           type="text"
           name="q"
@@ -33,11 +33,12 @@
           class="bulario-search__input"
           placeholder="Ex: amoxicilina, antibiótico, Frontline…"
           autocomplete="off"
+          aria-label="Buscar medicamento"
           autofocus
         >
         {% if q %}
-        <a href="{{ url_for('bulario', classe=classificacao, especie=especie) }}" class="bulario-search__clear" title="Limpar">
-          <i class="fas fa-times"></i>
+        <a href="{{ url_for('bulario', classe=classificacao, especie=especie) }}" class="bulario-search__clear" title="Limpar busca" aria-label="Limpar busca">
+          <i class="fas fa-times" aria-hidden="true"></i>
         </a>
         {% endif %}
         <button type="submit" class="bulario-search__btn">Buscar</button>
@@ -96,8 +97,10 @@
               class="bulario-macro-chip {% if grupo.is_active %}active expanded{% endif %}"
               data-macro="{{ grupo.key }}"
               onclick="toggleMacroGrupo('{{ grupo.key }}')"
+              aria-expanded="{% if grupo.is_active %}true{% else %}false{% endif %}"
+              aria-controls="drawer-{{ grupo.key }}"
               title="{{ grupo.count }} subcategoria(s)">
-        <i class="fas {{ grupo.icon }}"></i>
+        <i class="fas {{ grupo.icon }}" aria-hidden="true"></i>
         <span>{{ grupo.label }}</span>
         <span class="bulario-macro-count">{{ grupo.count }}</span>
       </button>
@@ -693,16 +696,21 @@ function toggleMacroGrupo(key) {
   // Fecha tudo primeiro
   drawers.forEach(d => d.classList.remove('open'));
   chips.forEach(c => {
-    // 'active' (filtro aplicado) é preservado; só limpamos o 'expanded' visual
-    if (c !== alvoChip) c.classList.remove('expanded');
+    // 'active' (filtro aplicado) é preservado; só limpamos o 'expanded' visual e o estado acessível
+    if (c !== alvoChip) {
+      c.classList.remove('expanded');
+      c.setAttribute('aria-expanded', 'false');
+    }
   });
 
   // Abre o alvo se não estava aberto
   if (!estavaAberto) {
     alvoDrawer.classList.add('open');
     alvoChip.classList.add('expanded');
+    alvoChip.setAttribute('aria-expanded', 'true');
   } else {
     alvoChip.classList.remove('expanded');
+    alvoChip.setAttribute('aria-expanded', 'false');
   }
 }
 </script>

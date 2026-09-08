@@ -833,6 +833,8 @@ def complete_delivery(req_id):
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
             return _delivery_error_response('Você não pode concluir esta entrega.', 'danger', 403)
+        if req.status != 'em_andamento':
+            return _delivery_error_response('Esta entrega não está em andamento. Atualize a lista.', 'warning', 409)
         req.status = 'concluida'
         req.completed_at = utcnow()
         _concluir_entrega_efeitos(req)
@@ -861,6 +863,8 @@ def cancel_delivery(req_id):
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
             return _delivery_error_response('Você não pode cancelar esta entrega.', 'danger', 403)
+        if req.status != 'em_andamento':
+            return _delivery_error_response('Esta entrega não está em andamento. Atualize a lista.', 'warning', 409)
         req.status = 'cancelada'
         req.canceled_at = utcnow()
         req.canceled_by_id = current_user.id
@@ -1459,6 +1463,8 @@ def produto_detail(product_id):
     # chega nele por link direto.
     if product.is_demo and not _is_admin():
         abort(404)
+    if not _is_admin() and (product.status != 'active' or (product.casa_de_racao and product.casa_de_racao.status != 'ativa')):
+        abort(404)
 
     if request.method == "POST" and not _is_admin():
         abort(403)
@@ -1783,6 +1789,12 @@ def adicionar_carrinho(product_id):
             return jsonify(success=False, error='product not found'), 404
         flash("Produto não encontrado.", "warning")
         return redirect(url_for("loja"))
+
+    if product.status != 'active' or product.is_demo or (product.casa_de_racao and product.casa_de_racao.status != 'ativa'):
+        if is_ajax:
+            return jsonify(success=False, message='Este produto não está disponível para compra.', category='warning'), 409
+        flash('Este produto não está disponível para compra.', 'warning')
+        return redirect(url_for('loja'))
 
     qty = 1
 
@@ -2847,6 +2859,19 @@ def minhas_compras():
         pagination=pagination,
         PaymentStatus=PaymentStatus,
     )
+
+
+@bp.route('/pedidos/<int:order_id>/comprar-novamente', methods=['GET'])
+@login_required
+def comprar_novamente(order_id):
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
+    if not order.payment or order.payment.status != PaymentStatus.COMPLETED:
+        abort(404)
+    product_ids = {item.product_id for item in order.items}
+    products = (_build_loja_query('', 'all').filter(Product.id.in_(product_ids)).all()
+                if product_ids else [])
+    # The buyer reviews today's price and presentation before changing the cart.
+    return render_template('loja/comprar_novamente.html', order=order, products=products)
 
 
 @bp.route("/pedidos/<int:order_id>/confirmar-recebimento", methods=["POST"])

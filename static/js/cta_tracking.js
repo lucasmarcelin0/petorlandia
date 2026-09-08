@@ -29,7 +29,7 @@
     enviados[chave] = true;
 
     var destino = el.getAttribute('href') || '';
-    var texto = (el.textContent || '').trim().slice(0, 60);
+    var texto = (el.getAttribute('data-cta-label') || el.textContent || '').trim().slice(0, 60);
 
     if (typeof window.gtag === 'function') {
       window.gtag('event', nome, {

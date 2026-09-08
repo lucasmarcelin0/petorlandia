@@ -12,10 +12,13 @@
   {% endif %}
   <figure class="product-media product-media--{{ variant }}{% if not source %} product-media--empty{% endif %}{% if class_name %} {{ class_name }}{% endif %}">
     {% if source %}
+    {% set responsive_sources = source|catalog_image_sources %}
+    {% if responsive_sources %}<picture><source type="image/webp" srcset="{{ responsive_sources }}" sizes="{{ '96px' if variant == 'thumb' else '(max-width: 575px) 90vw, (max-width: 991px) 45vw, 480px' }}">{% endif %}
     <img class="product-media__image" src="{{ source }}" alt="{{ alt_text }}"
          width="800" height="800" loading="{{ 'eager' if eager else 'lazy' }}"
          decoding="async" {% if eager %}fetchpriority="high"{% endif %}
-         onerror="this.hidden=true;this.parentElement.classList.add('product-media--error')">
+         onerror="this.hidden=true;this.closest('figure').classList.add('product-media--error')">
+    {% if responsive_sources %}</picture>{% endif %}
     {% endif %}
     <span class="product-media__fallback" aria-hidden="true">
       <i class="fa-regular fa-image"></i><span>Imagem indisponível</span>

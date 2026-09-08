@@ -7,13 +7,9 @@
   // Use pageshow event which fires even when page is loaded from cache (back button)
   window.addEventListener('pageshow', (event) => {
     // event.persisted is true when page is loaded from cache (back/forward navigation)
-    if (event.persisted || !document.hidden) {
-      console.log('pageshow event - refreshing delivery sections', { persisted: event.persisted, hidden: document.hidden });
+    if (event.persisted) {
       if (typeof window.refreshDeliverySections === 'function') {
         window.refreshDeliverySections();
-      } else {
-        // Fallback: reload page if function not available
-        window.location.reload();
       }
     }
   });
@@ -21,7 +17,6 @@
   // Also refresh on visibility change (user switched tabs)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && typeof window.refreshDeliverySections === 'function') {
-      console.log('visibilitychange event - refreshing delivery sections');
       // Small delay to ensure page is fully visible
       setTimeout(() => {
         window.refreshDeliverySections();
@@ -29,15 +24,6 @@
     }
   });
   
-  // Also refresh on page focus (user switched back to tab)
-  window.addEventListener('focus', () => {
-    if (typeof window.refreshDeliverySections === 'function') {
-      console.log('focus event - refreshing delivery sections');
-      setTimeout(() => {
-        window.refreshDeliverySections();
-      }, 100);
-    }
-  });
 </script>
 <div class="container py-4">
 
@@ -70,7 +56,10 @@
     const sections = document.getElementById('delivery-sections');
     const feedback = document.getElementById('delivery-feedback');
 
+    let refreshingCounts = false;
     async function refreshCounts() {
+      if (document.hidden || refreshingCounts) return;
+      refreshingCounts = true;
       try {
         const resp = await fetch('/api/delivery_counts');
         if (!resp.ok) return;
@@ -89,6 +78,8 @@
         });
       } catch (err) {
         console.error('Falha ao atualizar contadores', err);
+      } finally {
+        refreshingCounts = false;
       }
     }
     refreshCounts();

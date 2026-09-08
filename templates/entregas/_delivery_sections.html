@@ -37,7 +37,7 @@
           </form>
 
         {% elif req.status == 'em_andamento' and req.worker_id == current_user.id %}
-          <div class="d-flex">
+          <div class="d-flex flex-wrap gap-2">
             <a href="{{ url_for('delivery_detail', req_id=req.id) }}"
                class="btn btn-sm btn-outline-primary me-2">
                Detalhes
@@ -63,12 +63,12 @@
   {% if is_delivery_operator %}
     <div class="accordion-item">
       <h2 class="accordion-header" id="headPend">
-        <button class="accordion-button" type="button"
+        <button class="accordion-button{% if doing %} collapsed{% endif %}" type="button" aria-expanded="{{ 'false' if doing else 'true' }}"
                 data-bs-toggle="collapse" data-bs-target="#panePend">
           🟡 Disponíveis (<span id="available-count">{{ available_total }}</span>)
         </button>
       </h2>
-      <div id="panePend" class="accordion-collapse collapse show"
+      <div id="panePend" class="accordion-collapse collapse{% if not doing %} show{% endif %}"
            data-bs-parent="#accordionEntregas">
         <div class="accordion-body p-1">
           {% if available %}
@@ -83,12 +83,12 @@
 
   <div class="accordion-item">
     <h2 class="accordion-header" id="headDoing">
-      <button class="accordion-button collapsed" type="button"
+      <button class="accordion-button{% if not doing %} collapsed{% endif %}" type="button" aria-expanded="{{ 'true' if doing else 'false' }}"
               data-bs-toggle="collapse" data-bs-target="#paneDoing">
         🔵 Em Andamento (<span id="doing-count">{{ doing|length }}</span>)
       </button>
     </h2>
-    <div id="paneDoing" class="accordion-collapse collapse"
+    <div id="paneDoing" class="accordion-collapse collapse{% if doing %} show{% endif %}"
          data-bs-parent="#accordionEntregas">
       <div class="accordion-body p-1">
         {% if doing %}

@@ -36,6 +36,8 @@ from models import (
     Endereco,
     Order,
     OrderItem,
+    Payment,
+    PaymentStatus,
     Product,
     Racao,
     StorePaymentAccount,
@@ -476,6 +478,12 @@ def casa_de_racao_dashboard(casa_id):
     product_form = CasaDeRacaoProductForm(formdata=None)
     produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()
     produtos_count = sum(1 for p in produtos if p.status == 'active')
+    confirmed_orders_count = (db.session.query(func.count(func.distinct(Order.id)))
+                              .join(OrderItem, OrderItem.order_id == Order.id)
+                              .join(Product, Product.id == OrderItem.product_id)
+                              .join(Order.payment)
+                              .filter(Product.casa_de_racao_id == casa.id,
+                                      Payment.status == PaymentStatus.COMPLETED).scalar())
     entregas_pendentes = 0
     if casa.modo_entrega == 'propria':
         entregas_pendentes = (
@@ -503,6 +511,7 @@ def casa_de_racao_dashboard(casa_id):
         horarios=horarios,
         produtos=produtos,
         produtos_count=produtos_count,
+        confirmed_orders_count=confirmed_orders_count,
         entregas_pendentes=entregas_pendentes,
         store_initials=store_initials,
         pode_editar=True,
@@ -834,15 +843,19 @@ def casa_de_racao_vendas(casa_id):
     """Dashboard de vendas: pedidos que contêm produtos da casa de ração."""
     casa = _casa_loja_access(casa_id)
 
-    # Todos os OrderItems cujo produto pertence a esta casa
+    # Only confirmed payments are sales; open carts are not revenue.
     from sqlalchemy import func
     items = (
         OrderItem.query
+        .join(Order, OrderItem.order_id == Order.id)
+        .join(Order.payment)
         .join(Product, OrderItem.product_id == Product.id)
         .filter(Product.casa_de_racao_id == casa.id)
+        .filter(Payment.status == PaymentStatus.COMPLETED)
         .options(
             db.joinedload(OrderItem.product),
             db.joinedload(OrderItem.order).joinedload(Order.user),
+            db.joinedload(OrderItem.order).joinedload(Order.payment),
         )
         .order_by(OrderItem.order_id.desc())
         .all()

@@ -65,6 +65,7 @@
           {% endif %}
         </span>
         <h1 id="store-context-title">{{ casa.nome }}</h1>
+        {% if casa.razao_social %}<p class="text-muted small mb-1">{{ casa.razao_social }}</p>{% endif %}
         <div class="clinic-context-card__contacts">
           {% if casa.endereco %}<span><i class="fa-solid fa-location-dot" aria-hidden="true"></i>{{ casa.endereco }}</span>{% endif %}
           {% if casa.telefone %}<span><i class="fa-solid fa-phone" aria-hidden="true"></i>{{ casa.telefone }}</span>{% endif %}
@@ -85,6 +86,11 @@
               onclick="openStoreEdit({focusLogo: true});">
         <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Editar dados
       </button>
+      {% if casa.status == 'ativa' %}
+      <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">
+        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> Catálogo público
+      </a>
+      {% endif %}
     </div>
   </section>
 
@@ -110,47 +116,7 @@
     {# ══════════════════════ TAB: LOJA ══════════════════════ #}
     <div class="tab-pane clinic-tab-pane fade show active" id="loja" role="tabpanel" aria-labelledby="loja-tab">
 
-      {# Hero #}
-      <section class="clinic-hero mb-4"
-               style="--clinic-primary:#2e7d32;--clinic-secondary:#66bb6a;--clinic-text-color:#fff;
-                      --clinic-subtitle-color:rgba(255,255,255,.85);--clinic-eyebrow-color:rgba(255,255,255,.8);
-                      --clinic-chip-bg:rgba(255,255,255,.15);--clinic-chip-border:rgba(255,255,255,.25);
-                      --clinic-chip-text:#fff;--clinic-logo-frame-bg:#fff;
-                      --clinic-logo-frame-shadow:rgba(0,0,0,.12);--clinic-logo-frame-border:rgba(255,255,255,.35);
-                      --clinic-avatar-bg:rgba(255,255,255,.1);--clinic-avatar-text:#fff;">
-        <div class="clinic-hero__inner row g-4 align-items-center">
-          <div class="col-lg-7">
-            <p class="clinic-hero__eyebrow mb-1">Loja parceira</p>
-            <h1 class="clinic-hero__title mb-2">{{ casa.nome }}</h1>
-            {% if casa.razao_social %}<p class="clinic-hero__subtitle mb-3">{{ casa.razao_social }}</p>{% endif %}
-            <div class="clinic-hero__chips mb-4">
-              {% if casa.endereco %}<span class="clinic-hero__chip"><i class="fa-solid fa-location-dot"></i>{{ casa.endereco }}</span>{% endif %}
-              {% if casa.telefone %}<span class="clinic-hero__chip"><i class="fa-solid fa-phone"></i>{{ casa.telefone }}</span>{% endif %}
-              {% if casa.email %}<span class="clinic-hero__chip"><i class="fa-solid fa-envelope"></i>{{ casa.email }}</span>{% endif %}
-            </div>
-            <div class="clinic-hero__actions d-flex flex-wrap gap-2">
-              <button type="button" class="btn btn-light btn-lg d-inline-flex align-items-center gap-2"
-                      onclick="openStoreEdit({focusLogo: true});">
-                <i class="fa-solid fa-pen-to-square"></i> Editar dados
-              </button>
-              <a href="{{ url_for('loja') }}" class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2" target="_blank">
-                <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver loja
-              </a>
-            </div>
-          </div>
-          <div class="col-lg-5">
-            <div class="clinic-hero__brand text-center text-lg-end">
-              <div class="clinic-hero__logo-frame {{ 'clinic-hero__logo-frame--has-logo' if casa.logotipo }}">
-                {% if casa.logotipo %}
-                  {{ clinic_logo(casa, alt_text='Logo da loja') }}
-                {% else %}
-                  <span class="clinic-hero__avatar" aria-hidden="true">{{ store_initials }}</span>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {% if casa.descricao %}<p class="text-muted mb-4">{{ casa.descricao }}</p>{% endif %}
 
       {# Formulário de edição (oculto) #}
       <div id="edit-store-info" class="card shadow-lg border-0 rounded-3 mb-4" style="display:none;">
@@ -286,7 +252,7 @@
       </div>
 
       {# Métricas #}
-      <div class="row g-3 mb-4">
+      <div class="row g-3 mb-4 store-metrics">
         <div class="col-6 col-md-3">
           <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
             <i class="fa-solid fa-user-group fa-2x text-primary mb-2"></i>
@@ -314,8 +280,8 @@
           <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}" class="text-decoration-none">
             <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
               <i class="fa-solid fa-chart-line fa-2x text-info mb-2"></i>
-              <div class="fs-3 fw-bold">—</div>
-              <div class="text-muted small">Ver vendas</div>
+              <div class="fs-3 fw-bold">{{ confirmed_orders_count }}</div>
+              <div class="text-muted small">Pedidos pagos</div>
             </div>
           </a>
         </div>
@@ -325,15 +291,15 @@
       <div class="d-flex gap-2 flex-wrap">
         <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
            class="btn btn-primary">
-          <i class="fa-solid fa-plus me-1"></i>Publicar produto
+          <i class="fa-solid fa-plus me-1"></i>{{ 'Publicar produto' if casa.status == 'ativa' else 'Preparar produto' }}
         </a>
         <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
-           class="btn btn-outline-success {% if casa.status == 'pendente' %}disabled{% endif %}">
+           class="btn btn-outline-success">
           <i class="fa-solid fa-chart-line me-1"></i>Minhas vendas
         </a>
         {% if casa.modo_entrega == 'propria' %}
         <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
-           class="btn {% if entregas_pendentes %}btn-warning{% else %}btn-outline-primary{% endif %} {% if casa.status == 'pendente' %}disabled{% endif %} position-relative">
+           class="btn {% if entregas_pendentes %}btn-warning{% else %}btn-outline-primary{% endif %} position-relative">
           <i class="fa-solid fa-truck me-1"></i>Minhas entregas
           {% if entregas_pendentes %}
           <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ entregas_pendentes }}</span>
@@ -487,11 +453,11 @@
           <div class="row g-3">
             {% for p in produtos %}
             <div class="col-sm-6 col-xl-4">
-              <div class="card h-100 border-0 shadow-sm rounded-3 {% if p.status != 'active' %}opacity-50{% endif %}">
+              <div class="card h-100 border-0 shadow-sm rounded-3">
                 {{ product_media(p, 'card') }}
                 <div class="card-body p-3">
-                  <div class="d-flex justify-content-between align-items-start mb-1">
-                    <h6 class="fw-semibold mb-0 text-truncate" style="max-width:75%">{{ p.name }}</h6>
+                  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-1">
+                    <h6 class="fw-semibold mb-0 text-break">{{ p.name }}</h6>
                     {% if p.status == 'active' %}
                       <span class="badge bg-success-subtle text-success">Ativo</span>
                     {% elif p.status == 'pending' %}
@@ -517,17 +483,20 @@
                     <form method="post" action="{{ url_for('casa_produto_toggle', casa_id=casa.id, product_id=p.id) }}">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
+                              {% if casa.status != 'ativa' and p.status != 'active' %}disabled{% endif %}
                               class="btn btn-sm {% if p.status == 'active' %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
                               title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}"
                               aria-label="{% if p.status == 'active' %}Desativar produto{% else %}Ativar produto{% endif %}">
                         <i class="fa-solid {% if p.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i>
                       </button>
                     </form>
+                    {% if p.status == 'active' and casa.status == 'ativa' %}
                     <a href="{{ url_for('produto_detail', product_id=p.id) }}" target="_blank"
                        class="btn btn-outline-secondary btn-sm" title="Ver na loja"
                        aria-label="Ver produto na loja">
                       <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                     </a>
+                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -586,6 +555,29 @@ function toggleStoreEdit() {
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+function openStorePayments() {
+  const button = document.getElementById('loja-tab');
+  const payments = document.getElementById('recebimentos');
+  const focusPayments = () => {
+    payments.scrollIntoView({block: 'start'});
+    payments.focus({preventScroll: true});
+  };
+  if (button.classList.contains('active')) focusPayments();
+  else {
+    button.addEventListener('shown.bs.tab', focusPayments, {once: true});
+    activateStoreTab('loja');
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('a[href="#recebimentos"]').forEach(link => {
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      openStorePayments();
+    });
+  });
+  if (window.location.hash === '#recebimentos') openStorePayments();
+});
 </script>
 <script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 {% endblock %}

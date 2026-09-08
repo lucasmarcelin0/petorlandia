@@ -9,7 +9,7 @@
     {% for action in next_actions %}
     <li class="home-alert home-alert--{{ action.tone }}">
       <div class="home-alert-copy">
-        <span class="workspace-emoji" aria-hidden="true">{{ '💉' if action.tone == 'attention' else '📌' }}</span>
+        <span class="workspace-emoji" aria-hidden="true">{% if action.icon %}<i class="fa-solid {{ action.icon }}"></i>{% else %}{{ '💉' if action.tone == 'attention' else '📌' }}{% endif %}</span>
         <div><strong>{{ action.label }}</strong><small>{{ action.detail }}</small>{% if action.dismissed %}<small class="home-alert-dismissed">Dispensado do início</small>{% endif %}</div>
       </div>
       <div class="home-alert-actions">

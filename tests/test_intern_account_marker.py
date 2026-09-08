@@ -72,6 +72,41 @@ def test_marcador_reconhecido_pelo_worker(app_ctx):
     assert is_intern_account(user) is True
 
 
+def test_is_intern_account_none_no_current_user(app_ctx):
+    assert is_intern_account(None) is False
+
+
+def test_is_intern_account_none_with_authenticated_user(app_ctx, monkeypatch):
+    import flask_login.utils as login_utils
+    class DummyUser:
+        is_authenticated = True
+        role = INTERN_ROLE
+    monkeypatch.setattr(login_utils, '_get_user', lambda: DummyUser())
+    assert is_intern_account(None) is True
+
+
+def test_is_intern_account_none_with_unauthenticated_user(app_ctx, monkeypatch):
+    import flask_login.utils as login_utils
+    class DummyUser:
+        is_authenticated = False
+        role = INTERN_ROLE
+    monkeypatch.setattr(login_utils, '_get_user', lambda: DummyUser())
+    assert is_intern_account(None) is False
+
+
+def test_is_intern_account_uppercase_role_worker(app_ctx):
+    user_role = _user(id=98, role=INTERN_ROLE.upper())
+    assert is_intern_account(user_role) is True
+
+    user_worker = _user(id=99, worker=INTERN_WORKER.upper())
+    assert is_intern_account(user_worker) is True
+
+
+def test_is_intern_account_none_role_worker(app_ctx):
+    user = _user(id=100, role=None, worker=None)
+    assert is_intern_account(user) is False
+
+
 def test_conta_comum_nao_e_estagiaria(app_ctx):
     user = _user(id=3, role='adotante', worker='colaborador')
     assert is_intern_account(user) is False

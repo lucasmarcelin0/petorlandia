@@ -482,6 +482,8 @@ def appointments():
     view_as = request.args.get('view_as')
     worker = getattr(current_user, 'worker', None)
     is_vet = is_veterinarian(current_user)
+    if is_vet and current_user.role != 'admin':
+        worker = 'veterinario'
     if worker == 'veterinario' and not is_vet:
         worker = 'tutor'
     clinic_repo = ClinicRepository()

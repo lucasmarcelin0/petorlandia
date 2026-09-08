@@ -31,6 +31,9 @@ DIAS_AGENDA_USO_CONTINUO = 30
 def _normalizar(texto: str | None) -> str:
     if not texto:
         return ''
+    # Fast path: pure ASCII strings do not contain combining characters, so unicodedata NFKD decomposition can be bypassed.
+    if texto.isascii():
+        return texto.lower().strip()
     texto = unicodedata.normalize('NFKD', texto)
     texto = ''.join(ch for ch in texto if not unicodedata.combining(ch))
     return texto.lower().strip()
@@ -45,6 +48,25 @@ _FREQ_SIGLAS = {
     'qid': 6,
 }
 
+# Performance optimization: pre-compile regexes at module load time to prevent repeated compilation on hot paths.
+_RE_SIGLAS = {sigla: re.compile(rf'\b{sigla}\b') for sigla in _FREQ_SIGLAS}
+_RE_A_CADA_HORAS = re.compile(r'(?:a\s+)?cada\s+(\d{1,3})\s*(hora|h\b|hrs?)')
+_RE_DE_X_EM_X_HORAS = re.compile(r'de\s+(\d{1,3})\s+em\s+\d{1,3}\s*(?:hora|h\b|hrs?)?')
+_RE_X_SLASH_X_HORAS = re.compile(r'\b(\d{1,3})\s*/\s*(\d{1,3})\s*(?:hora|h\b|hrs?)?')
+_RE_A_CADA_DIAS = re.compile(r'(?:a\s+)?cada\s+(\d{1,2})\s*dias?')
+_RE_VEZES_DIA = re.compile(r'\b(\d{1,2})\s*(?:x|vez(?:es)?)\s*(?:ao|por|/|no)?\s*dia')
+_RE_VEZES_SEMANA = re.compile(r'\b(\d{1,2})\s*(?:x|vez(?:es)?)\s*(?:ao|por|/|na)?\s*semana')
+_RE_SEMANAL = re.compile(r'\bsemanal(?:mente)?\b')
+_RE_UMA_VEZ_DIA = re.compile(r'\buma\s+vez\s+(?:ao|por)\s+dia\b|\bdiariamente\b|\btodos\s+os\s+dias\b|\b1\s+vez\s+(?:ao|por)\s+dia\b')
+
+_RE_DURACAO_DIAS = re.compile(r'\b(\d{1,3})\s*dias?\b')
+_RE_DURACAO_SEMANAS = re.compile(r'\b(\d{1,2})\s*semanas?\b')
+_RE_DURACAO_MESES = re.compile(r'\b(\d{1,2})\s*m(?:e|ê)s(?:es)?\b')
+_RE_UMA_SEMANA = re.compile(r'\buma\s+semana\b')
+_RE_DOSE_UNICA = re.compile(r'\bdose\s+unica\b|\bunica\s+dose\b|\baplicacao\s+unica\b')
+
+_RE_USO_CONTINUO = re.compile(r'\bcontinuo\b|\buso\s+continuo\b|\bcontinuamente\b')
+
 
 def parse_intervalo_horas(frequencia: str | None) -> int | None:
     """Extrai o intervalo entre doses (em horas) do texto de frequência.
@@ -55,44 +77,44 @@ def parse_intervalo_horas(frequencia: str | None) -> int | None:
     if not texto:
         return None
 
-    for sigla, horas in _FREQ_SIGLAS.items():
-        if re.search(rf'\b{sigla}\b', texto):
-            return horas
+    for sigla, pattern in _RE_SIGLAS.items():
+        if pattern.search(texto):
+            return _FREQ_SIGLAS[sigla]
 
     # "a cada 12 horas", "cada 8h", "de 8 em 8 horas", "12/12h", "12-12h"
-    m = re.search(r'(?:a\s+)?cada\s+(\d{1,3})\s*(hora|h\b|hrs?)', texto)
+    m = _RE_A_CADA_HORAS.search(texto)
     if m:
         return int(m.group(1))
-    m = re.search(r'de\s+(\d{1,3})\s+em\s+\d{1,3}\s*(?:hora|h\b|hrs?)?', texto)
+    m = _RE_DE_X_EM_X_HORAS.search(texto)
     if m:
         return int(m.group(1))
-    m = re.search(r'\b(\d{1,3})\s*/\s*(\d{1,3})\s*(?:hora|h\b|hrs?)?', texto)
+    m = _RE_X_SLASH_X_HORAS.search(texto)
     if m and m.group(1) == m.group(2):
         return int(m.group(1))
 
     # "a cada 2 dias", "cada 3 dias"
-    m = re.search(r'(?:a\s+)?cada\s+(\d{1,2})\s*dias?', texto)
+    m = _RE_A_CADA_DIAS.search(texto)
     if m:
         return int(m.group(1)) * 24
 
     # "2x ao dia", "3 vezes por dia", "1x/dia"
-    m = re.search(r'\b(\d{1,2})\s*(?:x|vez(?:es)?)\s*(?:ao|por|/|no)?\s*dia', texto)
+    m = _RE_VEZES_DIA.search(texto)
     if m:
         vezes = int(m.group(1))
         if 1 <= vezes <= 24:
             return round(24 / vezes)
 
     # "1x por semana", "semanal", "2 vezes por semana"
-    m = re.search(r'\b(\d{1,2})\s*(?:x|vez(?:es)?)\s*(?:ao|por|/|na)?\s*semana', texto)
+    m = _RE_VEZES_SEMANA.search(texto)
     if m:
         vezes = int(m.group(1))
         if 1 <= vezes <= 7:
             return round(168 / vezes)
-    if re.search(r'\bsemanal(?:mente)?\b', texto):
+    if _RE_SEMANAL.search(texto):
         return 168
 
     # "uma vez ao dia", "diariamente", "todos os dias"
-    if re.search(r'\buma\s+vez\s+(?:ao|por)\s+dia\b|\bdiariamente\b|\btodos\s+os\s+dias\b|\b1\s+vez\s+(?:ao|por)\s+dia\b', texto):
+    if _RE_UMA_VEZ_DIA.search(texto):
         return 24
 
     return None
@@ -104,25 +126,25 @@ def parse_duracao_dias(duracao: str | None) -> int | None:
     if not texto:
         return None
 
-    m = re.search(r'\b(\d{1,3})\s*dias?\b', texto)
+    m = _RE_DURACAO_DIAS.search(texto)
     if m:
         return int(m.group(1))
-    m = re.search(r'\b(\d{1,2})\s*semanas?\b', texto)
+    m = _RE_DURACAO_SEMANAS.search(texto)
     if m:
         return int(m.group(1)) * 7
-    m = re.search(r'\b(\d{1,2})\s*m(?:e|ê)s(?:es)?\b', texto)
+    m = _RE_DURACAO_MESES.search(texto)
     if m:
         return int(m.group(1)) * 30
-    if re.search(r'\buma\s+semana\b', texto):
+    if _RE_UMA_SEMANA.search(texto):
         return 7
-    if re.search(r'\bdose\s+unica\b|\bunica\s+dose\b|\baplicacao\s+unica\b', texto):
+    if _RE_DOSE_UNICA.search(texto):
         return 1
     return None
 
 
 def eh_uso_continuo(duracao: str | None) -> bool:
     texto = _normalizar(duracao)
-    return bool(re.search(r'\bcontinuo\b|\buso\s+continuo\b|\bcontinuamente\b', texto))
+    return bool(_RE_USO_CONTINUO.search(texto))
 
 
 def gerar_agenda(inicio: datetime, intervalo_horas: int, duracao_dias: int) -> list[datetime]:

@@ -28,7 +28,7 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
     _login(client, admin_id)
     dashboard = client.get(f'/casa-de-racao/{store_id}#produtos')
     assert dashboard.status_code == 200
-    assert b'Publicar produto' in dashboard.data
+    assert b'Salvar produto' in dashboard.data
     assert b'aguardando aprova' not in dashboard.data
 
     created = client.post(
@@ -63,10 +63,16 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
     with app.app_context():
         product = db.session.get(Product, product_id)
         assert product.name == 'Racao Revisada'
-        assert product.status == 'inactive'
+        assert product.status == 'pending'
         assert product.subscription_enabled is True
         assert float(product.subscription_discount_percent) == 5
         assert float(product.subscription_shipping_fee) == 6
+        store = db.session.get(CasaDeRacao, store_id)
+        store.status = 'ativa'
+        db.session.commit()
+    client.post(f'/casa-de-racao/{store_id}/produto/{product_id}/toggle')
+    with app.app_context():
+        assert db.session.get(Product, product_id).status == 'active'
 
 
 def test_admin_product_list_highlights_sale_modes(app, client):
@@ -145,7 +151,10 @@ def test_pending_store_owner_cannot_publish_before_approval(app, client):
     )
     assert response.status_code == 302
     with app.app_context():
-        assert Product.query.filter_by(casa_de_racao_id=store_id).count() == 0
+        product = Product.query.filter_by(casa_de_racao_id=store_id).one()
+        assert product.status == 'pending'
+        product_id = product.id
+    assert client.get(f'/produto/{product_id}').status_code == 404
 
 
 def test_unrelated_user_cannot_manage_store_products(app, client):

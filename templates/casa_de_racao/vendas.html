@@ -26,7 +26,7 @@
         <div class="h3 fw-bold text-success mb-0">
           R$ {{ "%.2f"|format(receita_total)|replace('.', ',') }}
         </div>
-        <div class="small text-muted">Receita total</div>
+        <div class="small text-muted">Vendas confirmadas (produtos)</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
@@ -95,7 +95,7 @@
 
         <!-- Itens -->
         <ul class="list-unstyled mb-0">
-          {% for oi in p.items %}
+        {% for oi in p['items'] %}
           <li class="d-flex justify-content-between align-items-center py-1 border-bottom border-light">
             <span class="small">
               {% if oi.product %}

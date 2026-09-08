@@ -40,6 +40,7 @@
                 <i class="bi bi-search"></i> Detalhes
               </a>
               {% if status == 'COMPLETED' %}
+                <a href="{{ url_for('loja_routes.comprar_novamente', order_id=o.id) }}" class="btn btn-sm btn-outline-success" data-cta="order_repurchase"><i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>Comprar novamente</a>
                 {% if o.received_at %}
                 <span class="badge bg-success-subtle text-success border align-self-center" title="Recebimento confirmado">
                   <i class="bi bi-check2-circle"></i> Recebido em {{ o.received_at|format_datetime_brazil('%d/%m/%Y') }}

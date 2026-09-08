@@ -1,4 +1,4 @@
-.unified-home .unified-hero { display: block; padding: 36px 0 24px; background: transparent; min-height: 0; }
+.unified-home .unified-hero { display: block; padding: 36px 0 24px; background: transparent; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
 .unified-home .unified-hero__copy { max-width: 850px; }
 .unified-home #unified-home-title { font-size: 3rem; line-height: 1.1; letter-spacing: 0; }
 .unified-home .unified-hero__copy > p { font-size: 1.125rem; line-height: 1.65; }
@@ -14,6 +14,11 @@
 .unified-home .unified-hero__trust { flex-wrap: wrap; }
 .unified-home .unified-hero__trust li { min-width: 0; }
 .unified-home .unified-section__heading h2 { letter-spacing: 0; }
+.unified-home .unified-profile-panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding-inline: 0; }
+.unified-home .unified-profile-panel__action { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.unified-home .unified-profile-panel h3 { font-size: 1.65rem; line-height: 1.25; letter-spacing: 0; }
+.unified-home .unified-section__heading h2 { font-size: 2rem; }
+.unified-home .unified-proof, .unified-home .unified-final-cta { border-radius: 0; box-shadow: none; }
 @media (max-width: 575.98px) {
   .unified-home #unified-home-title { font-size: 2.25rem; }
   .unified-home .unified-hero { padding-top: 16px; }

@@ -669,10 +669,10 @@ def _landing_screenshot() -> str | None:
     um resumo em texto no lugar — nunca uma tela fictícia passando por real.
     """
 
-    candidate = 'img/landing-agenda.png'
     static_folder = current_app.static_folder
-    if static_folder and os.path.exists(os.path.join(static_folder, *candidate.split('/'))):
-        return candidate
+    for candidate in ('img/landing-agenda.webp', 'img/landing-agenda.png'):
+        if static_folder and os.path.exists(os.path.join(static_folder, *candidate.split('/'))):
+            return candidate
     return None
 
 
@@ -1055,7 +1055,7 @@ def waitlist_signup():
 #: atributos data-cta dos templates.
 CTA_EVENT_PREFIXES = (
     'cta_', 'home_', 'tutor_', 'student_', 'onboarding_', 'login_', 'pricing_', 'clinic_', 'store_',
-    'health_', 'recommendation_', 'value_',
+    'health_', 'recommendation_', 'value_', 'workspace_', 'order_',
 )
 
 
