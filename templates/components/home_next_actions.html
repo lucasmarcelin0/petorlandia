@@ -2,7 +2,7 @@
 <section class="next-actions workspace-band" aria-labelledby="next-actions-title">
   <div class="home-alert-heading">
     <h2 id="next-actions-title" class="h5">{{ 'Central de alertas' if home_alert_center else 'Precisa de atenção' }}</h2>
-    <a href="{{ url_for('index') if home_alert_center else url_for('index', alertas='1', _anchor='next-actions-title') }}">{{ 'Voltar ao início' if home_alert_center else 'Central de alertas' }} <span aria-hidden="true">→</span></a>
+    {% if home_alert_center %}<a href="{{ url_for('index') }}">Voltar ao início <span aria-hidden="true">→</span></a>{% endif %}
   </div>
   {% if home_alert_center %}<p class="text-muted small">Consulte suas pendências, incluindo os alertas dispensados do início.</p>{% endif %}
   <ul class="next-actions-list">

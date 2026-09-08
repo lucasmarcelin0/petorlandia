@@ -395,6 +395,8 @@
                 <i class="fas fa-bell me-2 text-warning"></i> <span data-push-label>Ativar notificações</span>
               </a>
             </li>
+            <li><a class="dropdown-item" href="{{ url_for('index', alertas='1') }}">
+                <i class="fas fa-inbox me-2 text-info" aria-hidden="true"></i> Central de alertas</a></li>
             <li><hr class="dropdown-divider"></li>
             <li class="nav-account__logout-desktop"><a class="dropdown-item nav-logout-link" href="{{ url_for('logout') }}">
                 <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
