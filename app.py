@@ -1226,10 +1226,7 @@ def _nim_turn_metadata(previous_state: dict, next_state: dict) -> tuple[dict | N
     return last_turn_summary, next_origin_rows
 
 
-def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
-    if not isinstance(payload, dict):
-        return None
-
+def _extract_nim_rows(payload: dict) -> list[list[bool]] | None:
     rows = payload.get("rows")
     if not isinstance(rows, (list, tuple)) or len(rows) != len(NIM_TEMPLATE_ROWS):
         return None
@@ -1239,7 +1236,10 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         if not isinstance(row, (list, tuple)) or len(row) != len(NIM_TEMPLATE_ROWS[index]):
             return None
         normalized_rows.append([bool(value) for value in row])
+    return normalized_rows
 
+
+def _extract_nim_turn(payload: dict, current_state: dict) -> int:
     turn = payload.get("turn", current_state["turn"])
     try:
         turn_int = int(turn)
@@ -1247,32 +1247,38 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         turn_int = current_state["turn"]
     if turn_int not in (1, 2):
         turn_int = 1
+    return turn_int
 
+
+def _extract_nim_winner(payload: dict) -> int | None:
     winner_value = payload.get("winner")
     if winner_value in (None, "", "null"):
-        winner_int = None
-    else:
-        try:
-            winner_int = int(winner_value)
-        except (TypeError, ValueError):
-            winner_int = None
-        if winner_int not in (1, 2):
-            winner_int = None
+        return None
+    try:
+        winner_int = int(winner_value)
+    except (TypeError, ValueError):
+        return None
+    if winner_int not in (1, 2):
+        return None
+    return winner_int
 
+
+def _extract_nim_has_played(payload: dict, current_state: dict) -> bool:
     has_played_raw = payload.get("has_played")
     if has_played_raw is None:
         has_played_raw = current_state.get("has_played", False)
     if isinstance(has_played_raw, str):
         has_played_raw = has_played_raw.strip().lower()
         if has_played_raw in {"1", "true", "yes", "on"}:
-            has_played = True
+            return True
         elif has_played_raw in {"0", "false", "no", "off", ""}:
-            has_played = False
+            return False
         else:
-            has_played = current_state.get("has_played", False)
-    else:
-        has_played = bool(has_played_raw)
+            return current_state.get("has_played", False)
+    return bool(has_played_raw)
 
+
+def _extract_nim_active_row(payload: dict, current_state: dict) -> int | None:
     has_active_row_key = "active_row" in payload or "activeRow" in payload
     active_row_value = payload.get("active_row")
     if active_row_value is None and "active_row" not in payload:
@@ -1283,29 +1289,22 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         active_row_int = int(active_row_value)
     except (TypeError, ValueError):
         active_row_int = None
-    if active_row_int is not None and not (
-        0 <= active_row_int < len(NIM_TEMPLATE_ROWS)
-    ):
+    if active_row_int is not None and not (0 <= active_row_int < len(NIM_TEMPLATE_ROWS)):
         active_row_int = None
+    return active_row_int
 
-    bg_gradient_value = payload.get("bg_gradient")
-    if bg_gradient_value is None:
-        bg_gradient_value = payload.get("bgGradient")
-    if bg_gradient_value is None:
-        bg_gradient = current_state.get("bg_gradient")
-    else:
-        bg_gradient_text = str(bg_gradient_value).strip()
-        bg_gradient = bg_gradient_text[:200] if bg_gradient_text else current_state.get("bg_gradient")
 
-    stick_color_value = payload.get("stick_color")
-    if stick_color_value is None:
-        stick_color_value = payload.get("stickColor")
-    if stick_color_value is None:
-        stick_color = current_state.get("stick_color")
-    else:
-        stick_color_text = str(stick_color_value).strip()
-        stick_color = stick_color_text[:50] if stick_color_text else current_state.get("stick_color")
+def _extract_nim_string_field(payload: dict, current_state: dict, snake_key: str, camel_key: str, max_length: int) -> str | None:
+    value = payload.get(snake_key)
+    if value is None:
+        value = payload.get(camel_key)
+    if value is None:
+        return current_state.get(snake_key)
+    text = str(value).strip()
+    return text[:max_length] if text else current_state.get(snake_key)
 
+
+def _extract_nim_player_emojis(payload: dict, current_state: dict) -> list[str]:
     player_emojis_value = payload.get("player_emojis")
     if player_emojis_value is None:
         player_emojis_value = payload.get("playerEmojis")
@@ -1318,40 +1317,52 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
                 raw = ""
             text = str(raw).strip()
             normalized_emojis.append(text[:8] if text else "🐾")
-        player_emojis = normalized_emojis
+        return normalized_emojis
     else:
         current_emojis = current_state.get("player_emojis")
         if isinstance(current_emojis, (list, tuple)):
             player_emojis = [str(value)[:8] for value in current_emojis[:2]]
             if len(player_emojis) < 2:
                 player_emojis.extend(["🐾"] * (2 - len(player_emojis)))
+            return player_emojis
         else:
-            player_emojis = ["🐾", "🐾"]
+            return ["🐾", "🐾"]
 
+
+def _extract_nim_starting_player(payload: dict, current_state: dict) -> int:
     starting_player_value = payload.get("starting_player")
     if starting_player_value is None:
         starting_player_value = payload.get("startingPlayer")
     if starting_player_value is None:
-        starting_player = current_state.get("starting_player", 1)
-    else:
-        try:
-            starting_player = int(starting_player_value)
-        except (TypeError, ValueError):
-            starting_player = current_state.get("starting_player", 1)
-        if starting_player not in (1, 2):
-            starting_player = current_state.get("starting_player", 1) or 1
+        return current_state.get("starting_player", 1)
+    try:
+        starting_player = int(starting_player_value)
+    except (TypeError, ValueError):
+        return current_state.get("starting_player", 1)
+    if starting_player not in (1, 2):
+        return current_state.get("starting_player", 1) or 1
+    return starting_player
+
+
+def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    normalized_rows = _extract_nim_rows(payload)
+    if normalized_rows is None:
+        return None
 
     return {
         "rows": normalized_rows,
-        "turn": turn_int,
-        "winner": winner_int,
+        "turn": _extract_nim_turn(payload, current_state),
+        "winner": _extract_nim_winner(payload),
         "players": _normalize_nim_players(payload.get("players"), current_state.get("players", {})),
-        "has_played": has_played,
-        "active_row": active_row_int,
-        "bg_gradient": bg_gradient,
-        "stick_color": stick_color,
-        "player_emojis": player_emojis,
-        "starting_player": starting_player,
+        "has_played": _extract_nim_has_played(payload, current_state),
+        "active_row": _extract_nim_active_row(payload, current_state),
+        "bg_gradient": _extract_nim_string_field(payload, current_state, "bg_gradient", "bgGradient", 200),
+        "stick_color": _extract_nim_string_field(payload, current_state, "stick_color", "stickColor", 50),
+        "player_emojis": _extract_nim_player_emojis(payload, current_state),
+        "starting_player": _extract_nim_starting_player(payload, current_state),
     }
 
 
