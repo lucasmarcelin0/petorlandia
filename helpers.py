@@ -780,25 +780,27 @@ def is_slot_available(veterinario_id, scheduled_at, kind='consulta'):
         scheduled_at_with_tz = scheduled_at.astimezone(BR_TZ)
         scheduled_at_local = scheduled_at_with_tz.replace(tzinfo=None)
 
-    if schedules:
-        slot_start = scheduled_at_local
-        slot_end = slot_start + duration
+    if not schedules:
+        return False
 
-        def _interval_overlaps_break(schedule):
-            if schedule.intervalo_inicio and schedule.intervalo_fim:
-                interval_start = datetime.combine(slot_start.date(), schedule.intervalo_inicio)
-                interval_end = datetime.combine(slot_start.date(), schedule.intervalo_fim)
-                return _intervals_overlap(slot_start, slot_end, interval_start, interval_end)
-            return False
+    slot_start = scheduled_at_local
+    slot_end = slot_start + duration
 
-        available = any(
-            datetime.combine(slot_start.date(), s.hora_inicio) <= slot_start
-            and slot_end <= datetime.combine(slot_start.date(), s.hora_fim)
-            and not _interval_overlaps_break(s)
-            for s in schedules
-        )
-        if not available:
-            return False
+    def _interval_overlaps_break(schedule):
+        if schedule.intervalo_inicio and schedule.intervalo_fim:
+            interval_start = datetime.combine(slot_start.date(), schedule.intervalo_inicio)
+            interval_end = datetime.combine(slot_start.date(), schedule.intervalo_fim)
+            return _intervals_overlap(slot_start, slot_end, interval_start, interval_end)
+        return False
+
+    available = any(
+        datetime.combine(slot_start.date(), s.hora_inicio) <= slot_start
+        and slot_end <= datetime.combine(slot_start.date(), s.hora_fim)
+        and not _interval_overlaps_break(s)
+        for s in schedules
+    )
+    if not available:
+        return False
 
     return not has_conflict_for_slot(veterinario_id, scheduled_at_local, duration)
 
