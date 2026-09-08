@@ -1,15 +1,21 @@
 {% extends "layout.html" %}
 {% block main %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workspaces.css', v='1') }}">
 <div class="container mt-4" style="max-width: 960px;">
 
   <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
     <div>
       <h1 class="h3 fw-bold mb-1"><i class="fa-solid fa-handshake me-2 text-primary"></i>Área do Parceiro</h1>
-      <p class="text-muted mb-0">Cadastre estabelecimentos, produtos e novos usuários — tudo entra ativo na hora.</p>
+      <p class="text-muted mb-0">Cadastros, ativação das lojas e resultados das suas indicações.</p>
     </div>
     <span class="badge bg-primary-subtle text-primary fs-6">{{ total }} cadastro(s)</span>
   </div>
 
+  <div class="operational-metrics" aria-label="Progresso de ativação">
+    <div><strong>{{ ready_stores }} / {{ casas|length }}</strong><span>Lojas ativas com catálogo e conta própria conectada</span></div>
+    <div><strong>{{ referral_count }}</strong><span>Cadastros por indicação</span></div>
+    <div><strong>{{ rewarded_count }}</strong><span>Indicações recompensadas</span><br><a href="{{ url_for('petsitter_routes.indicacao') }}">Ver minhas indicações</a></div>
+  </div>
   <div class="row g-3 mb-4">
     <div class="col-md-6">
       <a href="{{ url_for('parceiro_novo_estabelecimento') }}" class="text-decoration-none">
@@ -68,7 +74,7 @@
             <tr>
               <td class="fw-semibold">{{ c.nome }}</td>
               <td><span class="badge bg-info-subtle text-info">Clínica</span></td>
-              <td><span class="badge bg-success-subtle text-success">Ativa</span></td>
+              <td><span class="badge {{ 'bg-success-subtle text-success' if c.status == 'ativa' else 'bg-secondary-subtle text-secondary' }}">{{ 'Ativa' if c.status == 'ativa' else c.status }}</span></td>
               <td class="text-end">
                 <a class="btn btn-sm btn-outline-primary" href="{{ url_for('clinic_detail', clinica_id=c.id) }}#clinica">
                   Gerenciar / serviços
@@ -86,6 +92,10 @@
                 {% else %}
                   <span class="badge bg-secondary-subtle text-secondary">{{ casa.status }}</span>
                 {% endif %}
+                <div class="small mt-1">
+                  {% if casa.id not in catalog_ids %}<a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}">Preparar catálogo</a>{% endif %}
+                  {% if casa.id not in connected_ids %}<a class="d-block" href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}#recebimentos">Configurar recebimentos</a>{% endif %}
+                </div>
               </td>
               <td class="text-end">
                 <a class="btn btn-sm btn-outline-primary" href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}#produtos">

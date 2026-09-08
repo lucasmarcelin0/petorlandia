@@ -92,6 +92,10 @@
     isolation: isolate;
 }
 
+.product-media > picture {
+  display: contents;
+}
+
 .product-media__image {
     position: absolute;
     inset: 0;

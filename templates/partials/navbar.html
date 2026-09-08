@@ -12,7 +12,7 @@
 {% set nav_store_active = nav_endpoint in ['loja', 'ver_carrinho', 'create_order', 'checkout_confirm', 'payment_status', 'product_detail', 'detalhes_racao', 'assinar_racao', 'edit_address'] or nav_path.startswith('/loja') or nav_path.startswith('/carrinho') %}
 {% set nav_messages_active = nav_endpoint in ['mensagens', 'conversa', 'conversa_admin', 'enviar_mensagem'] %}
 
-<nav class="navbar {% if is_admin %}navbar-expand-xxl navbar--admin{% else %}navbar-expand-lg{% endif %} fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
+<nav class="navbar {% if is_admin %}navbar-expand-xxl navbar--admin{% elif current_user.is_authenticated %}navbar-expand-xxl{% else %}navbar-expand-lg{% endif %} fixed-top navbar-light{% if current_user.is_authenticated %} navbar--workspace{% else %} navbar--public{% endif %}">
   <div class="container-fluid">
     <a href="{{ url_for('painel_admin.index') if is_admin else url_for('index') }}" class="navbar-brand">
       <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="PetOrlândia" class="logo-img" width="96" height="91">
@@ -163,22 +163,8 @@
         </li>
         {% elif current_user.is_authenticated %}
         {# Ações de trabalho vêm primeiro para perfis que usam a plataforma profissionalmente. #}
-        {% for workspace in user_experience.visible_nav if workspace.key not in ['professional', 'delivery'] %}
-        <li class="nav-item{% if workspace.actions|length > 1 %} dropdown{% endif %}">
-          {% if workspace.actions|length > 1 %}
-          <a class="nav-link nav-link--primary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ 'Casa de ração' if workspace.key == 'store' else workspace.label }}
-          </a>
-          <ul class="dropdown-menu">
-            {% for action in workspace.actions %}
-            <li><a class="dropdown-item" href="{{ action.url }}"><i class="fa-solid {{ action.icon }} me-2" aria-hidden="true"></i>{{ action.label }}</a></li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          <a class="nav-link nav-link--primary" href="{{ workspace.actions[0].url }}"><i class="fa-solid {{ workspace.icon }} me-1" aria-hidden="true"></i>{{ workspace.label }}</a>
-          {% endif %}
-        </li>
-        {% endfor %}
+        {% set primary_is_clinical_or_delivery = user_experience.primary_workspace and user_experience.primary_workspace.key in ['professional', 'delivery'] %}
+        {% if not primary_is_clinical_or_delivery %}{% include 'partials/workspace_nav.html' %}{% endif %}
         {% if current_user.worker == 'delivery' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('list_delivery_requests') }}">
@@ -248,6 +234,7 @@
         {% endif %}
 
         {# Navegação pessoal e pública permanece disponível depois das áreas de trabalho. #}
+        {% if primary_is_clinical_or_delivery %}{% include 'partials/workspace_nav.html' %}{% endif %}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_home_active else '' }}" href="{{ url_for('index') }}"{% if nav_home_active %} aria-current="page"{% endif %}>
             <i class="fas fa-house me-1 nav-ico--inicio"></i> Início

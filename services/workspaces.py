@@ -34,7 +34,7 @@ class Experience:
         return self.workspaces
 
 
-def resolve_experience(user, *, active_vet=False, accounting=False, store=None):
+def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -64,9 +64,12 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None):
              action('Animais', 'novo_animal', 'fa-paw'),
              action('Tutores', 'tutores', 'fa-users'),
              action('Minha clínica', 'minha_clinica', 'fa-hospital'))
-    elif getattr(user, 'clinicas', None):
+    elif getattr(user, 'clinicas', None) or (clinic_access and worker in {'staff', 'assistente'}):
         area('clinic', 'Minha clínica', 'fa-hospital',
              action('Gerenciar clínica', 'minha_clinica', 'fa-hospital'))
+    elif getattr(user, 'veterinario', None):
+        area('membership', 'Acesso profissional', 'fa-id-card',
+             action('Revisar assinatura', 'veterinarian_membership', 'fa-id-card'))
     if store:
         area('store', store.nome, 'fa-store',
              action('Minha loja', 'casa_de_racao_dashboard', 'fa-store', casa_id=store.id),
@@ -106,7 +109,7 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None):
 
 def current_experience():
     if 'user_experience' not in g:
-        from context_processors import inject_minha_casa_de_racao
+        from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao
         from helpers import _user_can_access_accounting, is_veterinarian
 
         g.user_experience = resolve_experience(
@@ -114,13 +117,14 @@ def current_experience():
             active_vet=is_veterinarian(current_user),
             accounting=_user_can_access_accounting(current_user),
             store=inject_minha_casa_de_racao()['minha_casa_de_racao'],
+            clinic_access=inject_has_clinic_access()['has_clinic_access'],
         )
     return g.user_experience
 
 
 def home_next_actions(user, experience, pets, overdue, appointments):
     """Only query operational data for the workspaces visible to this user."""
-    from models import CasaDeRacao, DeliveryRequest, Product, StorePaymentAccount
+    from models import CasaDeRacao, DeliveryRequest, Order, Payment, PaymentStatus, Product, StorePaymentAccount
 
     actions = []
 
@@ -157,6 +161,12 @@ def home_next_actions(user, experience, pets, overdue, appointments):
     if 'professional' in experience.capabilities:
         add('Atendimentos e retornos', 'Agenda, solicitações e próximos pacientes.',
             'appointments', 'fa-calendar-check')
+        if getattr(user, 'veterinario', None):
+            from helpers import ensure_veterinarian_membership
+            membership = ensure_veterinarian_membership(user.veterinario)
+            if membership and not membership.has_payment_method():
+                add('Revisar meu plano profissional', 'Confira a avaliação gratuita e as condições de continuidade.',
+                    'veterinarian_membership', 'fa-id-card')
     if 'accounting' in experience.capabilities:
         add('Revisar recebimentos', 'Pagamentos em aberto e movimento da clínica.',
             'contabilidade_financeiro', 'fa-chart-line')
@@ -174,6 +184,10 @@ def home_next_actions(user, experience, pets, overdue, appointments):
     if not pets and not experience.workspaces:
         add('Cadastrar meu primeiro pet', 'Comece a organizar vacinas e atendimentos.',
             'add_animal', 'fa-paw')
+    if not experience.workspaces:
+        if (Order.query.join(Order.payment).filter(Order.user_id == user.id, Payment.status == PaymentStatus.COMPLETED).first()):
+            add('Comprar novamente', 'Reveja seus produtos e as opções de assinatura disponíveis.',
+                'minhas_compras', 'fa-arrows-rotate')
     # Clinical reminders stay visible even when a user also owns a business.
     actions.sort(key=lambda item: item['tone'] != 'attention')
     return actions

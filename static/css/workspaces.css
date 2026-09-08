@@ -22,12 +22,19 @@
 .dashboard-home .btn { border-radius: 6px !important; box-shadow: none !important; white-space: normal; }
 .store-activation { display: flex; gap: 12px 24px; flex-wrap: wrap; padding: 16px 0; margin: 16px 0; border-block: 1px solid #dce4df; }
 .store-activation a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+#recebimentos { scroll-margin-top: 140px; }
 .operational-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid #dce4df; margin-bottom: 24px; }
 .operational-metrics > div { padding: 20px 12px; }
 .operational-metrics strong { font-size: 1.65rem; display: block; }
 .operational-metrics span { color: #59665f; }
 .store-workspace .card { border-radius: 8px !important; }
 .store-workspace .card .card { border: 0 !important; box-shadow: none !important; background: transparent; }
+.store-workspace .clinic-context-card { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 12px 0; }
+.store-workspace .clinic-context-card__title { min-width: 0; overflow-wrap: anywhere; }
+.store-workspace .clinic-context-card__title h1 { font-size: 1.4rem; }
+.store-workspace .clinic-tabs-shell { border-radius: 0; box-shadow: none; }
+.store-workspace .store-metrics .card { background: transparent; box-shadow: none !important; border-radius: 0 !important; border-bottom: 1px solid #dce4df !important; }
+.store-workspace .store-metrics .fa-solid { font-size: 1.25rem; }
 @media (max-width: 575.98px) {
   .next-actions-list { grid-template-columns: minmax(0, 1fr); }
   .workspace-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

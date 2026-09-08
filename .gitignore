@@ -95,3 +95,6 @@ static/uploads/
 outputs/presentation_handoff_2026/db_presentation_data_*.json
 outputs/presentation_handoff_2026/dados_unificados_*.csv
 outputs/presentation_handoff_2026/old_survey_*.json
+
+.codex/
+.codex_worktrees/

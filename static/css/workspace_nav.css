@@ -1,0 +1,28 @@
+.navbar--workspace { min-height: 70px; }
+.navbar--workspace .container-fluid, .navbar--workspace .navbar-collapse { min-width: 0; }
+.navbar--workspace .navbar-brand { font-size: 1.35rem; flex-shrink: 0; }
+.navbar--workspace .navbar-brand img { width: 34px; height: 34px; }
+.navbar--workspace .app-navbar-nav { min-width: 0; gap: 0 !important; }
+.navbar--workspace .app-navbar-nav .nav-link { font-size: .875rem; padding-inline: .5rem !important; }
+.navbar--workspace .nav-account__name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 1400px) {
+  .navbar--workspace .app-navbar-nav { flex-wrap: wrap; }
+}
+@media (max-width: 1399.98px) {
+  .navbar--workspace .container-fluid { flex-wrap: wrap; }
+  .navbar--workspace .navbar-collapse {
+    flex: 0 0 100%;
+    width: 100%;
+    max-height: calc(100dvh - 80px - env(safe-area-inset-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: #fff;
+    padding: .75rem .5rem calc(1rem + env(safe-area-inset-bottom));
+  }
+  .navbar--workspace .app-navbar-nav { align-items: stretch !important; justify-content: flex-start; }
+  .navbar--workspace .app-navbar-nav .nav-link,
+  .navbar--workspace .app-navbar-nav .dropdown-item { min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+  .navbar--workspace .app-navbar-nav .dropdown-menu { position: static; min-width: 0; }
+  .navbar--workspace .nav-account__logout-mobile { display: list-item; }
+  .navbar--workspace .nav-account__logout-desktop { display: none; }
+}

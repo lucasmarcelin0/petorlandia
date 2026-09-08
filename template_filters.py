@@ -292,7 +292,27 @@ def animal_size_token(weight) -> str:
     return _resolve_size_data(weight)[1]
 
 
+def catalog_image_sources(source):
+    from pathlib import Path
+    from flask import current_app, url_for
+
+    prefix = '/static/img/produtos/'
+    if not source or not source.startswith(prefix):
+        return None
+    name = source[len(prefix):]
+    if '/' in name or '\\' in name or not name.endswith('.png'):
+        return None
+    stem = Path(name).stem
+    folder = Path(current_app.static_folder) / 'img' / 'produtos'
+    paths = [f'{stem}-{width}.webp' for width in (480, 960)]
+    if not all((folder / path).is_file() for path in paths):
+        return None
+    return ', '.join(f"{url_for('static', filename='img/produtos/' + path)} {width}w"
+                     for path, width in zip(paths, (480, 960)))
+
+
 _FILTERS = {
+    "catalog_image_sources": catalog_image_sources,
     "date_now": date_now,
     "datetime_brazil": datetime_brazil,
     "format_datetime_brazil": format_datetime_brazil,

@@ -102,9 +102,22 @@ def _parceiro_estabelecimentos(user):
 @parceiro_required
 def parceiro_dashboard():
     from services.establishments import establishment_label
+    from models import Product, StorePaymentAccount, ReferralCode, ReferralSignup
 
     clinicas, casas, sitters = _parceiro_estabelecimentos(current_user)
     total = len(clinicas) + len(casas) + len(sitters)
+    store_ids = [casa.id for casa in casas]
+    catalog_ids = set()
+    connected_ids = set()
+    if store_ids:
+        catalog_ids = {row[0] for row in db.session.query(Product.casa_de_racao_id).filter(
+            Product.casa_de_racao_id.in_(store_ids), Product.status == 'active', Product.is_demo.is_(False), Product.price > 0
+        ).distinct()}
+        connected_ids = {row[0] for row in db.session.query(StorePaymentAccount.casa_de_racao_id).filter(
+            StorePaymentAccount.casa_de_racao_id.in_(store_ids), StorePaymentAccount.provider == 'mercado_pago', StorePaymentAccount.status == 'connected'
+        )}
+    ready_stores = sum(casa.status == 'ativa' and casa.id in catalog_ids and casa.id in connected_ids for casa in casas)
+    referrals = (ReferralSignup.query.join(ReferralCode).filter(ReferralCode.user_id == current_user.id).all())
     return render_template(
         'parceiro/dashboard.html',
         clinicas=clinicas,
@@ -112,6 +125,11 @@ def parceiro_dashboard():
         sitters=sitters,
         total=total,
         establishment_label=establishment_label,
+        ready_stores=ready_stores,
+        catalog_ids=catalog_ids,
+        connected_ids=connected_ids,
+        referral_count=len(referrals),
+        rewarded_count=sum(referral.rewarded_at is not None for referral in referrals),
     )
 
 
