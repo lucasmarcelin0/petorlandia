@@ -2997,19 +2997,10 @@ def _build_exame_offers(bloco, clinica=None):
         nome_norm = nome_limpo.lower()
         matched = False
 
-        # 1. Combinado da Maisse / PetOrlandia
+        # 1. Combinado de exames laboratoriais da PetOrlandia
         if 'combinado' in nome_norm and ('hemograma' in nome_norm or 'alt' in nome_norm):
             if not clinic_id or clinic_id == 1:
-                maisse = (
-                    Veterinario.query
-                    .join(User, Veterinario.user_id == User.id)
-                    .filter(func.lower(User.name).like('%maisse%'))
-                    .first()
-                )
-                nome_prestador = maisse.user.name if maisse and maisse.user else 'Dra. Maisse Cividanes Degiovani'
-                crmv_prestador = f'CRMV-{maisse.crmv_estado or "SP"} {maisse.crmv}' if maisse and maisse.crmv else 'CRMV-SP 12345'
-                crmv_display = f' ({crmv_prestador})' if crmv_prestador else ''
-
+                nome_prestador = clinica.nome if clinica else 'PetOrlândia'
                 is_paid = (
                     getattr(exame, 'payment_status', None) in ('paid', 'approved', 'completed')
                     or getattr(bloco, 'payment_status', None) in ('paid', 'approved', 'completed')
@@ -3018,10 +3009,10 @@ def _build_exame_offers(bloco, clinica=None):
                 offers.append({
                     'exame_id': exame.id,
                     'exame_nome': exame.nome,
-                    'service_id': 'maisse-combinado',
+                    'service_id': 'combinado-laboratorio',
                     'title': 'Combinado - Hemograma, ALT, FA, ureia, creatinina',
-                    'provider_name': f'{nome_prestador}{crmv_display}',
-                    'provider_role': 'Patologia Clínica Veterinária',
+                    'provider_name': nome_prestador,
+                    'provider_role': 'Laboratório Parceiro Credenciado',
                     'price': Decimal('110.00'),
                     'price_display': 'R$ 110,00',
                     'description': 'Hemograma completo com contagem plaquetária e bioquímicos: ALT (TGP), Fosfatase Alcalina (FA), Ureia e Creatinina.',
