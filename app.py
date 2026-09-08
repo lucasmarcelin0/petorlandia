@@ -369,6 +369,7 @@ _clinic_notifications_table_checked = False
 _plantao_modelos_table_checked = False
 _professional_services_table_checked = False
 _exame_modelo_columns_checked = False
+_bloco_exames_payment_columns_checked = False
 
 
 PLATFORM_SERVICE_FEE_RATE = Decimal("0.10")
@@ -487,10 +488,42 @@ def _ensure_exame_modelo_columns() -> None:
     _exame_modelo_columns_checked = True
 
 
+def _ensure_bloco_exames_payment_columns() -> None:
+    """Ensure payment columns exist on bloco_exames and exame_solicitado defensively."""
+    global _bloco_exames_payment_columns_checked
+    if _bloco_exames_payment_columns_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table("bloco_exames"):
+            cols = {col["name"] for col in inspector.get_columns("bloco_exames")}
+            with db.engine.begin() as conn:
+                if "payment_status" not in cols:
+                    conn.execute(text("ALTER TABLE bloco_exames ADD COLUMN payment_status VARCHAR(20) DEFAULT 'pendente'"))
+                if "payment_link" not in cols:
+                    conn.execute(text("ALTER TABLE bloco_exames ADD COLUMN payment_link TEXT"))
+                if "payment_reference" not in cols:
+                    conn.execute(text("ALTER TABLE bloco_exames ADD COLUMN payment_reference VARCHAR(120)"))
+                if "paid_at" not in cols:
+                    conn.execute(text("ALTER TABLE bloco_exames ADD COLUMN paid_at TIMESTAMP WITH TIME ZONE"))
+
+        if inspector.has_table("exame_solicitado"):
+            cols = {col["name"] for col in inspector.get_columns("exame_solicitado")}
+            if "payment_status" not in cols:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE exame_solicitado ADD COLUMN payment_status VARCHAR(20) DEFAULT 'pendente'"))
+    except Exception:
+        pass
+
+    _bloco_exames_payment_columns_checked = True
+
+
 def _seed_maisse_professional_services_if_needed() -> None:
     """Seed Maisse's combined exam service for Orlandia partner operations."""
     _ensure_professional_services_table()
     _ensure_exame_modelo_columns()
+    _ensure_bloco_exames_payment_columns()
     try:
         from models import Veterinario, User, ProfessionalService, ServicoClinica, ExameModelo
         maisse = (

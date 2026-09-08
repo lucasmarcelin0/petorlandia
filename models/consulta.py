@@ -405,6 +405,10 @@ class BlocoExames(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)  # <- novo campo
     observacoes_gerais = db.Column(db.Text)
     data_criacao = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+    payment_status = db.Column(db.String(20), nullable=True, default='pendente', index=True)
+    payment_link = db.Column(db.Text, nullable=True)
+    payment_reference = db.Column(db.String(120), nullable=True, index=True)
+    paid_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
     exames = db.relationship('ExameSolicitado', backref='bloco', cascade='all, delete-orphan')
@@ -416,6 +420,7 @@ class ExameSolicitado(db.Model):
     nome = db.Column(db.String(120), nullable=False)
     justificativa = db.Column(db.Text)
     status = db.Column(db.String(20), default='pendente')
+    payment_status = db.Column(db.String(20), nullable=True, default='pendente', index=True)
     resultado = db.Column(db.Text, nullable=True)
     performed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     laudo_url = db.Column(db.String(500), nullable=True)

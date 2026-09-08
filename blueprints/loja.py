@@ -2428,6 +2428,13 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             bloco_id = None
 
+    bloco_exames_id = None
+    if extref and extref.startswith('bloco_exames-'):
+        try:
+            bloco_exames_id = int(extref.split('-', 1)[1])
+        except (ValueError, TypeError):
+            bloco_exames_id = None
+
     orcamento_id = None
     if extref and extref.startswith('orcamento-'):
         try:
@@ -2465,7 +2472,12 @@ def notificacoes_mercado_pago():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
             orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
-            if not pay and not bloco and not orcamento and not onboarding and not grooming_sub and not racao_sub:
+            bloco_exames = None
+            if bloco_exames_id:
+                from models import BlocoExames
+                bloco_exames = BlocoExames.query.get(bloco_exames_id)
+
+            if not pay and not bloco and not orcamento and not onboarding and not grooming_sub and not racao_sub and not bloco_exames:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
@@ -2700,6 +2712,37 @@ def notificacoes_mercado_pago():
 
             if racao_sub and payment_status == PaymentStatus.COMPLETED:
                 _process_racao_assinatura_ciclo(racao_sub, mp_id)
+
+            if bloco_exames:
+                bloco_exames.payment_status = normalized_status
+                if normalized_status in ('paid', 'approved', 'completed'):
+                    bloco_exames.paid_at = _parse_mp_datetime(info.get('date_approved')) or utcnow()
+                    for ex in (bloco_exames.exames or []):
+                        ex.payment_status = 'paid'
+                        if ex.status == 'pendente':
+                            ex.status = 'em_andamento'
+                    try:
+                        from services.notifications import queue_admin_action_notification
+                        animal = bloco_exames.animal
+                        tutor = getattr(animal, 'owner', None)
+                        nomes_exames = ', '.join(e.nome for e in (bloco_exames.exames or []))
+                        queue_admin_action_notification(
+                            title=f'Exame contratado e pago #{bloco_exames.id}',
+                            body=(
+                                f'Tutor: {tutor.name if tutor else "Tutor"}\n'
+                                f'Pet: {animal.name if animal else "Pet"}\n'
+                                f'Exames: {nomes_exames}\n'
+                                f'Status: Pago via Mercado Pago'
+                            ),
+                            event_type='exam.paid',
+                            entity_type='bloco_exames',
+                            entity_id=bloco_exames.id,
+                            priority='high',
+                            url=url_for('consulta_routes.imprimir_bloco_exames', bloco_id=bloco_exames.id, _external=True),
+                            idempotency_key=f'bloco-exames-paid:{bloco_exames.id}',
+                        )
+                    except Exception:
+                        current_app.logger.exception('Falha ao notificar contratacao de exame')
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)

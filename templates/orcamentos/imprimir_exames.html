@@ -149,6 +149,99 @@
     {% endfor %}
   </div>
 
+  {% if ofertas_exames %}
+  <section class="exames-contratacao" aria-labelledby="exames-contratacao-titulo">
+    <div class="exames-contratacao__head">
+      <div>
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+          <span style="background: #0d6efd; color: #fff; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em;">
+            🔬 Serviço Laboratorial
+          </span>
+          <span style="background: #e8f5e9; color: #2e7d32; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;">
+            🔒 Mercado Pago Seguro
+          </span>
+        </div>
+        <h2 id="exames-contratacao-titulo" class="exames-contratacao__title">
+          Contratar Exames Desta Requisição
+        </h2>
+        <p class="exames-contratacao__sub">
+          Contrate a coleta e análise laboratorial com profissional credenciado pela PetOrlândia. Pagamento rápido via Pix ou cartão.
+        </p>
+      </div>
+
+      {% if not bloco_pago and ofertas_exames|length > 1 %}
+      <a href="{{ url_for('consulta_routes.contratar_bloco_exames', bloco_id=bloco.id) }}"
+         class="exames-contratacao__cta-all"
+         onclick="iniciarContratacaoExame(event, this, '{{ url_for('consulta_routes.contratar_bloco_exames', bloco_id=bloco.id) }}')">
+        Contratar todos • {{ total_contratavel_display }}
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="exames-contratacao__list">
+      {% for oferta in ofertas_exames %}
+      <div class="exame-oferta-card {% if oferta.is_paid %}exame-oferta-card--pago{% endif %}">
+        <div class="exame-oferta-card__icone">
+          🧪
+        </div>
+        <div class="exame-oferta-card__info">
+          <div style="display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;">
+            <h3 class="exame-oferta-card__nome">{{ oferta.title }}</h3>
+            {% if oferta.is_paid %}
+              <span style="background: #d1e7dd; color: #0f5132; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">
+                ✓ Contratado / Pago
+              </span>
+            {% else %}
+              <span style="background: #eef2f6; color: #475569; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;">
+                Disponível para contratação
+              </span>
+            {% endif %}
+          </div>
+          <div class="exame-oferta-card__prestador">
+            Profissional / Laboratório: <strong>{{ oferta.provider_name }}</strong>
+            <span style="color: #64748b; font-size: .8rem;">({{ oferta.provider_role }})</span>
+          </div>
+          {% if oferta.description %}
+            <p class="exame-oferta-card__desc">{{ oferta.description }}</p>
+          {% endif %}
+        </div>
+
+        <div class="exame-oferta-card__acao">
+          <div class="exame-oferta-card__preco-box">
+            <span class="exame-oferta-card__label-preco">Valor do exame</span>
+            <span class="exame-oferta-card__preco">{{ oferta.price_display }}</span>
+          </div>
+
+          {% if oferta.is_paid %}
+            <button type="button" class="exame-oferta-card__btn-pago" disabled>
+              ✓ Pago
+            </button>
+          {% else %}
+            <a href="{{ url_for('consulta_routes.contratar_bloco_exames', bloco_id=bloco.id, exame_id=oferta.exame_id) }}"
+               class="exames-contratacao__btn-pagar"
+               onclick="iniciarContratacaoExame(event, this, '{{ url_for('consulta_routes.contratar_bloco_exames', bloco_id=bloco.id, exame_id=oferta.exame_id) }}')">
+              Contratar no Mercado Pago
+            </a>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="exames-contratacao__footer">
+      <div style="font-size: .8rem; color: #64748b;">
+        🔒 Pagamento processado com segurança pelo <strong>Mercado Pago</strong> (Pix, Cartão em até 12x ou saldo).
+      </div>
+      {% if not bloco_pago and total_contratavel %}
+      <div style="text-align: right;">
+        <span style="font-size: .8rem; color: #64748b; margin-right: 6px;">Total disponível:</span>
+        <strong style="font-size: 1.15rem; color: #0f172a;">{{ total_contratavel_display }}</strong>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
   {% if bloco.observacoes_gerais %}
     <div class="section-title">Observações</div>
     <div class="note-block">
@@ -175,6 +268,221 @@
   </footer>
 </div>
 
+<style>
+  /* A requisição impressa é documento clínico: o bloco de contratação NUNCA sai no papel */
+  @media print {
+    .exames-contratacao,
+    .no-print {
+      display: none !important;
+    }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .exames-contratacao {
+    margin: 28px 0 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .exames-contratacao__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+  }
+
+  .exames-contratacao__title {
+    margin: 4px 0 2px;
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .exames-contratacao__sub {
+    margin: 0;
+    font-size: .86rem;
+    color: #475569;
+  }
+
+  .exames-contratacao__cta-all {
+    border: 0;
+    border-radius: 999px;
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    font-size: .86rem;
+    padding: 9px 18px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+
+  .exames-contratacao__cta-all:hover {
+    background: #0b5ed7;
+    color: #fff;
+  }
+
+  .exames-contratacao__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .exame-oferta-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .exame-oferta-card--pago {
+    border-color: #a7f3d0;
+    background: #f0fdf4;
+  }
+
+  .exame-oferta-card__icone {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex: none;
+  }
+
+  .exame-oferta-card__info {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+
+  .exame-oferta-card__nome {
+    font-size: .96rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+  }
+
+  .exame-oferta-card__prestador {
+    font-size: .84rem;
+    color: #334155;
+    margin-top: 4px;
+  }
+
+  .exame-oferta-card__desc {
+    font-size: .80rem;
+    color: #64748b;
+    margin: 4px 0 0;
+    line-height: 1.35;
+  }
+
+  .exame-oferta-card__acao {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: none;
+    margin-left: auto;
+  }
+
+  .exame-oferta-card__preco-box {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
+  }
+
+  .exame-oferta-card__label-preco {
+    font-size: .70rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #64748b;
+  }
+
+  .exame-oferta-card__preco {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+
+  .exames-contratacao__btn-pagar {
+    border: 0;
+    border-radius: 999px;
+    background: #009ee3; /* Azul Mercado Pago */
+    color: #ffffff;
+    font-weight: 700;
+    font-size: .85rem;
+    padding: 9px 18px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0, 158, 227, 0.25);
+    cursor: pointer;
+    transition: background-color .15s, transform .1s;
+  }
+
+  .exames-contratacao__btn-pagar:hover {
+    background: #0081bb;
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .exame-oferta-card__btn-pago {
+    border: 1px solid #86efac;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-weight: 700;
+    font-size: .82rem;
+    padding: 7px 16px;
+    cursor: default;
+  }
+
+  .exames-contratacao__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  @media (max-width: 620px) {
+    .exame-oferta-card__acao {
+      width: 100%;
+      justify-content: space-between;
+      margin-left: 0;
+      padding-top: 10px;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .exames-contratacao__cta-all {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+    }
+  }
+</style>
+
 <script>
   const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
   const btnWhats = document.getElementById('btn-whatsapp');
@@ -188,12 +496,46 @@
     }
   }
 
+  function iniciarContratacaoExame(event, btn, url) {
+    event.preventDefault();
+    const textoOriginal = btn.innerHTML;
+    btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:6px;"></span> Conectando...';
+    btn.style.pointerEvents = 'none';
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.payment_url) {
+          window.location.href = data.payment_url;
+        } else {
+          alert((data && data.message) || 'Não foi possível iniciar o pagamento agora.');
+          btn.innerHTML = textoOriginal;
+          btn.style.pointerEvents = 'auto';
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao conectar Mercado Pago:', err);
+        window.location.href = url;
+      });
+  }
+
   function enviarWhatsApp() {
     if (!numeroWhatsApp) {
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue a requisição de exames para {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const temOferta = {{ 'true' if ofertas_exames else 'false' }};
+    const complementoExame = temOferta
+      ? `\n\n*Contratação e Pagamento Online:*\nVocê também pode contratar e pagar a realização dos exames online com segurança via Mercado Pago pelo link acima.`
+      : '';
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue a requisição de exames para {{ animal.name }}:\n\n${window.location.href}${complementoExame}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

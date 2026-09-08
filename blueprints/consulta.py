@@ -39,13 +39,16 @@ from models import (
     ProtocoloClinico,
     PropostaProtocoloClinico,
     ServicoClinica,
+    ProfessionalService,
+    Veterinario,
+    User,
 )
 from services import coverage_badge, coverage_label
 from services.appointments import ReturnAppointmentDTO, finalize_consulta_flow, schedule_return_appointment
 from services.billing.close_appointment import close_appointment
 from services.clinical_suggestions import build_followup_prefill, log_suggestion_event, recommend_protocols
 from services.payments import PaymentItemDTO, PaymentPreferenceDTO, apply_payment_to_bloco, apply_payment_to_orcamento, create_payment_preference
-from sqlalchemy import Text, cast, or_, text
+from sqlalchemy import Text, cast, func, or_, text
 from sqlalchemy.orm import load_only, selectinload
 from template_filters import PAYER_TYPE_LABELS, default_payer_type_for_consulta, payer_type_label
 from time_utils import BR_TZ, coerce_to_brazil_tz, now_in_brazil, utcnow
@@ -2984,13 +2987,128 @@ def alterar_exame_modelo(exame_id):
     return jsonify({'success': True})
 
 
+def _build_exame_offers(bloco, clinica=None):
+    from decimal import Decimal
+    clinic_id = getattr(clinica, 'id', None) or getattr(getattr(bloco, 'animal', None), 'clinica_id', None)
+    offers = []
+
+    for exame in (bloco.exames or []):
+        nome_limpo = (exame.nome or '').strip()
+        nome_norm = nome_limpo.lower()
+        matched = False
+
+        # 1. Combinado da Maisse / PetOrlandia
+        if 'combinado' in nome_norm and ('hemograma' in nome_norm or 'alt' in nome_norm):
+            if not clinic_id or clinic_id == 1:
+                maisse = (
+                    Veterinario.query
+                    .join(User, Veterinario.user_id == User.id)
+                    .filter(func.lower(User.name).like('%maisse%'))
+                    .first()
+                )
+                nome_prestador = maisse.user.name if maisse and maisse.user else 'Dra. Maisse Cividanes Degiovani'
+                crmv_prestador = f'CRMV-{maisse.crmv_estado or "SP"} {maisse.crmv}' if maisse and maisse.crmv else 'CRMV-SP 12345'
+                crmv_display = f' ({crmv_prestador})' if crmv_prestador else ''
+
+                is_paid = (
+                    getattr(exame, 'payment_status', None) in ('paid', 'approved', 'completed')
+                    or getattr(bloco, 'payment_status', None) in ('paid', 'approved', 'completed')
+                )
+
+                offers.append({
+                    'exame_id': exame.id,
+                    'exame_nome': exame.nome,
+                    'service_id': 'maisse-combinado',
+                    'title': 'Combinado - Hemograma, ALT, FA, ureia, creatinina',
+                    'provider_name': f'{nome_prestador}{crmv_display}',
+                    'provider_role': 'Patologia Clínica Veterinária',
+                    'price': Decimal('110.00'),
+                    'price_display': 'R$ 110,00',
+                    'description': 'Hemograma completo com contagem plaquetária e bioquímicos: ALT (TGP), Fosfatase Alcalina (FA), Ureia e Creatinina.',
+                    'payment_status': getattr(exame, 'payment_status', None) or getattr(bloco, 'payment_status', 'pendente'),
+                    'is_paid': is_paid,
+                })
+                matched = True
+
+        # 2. ServicoClinica da clínica ativa
+        if not matched and clinic_id:
+            serv = ServicoClinica.query.filter(
+                ServicoClinica.clinica_id == clinic_id,
+                func.lower(ServicoClinica.descricao) == nome_norm,
+            ).first()
+            if not serv and nome_limpo:
+                serv = ServicoClinica.query.filter(
+                    ServicoClinica.clinica_id == clinic_id,
+                    ServicoClinica.descricao.ilike(f'%{nome_limpo}%'),
+                ).first()
+
+            if serv and serv.valor:
+                is_paid = (
+                    getattr(exame, 'payment_status', None) in ('paid', 'approved', 'completed')
+                    or getattr(bloco, 'payment_status', None) in ('paid', 'approved', 'completed')
+                )
+                offers.append({
+                    'exame_id': exame.id,
+                    'exame_nome': exame.nome,
+                    'service_id': f'servico-{serv.id}',
+                    'title': serv.descricao,
+                    'provider_name': clinica.nome if clinica else 'Laboratório da Clínica',
+                    'provider_role': 'Exame Complementar Laboratorial',
+                    'price': Decimal(str(serv.valor)),
+                    'price_display': f'R$ {float(serv.valor):.2f}'.replace('.', ','),
+                    'description': getattr(exame, 'justificativa', None) or 'Procedimento e análise laboratorial solicitada.',
+                    'payment_status': getattr(exame, 'payment_status', None) or getattr(bloco, 'payment_status', 'pendente'),
+                    'is_paid': is_paid,
+                })
+                matched = True
+
+        # 3. ProfessionalService ativo
+        if not matched and nome_limpo:
+            ps = ProfessionalService.query.filter(
+                func.lower(ProfessionalService.title).like(f'%{nome_norm}%'),
+                ProfessionalService.active.is_(True),
+            ).first()
+            if ps and (ps.tutor_price or ps.clinic_business_price):
+                preco = ps.tutor_price or ps.clinic_business_price
+                vet_name = ps.veterinario.user.name if ps.veterinario and ps.veterinario.user else 'Profissional Parceiro'
+                is_paid = (
+                    getattr(exame, 'payment_status', None) in ('paid', 'approved', 'completed')
+                    or getattr(bloco, 'payment_status', None) in ('paid', 'approved', 'completed')
+                )
+                offers.append({
+                    'exame_id': exame.id,
+                    'exame_nome': exame.nome,
+                    'service_id': f'ps-{ps.id}',
+                    'title': ps.title,
+                    'provider_name': vet_name,
+                    'provider_role': 'Especialista Parceiro',
+                    'price': Decimal(str(preco)),
+                    'price_display': f'R$ {float(preco):.2f}'.replace('.', ','),
+                    'description': ps.description or 'Exame diagnóstico complementar.',
+                    'payment_status': getattr(exame, 'payment_status', None) or getattr(bloco, 'payment_status', 'pendente'),
+                    'is_paid': is_paid,
+                })
+
+    return offers
+
+
 @bp.route('/imprimir_bloco_exames/<int:bloco_id>')
-@login_required
 def imprimir_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
     animal = bloco.animal
-    tutor = animal.owner
-    consulta = animal.consultas[-1] if animal.consultas else None
+    tutor = animal.owner if animal else None
+
+    token = request.args.get('token')
+    token_user = _first_access_user_from_signed_token(token) if token else None
+    has_token_access = bool(token_user and tutor and token_user.id == tutor.id)
+
+    if has_token_access and not current_user.is_authenticated:
+        login_user(token_user, remember=True)
+
+    if not current_user.is_authenticated and not has_token_access:
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    consulta = animal.consultas[-1] if animal and animal.consultas else None
     veterinario = consulta.veterinario if consulta else None
     if not veterinario and current_user.is_authenticated and getattr(current_user, 'worker', None) == 'veterinario':
         veterinario = current_user
@@ -3008,7 +3126,114 @@ def imprimir_bloco_exames(bloco_id):
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
 
-    return render_template('orcamentos/imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica, veterinario=veterinario)
+    ofertas_exames = _build_exame_offers(bloco, clinica)
+    total_contratavel = sum(o['price'] for o in ofertas_exames if not o['is_paid'])
+    total_contratavel_display = f'R$ {float(total_contratavel):.2f}'.replace('.', ',')
+    bloco_pago = bool(
+        getattr(bloco, 'payment_status', None) in ('paid', 'approved', 'completed')
+        or (ofertas_exames and all(o['is_paid'] for o in ofertas_exames))
+    )
+
+    return render_template(
+        'orcamentos/imprimir_exames.html',
+        bloco=bloco,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica,
+        veterinario=veterinario,
+        ofertas_exames=ofertas_exames,
+        total_contratavel=total_contratavel,
+        total_contratavel_display=total_contratavel_display,
+        bloco_pago=bloco_pago,
+    )
+
+
+@bp.route('/bloco_exames/<int:bloco_id>/contratar', methods=['GET', 'POST'])
+@login_required
+def contratar_bloco_exames(bloco_id):
+    bloco = BlocoExames.query.get_or_404(bloco_id)
+    animal = bloco.animal
+    owner_access = _current_user_owns_animal(animal)
+    clinic_access = can_view_clinic(current_user, getattr(animal, 'clinica_id', None))
+    is_admin = _is_global_admin(current_user)
+
+    if not owner_access and not clinic_access and not is_admin:
+        abort(403)
+
+    clinica = getattr(animal, 'clinica', None)
+    if not clinica and animal and animal.consultas:
+        clinica = animal.consultas[-1].clinica
+    if not clinica:
+        clinica_id = request.args.get('clinica_id', type=int)
+        if clinica_id:
+            clinica = Clinica.query.get(clinica_id)
+
+    ofertas = _build_exame_offers(bloco, clinica)
+    exame_id = request.args.get('exame_id', type=int)
+    if not exame_id and (request.is_json or request.accept_mimetypes.accept_json):
+        data = request.get_json(silent=True) or {}
+        exame_id = data.get('exame_id')
+
+    if exame_id:
+        try:
+            exame_id = int(exame_id)
+            ofertas = [o for o in ofertas if o['exame_id'] == exame_id]
+        except (ValueError, TypeError):
+            pass
+
+    ofertas_a_pagar = [o for o in ofertas if not o['is_paid']]
+    if not ofertas_a_pagar:
+        msg = 'Todos os exames disponíveis já foram contratados ou pagos.' if ofertas else 'Nenhum exame contratável disponível neste bloco.'
+        if request.accept_mimetypes.accept_json or request.is_json:
+            return jsonify({'success': False, 'message': msg}), 400
+        flash(msg, 'info')
+        return redirect(url_for('consulta_routes.imprimir_bloco_exames', bloco_id=bloco.id))
+
+    items = [
+        PaymentItemDTO(
+            item_id=str(o['service_id']),
+            title=str(o['title'])[:60],
+            quantity=1,
+            unit_price=float(o['price']),
+        )
+        for o in ofertas_a_pagar
+    ]
+
+    back_url = url_for(
+        'consulta_routes.imprimir_bloco_exames',
+        bloco_id=bloco.id,
+        _external=True,
+    )
+
+    try:
+        preference = create_payment_preference(
+            PaymentPreferenceDTO(
+                items=items,
+                external_reference=f'bloco_exames-{bloco.id}',
+                back_url=back_url,
+            ),
+            _criar_preferencia_pagamento,
+        )
+    except PaymentPreferenceError as exc:
+        if request.accept_mimetypes.accept_json or request.is_json:
+            return jsonify({'success': False, 'message': str(exc)}), exc.status_code
+        flash(str(exc), 'danger')
+        return redirect(url_for('consulta_routes.imprimir_bloco_exames', bloco_id=bloco.id))
+
+    bloco.payment_link = preference.payment_url
+    bloco.payment_reference = preference.payment_reference
+    bloco.payment_status = 'pending'
+    db.session.commit()
+
+    if request.accept_mimetypes.accept_json or request.is_json:
+        return jsonify({
+            'success': True,
+            'payment_url': preference.payment_url,
+            'payment_reference': preference.payment_reference,
+            'message': 'Link de pagamento gerado com sucesso.',
+        })
+
+    return redirect(preference.payment_url)
 
 
 @bp.route('/bloco_exames/<int:bloco_id>/deletar', methods=['POST'])
