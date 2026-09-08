@@ -25,3 +25,7 @@
 ## 2026-09-08 - Accessible Form Macros with Field Validation & Required Indicators
 **Learning:** Reusable WTForms macros require automatic `aria-required="true"` and visual asterisk indicators (`*`) for required fields, plus `aria-invalid="true"` and `aria-describedby="{{ field.id }}-error"` linking invalid inputs to error messages so screen readers announce form errors immediately upon focus.
 **Action:** Always complement Jinja form rendering macros with automatic `aria-required`, `aria-invalid`, and `aria-describedby` error associations alongside visual required indicators.
+
+## 2026-09-12 - Dynamic Copy Button Feedback for Screen Readers
+**Learning:** Copy-to-clipboard buttons that change visual inner text on copy (e.g. from "Copiar" to "Copiado") leave screen reader users unaware of the copy operation status unless the element has `aria-live="polite"` and dynamically updates its `aria-label` during the success feedback state.
+**Action:** Always add `aria-live="polite"` and update `aria-label` dynamically during copy feedback state on copy-to-clipboard elements, restoring the original label after timeout.
