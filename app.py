@@ -4454,6 +4454,92 @@ def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     return False, "Teste de comunicação pendente."
 
 
+def _get_nfse_issue_snapshot_details(issue, pdf_available: bool = False) -> dict:
+    from flask import url_for
+    issue_status_labels = {
+        "fila": ("Na fila", "warning", "fa-clock"),
+        "processando": ("Processando", "info", "fa-arrows-rotate"),
+        "pendente": ("Pendente", "warning", "fa-hourglass-half"),
+        "autorizado": ("Emitida", "success", "fa-file-circle-check"),
+        "erro": ("Com erro", "danger", "fa-triangle-exclamation"),
+        "cancelada": ("Cancelada", "dark", "fa-ban"),
+        "cancelamento_solicitado": ("Cancelamento solicitado", "secondary", "fa-rotate-left"),
+        "substituicao_solicitada": ("Substituição solicitada", "secondary", "fa-file-pen"),
+    }
+
+    raw_status = (issue.status or "").strip().lower()
+    label, badge, icon = issue_status_labels.get(
+        raw_status,
+        ((raw_status or "Em acompanhamento").replace("_", " ").title(), "secondary", "fa-file-lines"),
+    )
+    detail = label
+    kind = "processing"
+    if raw_status == "autorizado":
+        kind = "emitted"
+        detail = (
+            f"NFS-e {issue.numero_nfse} autorizada."
+            if issue.numero_nfse
+            else "NFS-e autorizada e pronta para consulta."
+        )
+    elif raw_status in {"erro", "cancelada"}:
+        kind = "issue"
+        detail = issue.erro_mensagem or detail
+    elif raw_status in {"cancelamento_solicitado", "substituicao_solicitada"}:
+        kind = "processing"
+        detail = "A nota está em tratamento fiscal."
+    elif raw_status in {"fila", "processando", "pendente"}:
+        detail = "A emissão foi iniciada e segue em acompanhamento."
+
+    return {
+        "kind": kind,
+        "label": label,
+        "detail": detail,
+        "badge": badge,
+        "icon": icon,
+        "issue_id": issue.id,
+        "numero_nfse": issue.numero_nfse,
+        "download_pdf_url": (
+            url_for("contabilidade_nfse_download", issue_id=issue.id, kind="pdf")
+            if pdf_available
+            else None
+        ),
+    }
+
+def _get_nfse_config_snapshot_details(
+    key_configured: bool,
+    missing_fields: list,
+    certificate_ok: bool,
+    betha_ok: bool,
+    blocking_messages: list,
+) -> dict:
+    if not key_configured:
+        return {
+            "kind": "config",
+            "label": "Chave fiscal pendente",
+            "detail": "O ambiente ainda não está pronto para armazenar credenciais fiscais.",
+            "badge": "danger",
+            "icon": "fa-key",
+        }
+
+    if missing_fields or not certificate_ok or not betha_ok:
+        detail = blocking_messages[0] if blocking_messages else "Revise a configuração fiscal."
+        return {
+            "kind": "config",
+            "label": "Configuração pendente",
+            "detail": detail,
+            "badge": "warning",
+            "icon": "fa-gear",
+        }
+
+    return {
+        "kind": "ready",
+        "label": "Pronta para emitir",
+        "detail": "Cadastro, certificado e comunicação fiscal estão em dia.",
+        "badge": "success",
+        "icon": "fa-file-circle-check",
+        "can_emit": True,
+    }
+
 def _build_orcamento_nfse_snapshot(
     orcamento: Orcamento,
     clinic: Clinica,
@@ -4521,94 +4607,13 @@ def _build_orcamento_nfse_snapshot(
     base_snapshot["applicable"] = True
     base_snapshot["can_emit"] = key_configured and not missing_fields and certificate_ok and betha_ok
 
-    issue_status_labels = {
-        "fila": ("Na fila", "warning", "fa-clock"),
-        "processando": ("Processando", "info", "fa-arrows-rotate"),
-        "pendente": ("Pendente", "warning", "fa-hourglass-half"),
-        "autorizado": ("Emitida", "success", "fa-file-circle-check"),
-        "erro": ("Com erro", "danger", "fa-triangle-exclamation"),
-        "cancelada": ("Cancelada", "dark", "fa-ban"),
-        "cancelamento_solicitado": ("Cancelamento solicitado", "secondary", "fa-rotate-left"),
-        "substituicao_solicitada": ("Substituição solicitada", "secondary", "fa-file-pen"),
-    }
-
     if issue:
-        raw_status = (issue.status or "").strip().lower()
-        label, badge, icon = issue_status_labels.get(
-            raw_status,
-            ((raw_status or "Em acompanhamento").replace("_", " ").title(), "secondary", "fa-file-lines"),
-        )
-        detail = label
-        kind = "processing"
-        if raw_status == "autorizado":
-            kind = "emitted"
-            detail = (
-                f"NFS-e {issue.numero_nfse} autorizada."
-                if issue.numero_nfse
-                else "NFS-e autorizada e pronta para consulta."
-            )
-        elif raw_status in {"erro", "cancelada"}:
-            kind = "issue"
-            detail = issue.erro_mensagem or detail
-        elif raw_status in {"cancelamento_solicitado", "substituicao_solicitada"}:
-            kind = "processing"
-            detail = "A nota está em tratamento fiscal."
-        elif raw_status in {"fila", "processando", "pendente"}:
-            detail = "A emissão foi iniciada e segue em acompanhamento."
-
-        base_snapshot.update(
-            {
-                "kind": kind,
-                "label": label,
-                "detail": detail,
-                "badge": badge,
-                "icon": icon,
-                "issue_id": issue.id,
-                "numero_nfse": issue.numero_nfse,
-                "download_pdf_url": (
-                    url_for("contabilidade_nfse_download", issue_id=issue.id, kind="pdf")
-                    if pdf_available
-                    else None
-                ),
-            }
-        )
+        base_snapshot.update(_get_nfse_issue_snapshot_details(issue, pdf_available))
         return base_snapshot
 
-    if not key_configured:
-        base_snapshot.update(
-            {
-                "kind": "config",
-                "label": "Chave fiscal pendente",
-                "detail": "O ambiente ainda não está pronto para armazenar credenciais fiscais.",
-                "badge": "danger",
-                "icon": "fa-key",
-            }
-        )
-        return base_snapshot
-
-    if missing_fields or not certificate_ok or not betha_ok:
-        detail = blocking_messages[0] if blocking_messages else "Revise a configuração fiscal."
-        base_snapshot.update(
-            {
-                "kind": "config",
-                "label": "Configuração pendente",
-                "detail": detail,
-                "badge": "warning",
-                "icon": "fa-gear",
-            }
-        )
-        return base_snapshot
-
-    base_snapshot.update(
-        {
-            "kind": "ready",
-            "label": "Pronta para emitir",
-            "detail": "Cadastro, certificado e comunicação fiscal estão em dia.",
-            "badge": "success",
-            "icon": "fa-file-circle-check",
-            "can_emit": True,
-        }
-    )
+    base_snapshot.update(_get_nfse_config_snapshot_details(
+        key_configured, missing_fields, certificate_ok, betha_ok, blocking_messages
+    ))
     return base_snapshot
 
 
