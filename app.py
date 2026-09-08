@@ -938,45 +938,75 @@ def _nim_copy_rows(rows: Iterable[Iterable[bool]]) -> list[list[bool]]:
     return copied
 
 
+def _nim_parse_player(val, default_val: int | None) -> int | None:
+    try:
+        val = int(val)
+        return val if val in (1, 2) else default_val
+    except (TypeError, ValueError):
+        return default_val
+
+
+def _nim_has_restorations(current_rows: list[list[bool]], proposed_rows: list[list[bool]]) -> bool:
+    for current_row, next_row in zip(current_rows, proposed_rows):
+        for current_value, next_value in zip(current_row, next_row):
+            if not current_value and next_value:
+                return True
+    return False
+
+
+def _nim_count_removals(baseline_rows: list[list[bool]], proposed_rows: list[list[bool]]) -> list[int]:
+    removed_by_row_turn: list[int] = [0] * len(NIM_TEMPLATE_ROWS)
+    for row_index, (baseline_row, next_row) in enumerate(zip(baseline_rows, proposed_rows)):
+        for baseline_value, next_value in zip(baseline_row, next_row):
+            if baseline_value and not next_value:
+                removed_by_row_turn[row_index] += 1
+    return removed_by_row_turn
+
+
+def _nim_normalize_alternates(current_alternates) -> list[bool]:
+    if not isinstance(current_alternates, (list, tuple)):
+        return [False] * len(NIM_TEMPLATE_ROWS)
+    return [
+        bool(current_alternates[index]) if index < len(current_alternates) else False
+        for index in range(len(NIM_TEMPLATE_ROWS))
+    ]
+
+
+def _nim_next_alternates(normalized_alternates: list[bool], proposed_rows: list[list[bool]]) -> list[bool]:
+    next_alternates = normalized_alternates.copy()
+    for row_index, row in enumerate(proposed_rows):
+        remaining = sum(1 for stick in row if stick)
+        if remaining <= 1:
+            next_alternates[row_index] = False
+            continue
+
+        if len(row) == 3:
+            left, middle, right = row
+            if left and right and not middle:
+                next_alternates[row_index] = True
+    return next_alternates
+
+
 def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None:
     """Validate the proposed state according to the house rules."""
 
     proposed_rows = _nim_copy_rows(proposed_state.get("rows", []))
     current_rows = _nim_copy_rows(current_state.get("rows", _nim_default_rows()))
 
-    current_start = current_state.get("starting_player", 1)
-    try:
-        current_start_int = int(current_start)
-    except (TypeError, ValueError):
-        current_start_int = 1
-    if current_start_int not in (1, 2):
-        current_start_int = 1
-
+    current_start_int = _nim_parse_player(current_state.get("starting_player", 1), 1)
     proposed_state["starting_player"] = current_start_int
 
     origin_candidate = current_state.get("turn_origin_rows")
-    if (
-        not isinstance(origin_candidate, list)
-        or len(origin_candidate) != len(NIM_TEMPLATE_ROWS)
-    ):
+    if not isinstance(origin_candidate, list) or len(origin_candidate) != len(NIM_TEMPLATE_ROWS):
         baseline_rows = _nim_copy_rows(current_rows)
     else:
         baseline_rows = _nim_copy_rows(origin_candidate)
 
     default_rows = _nim_default_rows()
-
-    proposed_turn = proposed_state.get("turn")
-    try:
-        proposed_turn_int = int(proposed_turn)
-    except (TypeError, ValueError):
-        proposed_turn_int = None
-    if proposed_turn_int not in (1, 2):
-        proposed_turn_int = None
-
-    has_played_flag = proposed_state.get("has_played")
-    has_played_bool = bool(has_played_flag)
-
+    proposed_turn_int = _nim_parse_player(proposed_state.get("turn"), None)
+    has_played_bool = bool(proposed_state.get("has_played"))
     winner_flag = proposed_state.get("winner")
+
     is_reset = (
         proposed_rows == default_rows
         and (winner_flag is None or winner_flag == "")
@@ -984,54 +1014,20 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         and proposed_turn_int in (1, 2)
     )
 
-    restorations_from_current: list[tuple[int, int]] = []
-    for row_index, (current_row, next_row) in enumerate(zip(current_rows, proposed_rows)):
-        for stick_index, (current_value, next_value) in enumerate(zip(current_row, next_row)):
-            if not current_value and next_value:
-                restorations_from_current.append((row_index, stick_index))
-
-    if restorations_from_current and not is_reset:
+    if _nim_has_restorations(current_rows, proposed_rows) and not is_reset:
         return None
 
-    removed_by_row_turn: list[int] = [0] * len(NIM_TEMPLATE_ROWS)
-
-    for row_index, (baseline_row, next_row) in enumerate(zip(baseline_rows, proposed_rows)):
-        for stick_index, (baseline_value, next_value) in enumerate(zip(baseline_row, next_row)):
-            if baseline_value and not next_value:
-                removed_by_row_turn[row_index] += 1
-
+    removed_by_row_turn = _nim_count_removals(baseline_rows, proposed_rows)
     total_removed_turn = sum(removed_by_row_turn)
-    rows_with_removals = [
-        index for index, count in enumerate(removed_by_row_turn) if count > 0
-    ]
+    rows_with_removals = [index for index, count in enumerate(removed_by_row_turn) if count > 0]
 
-    current_turn = current_state.get("turn")
-    try:
-        current_turn_int = int(current_turn)
-    except (TypeError, ValueError):
-        current_turn_int = 1
-    if current_turn_int not in (1, 2):
-        current_turn_int = 1
-
-    next_turn = proposed_state.get("turn")
-    try:
-        next_turn_int = int(next_turn)
-    except (TypeError, ValueError):
-        next_turn_int = current_turn_int
-    if next_turn_int not in (1, 2):
-        next_turn_int = current_turn_int
+    current_turn_int = _nim_parse_player(current_state.get("turn"), 1)
+    next_turn_int = _nim_parse_player(proposed_state.get("turn"), current_turn_int)
 
     proposed_state["turn"] = next_turn_int
     turn_changed = current_turn_int != next_turn_int
 
-    current_alternates = current_state.get("alternate_rows")
-    if not isinstance(current_alternates, (list, tuple)):
-        normalized_alternates = [False] * len(NIM_TEMPLATE_ROWS)
-    else:
-        normalized_alternates = [
-            bool(current_alternates[index]) if index < len(current_alternates) else False
-            for index in range(len(NIM_TEMPLATE_ROWS))
-        ]
+    normalized_alternates = _nim_normalize_alternates(current_state.get("alternate_rows"))
 
     if is_reset:
         next_start = 2 if current_start_int == 1 else 1
@@ -1056,38 +1052,15 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         if normalized_alternates[row_index] and removed_count > 1:
             return None
 
-    # Update alternate row metadata based on the resulting board.
-    next_alternates = normalized_alternates.copy()
-    for row_index, row in enumerate(proposed_rows):
-        remaining = sum(1 for stick in row if stick)
-        if remaining <= 1:
-            next_alternates[row_index] = False
-            continue
-
-        if len(row) == 3:
-            left, middle, right = row
-            if left and right and not middle:
-                next_alternates[row_index] = True
-
     proposed_state["rows"] = proposed_rows
-    proposed_state["alternate_rows"] = next_alternates
+    proposed_state["alternate_rows"] = _nim_next_alternates(normalized_alternates, proposed_rows)
+    proposed_state["has_played"] = False if turn_changed else total_removed_turn > 0
 
-    if turn_changed:
-        proposed_state["has_played"] = False
-    else:
-        proposed_state["has_played"] = total_removed_turn > 0
-
-    # Winner is only valid when the board is empty. With the misère rule, the
-    # winner corresponds to the opponent of the player who removed the last
-    # stick, so any inconsistent winner flag is cleared here.
     all_taken = all(not any(row) for row in proposed_rows)
     if not all_taken:
         proposed_state["winner"] = None
     else:
-        if turn_changed:
-            proposed_state["winner"] = next_turn_int
-        else:
-            proposed_state["winner"] = 1 if next_turn_int == 2 else 2
+        proposed_state["winner"] = next_turn_int if turn_changed else (1 if next_turn_int == 2 else 2)
 
     proposed_state["starting_player"] = current_start_int
     return proposed_state
@@ -1227,10 +1200,7 @@ def _nim_turn_metadata(previous_state: dict, next_state: dict) -> tuple[dict | N
     return last_turn_summary, next_origin_rows
 
 
-def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
-    if not isinstance(payload, dict):
-        return None
-
+def _extract_nim_rows(payload: dict) -> list[list[bool]] | None:
     rows = payload.get("rows")
     if not isinstance(rows, (list, tuple)) or len(rows) != len(NIM_TEMPLATE_ROWS):
         return None
@@ -1240,7 +1210,10 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         if not isinstance(row, (list, tuple)) or len(row) != len(NIM_TEMPLATE_ROWS[index]):
             return None
         normalized_rows.append([bool(value) for value in row])
+    return normalized_rows
 
+
+def _extract_nim_turn(payload: dict, current_state: dict) -> int:
     turn = payload.get("turn", current_state["turn"])
     try:
         turn_int = int(turn)
@@ -1248,32 +1221,38 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         turn_int = current_state["turn"]
     if turn_int not in (1, 2):
         turn_int = 1
+    return turn_int
 
+
+def _extract_nim_winner(payload: dict) -> int | None:
     winner_value = payload.get("winner")
     if winner_value in (None, "", "null"):
-        winner_int = None
-    else:
-        try:
-            winner_int = int(winner_value)
-        except (TypeError, ValueError):
-            winner_int = None
-        if winner_int not in (1, 2):
-            winner_int = None
+        return None
+    try:
+        winner_int = int(winner_value)
+    except (TypeError, ValueError):
+        return None
+    if winner_int not in (1, 2):
+        return None
+    return winner_int
 
+
+def _extract_nim_has_played(payload: dict, current_state: dict) -> bool:
     has_played_raw = payload.get("has_played")
     if has_played_raw is None:
         has_played_raw = current_state.get("has_played", False)
     if isinstance(has_played_raw, str):
         has_played_raw = has_played_raw.strip().lower()
         if has_played_raw in {"1", "true", "yes", "on"}:
-            has_played = True
+            return True
         elif has_played_raw in {"0", "false", "no", "off", ""}:
-            has_played = False
+            return False
         else:
-            has_played = current_state.get("has_played", False)
-    else:
-        has_played = bool(has_played_raw)
+            return current_state.get("has_played", False)
+    return bool(has_played_raw)
 
+
+def _extract_nim_active_row(payload: dict, current_state: dict) -> int | None:
     has_active_row_key = "active_row" in payload or "activeRow" in payload
     active_row_value = payload.get("active_row")
     if active_row_value is None and "active_row" not in payload:
@@ -1284,29 +1263,22 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         active_row_int = int(active_row_value)
     except (TypeError, ValueError):
         active_row_int = None
-    if active_row_int is not None and not (
-        0 <= active_row_int < len(NIM_TEMPLATE_ROWS)
-    ):
+    if active_row_int is not None and not (0 <= active_row_int < len(NIM_TEMPLATE_ROWS)):
         active_row_int = None
+    return active_row_int
 
-    bg_gradient_value = payload.get("bg_gradient")
-    if bg_gradient_value is None:
-        bg_gradient_value = payload.get("bgGradient")
-    if bg_gradient_value is None:
-        bg_gradient = current_state.get("bg_gradient")
-    else:
-        bg_gradient_text = str(bg_gradient_value).strip()
-        bg_gradient = bg_gradient_text[:200] if bg_gradient_text else current_state.get("bg_gradient")
 
-    stick_color_value = payload.get("stick_color")
-    if stick_color_value is None:
-        stick_color_value = payload.get("stickColor")
-    if stick_color_value is None:
-        stick_color = current_state.get("stick_color")
-    else:
-        stick_color_text = str(stick_color_value).strip()
-        stick_color = stick_color_text[:50] if stick_color_text else current_state.get("stick_color")
+def _extract_nim_string_field(payload: dict, current_state: dict, snake_key: str, camel_key: str, max_length: int) -> str | None:
+    value = payload.get(snake_key)
+    if value is None:
+        value = payload.get(camel_key)
+    if value is None:
+        return current_state.get(snake_key)
+    text = str(value).strip()
+    return text[:max_length] if text else current_state.get(snake_key)
 
+
+def _extract_nim_player_emojis(payload: dict, current_state: dict) -> list[str]:
     player_emojis_value = payload.get("player_emojis")
     if player_emojis_value is None:
         player_emojis_value = payload.get("playerEmojis")
@@ -1319,40 +1291,52 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
                 raw = ""
             text = str(raw).strip()
             normalized_emojis.append(text[:8] if text else "🐾")
-        player_emojis = normalized_emojis
+        return normalized_emojis
     else:
         current_emojis = current_state.get("player_emojis")
         if isinstance(current_emojis, (list, tuple)):
             player_emojis = [str(value)[:8] for value in current_emojis[:2]]
             if len(player_emojis) < 2:
                 player_emojis.extend(["🐾"] * (2 - len(player_emojis)))
+            return player_emojis
         else:
-            player_emojis = ["🐾", "🐾"]
+            return ["🐾", "🐾"]
 
+
+def _extract_nim_starting_player(payload: dict, current_state: dict) -> int:
     starting_player_value = payload.get("starting_player")
     if starting_player_value is None:
         starting_player_value = payload.get("startingPlayer")
     if starting_player_value is None:
-        starting_player = current_state.get("starting_player", 1)
-    else:
-        try:
-            starting_player = int(starting_player_value)
-        except (TypeError, ValueError):
-            starting_player = current_state.get("starting_player", 1)
-        if starting_player not in (1, 2):
-            starting_player = current_state.get("starting_player", 1) or 1
+        return current_state.get("starting_player", 1)
+    try:
+        starting_player = int(starting_player_value)
+    except (TypeError, ValueError):
+        return current_state.get("starting_player", 1)
+    if starting_player not in (1, 2):
+        return current_state.get("starting_player", 1) or 1
+    return starting_player
+
+
+def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    normalized_rows = _extract_nim_rows(payload)
+    if normalized_rows is None:
+        return None
 
     return {
         "rows": normalized_rows,
-        "turn": turn_int,
-        "winner": winner_int,
+        "turn": _extract_nim_turn(payload, current_state),
+        "winner": _extract_nim_winner(payload),
         "players": _normalize_nim_players(payload.get("players"), current_state.get("players", {})),
-        "has_played": has_played,
-        "active_row": active_row_int,
-        "bg_gradient": bg_gradient,
-        "stick_color": stick_color,
-        "player_emojis": player_emojis,
-        "starting_player": starting_player,
+        "has_played": _extract_nim_has_played(payload, current_state),
+        "active_row": _extract_nim_active_row(payload, current_state),
+        "bg_gradient": _extract_nim_string_field(payload, current_state, "bg_gradient", "bgGradient", 200),
+        "stick_color": _extract_nim_string_field(payload, current_state, "stick_color", "stickColor", 50),
+        "player_emojis": _extract_nim_player_emojis(payload, current_state),
+        "starting_player": _extract_nim_starting_player(payload, current_state),
     }
 
 
@@ -4467,6 +4451,94 @@ def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     return False, "Teste de comunicação pendente."
 
 
+def _get_nfse_issue_snapshot_details(issue, pdf_available: bool = False) -> dict:
+    from flask import url_for
+    issue_status_labels = {
+        "fila": ("Na fila", "warning", "fa-clock"),
+        "processando": ("Processando", "info", "fa-arrows-rotate"),
+        "pendente": ("Pendente", "warning", "fa-hourglass-half"),
+        "autorizado": ("Emitida", "success", "fa-file-circle-check"),
+        "erro": ("Com erro", "danger", "fa-triangle-exclamation"),
+        "cancelada": ("Cancelada", "dark", "fa-ban"),
+        "cancelamento_solicitado": ("Cancelamento solicitado", "secondary", "fa-rotate-left"),
+        "substituicao_solicitada": ("Substituição solicitada", "secondary", "fa-file-pen"),
+    }
+
+    raw_status = (issue.status or "").strip().lower()
+    label, badge, icon = issue_status_labels.get(
+        raw_status,
+        ((raw_status or "Em acompanhamento").replace("_", " ").title(), "secondary", "fa-file-lines"),
+    )
+    detail = label
+    kind = "processing"
+    if raw_status == "autorizado":
+        kind = "emitted"
+        detail = (
+            f"NFS-e {issue.numero_nfse} autorizada."
+            if issue.numero_nfse
+            else "NFS-e autorizada e pronta para consulta."
+        )
+    elif raw_status in {"erro", "cancelada"}:
+        kind = "issue"
+        detail = issue.erro_mensagem or detail
+    elif raw_status in {"cancelamento_solicitado", "substituicao_solicitada"}:
+        kind = "processing"
+        detail = "A nota está em tratamento fiscal."
+    elif raw_status in {"fila", "processando", "pendente"}:
+        detail = "A emissão foi iniciada e segue em acompanhamento."
+
+    return {
+        "kind": kind,
+        "label": label,
+        "detail": detail,
+        "badge": badge,
+        "icon": icon,
+        "issue_id": issue.id,
+        "numero_nfse": issue.numero_nfse,
+        "download_pdf_url": (
+            url_for("contabilidade_nfse_download", issue_id=issue.id, kind="pdf")
+            if pdf_available
+            else None
+        ),
+    }
+
+
+def _get_nfse_config_snapshot_details(
+    key_configured: bool,
+    missing_fields: list,
+    certificate_ok: bool,
+    betha_ok: bool,
+    blocking_messages: list,
+) -> dict:
+    if not key_configured:
+        return {
+            "kind": "config",
+            "label": "Chave fiscal pendente",
+            "detail": "O ambiente ainda não está pronto para armazenar credenciais fiscais.",
+            "badge": "danger",
+            "icon": "fa-key",
+        }
+
+    if missing_fields or not certificate_ok or not betha_ok:
+        detail = blocking_messages[0] if blocking_messages else "Revise a configuração fiscal."
+        return {
+            "kind": "config",
+            "label": "Configuração pendente",
+            "detail": detail,
+            "badge": "warning",
+            "icon": "fa-gear",
+        }
+
+    return {
+        "kind": "ready",
+        "label": "Pronta para emitir",
+        "detail": "Cadastro, certificado e comunicação fiscal estão em dia.",
+        "badge": "success",
+        "icon": "fa-file-circle-check",
+        "can_emit": True,
+    }
+
+
 def _build_orcamento_nfse_snapshot(
     orcamento: Orcamento,
     clinic: Clinica,
@@ -4534,93 +4606,14 @@ def _build_orcamento_nfse_snapshot(
     base_snapshot["applicable"] = True
     base_snapshot["can_emit"] = key_configured and not missing_fields and certificate_ok and betha_ok
 
-    issue_status_labels = {
-        "fila": ("Na fila", "warning", "fa-clock"),
-        "processando": ("Processando", "info", "fa-arrows-rotate"),
-        "pendente": ("Pendente", "warning", "fa-hourglass-half"),
-        "autorizado": ("Emitida", "success", "fa-file-circle-check"),
-        "erro": ("Com erro", "danger", "fa-triangle-exclamation"),
-        "cancelada": ("Cancelada", "dark", "fa-ban"),
-        "cancelamento_solicitado": ("Cancelamento solicitado", "secondary", "fa-rotate-left"),
-        "substituicao_solicitada": ("Substituição solicitada", "secondary", "fa-file-pen"),
-    }
-
     if issue:
-        raw_status = (issue.status or "").strip().lower()
-        label, badge, icon = issue_status_labels.get(
-            raw_status,
-            ((raw_status or "Em acompanhamento").replace("_", " ").title(), "secondary", "fa-file-lines"),
-        )
-        detail = label
-        kind = "processing"
-        if raw_status == "autorizado":
-            kind = "emitted"
-            detail = (
-                f"NFS-e {issue.numero_nfse} autorizada."
-                if issue.numero_nfse
-                else "NFS-e autorizada e pronta para consulta."
-            )
-        elif raw_status in {"erro", "cancelada"}:
-            kind = "issue"
-            detail = issue.erro_mensagem or detail
-        elif raw_status in {"cancelamento_solicitado", "substituicao_solicitada"}:
-            kind = "processing"
-            detail = "A nota está em tratamento fiscal."
-        elif raw_status in {"fila", "processando", "pendente"}:
-            detail = "A emissão foi iniciada e segue em acompanhamento."
-
-        base_snapshot.update(
-            {
-                "kind": kind,
-                "label": label,
-                "detail": detail,
-                "badge": badge,
-                "icon": icon,
-                "issue_id": issue.id,
-                "numero_nfse": issue.numero_nfse,
-                "download_pdf_url": (
-                    url_for("contabilidade_nfse_download", issue_id=issue.id, kind="pdf")
-                    if pdf_available
-                    else None
-                ),
-            }
-        )
-        return base_snapshot
-
-    if not key_configured:
-        base_snapshot.update(
-            {
-                "kind": "config",
-                "label": "Chave fiscal pendente",
-                "detail": "O ambiente ainda não está pronto para armazenar credenciais fiscais.",
-                "badge": "danger",
-                "icon": "fa-key",
-            }
-        )
-        return base_snapshot
-
-    if missing_fields or not certificate_ok or not betha_ok:
-        detail = blocking_messages[0] if blocking_messages else "Revise a configuração fiscal."
-        base_snapshot.update(
-            {
-                "kind": "config",
-                "label": "Configuração pendente",
-                "detail": detail,
-                "badge": "warning",
-                "icon": "fa-gear",
-            }
-        )
+        base_snapshot.update(_get_nfse_issue_snapshot_details(issue, pdf_available))
         return base_snapshot
 
     base_snapshot.update(
-        {
-            "kind": "ready",
-            "label": "Pronta para emitir",
-            "detail": "Cadastro, certificado e comunicação fiscal estão em dia.",
-            "badge": "success",
-            "icon": "fa-file-circle-check",
-            "can_emit": True,
-        }
+        _get_nfse_config_snapshot_details(
+            key_configured, missing_fields, certificate_ok, betha_ok, blocking_messages
+        )
     )
     return base_snapshot
 
@@ -5236,6 +5229,112 @@ def _integration_prescription_items(block: BlocoPrescricao):
     return items
 
 
+def _build_animal_summary_dict(animal: Animal) -> dict:
+    return {
+        'id': animal.id,
+        'nome': animal.name,
+        'especie': animal.species.name if animal.species else None,
+        'raca': animal.breed.name if animal.breed else None,
+        'sexo': animal.sex,
+        'idade': animal.age_display,
+        'peso_kg': animal.peso,
+        'clinica_id': animal.clinica_id,
+        'clinica_nome': animal.clinica.nome if animal.clinica else None,
+    }
+
+
+def _build_tutor_summary_dict(animal: Animal) -> dict:
+    return {
+        'id': animal.owner.id if getattr(animal, 'owner', None) else None,
+        'nome': animal.owner.name if getattr(animal, 'owner', None) else None,
+        'email': animal.owner.email if getattr(animal, 'owner', None) else None,
+        'telefone': animal.owner.phone if getattr(animal, 'owner', None) else None,
+    }
+
+
+def _build_consulta_dict(consulta: Consulta) -> dict:
+    return {
+        'id': consulta.id,
+        'status': consulta.status,
+        'finalizada_em': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
+        'queixa_principal': consulta.queixa_principal,
+        'conduta': consulta.conduta,
+        'exames_solicitados': consulta.exames_solicitados,
+    }
+
+
+def _build_prescription_dict(prescription: BlocoPrescricao) -> dict:
+    return {
+        'id': prescription.id,
+        'emitida_em': _integration_format_datetime(prescription.data_criacao),
+        'instrucoes_gerais': prescription.instrucoes_gerais,
+        'itens': _integration_prescription_items(prescription),
+    }
+
+
+def _build_exam_dict(exam: ExameSolicitado) -> dict:
+    return {
+        'id': exam.id,
+        'nome': exam.nome,
+        'status': exam.status,
+        'justificativa': exam.justificativa,
+        'resultado': exam.resultado,
+    }
+
+
+def _build_pendencies_dict(pendencias: dict) -> dict:
+    return {
+        'vacinas_atrasadas': [
+            {
+                'id': vaccine.id,
+                'nome': vaccine.nome,
+                'tipo': vaccine.tipo,
+                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+            }
+            for vaccine in pendencias.get('vacinas_atrasadas', [])
+        ],
+        'proximas_vacinas': [
+            {
+                'id': vaccine.id,
+                'nome': vaccine.nome,
+                'tipo': vaccine.tipo,
+                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+            }
+            for vaccine in pendencias.get('proximas_vacinas', [])[:5]
+        ],
+        'retornos_agendados': [
+            {
+                'id': appointment.id,
+                'data': _integration_format_datetime(appointment.scheduled_at),
+                'status': appointment.status,
+                'observacoes': appointment.notes,
+            }
+            for appointment in pendencias.get('retornos_agendados', [])[:5]
+        ],
+        'exames_agendados': [
+            {
+                'id': exam.id,
+                'data': _integration_format_datetime(exam.scheduled_at),
+                'status': exam.status,
+                'especialista': (
+                    exam.specialist.user.name
+                    if getattr(getattr(exam, 'specialist', None), 'user', None) else None
+                ),
+            }
+            for exam in pendencias.get('exames_agendados', [])[:5]
+        ],
+        'exames_pendentes': [
+            {
+                'id': exam.id,
+                'nome': exam.nome,
+                'status': exam.status,
+                'justificativa': exam.justificativa,
+            }
+            for exam in pendencias.get('exames_pendentes', [])[:5]
+        ],
+    }
+
+
 def _integration_build_clinical_summary(user: User, animal: Animal):
     latest_consulta = (
         _integration_accessible_consultas_query(user)
@@ -5265,120 +5364,29 @@ def _integration_build_clinical_summary(user: User, animal: Animal):
     )
     pendencias = _integration_collect_animal_pendencies(animal)
 
+    ultima_consulta_dict = _build_consulta_dict(latest_consulta) if latest_consulta else None
+    if ultima_consulta_dict and latest_consulta:
+        ultima_consulta_dict['historico_clinico'] = latest_consulta.historico_clinico
+        ultima_consulta_dict['exame_fisico'] = latest_consulta.exame_fisico
+        ultima_consulta_dict['retorno_de_id'] = latest_consulta.retorno_de_id
+
     return {
-        'animal': {
-            'id': animal.id,
-            'nome': animal.name,
-            'especie': animal.species.name if animal.species else None,
-            'raca': animal.breed.name if animal.breed else None,
-            'sexo': animal.sex,
-            'idade': animal.age_display,
-            'peso_kg': animal.peso,
-            'clinica_id': animal.clinica_id,
-            'clinica_nome': animal.clinica.nome if animal.clinica else None,
-        },
-        'tutor': {
-            'id': animal.owner.id if getattr(animal, 'owner', None) else None,
-            'nome': animal.owner.name if getattr(animal, 'owner', None) else None,
-            'email': animal.owner.email if getattr(animal, 'owner', None) else None,
-            'telefone': animal.owner.phone if getattr(animal, 'owner', None) else None,
-        },
-        'ultima_consulta': (
-            {
-                'id': latest_consulta.id,
-                'status': latest_consulta.status,
-                'finalizada_em': _integration_format_datetime(
-                    latest_consulta.finalizada_em or latest_consulta.created_at
-                ),
-                'queixa_principal': latest_consulta.queixa_principal,
-                'historico_clinico': latest_consulta.historico_clinico,
-                'exame_fisico': latest_consulta.exame_fisico,
-                'conduta': latest_consulta.conduta,
-                'exames_solicitados': latest_consulta.exames_solicitados,
-                'retorno_de_id': latest_consulta.retorno_de_id,
-            }
-            if latest_consulta else None
-        ),
+        'animal': _build_animal_summary_dict(animal),
+        'tutor': _build_tutor_summary_dict(animal),
+        'ultima_consulta': ultima_consulta_dict,
         'consultas_recentes': [
-            {
-                'id': consulta.id,
-                'status': consulta.status,
-                'finalizada_em': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
-                'queixa_principal': consulta.queixa_principal,
-                'conduta': consulta.conduta,
-                'exames_solicitados': consulta.exames_solicitados,
-            }
+            _build_consulta_dict(consulta)
             for consulta in recent_consultas
         ],
         'prescricao_mais_recente': (
-            {
-                'id': latest_prescription.id,
-                'emitida_em': _integration_format_datetime(latest_prescription.data_criacao),
-                'instrucoes_gerais': latest_prescription.instrucoes_gerais,
-                'itens': _integration_prescription_items(latest_prescription),
-            }
+            _build_prescription_dict(latest_prescription)
             if latest_prescription else None
         ),
         'exames_recentes': [
-            {
-                'id': exam.id,
-                'nome': exam.nome,
-                'status': exam.status,
-                'justificativa': exam.justificativa,
-                'resultado': exam.resultado,
-            }
+            _build_exam_dict(exam)
             for exam in recent_exam_requests
         ],
-        'pendencias': {
-            'vacinas_atrasadas': [
-                {
-                    'id': vaccine.id,
-                    'nome': vaccine.nome,
-                    'tipo': vaccine.tipo,
-                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
-                }
-                for vaccine in pendencias['vacinas_atrasadas']
-            ],
-            'proximas_vacinas': [
-                {
-                    'id': vaccine.id,
-                    'nome': vaccine.nome,
-                    'tipo': vaccine.tipo,
-                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
-                }
-                for vaccine in pendencias['proximas_vacinas'][:5]
-            ],
-            'retornos_agendados': [
-                {
-                    'id': appointment.id,
-                    'data': _integration_format_datetime(appointment.scheduled_at),
-                    'status': appointment.status,
-                    'observacoes': appointment.notes,
-                }
-                for appointment in pendencias['retornos_agendados'][:5]
-            ],
-            'exames_agendados': [
-                {
-                    'id': exam.id,
-                    'data': _integration_format_datetime(exam.scheduled_at),
-                    'status': exam.status,
-                    'especialista': (
-                        exam.specialist.user.name
-                        if getattr(getattr(exam, 'specialist', None), 'user', None) else None
-                    ),
-                }
-                for exam in pendencias['exames_agendados'][:5]
-            ],
-            'exames_pendentes': [
-                {
-                    'id': exam.id,
-                    'nome': exam.nome,
-                    'status': exam.status,
-                    'justificativa': exam.justificativa,
-                }
-                for exam in pendencias['exames_pendentes'][:5]
-            ],
-        },
+        'pendencias': _build_pendencies_dict(pendencias),
     }
 
 
