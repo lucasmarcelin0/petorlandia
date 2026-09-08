@@ -63,7 +63,7 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
     with app.app_context():
         product = db.session.get(Product, product_id)
         assert product.name == 'Racao Revisada'
-        assert product.status == 'inactive'
+        assert product.status == 'pending'
         assert product.subscription_enabled is True
         assert float(product.subscription_discount_percent) == 5
         assert float(product.subscription_shipping_fee) == 6
@@ -141,11 +141,12 @@ def test_pending_store_owner_cannot_publish_before_approval(app, client):
     _login(client, owner_id)
     response = client.post(
         f'/casa-de-racao/{store_id}',
-        data={'_action': 'add_product', 'name': 'Produto Prematuro', 'price': '10.00', 'stock': '1', 'category': ''},
+        data={'_action': 'add_product', 'name': 'Produto Prematuro', 'price': '10.00', 'stock': '1', 'category': '', 'subscription_enabled': 'n'},
     )
     assert response.status_code == 302
     with app.app_context():
-        assert Product.query.filter_by(casa_de_racao_id=store_id).count() == 0
+        assert Product.query.filter_by(casa_de_racao_id=store_id).count() == 1
+        assert Product.query.filter_by(casa_de_racao_id=store_id).first().status == 'pending'
 
 
 def test_unrelated_user_cannot_manage_store_products(app, client):
