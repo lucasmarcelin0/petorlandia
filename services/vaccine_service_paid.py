@@ -73,7 +73,7 @@ def list_cidades():
     rows = (
         VaccineServiceItem.query
         .with_entities(distinct(VaccineServiceItem.cidade))
-        .filter(VaccineServiceItem.ativo == True, VaccineServiceItem.cidade.isnot(None))
+        .filter(VaccineServiceItem.ativo, VaccineServiceItem.cidade.isnot(None))
         .order_by(VaccineServiceItem.cidade)
         .all()
     )
