@@ -287,13 +287,26 @@ def _prescritor_vetsmart_stats(medicamento) -> Dict[str, Any]:
 
 
 def _produtos_vetsmart(medicamento) -> List[Dict[str, Any]]:
+    cache = getattr(medicamento, '_produtos_vetsmart_cache', None)
+    if cache is not None:
+        return cache
+
     conteudo = getattr(medicamento, 'conteudo_estruturado', None) or {}
     if not isinstance(conteudo, dict):
-        return []
-    produtos = conteudo.get('produtos_vetsmart') or []
-    if not isinstance(produtos, list):
-        return []
-    return [p for p in produtos if isinstance(p, dict)]
+        produtos_list = []
+    else:
+        produtos = conteudo.get('produtos_vetsmart') or []
+        if not isinstance(produtos, list):
+            produtos_list = []
+        else:
+            produtos_list = [p for p in produtos if isinstance(p, dict)]
+
+    try:
+        setattr(medicamento, '_produtos_vetsmart_cache', produtos_list)
+    except Exception:
+        pass
+
+    return produtos_list
 
 
 def _resumir_produtos_vetsmart(medicamento) -> List[Dict[str, Any]]:
@@ -371,12 +384,16 @@ def _parse_duracao_dias(texto: Optional[str]) -> Tuple[Optional[int], Optional[i
 
 def _duracao_produtos_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     for prod in _produtos_vetsmart(medicamento):
+        secoes = prod.get('secoes')
+        if not isinstance(secoes, dict):
+            secoes = {}
+
         candidatos = [
             prod.get('duracao_tratamento'),
-            ((prod.get('secoes') or {}).get('Duração do Tratamento') or {}).get('texto')
-            if isinstance((prod.get('secoes') or {}).get('Duração do Tratamento'), dict) else None,
-            ((prod.get('secoes') or {}).get('Administração e doses') or {}).get('texto')
-            if isinstance((prod.get('secoes') or {}).get('Administração e doses'), dict) else None,
+            secoes.get('Duração do Tratamento', {}).get('texto')
+            if isinstance(secoes.get('Duração do Tratamento'), dict) else None,
+            secoes.get('Administração e doses', {}).get('texto')
+            if isinstance(secoes.get('Administração e doses'), dict) else None,
         ]
         for texto in candidatos:
             mn, mx = _parse_duracao_dias(texto)
@@ -394,10 +411,13 @@ def _duracao_texto_de_produtos_vetsmart(medicamento) -> Optional[str]:
     (qualquer um cujos produtos tenham `duracao_tratamento`).
     """
     for prod in _produtos_vetsmart(medicamento):
-        secoes = prod.get('secoes') if isinstance(prod.get('secoes'), dict) else {}
+        secoes = prod.get('secoes')
+        if not isinstance(secoes, dict):
+            secoes = {}
+
         candidatos = [
             prod.get('duracao_tratamento'),
-            (secoes.get('Duração do Tratamento') or {}).get('texto')
+            secoes.get('Duração do Tratamento', {}).get('texto')
             if isinstance(secoes.get('Duração do Tratamento'), dict) else None,
         ]
         for texto in candidatos:

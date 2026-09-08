@@ -5412,10 +5412,7 @@ def _integration_build_today_agenda(user: User, target_date: date | None = None)
     }
 
 
-def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = None):
-    now = utcnow()
-    today = datetime.now(BR_TZ).date()
-
+def _integration_get_overdue_vaccines(user: User, clinic_id: int | None, today: date) -> list[dict]:
     overdue_vaccines = (
         _integration_accessible_vaccines_query(user, clinic_id=clinic_id)
         .filter(Vacina.aplicada.is_(False))
@@ -5425,6 +5422,21 @@ def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = N
         .limit(100)
         .all()
     )
+    return [
+        {
+            'id': vaccine.id,
+            'animal_id': vaccine.animal_id,
+            'animal_nome': vaccine.animal.name if vaccine.animal else None,
+            'tutor_nome': vaccine.animal.owner.name if vaccine.animal and getattr(vaccine.animal, 'owner', None) else None,
+            'nome': vaccine.nome,
+            'tipo': vaccine.tipo,
+            'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+        }
+        for vaccine in overdue_vaccines
+    ]
+
+
+def _integration_get_upcoming_returns(user: User, clinic_id: int | None, now: datetime) -> list[dict]:
     upcoming_returns = (
         _integration_accessible_appointments_query(user, clinic_id=clinic_id)
         .filter(Appointment.consulta_id.isnot(None))
@@ -5434,6 +5446,20 @@ def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = N
         .limit(100)
         .all()
     )
+    return [
+        {
+            'id': appointment.id,
+            'animal_id': appointment.animal_id,
+            'animal_nome': appointment.animal.name if appointment.animal else None,
+            'tutor_nome': appointment.animal.owner.name if appointment.animal and getattr(appointment.animal, 'owner', None) else None,
+            'data_hora': _integration_format_datetime(appointment.scheduled_at),
+            'status': appointment.status,
+        }
+        for appointment in upcoming_returns
+    ]
+
+
+def _integration_get_pending_exam_appointments(user: User, clinic_id: int | None) -> list[dict]:
     pending_exam_appointments = (
         _integration_accessible_exam_appointments_query(user, clinic_id=clinic_id)
         .filter(ExamAppointment.status.in_(['pending', 'confirmed']))
@@ -5441,6 +5467,20 @@ def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = N
         .limit(100)
         .all()
     )
+    return [
+        {
+            'id': exam.id,
+            'animal_id': exam.animal_id,
+            'animal_nome': exam.animal.name if exam.animal else None,
+            'tutor_nome': exam.animal.owner.name if exam.animal and getattr(exam.animal, 'owner', None) else None,
+            'data_hora': _integration_format_datetime(exam.scheduled_at),
+            'status': exam.status,
+        }
+        for exam in pending_exam_appointments
+    ]
+
+
+def _integration_get_pending_exam_requests(user: User, clinic_id: int | None) -> list[dict]:
     pending_exam_requests = (
         _integration_accessible_exam_requests_query(user, clinic_id=clinic_id)
         .filter(
@@ -5456,63 +5496,43 @@ def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = N
         .limit(100)
         .all()
     )
+    return [
+        {
+            'id': exam.id,
+            'animal_id': exam.bloco.animal_id if exam.bloco else None,
+            'animal_nome': exam.bloco.animal.name if exam.bloco and exam.bloco.animal else None,
+            'tutor_nome': (
+                exam.bloco.animal.owner.name
+                if exam.bloco and exam.bloco.animal and getattr(exam.bloco.animal, 'owner', None) else None
+            ),
+            'nome': exam.nome,
+            'status': exam.status,
+            'justificativa': exam.justificativa,
+        }
+        for exam in pending_exam_requests
+    ]
+
+
+def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = None):
+    now = utcnow()
+    today = datetime.now(BR_TZ).date()
+
+    overdue_vaccines_formatted = _integration_get_overdue_vaccines(user, clinic_id, today)
+    upcoming_returns_formatted = _integration_get_upcoming_returns(user, clinic_id, now)
+    pending_exam_appointments_formatted = _integration_get_pending_exam_appointments(user, clinic_id)
+    pending_exam_requests_formatted = _integration_get_pending_exam_requests(user, clinic_id)
 
     return {
         'resumo': {
-            'vacinas_atrasadas': len(overdue_vaccines),
-            'retornos_pendentes': len(upcoming_returns),
-            'agendamentos_de_exame_pendentes': len(pending_exam_appointments),
-            'solicitacoes_de_exame_pendentes': len(pending_exam_requests),
+            'vacinas_atrasadas': len(overdue_vaccines_formatted),
+            'retornos_pendentes': len(upcoming_returns_formatted),
+            'agendamentos_de_exame_pendentes': len(pending_exam_appointments_formatted),
+            'solicitacoes_de_exame_pendentes': len(pending_exam_requests_formatted),
         },
-        'vacinas_atrasadas': [
-            {
-                'id': vaccine.id,
-                'animal_id': vaccine.animal_id,
-                'animal_nome': vaccine.animal.name if vaccine.animal else None,
-                'tutor_nome': vaccine.animal.owner.name if vaccine.animal and getattr(vaccine.animal, 'owner', None) else None,
-                'nome': vaccine.nome,
-                'tipo': vaccine.tipo,
-                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
-            }
-            for vaccine in overdue_vaccines
-        ],
-        'retornos_pendentes': [
-            {
-                'id': appointment.id,
-                'animal_id': appointment.animal_id,
-                'animal_nome': appointment.animal.name if appointment.animal else None,
-                'tutor_nome': appointment.animal.owner.name if appointment.animal and getattr(appointment.animal, 'owner', None) else None,
-                'data_hora': _integration_format_datetime(appointment.scheduled_at),
-                'status': appointment.status,
-            }
-            for appointment in upcoming_returns
-        ],
-        'exames_agendados_pendentes': [
-            {
-                'id': exam.id,
-                'animal_id': exam.animal_id,
-                'animal_nome': exam.animal.name if exam.animal else None,
-                'tutor_nome': exam.animal.owner.name if exam.animal and getattr(exam.animal, 'owner', None) else None,
-                'data_hora': _integration_format_datetime(exam.scheduled_at),
-                'status': exam.status,
-            }
-            for exam in pending_exam_appointments
-        ],
-        'exames_solicitados_pendentes': [
-            {
-                'id': exam.id,
-                'animal_id': exam.bloco.animal_id if exam.bloco else None,
-                'animal_nome': exam.bloco.animal.name if exam.bloco and exam.bloco.animal else None,
-                'tutor_nome': (
-                    exam.bloco.animal.owner.name
-                    if exam.bloco and exam.bloco.animal and getattr(exam.bloco.animal, 'owner', None) else None
-                ),
-                'nome': exam.nome,
-                'status': exam.status,
-                'justificativa': exam.justificativa,
-            }
-            for exam in pending_exam_requests
-        ],
+        'vacinas_atrasadas': overdue_vaccines_formatted,
+        'retornos_pendentes': upcoming_returns_formatted,
+        'exames_agendados_pendentes': pending_exam_appointments_formatted,
+        'exames_solicitados_pendentes': pending_exam_requests_formatted,
     }
 
 

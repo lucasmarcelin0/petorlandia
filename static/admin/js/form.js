@@ -607,11 +607,14 @@
             var id = me.attr('id');
             var name = me.attr('name');
 
-            id = prefix + (id !== '' ? '-' + id : '');
-            name = prefix + (name !== '' ? '-' + name : '');
-
-            me.attr('id', id);
-            me.attr('name', name);
+            if (typeof id !== 'undefined') {
+                id = prefix + (id !== '' ? '-' + id : '');
+                me.attr('id', id);
+            }
+            if (typeof name !== 'undefined') {
+                name = prefix + (name !== '' ? '-' + name : '');
+                me.attr('name', name);
+            }
         });
 
         $template.appendTo($fieldList);

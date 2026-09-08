@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
 import zipfile
 from collections import defaultdict
@@ -21,6 +22,8 @@ from sqlalchemy.sql.sqltypes import Numeric
 
 import models
 from extensions import db
+
+logger = logging.getLogger(__name__)
 from models import (
     AccountingAccount,
     BankStatementTransaction,
@@ -129,9 +132,7 @@ def _log(message: str, *args) -> None:
     if has_app_context():
         current_app.logger.info(message, *args)
     else:  # pragma: no cover - only triggered outside flask contexts
-        if args:
-            message = message % args
-        print(message)
+        logger.info(message, *args)
 
 
 def _ensure_decimal(value) -> Decimal:
@@ -379,6 +380,18 @@ def _ensure_datetime(value: Optional[datetime], default_date: date) -> datetime:
     return datetime.combine(default_date, datetime.min.time())
 
 
+def _pre_fetch_classified_transactions(clinic_id: int, month_start: date, origin: str) -> dict[str, ClassifiedTransaction]:
+    """Pre-fetches all classified transactions for a given clinic, month, and origin."""
+    records = ClassifiedTransaction.query.filter_by(
+        clinic_id=clinic_id,
+        month=month_start,
+        origin=origin
+    ).all()
+    return {r.raw_id: r for r in records}
+
+_MISSING = object()
+
+
 def _upsert_classified_transaction(
     clinic_id: int,
     month_start: date,
@@ -390,12 +403,16 @@ def _upsert_classified_transaction(
     value: Decimal,
     category: str,
     subcategory: Optional[str] = None,
+    existing_record: Optional[ClassifiedTransaction] = _MISSING,
 ) -> Tuple[ClassifiedTransaction, bool]:
-    record = (
-        ClassifiedTransaction.query
-        .filter_by(clinic_id=clinic_id, raw_id=raw_id)
-        .one_or_none()
-    )
+    if existing_record is not _MISSING:
+        record = existing_record
+    else:
+        record = (
+            ClassifiedTransaction.query
+            .filter_by(clinic_id=clinic_id, raw_id=raw_id)
+            .one_or_none()
+        )
     attrs = {
         'date': date_value,
         'month': month_start,
@@ -452,21 +469,24 @@ def _classify_service_transactions(
     )
     records: List[ClassifiedTransaction] = []
     changed = False
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "service")
     for row in query.all():
         occurred_at = _ensure_datetime(row.item_date, month_start)
         value = _ensure_decimal(row.valor)
         description = _prepare_description(row.descricao, "Serviço")
         subcategory = _prepare_subcategory(row.servico_nome or row.descricao)
+        raw_id = f"service:{row.item_id}"
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
-            raw_id=f"service:{row.item_id}",
+            raw_id=raw_id,
             date_value=occurred_at,
             origin="service",
             description=description,
             value=value,
             category="receita_servico",
             subcategory=subcategory,
+            existing_record=existing_records.get(raw_id),
         )
         records.append(record)
         changed = changed or record_changed
@@ -504,6 +524,7 @@ def _classify_product_sales(
 
     records: List[ClassifiedTransaction] = []
     changed = False
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "product_sale")
     for row in query.all():
         occurred_at = _ensure_datetime(row.order_date, month_start)
         quantity = Decimal(row.quantity or 0)
@@ -511,16 +532,18 @@ def _classify_product_sales(
         value = unit_price * quantity
         description = _prepare_description(row.item_name or row.product_name, "Venda de produto")
         subcategory = _prepare_subcategory(row.product_category or row.product_name)
+        raw_id = f"product:{row.item_id}"
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
-            raw_id=f"product:{row.item_id}",
+            raw_id=raw_id,
             date_value=occurred_at,
             origin="product_sale",
             description=description,
             value=value,
             category="receita_produto",
             subcategory=subcategory,
+            existing_record=existing_records.get(raw_id),
         )
         records.append(record)
         changed = changed or record_changed
@@ -552,21 +575,24 @@ def _classify_manual_entries(
 
     records: List[ClassifiedTransaction] = []
     changed = False
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "manual")
     for entry in query.all():
         date_value = getattr(entry, date_column.key)
         amount_value = getattr(entry, amount_column.key)
         description = getattr(entry, description_column.key, None) if description_column else None
         value = _ensure_decimal(amount_value)
+        raw_id = f"manual:{getattr(entry, 'id', id(entry))}"
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
-            raw_id=f"manual:{getattr(entry, 'id', id(entry))}",
+            raw_id=raw_id,
             date_value=_ensure_datetime(date_value, month_start),
             origin="manual",
             description=_prepare_description(description, "Lançamento manual"),
             value=value,
             category="receita_servico",
             subcategory=_prepare_subcategory("ajuste_manual"),
+            existing_record=existing_records.get(raw_id),
         )
         records.append(record)
         changed = changed or record_changed
@@ -662,6 +688,7 @@ def _classify_veterinarian_payments(
 
     records: List[ClassifiedTransaction] = []
     changed = False
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "vet_payment")
     for entry in query.all():
         amount_value = getattr(entry, amount_column.key)
         date_value = getattr(entry, date_column.key)
@@ -680,16 +707,18 @@ def _classify_veterinarian_payments(
             else None
         )
         provider_type = determine_pj_payment_subcategory(provider_value)
+        raw_id = f"vet_payment:{raw_value}"
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
-            raw_id=f"vet_payment:{raw_value}",
+            raw_id=raw_id,
             date_value=_ensure_datetime(date_value, month_start),
             origin="vet_payment",
             description=_prepare_description(description, "Pagamento PJ"),
             value=_ensure_decimal(amount_value),
             category="pagamento_pj",
             subcategory=_prepare_subcategory(provider_type),
+            existing_record=existing_records.get(raw_id),
         )
         records.append(record)
         changed = changed or record_changed
@@ -735,6 +764,7 @@ def _classify_expenses(
 
     records: List[ClassifiedTransaction] = []
     changed = False
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "expense")
     for entry in query.all():
         amount_value = getattr(entry, amount_column.key)
         date_value = getattr(entry, date_column.key)
@@ -742,16 +772,18 @@ def _classify_expenses(
         category = _detect_expense_category(entry, kind_column, cogs_flag)
         subcategory = description
         raw_value = getattr(entry, 'id', id(entry))
+        raw_id = f"expense:{raw_value}"
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
-            raw_id=f"expense:{raw_value}",
+            raw_id=raw_id,
             date_value=_ensure_datetime(date_value, month_start),
             origin="expense",
             description=_prepare_description(description, "Despesa"),
             value=_ensure_decimal(amount_value),
             category=category,
             subcategory=_prepare_subcategory(subcategory),
+            existing_record=existing_records.get(raw_id),
         )
         records.append(record)
         changed = changed or record_changed

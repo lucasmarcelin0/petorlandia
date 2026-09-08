@@ -15,3 +15,8 @@
 **Learning:** `services/tratamento.py` parses dosage frequency and duration strings (`parse_intervalo_horas`, `parse_duracao_dias`, `eh_uso_continuo`) repeatedly. Pre-compiling frequency regex patterns at module level and adding an `isascii()` check in `_normalizar` avoids repetitive NFKD decomposition and regex re-compilation in hot execution paths.
 **Action:** Pre-compile frequency/duration regexes in treatment tracking and short-circuit ASCII text before accent stripping.
 
+## 2026-09-08 - Batch Pre-fetching in Financial Classification and Object-Level Bulario Cache
+**Learning:** In `services/finance.py`, single-record `_upsert_classified_transaction` calls inside transaction loops trigger repetitive single SELECT queries (N+1 queries). Pre-fetching all classified transactions per `(clinic_id, month, origin)` upfront into a dict indexed by `raw_id` reduces classification queries by >90%. Similarly, parsing complex JSON structures like `_produtos_vetsmart` in `services/bulario.py` benefits significantly from attaching a lazy in-memory cache `_produtos_vetsmart_cache` on the model instance.
+**Action:** Always pre-fetch existing records by batch key prior to upsert loops and cache parsed JSON structures on model instances during request lifecycles.
+
+
