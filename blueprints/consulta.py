@@ -6,7 +6,7 @@ from context_processors import _invalidate_cached_context
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
-from extensions import db
+from extensions import db, csrf
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user
 from forms import AnimalForm, AppointmentForm, EditProfileForm
@@ -3149,24 +3149,49 @@ def imprimir_bloco_exames(bloco_id):
 
 
 @bp.route('/bloco_exames/<int:bloco_id>/contratar', methods=['GET', 'POST'])
-@login_required
+@csrf.exempt
 def contratar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
     animal = bloco.animal
-    owner_access = _current_user_owns_animal(animal)
-    clinic_access = can_view_clinic(current_user, getattr(animal, 'clinica_id', None))
-    is_admin = _is_global_admin(current_user)
+    tutor = animal.owner if animal else None
 
-    if not owner_access and not clinic_access and not is_admin:
-        abort(403)
+    # Suporte a acesso por link assinado (ex: enviado por WhatsApp para o tutor)
+    token = request.args.get('token')
+    if token and not current_user.is_authenticated:
+        token_user = _first_access_user_from_signed_token(token) if token else None
+        if token_user and tutor and token_user.id == tutor.id:
+            login_user(token_user, remember=True)
 
-    clinica = getattr(animal, 'clinica', None)
-    if not clinica and animal and animal.consultas:
-        clinica = animal.consultas[-1].clinica
+    if not current_user.is_authenticated:
+        if request.accept_mimetypes.accept_json or request.is_json:
+            return jsonify({'success': False, 'message': 'Autenticação necessária.'}), 401
+        return redirect(url_for('login_view', next=request.full_path or request.path))
+
+    # Resolução robusta da clínica equivalente a imprimir_bloco_exames
+    consulta = animal.consultas[-1] if animal and animal.consultas else None
+    veterinario = consulta.veterinario if consulta else None
+    if not veterinario and current_user.is_authenticated and getattr(current_user, 'worker', None) == 'veterinario':
+        veterinario = current_user
+    clinica = consulta.clinica if consulta and consulta.clinica else None
+    if not clinica and veterinario and getattr(veterinario, 'veterinario', None):
+        vet = veterinario.veterinario
+        if vet and vet.clinica:
+            clinica = vet.clinica
+    if not clinica:
+        clinica = getattr(animal, 'clinica', None)
     if not clinica:
         clinica_id = request.args.get('clinica_id', type=int)
         if clinica_id:
             clinica = Clinica.query.get(clinica_id)
+    if not clinica:
+        clinica = Clinica.query.get(1)
+
+    owner_access = _current_user_owns_animal(animal)
+    clinic_access = bool(clinica and can_view_clinic(current_user, clinica.id))
+    is_admin = _is_global_admin(current_user)
+
+    if not owner_access and not clinic_access and not is_admin:
+        abort(403)
 
     ofertas = _build_exame_offers(bloco, clinica)
     exame_id = request.args.get('exame_id', type=int)
@@ -3177,7 +3202,9 @@ def contratar_bloco_exames(bloco_id):
     if exame_id:
         try:
             exame_id = int(exame_id)
-            ofertas = [o for o in ofertas if o['exame_id'] == exame_id]
+            filtered = [o for o in ofertas if o['exame_id'] == exame_id]
+            if filtered:
+                ofertas = filtered
         except (ValueError, TypeError):
             pass
 

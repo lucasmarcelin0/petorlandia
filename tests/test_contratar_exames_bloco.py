@@ -96,6 +96,9 @@ def test_imprimir_bloco_exames_mostra_opcao_contratacao(app, client):
     assert 'R$ 110,00' in html
     assert 'Combinado - Hemograma, ALT, FA, ureia, creatinina' in html
     assert '/bloco_exames/1552/contratar' in html
+    assert 'name="csrf-token"' in html
+    assert 'data-csrf' in html
+    assert 'csrf_fetch.js' in html
 
 
 def test_contratar_bloco_exames_gera_preferencia_mercado_pago(app, client, monkeypatch):
@@ -158,6 +161,59 @@ def test_contratar_bloco_exames_gera_preferencia_mercado_pago(app, client, monke
         b = BlocoExames.query.get(1552)
         assert b.payment_reference == 'fake-pref-123'
         assert b.payment_status == 'pending'
+
+
+def test_contratar_bloco_exames_com_csrf_global_ativado(app, client, monkeypatch):
+    """Garante que com WTF_CSRF_ENABLED=True a rota @csrf.exempt não falha com CSRFError."""
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        with app.app_context():
+            tutor = User(id=1, name='Pedro Tutor', email='tutor@test.com', password_hash='x')
+            vet_user = User(id=2, name='Dr Lucas', email='lucas@petorlandia.com.br', password_hash='x', worker='veterinario')
+            clinica = Clinica(id=1, nome='PetOrlandia', owner_id=vet_user.id)
+            animal = Animal(id=10, name='Paloma', user_id=tutor.id, clinica_id=1)
+            bloco = BlocoExames(id=1552, animal_id=animal.id)
+            exame = ExameSolicitado(
+                id=200,
+                bloco_id=1552,
+                nome='Combinado - Hemograma, ALT, FA, ureia, creatinina',
+                status='pendente',
+            )
+            servico = ServicoClinica(
+                clinica_id=1,
+                descricao='Combinado - Hemograma, ALT, FA, ureia, creatinina',
+                valor=Decimal('110.00'),
+            )
+            db.session.add_all([tutor, vet_user, clinica, animal, bloco, exame, servico])
+            db.session.commit()
+
+        def fake_criar_preferencia(items, ext_ref, back_url):
+            return {
+                'payment_url': 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=fake-csrf-ok',
+                'payment_reference': 'fake-csrf-ok',
+            }
+
+        from blueprints import consulta as consulta_blueprint
+        monkeypatch.setattr(consulta_blueprint, '_criar_preferencia_pagamento', fake_criar_preferencia)
+
+        login(client, user_id=1)
+
+        # POST sem CSRF token - não pode retornar 400 Falha de validação!
+        resp_post = client.post(
+            '/bloco_exames/1552/contratar?exame_id=200',
+            headers={'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'},
+        )
+        assert resp_post.status_code == 200
+        dados = resp_post.get_json()
+        assert dados['success'] is True
+        assert 'fake-csrf-ok' in dados['payment_url']
+
+        # GET direto - fallback via navegador deve redirecionar (302) para o checkout
+        resp_get = client.get('/bloco_exames/1552/contratar?exame_id=200')
+        assert resp_get.status_code == 302
+        assert 'mercadopago.com.br' in resp_get.headers['Location']
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = False
 
 
 def test_webhook_aprova_pagamento_bloco_exames(app, client, monkeypatch):

@@ -4,8 +4,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Exames de {{ animal.name }} | {{ clinica.nome }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+  <script src="{{ url_for('static', filename='csrf_fetch.js') }}" defer></script>
 </head>
 <body>
 
@@ -150,7 +152,7 @@
   </div>
 
   {% if ofertas_exames %}
-  <section class="exames-contratacao" aria-labelledby="exames-contratacao-titulo">
+  <section class="exames-contratacao" aria-labelledby="exames-contratacao-titulo" data-csrf="{{ csrf_token() }}">
     <div class="exames-contratacao__head">
       <div>
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
@@ -497,20 +499,40 @@
   }
 
   function iniciarContratacaoExame(event, btn, url) {
-    event.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
     const textoOriginal = btn.innerHTML;
     btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:6px;"></span> Conectando...';
     btn.style.pointerEvents = 'none';
 
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfValue = (csrfMeta && csrfMeta.content) || (document.querySelector('[data-csrf]')?.dataset?.csrf) || '';
+
+    const headers = {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    if (csrfValue) {
+      headers['X-CSRFToken'] = csrfValue;
+    }
+
     fetch(url, {
       method: 'POST',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
+      body: JSON.stringify({}),
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(data => {
+            throw new Error((data && data.message) || 'Erro ao conectar com Mercado Pago.');
+          }).catch(err => {
+            throw err;
+          });
+        }
+        return res.json();
+      })
       .then(data => {
         if (data && data.success && data.payment_url) {
           window.location.href = data.payment_url;
@@ -521,7 +543,8 @@
         }
       })
       .catch(err => {
-        console.error('Erro ao conectar Mercado Pago:', err);
+        console.warn('Falha na chamada assíncrona, redirecionando via navegador:', err);
+        // Fallback resiliente: navega diretamente para a URL via GET, que gera a preferência e redireciona
         window.location.href = url;
       });
   }

@@ -13987,6 +13987,7 @@ from blueprints.consulta import (  # noqa: E402,F401
     historico_orcamentos_partial,
     historico_prescricoes_partial,
     imprimir_bloco_exames,
+    contratar_bloco_exames,
     imprimir_bloco_orcamento,
     imprimir_bloco_prescricao,
     imprimir_consulta,
