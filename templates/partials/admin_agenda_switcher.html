@@ -1,6 +1,6 @@
 {% set _agenda_veterinarios = agenda_veterinarios|default([]) %}
 {% set _agenda_colaboradores = agenda_colaboradores|default([]) %}
-{% if current_user.role == 'admin' and (_agenda_veterinarios or _agenda_colaboradores) %}
+{% if current_user.role == 'admin' and admin_other_agendas_active and (_agenda_veterinarios or _agenda_colaboradores) %}
   {% set _form_classes = switcher_form_classes|default('d-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap') %}
   {% set _select_classes = switcher_select_classes|default('form-select') %}
   {% set _select_style = switcher_select_style|default('') %}
@@ -17,6 +17,7 @@
       <input type="hidden" name="{{ param }}" value="{{ value }}">
       {% endif %}
     {% endfor %}
+    <input type="hidden" name="other_agendas" value="1">
     <input type="hidden" name="view_as" value="{{ admin_selected_view if admin_selected_view in ['veterinario', 'colaborador', 'tutor'] else '' }}" data-switcher-view>
     <input type="hidden" name="veterinario_id" value="{{ admin_selected_veterinario_id or '' }}" data-switcher-vet>
     <input type="hidden" name="colaborador_id" value="{{ admin_selected_colaborador_id or '' }}" data-switcher-colab>
@@ -44,6 +45,9 @@
       </optgroup>
       {% endif %}
     </select>
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-admin-other-agendas-toggle data-active="true" title="Voltar para minha agenda (desativar multi-agendas)">
+      <i class="fa-solid fa-lock me-1"></i>Fechar
+    </button>
   </form>
   <script>
     (function() {
@@ -91,28 +95,6 @@
           }
           return 'adminAgendaSelection:' + String(rawUserId);
         })();
-        const defaultSelection = formDataset.adminDefaultSelection || '';
-
-        function findOptionByValue(value) {
-          if (value === undefined || value === null) {
-            return null;
-          }
-          const stringValue = String(value);
-          return Array.from(select.options || []).find(function(option) {
-            return option.value === stringValue;
-          }) || null;
-        }
-
-        function readStoredSelection() {
-          if (!storageKey || typeof window === 'undefined' || !window.localStorage) {
-            return null;
-          }
-          try {
-            return window.localStorage.getItem(storageKey);
-          } catch (error) {
-            return null;
-          }
-        }
 
         function persistSelection(value) {
           if (!storageKey || typeof window === 'undefined' || !window.localStorage) {
@@ -129,40 +111,8 @@
           }
         }
 
-        function applyInitialSelection() {
-          let storedValue = readStoredSelection();
-          const hasDefault = !!(defaultSelection && findOptionByValue(defaultSelection));
-          if (!storedValue && hasDefault) {
-            storedValue = defaultSelection;
-          } else if (storedValue && !findOptionByValue(storedValue)) {
-            storedValue = hasDefault ? defaultSelection : '';
-            persistSelection(storedValue);
-          }
-          if (storedValue && storedValue !== select.value && findOptionByValue(storedValue)) {
-            select.value = storedValue;
-            updateHiddenInputs(storedValue);
-            if (typeof window !== 'undefined') {
-              const params = new URLSearchParams(window.location.search || '');
-              const targetView = viewInput.value || '';
-              const targetVet = vetInput.value || '';
-              const targetColab = colabInput.value || '';
-              const paramView = params.get('view_as') || '';
-              const paramVet = params.get('veterinario_id') || '';
-              const paramColab = params.get('colaborador_id') || '';
-              if (paramView !== targetView || paramVet !== targetVet || paramColab !== targetColab) {
-                persistSelection(storedValue);
-                form.submit();
-                return;
-              }
-            }
-            persistSelection(storedValue);
-          } else if (hasDefault && storedValue !== defaultSelection) {
-            persistSelection(defaultSelection);
-          }
-        }
-
         updateHiddenInputs(select.value);
-        applyInitialSelection();
+
         select.addEventListener('change', function() {
           updateHiddenInputs(this.value);
           persistSelection(this.value);

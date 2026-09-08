@@ -176,3 +176,104 @@ def test_admin_collaborator_post_preserves_query_and_lists_new_appointment(clien
     assert follow_resp.status_code == 200
     assert b'Nova Consulta' in follow_resp.data
     assert f'data-appointment-id="{appointment_id}"'.encode() in follow_resp.data
+
+
+def test_admin_vet_defaults_to_own_agenda_and_other_agendas_deactivated(client, monkeypatch):
+    with flask_app.app_context():
+        setup_data()
+        clinic = Clinica.query.first()
+        admin_vet_user = User(id=99, name='Dra Admin', email='dra_admin@test', role='admin', worker='veterinario')
+        admin_vet_user.set_password('x')
+        db.session.add(admin_vet_user)
+        db.session.commit()
+        admin_vet = Veterinario(id=99, user_id=admin_vet_user.id, clinica_id=clinic.id, crmv='9999')
+        db.session.add(admin_vet)
+        db.session.commit()
+        admin_vet_id = admin_vet.id
+        admin_user_id = admin_vet_user.id
+
+    fake_admin_vet = type(
+        'U',
+        (),
+        {
+            'id': admin_user_id,
+            'role': 'admin',
+            'worker': 'veterinario',
+            'is_authenticated': True,
+            'clinica_id': 1,
+            'name': 'Dra Admin',
+            'veterinario': type('V', (), {'id': admin_vet_id, 'user': type('VU', (), {'name': 'Dra Admin'})(), 'clinica_id': 1, 'specialty_list': []})(),
+        },
+    )()
+
+    login(monkeypatch, fake_admin_vet)
+
+    # 1. Acesso padrão /appointments sem parâmetros: abre diretamente a agenda do próprio admin vet
+    resp = client.get('/appointments')
+    assert resp.status_code == 200
+    assert b'Agenda \xe2\x80\x93 Dra Admin' in resp.data or b'Dra Admin' in resp.data
+    # O seletor de outras agendas deve estar desativado por padrão
+    assert b'admin-agenda-picker' not in resp.data
+    # O gatilho do Easter Egg no ícone deve estar presente
+    assert b'data-admin-other-agendas-toggle' in resp.data
+    assert b'data-active="false"' in resp.data
+
+    # 2. Ativação do modo multi-agendas via parâmetro other_agendas=1
+    resp_active = client.get('/appointments?other_agendas=1')
+    assert resp_active.status_code == 200
+    assert b'data-active="true"' in resp_active.data
+    assert b'Multi-agendas' in resp_active.data
+    # Agora o seletor de outras agendas deve aparecer
+    assert b'data-admin-agenda-switcher' in resp_active.data
+
+    # 3. Desativação via other_agendas=0
+    resp_inactive = client.get('/appointments?other_agendas=0')
+    assert resp_inactive.status_code == 200
+    assert b'data-active="false"' in resp_inactive.data
+    assert b'admin-agenda-picker' not in resp_inactive.data
+
+
+def test_toggle_other_agendas_api_endpoint(client, monkeypatch):
+    with flask_app.app_context():
+        setup_data()
+        admin = User.query.filter_by(role='admin').first()
+        admin_id = admin.id
+
+    fake_admin = type(
+        'U',
+        (),
+        {
+            'id': admin_id,
+            'role': 'admin',
+            'worker': None,
+            'is_authenticated': True,
+            'clinica_id': None,
+            'name': 'Admin',
+        },
+    )()
+
+    login(monkeypatch, fake_admin)
+
+    # Chamada POST para alternar para ativo
+    resp = client.post(
+        '/api/admin/toggle_other_agendas',
+        json={'active': True},
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp.status_code == 200
+    json_data = resp.get_json()
+    assert json_data['success'] is True
+    assert json_data['active'] is True
+    assert 'other_agendas=1' in json_data['redirect_url']
+
+    # Chamada POST para alternar para inativo
+    resp2 = client.post(
+        '/api/admin/toggle_other_agendas',
+        json={'active': False},
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp2.status_code == 200
+    json_data2 = resp2.get_json()
+    assert json_data2['success'] is True
+    assert json_data2['active'] is False
+    assert 'other_agendas=0' in json_data2['redirect_url']

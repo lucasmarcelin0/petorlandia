@@ -556,3 +556,36 @@
   font-weight: 700;
   text-transform: uppercase;
 }
+
+/* Easter Egg: Alternância do modo multi-agendas para administradores */
+.admin-agenda-toggle-wrapper {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  border-radius: 8px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  vertical-align: middle;
+}
+
+.admin-agenda-toggle-wrapper:hover {
+  background-color: rgba(13, 110, 253, 0.09);
+  transform: scale(1.05);
+}
+
+.admin-agenda-toggle-wrapper:focus-visible {
+  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline-offset: 2px;
+}
+
+.admin-agenda-easter-egg-icon {
+  transition: color 0.25s ease, transform 0.2s ease;
+}
+
+.admin-agenda-easter-egg-icon--active {
+  color: #198754 !important;
+  filter: drop-shadow(0 0 2px rgba(25, 135, 84, 0.4));
+}
+

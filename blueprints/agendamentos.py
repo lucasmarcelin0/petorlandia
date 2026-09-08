@@ -15,6 +15,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user, login_required
@@ -482,8 +483,35 @@ def appointments():
     view_as = request.args.get('view_as')
     worker = getattr(current_user, 'worker', None)
     is_vet = is_veterinarian(current_user)
-    if is_vet and current_user.role != 'admin':
-        worker = 'veterinario'
+    admin_vet = getattr(current_user, 'veterinario', None) if getattr(current_user, 'role', None) == 'admin' else None
+
+    # O acesso da admin a outras agendas é normalmente desativado por padrão
+    admin_other_agendas_active = False
+    if current_user.role == 'admin':
+        other_agendas_arg = request.args.get('other_agendas')
+        if other_agendas_arg == '1':
+            admin_other_agendas_active = True
+            session['admin_other_agendas'] = True
+        elif other_agendas_arg == '0':
+            admin_other_agendas_active = False
+            session['admin_other_agendas'] = False
+        else:
+            admin_other_agendas_active = bool(
+                session.get('admin_other_agendas')
+                or request.cookies.get('admin_other_agendas') == '1'
+            )
+        # Se a admin explicitamente requisita outro profissional pela URL, ativa multi-agendas
+        vet_arg = request.args.get('veterinario_id', type=int)
+        colab_arg = request.args.get('colaborador_id', type=int)
+        if colab_arg or (vet_arg and (not admin_vet or vet_arg != getattr(admin_vet, 'id', None))):
+            admin_other_agendas_active = True
+
+    if is_vet:
+        if current_user.role != 'admin':
+            worker = 'veterinario'
+        elif not view_as:
+            # Admin que é veterinário(a) abre diretamente a sua própria agenda
+            worker = 'veterinario'
     if worker == 'veterinario' and not is_vet:
         worker = 'tutor'
     clinic_repo = ClinicRepository()
@@ -519,7 +547,7 @@ def appointments():
     def _vet_clinic_ids(vet):
         return calendar_access_scope.get_veterinarian_clinic_ids(vet)
 
-    if current_user.role == 'admin':
+    if current_user.role == 'admin' and admin_other_agendas_active:
         agenda_users = User.query.order_by(User.name).all()
         agenda_veterinarios = (
             Veterinario.query.join(User).order_by(User.name).all()
@@ -529,7 +557,7 @@ def appointments():
             .order_by(User.name)
             .all()
         )
-        default_vet = getattr(current_user, 'veterinario', None)
+        default_vet = admin_vet
         if default_vet and getattr(default_vet, 'id', None):
             admin_default_selection_value = f'veterinario:{default_vet.id}'
 
@@ -563,6 +591,8 @@ def appointments():
                     veterinario = Veterinario.query.get_or_404(
                         veterinario_id_arg
                     )
+            elif admin_vet and getattr(admin_vet, 'id', None):
+                veterinario = admin_vet
             elif agenda_veterinarios:
                 veterinario = agenda_veterinarios[0]
             else:
@@ -590,7 +620,7 @@ def appointments():
                     'clinic_ids': _vet_clinic_ids(veterinario),
                 }
             ]
-        include_colleagues = bool(clinic_ids)
+        include_colleagues = bool(clinic_ids) and (current_user.role != 'admin' or admin_other_agendas_active)
         if include_colleagues:
             colleagues_source = []
             if current_user.role == 'admin' and agenda_veterinarios:
@@ -645,7 +675,7 @@ def appointments():
             query_args['veterinario_id'] = veterinario.id
         appointments_url = url_for('appointments', **query_args)
         schedule_form = VetScheduleForm(prefix='schedule')
-        if _is_admin():
+        if _is_admin() and admin_other_agendas_active:
             vets_for_choices = agenda_veterinarios or Veterinario.query.all()
         else:
             vets_for_choices = [veterinario]
@@ -670,48 +700,55 @@ def appointments():
                 prefix='appointment',
                 require_clinic_scope=True,
             )
-            clinic_vets = (
-                Veterinario.query.filter(
-                    Veterinario.clinica_id.in_(clinic_ids)
-                ).all()
-            ) if clinic_ids else []
-            for clinica in associated_clinics:
-                owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
-                if owner_vet and getattr(owner_vet, 'id', None) is not None:
-                    clinic_vets.append(owner_vet)
-            specialists = []
-            for clinica in associated_clinics:
-                specialists.extend(
-                    vet
-                    for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
-                    if getattr(vet, 'id', None) is not None
-                )
-            combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
-
-            def _vet_sort_key(vet):
-                name = getattr(getattr(vet, 'user', None), 'name', '') or ''
-                return name.lower()
-
-            combined_vets = sorted(
-                (
-                    vet
-                    for vet in combined_vets
-                    if getattr(vet, 'id', None) is not None
-                ),
-                key=_vet_sort_key,
-            )
-            combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
-            if not combined_vets:
+            if current_user.role == 'admin' and not admin_other_agendas_active:
+                clinic_vets = [veterinario]
+                specialists = []
                 combined_vets = [veterinario]
+                clinic_vet_ids = {veterinario.id}
+                specialist_ids = set()
+            else:
+                clinic_vets = (
+                    Veterinario.query.filter(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ).all()
+                ) if clinic_ids else []
+                for clinica in associated_clinics:
+                    owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
+                    if owner_vet and getattr(owner_vet, 'id', None) is not None:
+                        clinic_vets.append(owner_vet)
+                specialists = []
+                for clinica in associated_clinics:
+                    specialists.extend(
+                        vet
+                        for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
+                        if getattr(vet, 'id', None) is not None
+                    )
+                combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
 
-            clinic_vet_ids = {
-                getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
-            }
-            specialist_ids = {
-                getattr(vet, 'id', None)
-                for vet in specialists
-                if getattr(vet, 'id', None)
-            }
+                def _vet_sort_key(vet):
+                    name = getattr(getattr(vet, 'user', None), 'name', '') or ''
+                    return name.lower()
+
+                combined_vets = sorted(
+                    (
+                        vet
+                        for vet in combined_vets
+                        if getattr(vet, 'id', None) is not None
+                    ),
+                    key=_vet_sort_key,
+                )
+                combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
+                if not combined_vets:
+                    combined_vets = [veterinario]
+
+                clinic_vet_ids = {
+                    getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
+                }
+                specialist_ids = {
+                    getattr(vet, 'id', None)
+                    for vet in specialists
+                    if getattr(vet, 'id', None)
+                }
 
             def _vet_label(vet):
                 base_name = getattr(getattr(vet, 'user', None), 'name', None)
@@ -1474,6 +1511,7 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            admin_other_agendas_active=admin_other_agendas_active,
             horarios_grouped=horarios_grouped,
             appointments_pending_consults=appointments_pending_consults,
             pending_consults_for_me=pending_consults_for_me,
@@ -1772,6 +1810,7 @@ def appointments():
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
             admin_default_selection_value=admin_default_selection_value,
+            admin_other_agendas_active=admin_other_agendas_active,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
             nfse_documents_by_appointment=nfse_documents_by_appointment,
@@ -2744,4 +2783,37 @@ def animal_exam_appointments(animal_id):
         .all()
     )
     return render_template('partials/historico_exam_appointments.html', appointments=appointments)
+
+
+@bp.route("/api/admin/toggle_other_agendas", methods=["GET", "POST"])
+@login_required
+def toggle_other_agendas():
+    if not _is_admin():
+        abort(403)
+    current_active = bool(session.get('admin_other_agendas') or request.cookies.get('admin_other_agendas') == '1')
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        new_active = data.get('active', not current_active)
+    else:
+        target = request.args.get('active')
+        new_active = (target == '1') if target is not None else not current_active
+    session['admin_other_agendas'] = bool(new_active)
+
+    redirect_url = url_for('appointments', other_agendas='1' if new_active else '0')
+    wants_json = request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+    if wants_json:
+        response = jsonify({
+            'success': True,
+            'active': bool(new_active),
+            'redirect_url': redirect_url,
+            'message': 'Modo multi-agendas ativado! 🔓' if new_active else 'Modo agenda pessoal ativado! 🔒',
+        })
+    else:
+        response = redirect(redirect_url)
+
+    if new_active:
+        response.set_cookie('admin_other_agendas', '1', max_age=86400, samesite='Lax')
+    else:
+        response.delete_cookie('admin_other_agendas', samesite='Lax')
+    return response
 

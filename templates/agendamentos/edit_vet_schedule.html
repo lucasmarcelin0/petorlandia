@@ -48,7 +48,24 @@
     <div class="consultation-hero__content">
       <p class="consultation-eyebrow mb-2">Agenda Veterinária</p>
       <h2 id="vet-schedule-title" class="consultation-title mb-1">
-        <i class="bi bi-calendar4-week text-primary me-2"></i>Agenda – {{ veterinario.user.name }}
+        {% if current_user.role == 'admin' %}
+        <span class="admin-agenda-toggle-wrapper"
+              id="adminAgendaEasterEgg"
+              data-admin-other-agendas-toggle
+              data-active="{{ 'true' if admin_other_agendas_active else 'false' }}"
+              role="button"
+              tabindex="0"
+              title="{{ 'Acesso a outras agendas ativo (clique no ícone para desativar)' if admin_other_agendas_active else 'Clique no ícone da agenda para ativar acesso a outras agendas' }}">
+          <i class="bi bi-calendar4-week text-primary me-2 admin-agenda-easter-egg-icon{% if admin_other_agendas_active %} text-success admin-agenda-easter-egg-icon--active{% endif %}"></i>
+          {% if admin_other_agendas_active %}
+          <span class="badge bg-warning text-dark me-2 align-middle" style="font-size: 0.68rem; font-weight: 600;">
+            <i class="fa-solid fa-unlock me-1"></i>Multi-agendas
+          </span>
+          {% endif %}
+        </span>
+        {% else %}
+        <i class="bi bi-calendar4-week text-primary me-2"></i>
+        {% endif %}Agenda – {{ veterinario.user.name }}
       </h2>
       <small class="consultation-subtitle text-muted">Calendário, consultas, exames e horários em um só lugar.</small>
       {% if appointment_form %}
@@ -937,6 +954,9 @@
     })();
   </script>
 
+  {% if current_user.role == 'admin' %}
+  <script type="module" src="{{ url_for('static', filename='admin_agenda_toggle.js') }}"></script>
+  {% endif %}
   <script type="module">
     import { setupAppointmentsCalendarSummary } from "{{ url_for('static', filename='appointments_calendar_summary.js') }}";
     import { setupAgendaAjax } from "{{ url_for('static', filename='agenda_ajax.js') }}";
