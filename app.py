@@ -368,6 +368,7 @@ _inventory_movement_columns_checked = False
 _clinic_notifications_table_checked = False
 _plantao_modelos_table_checked = False
 _professional_services_table_checked = False
+_exame_modelo_columns_checked = False
 
 
 PLATFORM_SERVICE_FEE_RATE = Decimal("0.10")
@@ -465,6 +466,90 @@ def _seed_robson_professional_services_if_needed() -> None:
     except Exception:
         db.session.rollback()
         current_app.logger.exception('Falha ao semear serviços profissionais do Robson')
+
+
+def _ensure_exame_modelo_columns() -> None:
+    """Ensure clinica_id column exists on exame_modelo table defensively."""
+    global _exame_modelo_columns_checked
+    if _exame_modelo_columns_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table("exame_modelo"):
+            cols = {col["name"] for col in inspector.get_columns("exame_modelo")}
+            if "clinica_id" not in cols:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE exame_modelo ADD COLUMN clinica_id INTEGER REFERENCES clinica(id) ON DELETE SET NULL"))
+    except Exception:
+        pass
+
+    _exame_modelo_columns_checked = True
+
+
+def _seed_maisse_professional_services_if_needed() -> None:
+    """Seed Maisse's combined exam service for Orlandia partner operations."""
+    _ensure_professional_services_table()
+    _ensure_exame_modelo_columns()
+    try:
+        from models import Veterinario, User, ProfessionalService, ServicoClinica, ExameModelo
+        maisse = (
+            Veterinario.query
+            .join(User, Veterinario.user_id == User.id)
+            .filter(func.lower(User.name).like('%maisse%'))
+            .first()
+        )
+        if not maisse:
+            return
+
+        title = 'Combinado - Hemograma, ALT, FA, ureia, creatinina'
+        existing_ps = ProfessionalService.query.filter_by(
+            veterinario_id=maisse.id,
+            title=title,
+        ).first()
+
+        if not existing_ps:
+            db.session.add(
+                ProfessionalService(
+                    veterinario_id=maisse.id,
+                    service_type='exame',
+                    title=title,
+                    description='Serviço laboratorial prestado pela Dra. Maisse: Hemograma completo, ALT, FA, ureia e creatinina.',
+                    audience='both',
+                    mode='clinica',
+                    duration_minutes=30,
+                    clinic_business_price=Decimal('100.00'),
+                    tutor_price=Decimal('110.00'),
+                    active=True,
+                )
+            )
+
+        # Vincular ExameModelo do Combinado à Clínica PetOrlandia (ID 1)
+        exame_m = ExameModelo.query.filter(
+            func.lower(ExameModelo.nome).like('%combinado%hemograma%')
+        ).first()
+        if exame_m and exame_m.clinica_id != 1:
+            exame_m.clinica_id = 1
+
+        # Garantir ServicoClinica da PetOrlandia (ID 1)
+        servico = ServicoClinica.query.filter_by(
+            clinica_id=1,
+            descricao=title,
+        ).first()
+        if not servico:
+            db.session.add(
+                ServicoClinica(
+                    clinica_id=1,
+                    descricao=title,
+                    valor=Decimal('110.00'),
+                    procedure_code='LAB-MAISSE',
+                )
+            )
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falha ao semear serviço da Maisse')
 
 
 def _ensure_inventory_threshold_columns() -> None:
@@ -2158,6 +2243,7 @@ def _service_visible_for_audience(service, audience):
 
 def _professional_service_query(*, audience=None, service_type=None, city=None, active_only=True):
     _seed_robson_professional_services_if_needed()
+    _seed_maisse_professional_services_if_needed()
     query = (
         ProfessionalService.query
         .join(Veterinario, ProfessionalService.veterinario_id == Veterinario.id)

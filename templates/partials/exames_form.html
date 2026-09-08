@@ -8,10 +8,26 @@
       <p class="mb-0 text-muted">Monte o bloco de exames e acompanhe solicita&ccedil;&otilde;es e agendamentos.</p>
     </div>
   </div>
-  <h5 class="mb-3">Solicitação de Exames</h5>
+  <!-- Ações e Atalhos Rápidos de Exames -->
+  <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <button type="button" class="btn btn-outline-primary" onclick="toggleNovoExame()">➕ Novo exame</button>
+  </div>
 
-  <!-- Botão para cadastrar novo exame -->
-  <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovoExame()">➕ Novo exame</button>
+  <!-- Painel de Exames Frequentes / Sugeridos (estilo medicamentos) -->
+  <div id="exames-frequentes-container" class="border rounded p-3 mb-3 bg-light d-none">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <small id="exames-frequentes-titulo" class="text-muted fw-semibold text-uppercase" style="font-size:.72rem;letter-spacing:.05em;">
+        <i class="bi bi-stars me-1 text-warning"></i>Atalhos Rápidos de Exames
+      </small>
+      <small class="text-muted" style="font-size:.75rem;">Clique para preencher</small>
+    </div>
+    <div id="exames-frequentes-chips" class="d-flex flex-wrap gap-2">
+      <span class="text-muted" style="font-size:.85rem;">
+        <span class="spinner-border spinner-border-sm me-1"></span>Carregando atalhos...
+      </span>
+    </div>
+  </div>
+
   <div id="novo-exame-container" class="border rounded p-3 mb-3 bg-light d-none">
     <div class="mb-2 position-relative">
       <label for="buscar-exame-novo" class="form-label">Pesquisar exame existente</label>
@@ -195,11 +211,65 @@
     }
   }
 
+    const clinicIdExames = {{ ((clinica_id if clinica_id is defined and clinica_id else (consulta.clinica_id if consulta and consulta.clinica_id else (animal.clinica_id if animal and animal.clinica_id else None))) or '')|tojson }};
+
+    function carregarExamesFrequentes() {
+      const qs = new URLSearchParams();
+      {% if animal %}qs.set('animal_id', '{{ animal.id }}');{% endif %}
+      if (clinicIdExames) qs.set('clinica_id', clinicIdExames);
+
+      fetch(`/exames_frequentes?${qs.toString()}`)
+        .then(r => r.json())
+        .then(lista => {
+          const container = document.getElementById('exames-frequentes-chips');
+          const painel = document.getElementById('exames-frequentes-container');
+          if (!container) return;
+          container.innerHTML = '';
+          if (!lista || !lista.length) {
+            painel?.classList.add('d-none');
+            return;
+          }
+          painel?.classList.remove('d-none');
+          lista.forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            const isCombo = item.nome.toLowerCase().includes('combinado');
+            btn.className = isCombo
+              ? 'btn btn-sm btn-primary rounded-pill shadow-sm fw-semibold'
+              : 'btn btn-sm btn-outline-secondary rounded-pill';
+            btn.style.cssText = 'font-size:.82rem;padding:4px 12px;';
+            btn.title = item.nome;
+            btn.innerHTML = (isCombo ? '<i class="fa-solid fa-flask-vial me-1"></i>' : '<i class="fa-solid fa-vial me-1"></i>') + item.nome;
+            btn.addEventListener('click', () => {
+              selecionarExameFrequente(item);
+            });
+            container.appendChild(btn);
+          });
+        })
+        .catch(() => {});
+    }
+
+    function selecionarExameFrequente(item) {
+      if (!item) return;
+      if (inputExame) {
+        inputExame.value = item.nome;
+        inputExame.classList.add('border-primary');
+        setTimeout(() => inputExame.classList.remove('border-primary'), 1000);
+      }
+      const justEl = document.getElementById('justificativa-exame');
+      if (justEl) {
+        justEl.value = item.justificativa || '';
+      }
+      mostrarFeedback(`Exame selecionado: ${item.nome}`);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       inputExame = document.getElementById('nome-exame');
       sugestoes = document.getElementById('sugestoes-exames');
       const buscarNovo = document.getElementById('buscar-exame-novo');
       const sugestoesNovo = document.getElementById('sugestoes-exame-novo');
+
+      carregarExamesFrequentes();
 
       const toggleAgendarBtn = document.getElementById('toggle-agendar-exame');
       const agendarDiv = document.getElementById('agendar-exame');
@@ -209,7 +279,6 @@
         });
       }
 
-
       inputExame.addEventListener('input', function () {
         const query = this.value;
         if (query.length < 2) {
@@ -217,33 +286,37 @@
           return;
         }
 
-      fetch(`/buscar_exames?q=${encodeURIComponent(query)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
-        .then(res => res.json())
-        .then(data => {
-          sugestoes.innerHTML = '';
-          if (data.length) {
-            data.forEach(item => {
+        const qs = new URLSearchParams({ q: query });
+        {% if animal %}qs.set('animal_id', '{{ animal.id }}');{% endif %}
+        if (clinicIdExames) qs.set('clinica_id', clinicIdExames);
+
+        fetch(`/buscar_exames?${qs.toString()}`)
+          .then(res => res.json())
+          .then(data => {
+            sugestoes.innerHTML = '';
+            if (data.length) {
+              data.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action';
+                li.textContent = item.nome;
+                li.onclick = () => {
+                  inputExame.value = item.nome;
+                  document.getElementById('justificativa-exame').value = item.justificativa || '';
+                  sugestoes.innerHTML = '';
+                };
+                sugestoes.appendChild(li);
+              });
+            } else {
               const li = document.createElement('li');
-              li.className = 'list-group-item list-group-item-action';
-              li.textContent = item.nome;
+              li.className = 'list-group-item list-group-item-action text-primary';
+              li.textContent = 'Adicionar exame';
               li.onclick = () => {
-                inputExame.value = item.nome;
-                document.getElementById('justificativa-exame').value = item.justificativa || '';
-                sugestoes.innerHTML = '';
+                document.getElementById('novo-exame-container').classList.remove('d-none');
+                const input = document.getElementById('novo-exame-nome');
+                if (input) input.value = query;
               };
               sugestoes.appendChild(li);
-            });
-          } else {
-            const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-action text-primary';
-            li.textContent = 'Adicionar exame';
-            li.onclick = () => {
-              document.getElementById('novo-exame-container').classList.remove('d-none');
-              const input = document.getElementById('novo-exame-nome');
-              if (input) input.value = query;
-            };
-            sugestoes.appendChild(li);
-          }
+            }
           });
       });
 

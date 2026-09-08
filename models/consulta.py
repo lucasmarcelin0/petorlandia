@@ -390,6 +390,14 @@ class ExameModelo(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
+    clinica = db.relationship('Clinica', backref=db.backref('exames_modelo', cascade='all, delete-orphan'))
 
 
 class BlocoExames(db.Model):

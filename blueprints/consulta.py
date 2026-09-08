@@ -2797,10 +2797,30 @@ def salvar_bloco_exames(animal_id):
 @bp.route('/buscar_exames')
 @login_required
 def buscar_exames():
-    q = request.args.get('q', '').lower()
+    q = (request.args.get('q') or '').strip().lower()
+    clinic_id = request.args.get('clinica_id', type=int) or current_user_clinic_id()
+    animal_id = request.args.get('animal_id', type=int)
+    if not clinic_id and animal_id:
+        animal = Animal.query.get(animal_id)
+        if animal:
+            clinic_id = getattr(animal, 'clinica_id', None)
+
+    query = ExameModelo.query
+    if q:
+        query = query.filter(ExameModelo.nome.ilike(f'%{q}%'))
+
+    if clinic_id:
+        query = query.filter(
+            or_(
+                ExameModelo.clinica_id.is_(None),
+                ExameModelo.clinica_id == clinic_id,
+            )
+        )
+    else:
+        query = query.filter(ExameModelo.clinica_id.is_(None))
+
     exames = (
-        ExameModelo.query
-        .filter(ExameModelo.nome.ilike(f'%{q}%'))
+        query
         .order_by(ExameModelo.nome)
         .limit(40)
         .all()
@@ -2820,9 +2840,102 @@ def buscar_exames():
             'nome': e.nome,
             'justificativa': e.justificativa,
             'species_scope': e.species_scope,
+            'clinica_id': e.clinica_id,
         }
         for e in exames[:15]
     ])
+
+
+@bp.route('/exames_frequentes')
+@login_required
+def exames_frequentes():
+    """Retorna os exames mais solicitados e atalhos da clínica ativa."""
+    clinic_id = request.args.get('clinica_id', type=int) or current_user_clinic_id()
+    animal_id = request.args.get('animal_id', type=int)
+    if not clinic_id and animal_id:
+        animal = Animal.query.get(animal_id)
+        if animal:
+            clinic_id = getattr(animal, 'clinica_id', None)
+
+    itens = []
+    nomes_vistos = set()
+
+    # 1. Modelos específicos cadastrados para esta clínica (prioridade máxima nos atalhos)
+    if clinic_id:
+        try:
+            modelos_clinica = (
+                ExameModelo.query
+                .filter_by(clinica_id=clinic_id)
+                .order_by(ExameModelo.id.asc())
+                .all()
+            )
+            for m in modelos_clinica:
+                nome_norm = m.nome.strip().lower()
+                if nome_norm not in nomes_vistos:
+                    nomes_vistos.add(nome_norm)
+                    itens.append({
+                        'id': m.id,
+                        'nome': m.nome,
+                        'justificativa': m.justificativa or 'Exame solicitado para avaliação geral do estado de saúde e suporte ao diagnóstico clínico.',
+                        'clinica_id': m.clinica_id,
+                        'is_clinic_exclusive': True,
+                    })
+        except Exception:
+            current_app.logger.exception('Erro ao carregar modelos da clínica para exames frequentes')
+
+    # 2. Exames mais frequentes do histórico
+    try:
+        from sqlalchemy import text as sql_text
+        rows = db.session.execute(sql_text("""
+            SELECT es.nome, es.justificativa, COUNT(*) AS total
+            FROM exame_solicitado es
+            JOIN bloco_exames be ON be.id = es.bloco_id
+            WHERE es.nome IS NOT NULL AND TRIM(es.nome) != ''
+            GROUP BY es.nome, es.justificativa
+            ORDER BY total DESC
+            LIMIT 25
+        """)).fetchall()
+
+        for nome, just, total in rows:
+            nome_limpo = (nome or '').strip()
+            nome_norm = nome_limpo.lower()
+            if not nome_limpo or nome_norm in nomes_vistos:
+                continue
+
+            # Se for o combinado da Maisse mas a clínica ativa NÃO for PetOrlandia (1), NÃO inclui
+            if 'combinado' in nome_norm and ('hemograma' in nome_norm or 'alt' in nome_norm):
+                if clinic_id != 1:
+                    continue
+
+            # Ignora repetições de caracteres (ex: 'bbbbbbbbbbbbbbbbb')
+            if len(set(nome_norm.replace(' ', ''))) <= 2 and len(nome_norm) > 4:
+                continue
+
+            nomes_vistos.add(nome_norm)
+            itens.append({
+                'id': None,
+                'nome': nome_limpo,
+                'justificativa': just or 'Exame solicitado para suporte ao diagnóstico clínico.',
+                'total_solicitacoes': total,
+                'is_clinic_exclusive': False,
+            })
+
+            if len(itens) >= 8:
+                break
+    except Exception:
+        current_app.logger.exception('Erro ao carregar histórico de exames frequentes')
+
+    # 3. Garantir que para a PetOrlandia (ID 1), o Combinado esteja presente como primeiro item
+    if clinic_id == 1 and not any('combinado' in item['nome'].lower() for item in itens):
+        itens.insert(0, {
+            'id': 1,
+            'nome': 'Combinado - Hemograma, ALT, FA, ureia, creatinina',
+            'justificativa': 'Exame solicitado para avaliação geral do estado de saúde e suporte ao diagnóstico clínico.',
+            'clinica_id': 1,
+            'is_clinic_exclusive': True,
+        })
+
+    return jsonify(itens[:8])
 
 
 @bp.route('/exame_modelo', methods=['POST'])
@@ -2831,12 +2944,23 @@ def criar_exame_modelo():
     data = request.get_json(silent=True) or {}
     nome = (data.get('nome') or '').strip()
     justificativa = (data.get('justificativa') or '').strip() or None
+    clinica_id = data.get('clinica_id') or current_user_clinic_id()
     if not nome:
         return jsonify({'error': 'Nome é obrigatório'}), 400
-    exame = ExameModelo(nome=nome, justificativa=justificativa, created_by=current_user.id)
+    exame = ExameModelo(
+        nome=nome,
+        justificativa=justificativa,
+        created_by=current_user.id,
+        clinica_id=clinica_id,
+    )
     db.session.add(exame)
     db.session.commit()
-    return jsonify({'id': exame.id, 'nome': exame.nome, 'justificativa': exame.justificativa})
+    return jsonify({
+        'id': exame.id,
+        'nome': exame.nome,
+        'justificativa': exame.justificativa,
+        'clinica_id': exame.clinica_id,
+    })
 
 
 @bp.route('/exame_modelo/<int:exame_id>', methods=['PUT', 'DELETE'])

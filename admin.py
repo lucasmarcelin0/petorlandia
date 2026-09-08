@@ -1551,8 +1551,9 @@ class StorePaymentAccountAdminView(MyModelView):
 # Exame Modelo Admin
 # --------------------------------------------------------------------------
 class ExameModeloAdminView(MyModelView):
+    column_list = ('nome', 'justificativa', 'clinica', 'species_scope', 'created_by')
     column_searchable_list = ('nome', 'justificativa')
-    form_columns = ('nome', 'justificativa')
+    form_columns = ('nome', 'justificativa', 'clinica', 'species_scope', 'created_by')
 
 
 class ProtocoloClinicoAdminView(MyModelView):
