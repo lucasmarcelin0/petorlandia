@@ -2,8 +2,8 @@
 
 {% block main %}
 <div class="container mt-4">
-  <h2>Consulta agendada!</h2>
-  <p>Sua consulta foi marcada para {{ appointment.scheduled_at|datetime_brazil }} com o veterinário {{ appointment.veterinario.user.name if appointment.veterinario and appointment.veterinario.user else appointment.veterinario_id }}.</p>
+  <h1 class="h3">Consulta agendada!</h1>
+  <p>Sua consulta{% if appointment.animal %} para {{ appointment.animal.name }}{% endif %} está marcada para {{ appointment.scheduled_at|datetime_brazil }}{% if appointment.veterinario and appointment.veterinario.user %}, com {{ appointment.veterinario.user.name }}{% endif %}.</p>
   <a href="{{ url_for('appointments') }}" class="btn btn-primary">Ver agendamentos</a>
 </div>
 {% endblock %}

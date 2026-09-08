@@ -1,7 +1,9 @@
 {% extends "layout.html" %}
+{% from 'components/purchase_items.html' import purchase_items %}
 {% block main %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_purchases.css', v='1') }}">
 <div class="container my-5 d-flex justify-content-center">
-  <div class="col-lg-8 bg-white shadow rounded-4 p-5 border">
+  <div class="col-lg-8 bg-white shadow rounded-4 p-3 p-md-4 border purchase-history">
 
     {% set status_map = {
       'pending': 'Pendente',
@@ -16,7 +18,7 @@
     <div id="loading" class="text-center my-4"{% if status != 'Pendente' %} style="display:none"{% endif %}>
       <div class="spinner-border text-primary" role="status" aria-label="Carregando"></div>
       <h2 class="fw-bold mt-3 h4">Aguardando a confirmação do pagamento…</h2>
-      <p class="text-muted">Você não precisa fazer nada: esta página atualiza sozinha assim que o Mercado Pago confirmar.</p>
+      <p class="text-muted">Estamos consultando a confirmação do Mercado Pago. Esta página será atualizada quando houver uma resposta.</p>
     </div>
 
     <div id="status-banner"{% if status == 'Pendente' %} style="display:none"{% endif %}>
@@ -28,7 +30,7 @@
         <div class="alert alert-success" role="alert">
           <strong>O que acontece agora:</strong>
           <ul class="mb-0 mt-1">
-            <li>Seu pedido já foi confirmado e entrou em preparação.</li>
+            <li>O pagamento do seu pedido foi confirmado. Você pode consultar os produtos e as informações de entrega em Minhas compras.</li>
             {% if delivery_estimate %}
             <li>Previsão de entrega: <strong>{{ delivery_estimate|format_datetime_brazil('%d/%m/%Y') }}</strong>.</li>
             {% endif %}
@@ -43,8 +45,7 @@
           <h2 class="fw-bold text-danger">O pagamento não foi concluído</h2>
         </div>
         <div class="alert alert-danger" role="alert">
-          Isso costuma acontecer por recusa do cartão ou desistência no meio do processo.
-          Nada foi confirmado — você pode tentar novamente pelo botão abaixo, usando o mesmo ou outro meio de pagamento.
+          Não recebemos a confirmação deste pagamento. Confira a situação no Mercado Pago antes de tentar novamente.
         </div>
       {% else %}
         <h2 class="fw-bold mb-3 text-center">Status do pagamento</h2>
@@ -52,16 +53,10 @@
     </div>
 
     {% if order %}
-    <h5 class="mt-4">Resumo do Pedido{% if order.public_reference %} · {{ order.public_reference }}{% endif %}</h5>
-    <ul class="list-group mb-3">
-      {% for item in order.items %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        <span>{{ item.item_name }} × {{ item.quantity }}</span>
-        <span>R$ {{ '%.2f'|format(item.unit_price if item.unit_price is not none else (item.product.preco_publico if item.product else 0) or 0) }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    <p class="text-end fw-bold">Total: R$ {{ '%.2f'|format((payment.__dict__.get('amount') or order.total_value())) }}</p>
+    <h2 class="h5 mt-4">Produtos do pedido</h2>
+    <p class="text-muted small">Número do pedido: {{ order.public_reference }}</p>
+    {{ purchase_items(order.items) }}
+    <p class="text-end fw-bold">Total: {{ (payment.amount if payment.amount is defined and payment.amount is not none else order.total_value())|currency_br }}</p>
     {% if delivery_estimate and status != 'Aprovado' %}
     <p class="text-muted text-end">Previsão de entrega: {{ delivery_estimate|format_datetime_brazil('%d/%m/%Y') }}</p>
     {% endif %}
@@ -78,6 +73,9 @@
   </form>
 {% endif %}
 
+{% if order %}
+  <a class="btn btn-outline-primary" href="{{ url_for('pedido_detail', order_id=payment.order_id) }}">Ver meu pedido</a>
+{% endif %}
 {% if req_id %}
   <a href="{{ url_for(req_endpoint, req_id=req_id) }}"
      class="btn btn-primary">

@@ -1,13 +1,16 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container mt-4">
+<div class="tutor-page-shell my-4">
   {% include 'partials/minhas_atividades_tabs.html' %}
 
   <section id="minhas-atividades-content" data-activities-content tabindex="-1">
-  <div class="d-flex align-items-center gap-3 mb-4">
-    <h2 class="h5 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Assinaturas de Banho e Tosa</h2>
-    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-secondary btn-sm">
-      Ver planos
+  <div class="tutor-surface d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3 p-3">
+    <div>
+      <h2 class="h5 fw-bold mb-1"><i class="fa-solid fa-scissors me-2 text-primary" aria-hidden="true"></i>Minhas assinaturas de banho e tosa</h2>
+      <p class="text-muted small mb-0">Veja os planos de cada pet e os cuidados utilizados neste mês.</p>
+    </div>
+    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0">
+      Conhecer planos
     </a>
   </div>
 
@@ -30,24 +33,24 @@
             {% endif %}
           </div>
 
-          <h6 class="fw-bold mb-1">{{ s.plan.name }}</h6>
+          <h3 class="h6 fw-bold mb-1">{{ s.plan.name }}</h3>
           <p class="text-muted small mb-1">
-            <i class="fa-solid fa-house-medical me-1"></i>{{ s.plan.clinica.nome }}
+            <i class="fa-solid fa-store me-1" aria-hidden="true"></i>{{ s.plan.provider_name }}
           </p>
           <p class="text-muted small mb-1">
-            <i class="fa-solid fa-paw me-1"></i>{{ s.animal.name if s.animal else '—' }}
+            <i class="fa-solid fa-paw me-1" aria-hidden="true"></i>Para {{ s.animal.name if s.animal else 'seu pet' }}
           </p>
           <p class="text-success fw-bold mb-1">
-            R$ {{ '%.2f'|format(s.plan.price)|replace('.', ',') }}/mês
+            R$ {{ '%.2f'|format(s.plan.price)|replace('.', ',') }} por mês
           </p>
           <p class="text-muted small mb-2">
             <i class="fa-solid fa-calendar-check me-1"></i>
-            {{ s.plan.sessions_per_month }} sessão(ões)/mês
-            · usadas este mês: {{ s.sessions_used_this_month }}
+            {{ s.plan.sessions_per_month }} {{ 'sessão incluída' if s.plan.sessions_per_month == 1 else 'sessões incluídas' }} por mês<br>
+            {{ s.sessions_used_this_month }} {{ 'sessão utilizada' if s.sessions_used_this_month == 1 else 'sessões utilizadas' }} neste mês
           </p>
           {% if s.start_date %}
           <p class="text-muted small mb-3">
-            <i class="fa-solid fa-clock me-1"></i>Desde {{ s.start_date.strftime('%d/%m/%Y') }}
+            <i class="fa-solid fa-clock me-1" aria-hidden="true"></i>Início da assinatura: {{ s.start_date.strftime('%d/%m/%Y') }}
           </p>
           {% endif %}
 
@@ -67,9 +70,10 @@
   </div>
 
   {% else %}
-  <div class="text-center py-5 text-muted">
-    <i class="fa-solid fa-scissors fa-3x mb-3"></i>
-    <p class="h5">Você ainda não possui assinaturas.</p>
+  <div class="tutor-empty-state tutor-surface">
+    <span class="tutor-empty-state__icon"><i class="fa-solid fa-scissors" aria-hidden="true"></i></span>
+    <h2>Um cuidado que faz parte da rotina</h2>
+    <p>Você ainda não tem uma assinatura de banho e tosa. Conheça os planos e veja qual combina com seu pet.</p>
     <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-primary mt-2">
       Ver planos disponíveis
     </a>

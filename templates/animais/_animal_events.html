@@ -32,9 +32,15 @@
   {% if exames_agendados %}
     <ul class="list-group mb-3">
       {% for ex in exames_agendados %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ ex.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
-          <span class="text-muted small">{{ ex.specialist.user.name if ex.specialist and ex.specialist.user else 'Especialista não atribuído' }}</span>
+        <li class="list-group-item d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2">
+          <div>
+            <strong>{{ ex.exam_name or 'Exame veterinário' }}</strong>
+            <div>{{ ex.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</div>
+            <div class="text-muted small">{{ ex.specialist.user.name if ex.specialist and ex.specialist.user else 'Profissional a confirmar' }}</div>
+          </div>
+          <span class="badge {{ 'bg-success' if ex.status == 'confirmed' else 'bg-warning text-dark' }}">
+            {% if ex.status == 'confirmed' %}Confirmado{% elif ex.status_display == 'Prazo expirado' %}Prazo de confirmação encerrado{% else %}Aguardando confirmação{% endif %}
+          </span>
         </li>
       {% endfor %}
     </ul>

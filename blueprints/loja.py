@@ -27,7 +27,7 @@ from flask import (
 from flask_login import current_user, login_required
 from flask_wtf.csrf import CSRFError
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from extensions import csrf, db, mail
@@ -2847,7 +2847,7 @@ def minhas_compras():
 
     pagination = (Order.query
                   .join(Order.payment)
-                  .options(joinedload(Order.payment))
+                  .options(joinedload(Order.payment), selectinload(Order.items).joinedload(OrderItem.product))
                   .filter(Order.user_id == current_user.id,
                           Payment.status == PaymentStatus.COMPLETED)
                   .order_by(Order.created_at.desc())
@@ -2947,7 +2947,7 @@ def pedido_detail(order_id):
     )
 
     return render_template(
-        "entregas/delivery_detail.html",
+        "loja/pedido_cliente.html" if role == 'buyer' else "entregas/delivery_detail.html",
         req=req,
         order=order,
         items=items,

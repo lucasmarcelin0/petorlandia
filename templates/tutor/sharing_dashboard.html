@@ -45,7 +45,7 @@
                 <div class="d-flex flex-column gap-1">
                   <strong>{{ request.clinic or 'Clínica parceira' }}</strong>
                   {% if request.animal %}
-                  <span class="text-muted small">Animal: {{ request.animal }}</span>
+                  <span class="text-muted small">Pet: {{ request.animal }}</span>
                   {% endif %}
                   {% if request.message %}
                   <span class="text-muted small">Mensagem: {{ request.message }}</span>
@@ -54,12 +54,12 @@
                     <button class="btn btn-sm btn-success"
                             data-share-approve
                             data-request-id="{{ request.id }}">
-                      Aprovar
+                      Autorizar acesso
                     </button>
                     <button class="btn btn-sm btn-outline-danger"
                             data-share-deny
                             data-request-id="{{ request.id }}">
-                      Negar
+                      Recusar pedido
                     </button>
                   </div>
                 </div>
@@ -84,9 +84,14 @@
             {% for share in share_payload.active_shares %}
             <li class="list-group-item border-0 px-0">
               <div class="d-flex flex-column gap-1">
-                <strong>{{ share.clinic or 'Clínica parceira' }}</strong>
+                <strong>{{ share.recipient or share.clinic or 'Destinatário autorizado' }}</strong>
+                {% if share.animal %}
+                <span class="text-muted small">Pet: {{ share.animal }}</span>
+                {% else %}
+                <span class="text-muted small">Compartilhamento vinculado ao seu cadastro.</span>
+                {% endif %}
                 {% if share.expires_label %}
-                <span class="text-muted small">Expira em {{ share.expires_label }}</span>
+                <span class="text-muted small">Acesso autorizado até {{ share.expires_label }}</span>
                 {% endif %}
                 {% if share.grant_reason %}
                 <span class="text-muted small">Motivo: {{ share.grant_reason }}</span>

@@ -1,0 +1,18 @@
+{% from 'components/product_media.html' import media_image %}
+{% macro purchase_items(items) %}
+<ul class="purchase-items">
+  {% for item in items %}
+  {% set name = item.item_name or (item.product.name if item.product else 'Produto desta compra') %}
+  <li class="purchase-item">
+    {{ media_image(item.product.image_url if item.product else none, name, 'thumb') }}
+    <div class="purchase-item__info">
+      <h3 class="h6 mb-1">{{ name }}</h3>
+      <p class="text-muted small mb-0">Quantidade: {{ item.quantity }}{% if item.unit_price is not none %} · {{ item.unit_price|currency_br }} por unidade{% endif %}</p>
+    </div>
+    {% if item.unit_price is not none %}<strong class="purchase-item__price">{{ (item.unit_price * item.quantity)|currency_br }}</strong>{% endif %}
+  </li>
+  {% else %}
+  <li class="text-muted">Os produtos desta compra não estão disponíveis no histórico. Consulte os detalhes ou fale com nossa equipe.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}

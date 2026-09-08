@@ -2,9 +2,9 @@
 {% block main %}
 <div class="container mt-4" style="max-width:580px;">
 
-  <div class="d-flex align-items-center gap-3 mb-4">
+  <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
     <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Voltar aos planos
     </a>
     <h1 class="h4 fw-bold mb-0">Assinar plano</h1>
   </div>
@@ -23,7 +23,7 @@
       </div>
       <h5 class="fw-bold mb-1">{{ plan.name }}</h5>
       <p class="text-muted small mb-2">
-        <i class="fa-solid fa-house-medical me-1"></i>{{ plan.clinica.nome }}
+        <i class="fa-solid fa-store me-1" aria-hidden="true"></i>{{ plan.provider_name }}
       </p>
       {% if plan.description %}
       <p class="text-muted small mb-2">{{ plan.description }}</p>
@@ -33,7 +33,7 @@
         <span class="text-muted fs-6 fw-normal">/mês</span>
       </p>
       <p class="text-muted small mt-1">
-        <i class="fa-solid fa-calendar-check me-1"></i>{{ plan.sessions_per_month }} sessão(ões) por mês · cobrança mensal recorrente
+        <i class="fa-solid fa-calendar-check me-1" aria-hidden="true"></i>{{ plan.sessions_per_month }} {{ 'sessão' if plan.sessions_per_month == 1 else 'sessões' }} por mês · renovação automática mensal
       </p>
     </div>
   </div>
@@ -41,7 +41,7 @@
   <!-- Formulário de assinatura -->
   <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
-      <h6 class="fw-bold mb-3">Dados da assinatura</h6>
+      <h2 class="h6 fw-bold mb-3">Para qual pet é este plano?</h2>
       <form method="post" novalidate>
         {{ form.hidden_tag() }}
 
@@ -52,8 +52,8 @@
             {% for e in form.animal_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
           {% else %}
             <div class="alert alert-warning py-2 small">
-              Você não possui animais cadastrados.
-              <a href="{{ url_for('meus_animais') }}">Cadastre um pet</a> para continuar.
+              Cadastre seu pet para escolher esta assinatura.
+              <a href="{{ url_for('add_animal') }}">Cadastrar meu pet</a>
             </div>
           {% endif %}
         </div>
@@ -70,7 +70,7 @@
 
         <div class="alert alert-info py-2 small mb-3">
           <i class="fa-solid fa-circle-info me-1"></i>
-          Você será redirecionado ao Mercado Pago para autorizar a cobrança mensal. O plano é ativado após a confirmação do pagamento.
+          No próximo passo, você autoriza o pagamento mensal no Mercado Pago. A assinatura fica ativa após a confirmação do pagamento.
         </div>
 
         {% if animais %}

@@ -67,9 +67,9 @@
   {% endif %}
 
   <div class="text-end mb-3">
-    <div class="text-muted small">Produtos: R$ {{ '%.2f'|format(shipping.products_total if shipping else order.total_value()) }}</div>
-    <div class="text-muted small">Fretes: R$ {{ '%.2f'|format(shipping.shipping_total if shipping else 0) }}</div>
-    <strong id="cartTotal" data-total-value="{{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}">Total:&nbsp;R$ {{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}</strong>
+    <div class="text-muted small">Produtos: {{ (shipping.products_total if shipping else order.total_value())|currency_br }}</div>
+    <div class="text-muted small">Fretes: {{ (shipping.shipping_total if shipping else 0)|currency_br }}</div>
+    <strong id="cartTotal" data-total-value="{{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}">Total:&nbsp;{{ (shipping.grand_total if shipping else order.total_value())|currency_br }}</strong>
   </div>
 
   <div id="new-address-form" class="d-none mb-4">

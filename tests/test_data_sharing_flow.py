@@ -89,6 +89,11 @@ def test_tutor_can_approve_and_deny_requests(monkeypatch, app):
         access = DataShareAccess.query.first()
         assert access is not None
         assert access.granted_by == tutor.id
+        from app import _serialize_share_access
+        displayed = _serialize_share_access(access)
+        assert displayed['clinic'] == 'Destino'
+        assert displayed['recipient'] == 'Destino'
+        assert displayed['animal'] == 'Rex'
         access.revoked_at = datetime.utcnow()
         db.session.commit()
 

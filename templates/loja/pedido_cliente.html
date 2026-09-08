@@ -1,0 +1,57 @@
+{% extends 'layout.html' %}
+{% from 'components/purchase_items.html' import purchase_items %}
+{% block page_title %}Seu pedido | PetOrlândia{% endblock %}
+{% block main %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_purchases.css', v='1') }}">
+<div class="tutor-page-shell purchase-history py-3">
+  <a href="{{ url_for('minhas_compras') }}" class="d-inline-block mb-3">← Voltar às minhas compras</a>
+  <div class="purchase-history__heading">
+    <div><h1 class="h3 fw-bold mb-1">Seu pedido</h1><p class="text-muted mb-0">Compra de {{ order.created_at|format_datetime_brazil('%d/%m/%Y') }} · {{ order.public_reference }}</p></div>
+    <a href="{{ url_for('support') }}" class="btn btn-outline-secondary">Preciso de ajuda</a>
+  </div>
+  {% set paid = order.payment and order.payment.status.name == 'COMPLETED' %}
+  <section class="purchase-card" aria-labelledby="order-products-title">
+    <div class="purchase-card__header">
+      <h2 id="order-products-title" class="h5 mb-0">Produtos da sua compra</h2>
+      <div class="purchase-card__status"><span class="{{ '' if paid else 'purchase-status--waiting' }}">{{ 'Pagamento aprovado' if paid else 'Pagamento ainda não confirmado' }}</span></div>
+    </div>
+    {{ purchase_items(items) }}
+    <dl class="purchase-summary">
+      <div><dt>Produtos</dt><dd>{{ products_total|currency_br }}</dd></div>
+      {% if shipping_total > 0 %}<div><dt>Entrega</dt><dd>{{ shipping_total|currency_br }}</dd></div>{% endif %}
+      <div class="purchase-summary__total"><dt>{{ 'Total pago' if paid else 'Total do pedido' }}</dt><dd>{{ total|currency_br }}</dd></div>
+    </dl>
+  </section>
+  <section class="purchase-card" aria-labelledby="order-delivery-title">
+    <h2 id="order-delivery-title" class="h5">Entrega do pedido</h2>
+    {% if order.shipping_address %}<p class="text-muted">{{ order.shipping_address }}</p>{% endif %}
+    {% if order.received_at %}<p class="text-success fw-semibold">Você confirmou o recebimento em {{ order.received_at|format_datetime_brazil('%d/%m/%Y') }}.</p>{% endif %}
+    {% set delivery_labels = {'pendente': 'Aguardando início da entrega', 'em_andamento': 'Entrega em andamento', 'concluida': 'Entrega concluída', 'cancelada': 'Entrega cancelada'} %}
+    {% for delivery in order.delivery_requests %}
+    <div class="mb-3">
+      <h3 class="h6">{{ delivery_labels.get(delivery.status, 'Consulte as informações da entrega') }}{% if order.delivery_requests|length > 1 %} · Entrega {{ loop.index }}{% endif %}</h3>
+      <ul class="purchase-timeline">
+        {% if delivery.requested_at %}<li>Entrega solicitada em {{ delivery.requested_at|format_datetime_brazil('%d/%m/%Y às %H:%M') }}</li>{% endif %}
+        {% if delivery.accepted_at %}<li>Entregador aceitou em {{ delivery.accepted_at|format_datetime_brazil('%d/%m/%Y às %H:%M') }}</li>{% endif %}
+        {% if delivery.completed_at %}<li>Entrega concluída em {{ delivery.completed_at|format_datetime_brazil('%d/%m/%Y às %H:%M') }}</li>{% endif %}
+        {% if delivery.canceled_at %}<li>Entrega cancelada em {{ delivery.canceled_at|format_datetime_brazil('%d/%m/%Y às %H:%M') }}</li>{% endif %}
+      </ul>
+      <a class="d-inline-block mt-2" href="{{ url_for('delivery_detail', req_id=delivery.id) }}">Acompanhar esta entrega →</a>
+    </div>
+    {% else %}{% if not order.received_at %}<p class="text-muted">Ainda não há informações de entrega neste pedido. Se precisar, nossa equipe pode ajudar.</p>{% endif %}{% endfor %}
+    {% if paid and not order.received_at %}
+    <div class="purchase-receipt">
+      <span>Já recebeu todos os produtos?</span>
+      <form method="post" action="{{ url_for('confirmar_recebimento_pedido', order_id=order.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-success" type="submit">Recebi o pedido</button>
+      </form>
+    </div>
+    {% endif %}
+  </section>
+  <div class="purchase-actions">
+    {% if paid %}<a class="btn btn-primary" href="{{ url_for('loja_routes.comprar_novamente', order_id=order.id) }}">Comprar novamente</a>{% endif %}
+    {% if cancel_url %}<form action="{{ cancel_url }}" method="post">{{ form.hidden_tag() }}<button type="submit" class="btn btn-outline-danger">Cancelar pedido</button></form>{% endif %}
+  </div>
+</div>
+{% endblock %}

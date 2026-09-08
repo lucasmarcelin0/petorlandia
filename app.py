@@ -2345,10 +2345,22 @@ def _serialize_share_request(req):
 
 
 def _serialize_share_access(access):
-    clinic_name = getattr(access.source_clinic, 'nome', None)
+    recipient_type = getattr(access.granted_to_type, 'value', access.granted_to_type)
+    recipient_name = None
+    clinic_name = None
+    if recipient_type == 'clinic':
+        recipient = db.session.get(Clinica, access.granted_to_id)
+        clinic_name = getattr(recipient, 'nome', None)
+        recipient_name = clinic_name
+    elif recipient_type in {'veterinarian', 'insurer'}:
+        recipient = db.session.get(User, access.granted_to_id)
+        recipient_name = getattr(recipient, 'name', None)
     return {
         'id': access.id,
         'clinic': clinic_name,
+        'recipient': recipient_name,
+        'recipient_type': recipient_type,
+        'animal': getattr(access.animal, 'name', None),
         'expires_at': access.expires_at.isoformat() if access.expires_at else None,
         'expires_label': access.expires_at.strftime('%d/%m/%Y') if access.expires_at else None,
         'grant_reason': access.grant_reason,

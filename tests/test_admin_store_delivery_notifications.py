@@ -215,10 +215,10 @@ def test_buyer_never_sees_seller_payout_or_internal_ids(monkeypatch, app):
 
         assert response.status_code == 200
         assert order.public_reference in html
-        assert 'Subtotal dos produtos' in html and 'R$ 31.11' in html
-        assert 'Frete' in html and 'R$ 5.00' in html
-        assert 'Total pago' in html and 'R$ 36.11' in html
-        assert 'R$ 28.00' not in html
+        assert 'Produtos' in html and 'R$ 31,11' in html
+        assert 'Entrega' in html and 'R$ 5,00' in html
+        assert 'Total pago' in html and 'R$ 36,11' in html
+        assert 'R$ 28,00' not in html
         assert 'Pedido #1' not in html
         assert 'ID 2' not in html
 

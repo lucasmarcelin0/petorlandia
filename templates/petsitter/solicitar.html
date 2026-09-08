@@ -2,8 +2,8 @@
 
 {% block main %}
 <div class="container" style="max-width: 680px;">
-  <h1 class="h3 fw-bold text-primary mb-1"><i class="fa-solid fa-dog me-2"></i> Solicitar petsitter</h1>
-  <p class="text-muted">Conte sobre a viagem e nós encontramos um cuidador aprovado para o seu pet.</p>
+  <h1 class="h3 fw-bold text-primary mb-1"><i class="fa-solid fa-dog me-2" aria-hidden="true"></i> Solicitar um cuidador</h1>
+  <p class="text-muted">Escolha as datas e conte como seu pet gosta de ser cuidado. Sua solicitação ficará disponível para a equipe encontrar um petsitter.</p>
 
   {% if not animais %}
   <div class="alert alert-info">
@@ -15,8 +15,8 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="mb-3">
-      <label class="form-label fw-semibold">Quais pets?</label>
-      <div class="d-flex flex-wrap gap-2">
+      <p class="form-label fw-semibold mb-2" id="petsitter-pets-label">Quais pets precisam de cuidado?</p>
+      <div class="d-flex flex-wrap gap-2" role="group" aria-labelledby="petsitter-pets-label">
         {% for animal in animais %}
         <input type="checkbox" class="btn-check" name="animal_ids" value="{{ animal.id }}"
                id="animal-{{ animal.id }}" autocomplete="off"
@@ -42,7 +42,8 @@
     </div>
 
     <div class="mb-3">
-      <label class="form-label fw-semibold">Onde o pet ficará?</label>
+      <p class="form-label fw-semibold mb-2" id="petsitter-local-label">Onde seu pet ficará?</p>
+      <div role="radiogroup" aria-labelledby="petsitter-local-label">
       {% for valor, rotulo in locais.items() %}
       <div class="form-check">
         <input class="form-check-input" type="radio" name="local_atendimento" id="local-{{ valor }}"
@@ -51,6 +52,7 @@
         <label class="form-check-label" for="local-{{ valor }}">{{ rotulo }}</label>
       </div>
       {% endfor %}
+      </div>
     </div>
 
     <div class="mb-3" id="campo-endereco">
@@ -62,9 +64,9 @@
     </div>
 
     <div class="mb-4">
-      <label for="observacoes" class="form-label fw-semibold">Observações <span class="text-muted fw-normal">(opcional)</span></label>
+      <label for="observacoes" class="form-label fw-semibold">Rotina e cuidados do seu pet <span class="text-muted fw-normal">(opcional)</span></label>
       <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
-                placeholder="Rotina, medicamentos, manias, alimentação...">{{ request.form.get('observacoes', '') }}</textarea>
+                placeholder="Conte sobre alimentação, passeios, medicamentos e o que ajuda seu pet a se sentir bem.">{{ request.form.get('observacoes', '') }}</textarea>
     </div>
 
     <button type="submit" class="btn btn-primary btn-lg w-100">

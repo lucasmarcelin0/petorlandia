@@ -1,79 +1,53 @@
 {% extends "layout.html" %}
+{% from 'components/purchase_items.html' import purchase_items %}
+{% block page_title %}Minhas compras | PetOrlândia{% endblock %}
 {% block main %}
-{% set payment_status_text = {
-  'COMPLETED': 'Concluído',
-  'PENDING': 'Pendente',
-  'FAILED': 'Falhou'
-} %}
-<div class="container py-5">
+<div class="tutor-page-shell py-3">
   {% include 'partials/minhas_atividades_tabs.html' %}
-
-  <section id="minhas-atividades-content" data-activities-content tabindex="-1">
-  <h2 class="h5 fw-bold mb-4"><i class="fa-solid fa-bag-shopping me-2 text-primary"></i>Minhas compras</h2>
-  {% if orders %}
-  <div class="table-responsive">
-    <table class="table align-middle">
-      <thead>
-        <tr>
-          <th>Referência</th>
-          <th>Data</th>
-          <th>Valor</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for o in orders %}
-        <tr>
-          <td>{{ o.public_reference }}</td>
-          <td>{{ o.created_at|format_datetime_brazil('%d/%m/%Y') }}</td>
-          <td>R$ {{ '%.2f'|format(((o.payment.__dict__.get('amount') if o.payment else None) or o.total_value())) }}</td>
-          <td>
-            {% set status = o.payment.status.name if o.payment else 'PENDING' %}
-            <span class="badge{% if status == 'COMPLETED' %} bg-success{% elif status == 'PENDING' %} bg-warning text-dark{% else %} bg-danger{% endif %}">
-              {{ payment_status_text.get(status, status) }}
-            </span>
-          </td>
-          <td>
-            <div class="d-flex flex-wrap gap-1 justify-content-end">
-              <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes da compra {{ o.public_reference }}">
-                <i class="bi bi-search"></i> Detalhes
-              </a>
-              {% if status == 'COMPLETED' %}
-                <a href="{{ url_for('loja_routes.comprar_novamente', order_id=o.id) }}" class="btn btn-sm btn-outline-success" data-cta="order_repurchase"><i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>Comprar novamente</a>
-                {% if o.received_at %}
-                <span class="badge bg-success-subtle text-success border align-self-center" title="Recebimento confirmado">
-                  <i class="bi bi-check2-circle"></i> Recebido em {{ o.received_at|format_datetime_brazil('%d/%m/%Y') }}
-                </span>
-                {% else %}
-                <form method="post" action="{{ url_for('confirmar_recebimento_pedido', order_id=o.id) }}" class="d-inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-success" aria-label="Confirmar recebimento da compra {{ o.public_reference }}">
-                    <i class="bi bi-box-seam"></i> Recebi o pedido
-                  </button>
-                </form>
-                {% endif %}
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <div class="text-center mt-3">
-    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary">
-      <i class="bi bi-shop-window"></i> Continuar comprando
-    </a>
-  </div>
-  {% else %}
-  <div class="text-center text-muted mt-5">
-    <p class="mt-4 fs-5">Nenhuma compra registrada.</p>
-    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary mt-3">
-      <i class="bi bi-shop-window"></i> Ir para a loja
-    </a>
-  </div>
-  {% endif %}
+  <section id="minhas-atividades-content" class="purchase-history" data-activities-content tabindex="-1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_purchases.css', v='1') }}">
+    <div class="purchase-history__heading">
+      <div><h2 class="h4 fw-bold mb-1">Minhas compras</h2><p class="text-muted mb-0">Seus produtos, valores e informações de entrega.</p></div>
+      {% if orders %}<a href="{{ url_for('loja') }}" class="btn btn-outline-primary">Continuar comprando</a>{% endif %}
+    </div>
+    {% for o in orders %}
+    <article class="purchase-card" aria-labelledby="purchase-{{ o.id }}">
+      <header class="purchase-card__header">
+        <div>
+          <h3 id="purchase-{{ o.id }}" class="h6 fw-semibold mb-0">Compra de {{ o.created_at|format_datetime_brazil('%d/%m/%Y') }}</h3>
+          <p class="purchase-card__reference">Número do pedido: {{ o.public_reference }}</p>
+        </div>
+        <div class="purchase-card__status">
+          <span>Pagamento aprovado</span>
+          {% if o.received_at %}<span>Recebido em {{ o.received_at|format_datetime_brazil('%d/%m/%Y') }}</span>{% endif %}
+        </div>
+      </header>
+      {{ purchase_items(o.items) }}
+      <div class="purchase-card__footer">
+        <div class="purchase-card__total"><small class="text-muted">Total pago</small><strong>{{ (o.payment.amount if o.payment and o.payment.amount is not none else o.total_value())|currency_br }}</strong></div>
+        <div class="purchase-actions">
+          <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-primary" aria-label="Ver pedido {{ o.public_reference }}">Ver pedido</a>
+          <a href="{{ url_for('loja_routes.comprar_novamente', order_id=o.id) }}" class="btn btn-outline-primary" data-cta="order_repurchase">Comprar novamente</a>
+        </div>
+      </div>
+      {% if not o.received_at %}
+      <div class="purchase-receipt">
+        <span class="small">Seu pedido já chegou? Confirme o recebimento.</span>
+        <form method="post" action="{{ url_for('confirmar_recebimento_pedido', order_id=o.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-success" aria-label="Confirmar recebimento do pedido {{ o.public_reference }}">Recebi o pedido</button>
+        </form>
+      </div>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="purchase-card purchase-empty">
+      <span class="fs-1" aria-hidden="true">🛍️</span>
+      <h3 class="h5 mt-3">Suas compras aparecerão aqui</h3>
+      <p class="text-muted">Após a confirmação do pagamento, você poderá consultar os produtos e acompanhar o pedido nesta página.</p>
+      <a href="{{ url_for('loja') }}" class="btn btn-primary">Explorar a loja</a>
+    </div>
+    {% endfor %}
   {% if pagination.pages > 1 %}
   <nav aria-label="Paginação" class="mt-4 pagination-responsive">
     <ul class="pagination justify-content-center">

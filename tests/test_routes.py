@@ -1392,7 +1392,7 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         response = client.get('/payment_status/1?status=success', follow_redirects=False)
         assert response.status_code == 200
         html = response.get_data(as_text=True)
-        assert 'Resumo do Pedido' in html
+        assert 'Produtos do pedido' in html
         assert 'Previsão de entrega' in html
 
 

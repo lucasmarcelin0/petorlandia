@@ -135,7 +135,7 @@
   <div class="text-center mb-4">
     <h1 class="fw-bold text-primary"><i class="fa-solid fa-scissors me-2"></i>Planos de Banho e Tosa</h1>
     <p class="text-muted mx-auto" style="max-width:600px;">
-      Assine um plano mensal e garanta o cuidado do seu pet com regularidade e economia.
+      Compare os serviços, as sessões incluídas e o valor mensal para escolher o cuidado do seu pet.
     </p>
     <a href="{{ url_for('grooming_minhas_assinaturas') }}" class="btn btn-outline-primary">
       <i class="fa-solid fa-list me-1"></i> Minhas assinaturas
@@ -180,12 +180,12 @@
               <span class="text-muted fs-6 fw-normal">/mês</span>
             </p>
             <p class="text-muted small mb-3">
-              <i class="fa-solid fa-calendar-check me-1"></i>{{ p.sessions_per_month }} sessão(ões) por mês
+              <i class="fa-solid fa-calendar-check me-1" aria-hidden="true"></i>{{ p.sessions_per_month }} {{ 'sessão incluída' if p.sessions_per_month == 1 else 'sessões incluídas' }} por mês
             </p>
 
             {% if p.id in minhas_ids %}
               <button class="btn btn-secondary w-100" disabled>
-                <i class="fa-solid fa-check me-1"></i> Já assinado
+                <i class="fa-solid fa-check me-1" aria-hidden="true"></i> Você já tem este plano
               </button>
             {% else %}
               <a href="{{ url_for('grooming_assinar', plan_id=p.id) }}"
