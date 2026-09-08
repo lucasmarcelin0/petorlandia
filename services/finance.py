@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
 import zipfile
 from collections import defaultdict
@@ -21,6 +22,9 @@ from sqlalchemy.sql.sqltypes import Numeric
 
 import models
 from extensions import db
+
+logger = logging.getLogger(__name__)
+
 from models import (
     AccountingAccount,
     BankStatementTransaction,
@@ -129,9 +133,7 @@ def _log(message: str, *args) -> None:
     if has_app_context():
         current_app.logger.info(message, *args)
     else:  # pragma: no cover - only triggered outside flask contexts
-        if args:
-            message = message % args
-        print(message)
+        logger.info(message, *args)
 
 
 def _ensure_decimal(value) -> Decimal:
