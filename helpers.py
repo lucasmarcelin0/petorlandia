@@ -635,13 +635,9 @@ def has_conflict_for_slot(
                 for exam in exams_conflicts:
                     exams.setdefault(exam.id, exam)
 
-    if not cached_appts and not appointments:
-        for appt in Appointment.query.filter_by(veterinario_id=veterinario_id).all():
-            appointments.setdefault(appt.id, appt)
-    if not cached_exams and not exams:
-        for exam in ExamAppointment.query.filter_by(specialist_id=veterinario_id).all():
-            exams.setdefault(exam.id, exam)
-
+    # Note: Window filtering already queries for any conflicting appointments/exams
+    # within the relevant time windows. Fallback full-table scans when no conflicts
+    # were found in the window caused severe N+1 / full scan overhead.
     for appt in appointments.values():
         if exclude_appointment_id and appt.id == exclude_appointment_id:
             continue
