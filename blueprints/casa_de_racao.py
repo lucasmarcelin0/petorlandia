@@ -385,14 +385,14 @@ def casa_de_racao_dashboard(casa_id):
                     subscription_enabled=bool(product_form.subscription_enabled.data),
                     subscription_discount_percent=product_form.subscription_discount_percent.data or Decimal('0'),
                     subscription_shipping_fee=product_form.subscription_shipping_fee.data or Decimal('0'),
-                    status='active' if casa.status == 'ativa' else 'pending',
+                    status='active' if casa.status == 'ativa' or _is_admin() else 'pending',
                 )
                 db.session.add(product)
                 _create_initial_variant(product, product_form)
                 db.session.commit()
                 from services.offer_availability import invalidate_cache
                 invalidate_cache()
-                flash('Produto publicado com sucesso!' if casa.status == 'ativa' else 'Produto salvo em preparação. Você poderá ativá-lo após a aprovação da loja.', 'success')
+                flash('Produto publicado com sucesso!' if casa.status == 'ativa' or _is_admin() else 'Produto salvo em preparação. Você poderá ativá-lo após a aprovação da loja.', 'success')
                 return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             flash('Verifique os campos do produto.', 'warning')
             produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()

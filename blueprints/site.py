@@ -747,6 +747,7 @@ def _public_profile_data(profile_key: str) -> dict:
             'primary_url': url_for('register', next=url_for('minha_clinica')),
             'secondary_label': 'Ver a rotina profissional',
             'secondary_url': url_for('parceiro_clinica_landing'),
+            'price': f'R$ {monthly_price:.0f}/mês por veterinário',
             'reassurance': 'Seu acesso acompanha a clínica e respeita as permissões da equipe.',
         },
         'estudante': {
