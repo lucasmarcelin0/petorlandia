@@ -18,3 +18,6 @@
 **Learning:** Password inputs require accessible visibility toggles with `aria-label`, `aria-pressed`, and dynamic text announcement so screen reader and keyboard users can verify password entry safely. Search inputs and filtering drawers require explicit `aria-label`, `aria-expanded`, and `aria-controls` bindings to maintain accessible state transitions.
 **Action:** Always provide accessible toggle buttons for password inputs and link collapsible filter drawers to their toggles via `aria-expanded` and `aria-controls`.
 
+## 2026-09-12 - Dynamic Copy Button Feedback for Screen Readers
+**Learning:** Copy-to-clipboard buttons that change visual inner text on copy (e.g. from "Copiar" to "Copiado") leave screen reader users unaware of the copy operation status unless the element has `aria-live="polite"` and dynamically updates its `aria-label` during the success feedback state.
+**Action:** Always add `aria-live="polite"` and update `aria-label` dynamically during copy feedback state on copy-to-clipboard elements, restoring the original label after timeout.

@@ -99,7 +99,7 @@
         <label class="form-label fw-semibold" for="mcp-url">MCP URL</label>
           <div class="copy-box mb-3">
             <div class="copy-value" id="mcp-url">{{ mcp_url }}</div>
-          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ mcp_url }}">
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ mcp_url }}" aria-label="Copiar MCP URL" aria-live="polite">
             <i class="fa-regular fa-copy" aria-hidden="true"></i>
             Copiar
           </button>
@@ -145,7 +145,7 @@
       <textarea id="client-message" readonly>Oi! Para testar o PetOrlandia no ChatGPT, abra este link: {{ request.url }}.
 
 Na pagina, teste a MCP URL. No ChatGPT, remova a conexao Petorlandia MCP antiga e crie PetOrlandia MCP v2 em Settings -> Apps. Depois conecte com sua conta PetOrlandia e inicie uma conversa nova.</textarea>
-      <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="client-message">
+      <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="client-message" aria-label="Copiar mensagem pronta" aria-live="polite">
         <i class="fa-regular fa-copy" aria-hidden="true"></i>
         Copiar texto
       </button>
@@ -181,16 +181,19 @@ Na pagina, teste a MCP URL. No ChatGPT, remova a conexao Petorlandia MCP antiga 
         const targetId = button.dataset.copyTarget;
         const target = targetId ? document.getElementById(targetId) : null;
         const value = target ? target.value : (button.dataset.copy || '');
+        const originalLabel = button.getAttribute('aria-label') || 'Copiar';
         try {
           await navigator.clipboard.writeText(value);
           button.classList.remove('btn-outline-secondary');
           button.classList.add('btn-success');
           const original = button.innerHTML;
           button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          button.setAttribute('aria-label', 'Copiado para a área de transferência');
           window.setTimeout(function () {
             button.classList.add('btn-outline-secondary');
             button.classList.remove('btn-success');
             button.innerHTML = original;
+            button.setAttribute('aria-label', originalLabel);
           }, 1600);
         } catch (error) {
           if (target) {

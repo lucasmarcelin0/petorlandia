@@ -417,7 +417,7 @@
               {% if card.clinic_url %}
               <div class="link-box">
                 <input value="{{ card.clinic_url }}" readonly aria-label="Link da clinica">
-                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.clinic_url }}">
+                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.clinic_url }}" aria-label="Copiar link da clínica" aria-live="polite">
                   <i class="fa-regular fa-copy" aria-hidden="true"></i>
                   Copiar
                 </button>
@@ -451,7 +451,7 @@
               {% if card.tutor_url %}
               <div class="link-box">
                 <input value="{{ card.tutor_url }}" readonly aria-label="Link do tutor">
-                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.tutor_url }}">
+                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.tutor_url }}" aria-label="Copiar link do tutor" aria-live="polite">
                   <i class="fa-regular fa-copy" aria-hidden="true"></i>
                   Copiar
                 </button>
@@ -513,15 +513,18 @@
     document.querySelectorAll('.js-copy-link').forEach(function (button) {
       button.addEventListener('click', async function () {
         const value = button.dataset.copy || '';
+        const originalLabel = button.getAttribute('aria-label') || 'Copiar link';
         try {
           await navigator.clipboard.writeText(value);
           button.classList.remove('btn-outline-secondary');
           button.classList.add('btn-success');
           button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          button.setAttribute('aria-label', 'Copiado para a área de transferência');
           window.setTimeout(function () {
             button.classList.add('btn-outline-secondary');
             button.classList.remove('btn-success');
             button.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i> Copiar';
+            button.setAttribute('aria-label', originalLabel);
           }, 1600);
         } catch (error) {
           const input = button.closest('.link-box')?.querySelector('input');
