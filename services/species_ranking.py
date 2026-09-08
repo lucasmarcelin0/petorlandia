@@ -64,9 +64,14 @@ _TOKENS_OUTRO = (
 )
 
 
+_RE_SPACES = re.compile(r'\s+')
+
+
 def _normalizar(texto: str) -> str:
     """Lowercase + colapsa espaços."""
-    return re.sub(r'\s+', ' ', (texto or '').lower()).strip()
+    if not texto:
+        return ''
+    return _RE_SPACES.sub(' ', texto.lower()).strip()
 
 
 def especie_para_scope(especie_texto: Optional[str]) -> Optional[str]:

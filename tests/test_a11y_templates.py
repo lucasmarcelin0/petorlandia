@@ -46,3 +46,48 @@ def test_sfa_templates_icon_a11y_labels():
     with open("templates/sfa/pacientes.html", "r", encoding="utf-8") as f:
         pacientes_content = f.read()
     assert 'aria-label="Ver detalhes do paciente {{ p.id_estudo }}"' in pacientes_content
+
+
+def test_global_modal_dialog_accessibility_attributes():
+    with open("templates/layout.html", "r", encoding="utf-8") as f:
+        layout_content = f.read()
+    assert 'id="confirmModal"' in layout_content
+    assert 'role="dialog"' in layout_content
+    assert 'aria-modal="true"' in layout_content
+    assert 'aria-labelledby="confirmModalLabel"' in layout_content
+
+    with open("templates/partials/_lead_capture.html", "r", encoding="utf-8") as f:
+        lead_content = f.read()
+    assert 'id="leadCaptureModal"' in lead_content
+    assert 'role="dialog"' in lead_content
+    assert 'aria-modal="true"' in lead_content
+    assert 'aria-labelledby="leadCaptureTitle"' in lead_content
+    assert 'aria-describedby="leadCaptureDescription"' in lead_content
+
+    with open("templates/partials/schedule_modal.html", "r", encoding="utf-8") as f:
+        schedule_content = f.read()
+    assert 'id="scheduleModal"' in schedule_content
+    assert 'role="dialog"' in schedule_content
+    assert 'aria-modal="true"' in schedule_content
+    assert 'aria-labelledby="scheduleModalTitle"' in schedule_content
+
+
+def test_appointment_card_template_a11y_icons():
+    with open("templates/partials/_appointment_card.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert '<i class="fa-regular fa-clock" aria-hidden="true"></i>' in content
+    assert '<i class="fa-solid fa-paw" aria-hidden="true"></i>' in content
+    assert '<i class="fa-solid fa-trash" aria-hidden="true"></i>' in content
+
+
+def test_bulario_search_and_filter_a11y():
+    with open("templates/bulario/lista.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="Buscar medicamento"' in content
+    assert 'aria-label="Limpar busca"' in content
+    assert 'aria-expanded=' in content
+    assert 'aria-controls="drawer-' in content
+
+

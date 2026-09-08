@@ -226,8 +226,11 @@ def _normalize_species_token(species: str | None) -> str | None:
     name = _resolve_species_name(species)
     if not name:
         return None
-    normalized = unicodedata.normalize("NFKD", name)
-    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    if name.isascii():
+        without_accents = name
+    else:
+        normalized = unicodedata.normalize("NFKD", name)
+        without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     cleaned = _RE_NON_ALPHANUMERIC.sub("-", without_accents).strip("-")
     token = cleaned.lower()
     return token or None

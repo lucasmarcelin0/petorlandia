@@ -35,6 +35,8 @@ def _strip_accents(s: str) -> str:
     macro-grupos podem usar ASCII simples sem lidar com cada variante."""
     if not s:
         return ""
+    if s.isascii():
+        return s
     nfkd = unicodedata.normalize("NFKD", s)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 

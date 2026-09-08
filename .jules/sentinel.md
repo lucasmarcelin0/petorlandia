@@ -12,3 +12,9 @@
 **Vulnerability:** `services/nfse_service.py` used an ad-hoc `_redact_sensitive_xml_text` implementation that missed formatted CPFs/CNPJs (`123.456.789-00`, `12.345.678/0001-90`), 44-digit keys, and sensitive XML tags (`InscricaoEstadual`, `ChaveAcesso`, `Secret`).
 **Learning:** Ad-hoc regexes for redaction miss edge cases and diverge from the application's central redaction policy.
 **Prevention:** Always delegate XML and text redaction to `security.redact` (`redact_xml` or `redact_sensitive_text`) to ensure consistent PII sanitization.
+
+## 2026-09-07 - SSRF Mitigation in Outbound HTTP Requests and Integration Downloads
+**Vulnerability:** External download and geocoding endpoints (`_integration_download_and_store_laudo_file`, `_integration_download_and_store_carteirinha_file`, `api_cep_lookup`, `api_reverse_geocode`) accepted arbitrary URLs without checking if destination IPs resolved to private, loopback, or cloud metadata IP ranges.
+**Learning:** `security.url_safe` provides `is_url_ssrf_safe` to validate schemes, hostnames, and IP resolution against loopback, private networks, and link-local cloud metadata addresses.
+**Prevention:** Always validate all outbound URLs against `is_url_ssrf_safe` prior to dispatching HTTP requests with `requests.get` or other network clients.
+

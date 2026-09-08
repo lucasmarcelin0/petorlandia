@@ -2188,6 +2188,29 @@ def test_mcp_importar_laudo_volante_ignores_unreachable_chatgpt_local_path(app, 
     assert result["exame"]["arquivo_status"] == "caminho_local_ignorado"
 
 
+def test_integration_download_file_rejects_ssrf_urls(app):
+    import pytest
+    from app import (
+        _integration_download_and_store_laudo_file,
+        _integration_download_and_store_carteirinha_file,
+    )
+
+    with app.app_context():
+        # Private and loopback URLs must be rejected by SSRF checks
+        unsafe_urls = [
+            "https://127.0.0.1/laudo.pdf",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://10.0.0.1/secret.pdf",
+            "https://192.168.1.1/internal.pdf",
+        ]
+        for url in unsafe_urls:
+            with pytest.raises(ValueError, match="download_url invalido|nao permitida"):
+                _integration_download_and_store_laudo_file({"download_url": url, "file_name": "test.pdf"})
+
+            with pytest.raises(ValueError, match="URL HTTPS autorizada|nao permitida"):
+                _integration_download_and_store_carteirinha_file({"download_url": url, "file_name": "test.jpg"})
+
+
 def test_mcp_open_laudo_widget_strips_unreachable_chatgpt_local_path(app, client):
     with app.app_context():
         professional = User(

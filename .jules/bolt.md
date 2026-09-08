@@ -10,3 +10,8 @@
 ## 2026-09-03 - Pre-computing Product Tokens in Prescription-to-Store Matching
 **Learning:** In `services/prescription_store.py`, `build_prescription_offers` matched prescription lines against all sellable catalog products by re-tokenizing and re-parsing strengths for each product inside the inner loop for every prescription item. Pre-extracting tokens and strengths once per catalog product reduced `build_prescription_offers` execution time by ~60%.
 **Action:** When performing cross-matching between two collections (e.g. prescription lines and store products), pre-tokenize and pre-extract properties for the candidates once before entering nested loops.
+
+## 2026-09-07 - Pre-compiling Regex Patterns and ASCII Fast-Path in Treatment Posology Parsing
+**Learning:** `services/tratamento.py` parses dosage frequency and duration strings (`parse_intervalo_horas`, `parse_duracao_dias`, `eh_uso_continuo`) repeatedly. Pre-compiling frequency regex patterns at module level and adding an `isascii()` check in `_normalizar` avoids repetitive NFKD decomposition and regex re-compilation in hot execution paths.
+**Action:** Pre-compile frequency/duration regexes in treatment tracking and short-circuit ASCII text before accent stripping.
+
