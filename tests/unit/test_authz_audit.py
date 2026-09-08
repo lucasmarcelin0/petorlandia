@@ -28,3 +28,39 @@ def test_authz_denial_metrics_group_by_route_user_ip(app):
     assert any(item["key"] == "/rota-protegida/12345678901" for item in snapshot["by_route"])
     assert any(item["key"] == "7" for item in snapshot["by_user"])
     assert any(item["key"] == "203.0.113.10" for item in snapshot["by_ip"])
+from datetime import datetime, timedelta, timezone
+
+def test_summarize_authz_denials_aggregation_and_cutoff():
+    from authz import _DENY_EVENTS_WINDOW, summarize_authz_denials
+
+    _DENY_EVENTS_WINDOW.clear()
+    now = datetime.now(timezone.utc)
+
+    # Add recent events
+    _DENY_EVENTS_WINDOW.extend([
+        {"at": now, "route": "/r1", "user_id": 1, "ip": "1.1.1.1"},
+        {"at": now - timedelta(minutes=1), "route": "/r1", "user_id": 1, "ip": "2.2.2.2"},
+        {"at": now - timedelta(minutes=2), "route": "/r2", "user_id": 2, "ip": "1.1.1.1"},
+        {"at": now - timedelta(minutes=3), "route": "/r3", "user_id": 3, "ip": "3.3.3.3"},
+        {"at": now - timedelta(minutes=4), "route": "/r4", "user_id": 4, "ip": "4.4.4.4"},
+        {"at": now - timedelta(minutes=4.5), "route": "/r5", "user_id": 5, "ip": "5.5.5.5"},
+    ])
+
+    # Add old event (past 5 minutes)
+    _DENY_EVENTS_WINDOW.append(
+        {"at": now - timedelta(minutes=10), "route": "/old", "user_id": 99, "ip": "9.9.9.9"}
+    )
+
+    summary = summarize_authz_denials(window_minutes=5, top_n=2)
+
+    assert summary["window_minutes"] == 5
+    assert summary["total_denies"] == 6 # the 6 recent ones
+
+    assert summary["by_route"][0] == {"key": "/r1", "count": 2}
+    assert len(summary["by_route"]) == 2
+
+    assert summary["by_user"][0] == {"key": "1", "count": 2}
+    assert len(summary["by_user"]) == 2
+
+    assert summary["by_ip"][0] == {"key": "1.1.1.1", "count": 2}
+    assert len(summary["by_ip"]) == 2
