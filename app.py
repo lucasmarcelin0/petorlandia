@@ -937,45 +937,75 @@ def _nim_copy_rows(rows: Iterable[Iterable[bool]]) -> list[list[bool]]:
     return copied
 
 
+def _nim_parse_player(value, default_val: int) -> int:
+    try:
+        val = int(value)
+        return val if val in (1, 2) else default_val
+    except (TypeError, ValueError):
+        return default_val
+
+
+def _nim_has_restorations(current_rows: list[list[bool]], proposed_rows: list[list[bool]]) -> bool:
+    for current_row, next_row in zip(current_rows, proposed_rows):
+        for current_value, next_value in zip(current_row, next_row):
+            if not current_value and next_value:
+                return True
+    return False
+
+
+def _nim_count_removals(baseline_rows: list[list[bool]], proposed_rows: list[list[bool]]) -> list[int]:
+    removed_by_row_turn: list[int] = [0] * len(NIM_TEMPLATE_ROWS)
+    for row_index, (baseline_row, next_row) in enumerate(zip(baseline_rows, proposed_rows)):
+        for baseline_value, next_value in zip(baseline_row, next_row):
+            if baseline_value and not next_value:
+                removed_by_row_turn[row_index] += 1
+    return removed_by_row_turn
+
+
+def _nim_normalize_alternates(current_alternates) -> list[bool]:
+    if not isinstance(current_alternates, (list, tuple)):
+        return [False] * len(NIM_TEMPLATE_ROWS)
+    return [
+        bool(current_alternates[index]) if index < len(current_alternates) else False
+        for index in range(len(NIM_TEMPLATE_ROWS))
+    ]
+
+
+def _nim_next_alternates(normalized_alternates: list[bool], proposed_rows: list[list[bool]]) -> list[bool]:
+    next_alternates = normalized_alternates.copy()
+    for row_index, row in enumerate(proposed_rows):
+        remaining = sum(1 for stick in row if stick)
+        if remaining <= 1:
+            next_alternates[row_index] = False
+            continue
+
+        if len(row) == 3:
+            left, middle, right = row
+            if left and right and not middle:
+                next_alternates[row_index] = True
+    return next_alternates
+
+
 def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None:
     """Validate the proposed state according to the house rules."""
 
     proposed_rows = _nim_copy_rows(proposed_state.get("rows", []))
     current_rows = _nim_copy_rows(current_state.get("rows", _nim_default_rows()))
 
-    current_start = current_state.get("starting_player", 1)
-    try:
-        current_start_int = int(current_start)
-    except (TypeError, ValueError):
-        current_start_int = 1
-    if current_start_int not in (1, 2):
-        current_start_int = 1
-
+    current_start_int = _nim_parse_player(current_state.get("starting_player", 1), 1)
     proposed_state["starting_player"] = current_start_int
 
     origin_candidate = current_state.get("turn_origin_rows")
-    if (
-        not isinstance(origin_candidate, list)
-        or len(origin_candidate) != len(NIM_TEMPLATE_ROWS)
-    ):
+    if not isinstance(origin_candidate, list) or len(origin_candidate) != len(NIM_TEMPLATE_ROWS):
         baseline_rows = _nim_copy_rows(current_rows)
     else:
         baseline_rows = _nim_copy_rows(origin_candidate)
 
     default_rows = _nim_default_rows()
-
-    proposed_turn = proposed_state.get("turn")
-    try:
-        proposed_turn_int = int(proposed_turn)
-    except (TypeError, ValueError):
-        proposed_turn_int = None
-    if proposed_turn_int not in (1, 2):
-        proposed_turn_int = None
-
-    has_played_flag = proposed_state.get("has_played")
-    has_played_bool = bool(has_played_flag)
-
+    proposed_turn_int = _nim_parse_player(proposed_state.get("turn"), None)
+    has_played_bool = bool(proposed_state.get("has_played"))
     winner_flag = proposed_state.get("winner")
+
     is_reset = (
         proposed_rows == default_rows
         and (winner_flag is None or winner_flag == "")
@@ -983,54 +1013,20 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         and proposed_turn_int in (1, 2)
     )
 
-    restorations_from_current: list[tuple[int, int]] = []
-    for row_index, (current_row, next_row) in enumerate(zip(current_rows, proposed_rows)):
-        for stick_index, (current_value, next_value) in enumerate(zip(current_row, next_row)):
-            if not current_value and next_value:
-                restorations_from_current.append((row_index, stick_index))
-
-    if restorations_from_current and not is_reset:
+    if _nim_has_restorations(current_rows, proposed_rows) and not is_reset:
         return None
 
-    removed_by_row_turn: list[int] = [0] * len(NIM_TEMPLATE_ROWS)
-
-    for row_index, (baseline_row, next_row) in enumerate(zip(baseline_rows, proposed_rows)):
-        for stick_index, (baseline_value, next_value) in enumerate(zip(baseline_row, next_row)):
-            if baseline_value and not next_value:
-                removed_by_row_turn[row_index] += 1
-
+    removed_by_row_turn = _nim_count_removals(baseline_rows, proposed_rows)
     total_removed_turn = sum(removed_by_row_turn)
-    rows_with_removals = [
-        index for index, count in enumerate(removed_by_row_turn) if count > 0
-    ]
+    rows_with_removals = [index for index, count in enumerate(removed_by_row_turn) if count > 0]
 
-    current_turn = current_state.get("turn")
-    try:
-        current_turn_int = int(current_turn)
-    except (TypeError, ValueError):
-        current_turn_int = 1
-    if current_turn_int not in (1, 2):
-        current_turn_int = 1
-
-    next_turn = proposed_state.get("turn")
-    try:
-        next_turn_int = int(next_turn)
-    except (TypeError, ValueError):
-        next_turn_int = current_turn_int
-    if next_turn_int not in (1, 2):
-        next_turn_int = current_turn_int
+    current_turn_int = _nim_parse_player(current_state.get("turn"), 1)
+    next_turn_int = _nim_parse_player(proposed_state.get("turn"), current_turn_int)
 
     proposed_state["turn"] = next_turn_int
     turn_changed = current_turn_int != next_turn_int
 
-    current_alternates = current_state.get("alternate_rows")
-    if not isinstance(current_alternates, (list, tuple)):
-        normalized_alternates = [False] * len(NIM_TEMPLATE_ROWS)
-    else:
-        normalized_alternates = [
-            bool(current_alternates[index]) if index < len(current_alternates) else False
-            for index in range(len(NIM_TEMPLATE_ROWS))
-        ]
+    normalized_alternates = _nim_normalize_alternates(current_state.get("alternate_rows"))
 
     if is_reset:
         next_start = 2 if current_start_int == 1 else 1
@@ -1055,26 +1051,9 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         if normalized_alternates[row_index] and removed_count > 1:
             return None
 
-    # Update alternate row metadata based on the resulting board.
-    next_alternates = normalized_alternates.copy()
-    for row_index, row in enumerate(proposed_rows):
-        remaining = sum(1 for stick in row if stick)
-        if remaining <= 1:
-            next_alternates[row_index] = False
-            continue
-
-        if len(row) == 3:
-            left, middle, right = row
-            if left and right and not middle:
-                next_alternates[row_index] = True
-
     proposed_state["rows"] = proposed_rows
-    proposed_state["alternate_rows"] = next_alternates
-
-    if turn_changed:
-        proposed_state["has_played"] = False
-    else:
-        proposed_state["has_played"] = total_removed_turn > 0
+    proposed_state["alternate_rows"] = _nim_next_alternates(normalized_alternates, proposed_rows)
+    proposed_state["has_played"] = False if turn_changed else total_removed_turn > 0
 
     # Winner is only valid when the board is empty. With the misère rule, the
     # winner corresponds to the opponent of the player who removed the last
@@ -1083,10 +1062,7 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
     if not all_taken:
         proposed_state["winner"] = None
     else:
-        if turn_changed:
-            proposed_state["winner"] = next_turn_int
-        else:
-            proposed_state["winner"] = 1 if next_turn_int == 2 else 2
+        proposed_state["winner"] = next_turn_int if turn_changed else (1 if next_turn_int == 2 else 2)
 
     proposed_state["starting_player"] = current_start_int
     return proposed_state
