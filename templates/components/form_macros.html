@@ -5,21 +5,51 @@
    mesmo trocar o tipo (ex.: `type='tel'` num StringField). #}
 {% macro render_field(field, type=None, label=None, placeholder='', classes='form-control', autocomplete=None) %}
 <div class="mb-3">
-  <label for="{{ field.id }}" class="form-label">{{ label if label is not none else field.label.text }}</label>
+  <label for="{{ field.id }}" class="form-label">
+    {{ label if label is not none else field.label.text }}
+    {% if field.flags.required or field.required %}
+      <span class="text-danger" aria-hidden="true">*</span>
+    {% endif %}
+  </label>
   {% set extra = {} %}
   {% if type %}{% set _ = extra.update({'type': type}) %}{% endif %}
   {% if autocomplete %}{% set _ = extra.update({'autocomplete': autocomplete}) %}{% endif %}
-  {{ field(class=classes, id=field.id, placeholder=placeholder, **extra) }}
+  {% set input_classes = classes %}
+  {% if field.errors %}
+    {% set input_classes = classes + ' is-invalid' %}
+    {% set _ = extra.update({'aria_invalid': 'true', 'aria_describedby': field.id ~ '-error'}) %}
+  {% endif %}
+  {% if field.flags.required or field.required %}
+    {% set _ = extra.update({'aria_required': 'true'}) %}
+  {% endif %}
+  {{ field(class=input_classes, id=field.id, placeholder=placeholder, **extra) }}
   {% for error in field.errors %}
-  <div class="text-danger">{{ error }}</div>
+  <div id="{{ field.id }}-error" class="invalid-feedback d-block">{{ error }}</div>
   {% endfor %}
 </div>
 {% endmacro %}
 
 {% macro render_checkbox(field, label=None, classes='form-check-input') %}
 <div class="mb-3 form-check">
-  {{ field(class=classes, id=field.id) }}
-  <label for="{{ field.id }}" class="form-check-label">{{ label if label is not none else field.label.text }}</label>
+  {% set extra = {} %}
+  {% set input_classes = classes %}
+  {% if field.errors %}
+    {% set input_classes = classes + ' is-invalid' %}
+    {% set _ = extra.update({'aria_invalid': 'true', 'aria_describedby': field.id ~ '-error'}) %}
+  {% endif %}
+  {% if field.flags.required or field.required %}
+    {% set _ = extra.update({'aria_required': 'true'}) %}
+  {% endif %}
+  {{ field(class=input_classes, id=field.id, **extra) }}
+  <label for="{{ field.id }}" class="form-check-label">
+    {{ label if label is not none else field.label.text }}
+    {% if field.flags.required or field.required %}
+      <span class="text-danger" aria-hidden="true">*</span>
+    {% endif %}
+  </label>
+  {% for error in field.errors %}
+  <div id="{{ field.id }}-error" class="invalid-feedback d-block">{{ error }}</div>
+  {% endfor %}
 </div>
 {% endmacro %}
 

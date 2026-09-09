@@ -18,3 +18,6 @@
 **Learning:** Password inputs require accessible visibility toggles with `aria-label`, `aria-pressed`, and dynamic text announcement so screen reader and keyboard users can verify password entry safely. Search inputs and filtering drawers require explicit `aria-label`, `aria-expanded`, and `aria-controls` bindings to maintain accessible state transitions.
 **Action:** Always provide accessible toggle buttons for password inputs and link collapsible filter drawers to their toggles via `aria-expanded` and `aria-controls`.
 
+## 2026-09-08 - Accessible Form Macros with Field Validation & Required Indicators
+**Learning:** Reusable WTForms macros require automatic `aria-required="true"` and visual asterisk indicators (`*`) for required fields, plus `aria-invalid="true"` and `aria-describedby="{{ field.id }}-error"` linking invalid inputs to error messages so screen readers announce form errors immediately upon focus.
+**Action:** Always complement Jinja form rendering macros with automatic `aria-required`, `aria-invalid`, and `aria-describedby` error associations alongside visual required indicators.
