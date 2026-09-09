@@ -91,3 +91,12 @@ def test_bulario_search_and_filter_a11y():
     assert 'aria-controls="drawer-' in content
 
 
+def test_form_macros_accessibility_attributes():
+    with open("templates/components/form_macros.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert '<span class="text-danger" aria-hidden="true">*</span>' in content
+    assert "'aria_required': 'true'" in content
+    assert "'aria_invalid': 'true'" in content
+    assert "field.id ~ '-error'" in content
+    assert 'invalid-feedback' in content

@@ -21,3 +21,7 @@
 ## 2026-09-07 - Emoji Action Buttons & Dynamic Item Aria Labels
 **Learning:** Raw emoji action buttons (such as 🗑️) render inconsistently across platforms and fail to convey context to screen readers. Replacing them with standard icon elements (`aria-hidden="true"`) paired with item-specific `aria-label`s (e.g. `aria-label="Remover item {{ item.descricao }}"`) provides clear contextual announcements to screen readers.
 **Action:** Replace raw emoji action buttons with standard Font Awesome icons and always provide descriptive, item-specific `aria-label`s in both static HTML templates and dynamic JS string templates.
+
+## 2026-09-08 - Accessible Form Macros with Field Validation & Required Indicators
+**Learning:** Reusable WTForms macros require automatic `aria-required="true"` and visual asterisk indicators (`*`) for required fields, plus `aria-invalid="true"` and `aria-describedby="{{ field.id }}-error"` linking invalid inputs to error messages so screen readers announce form errors immediately upon focus.
+**Action:** Always complement Jinja form rendering macros with automatic `aria-required`, `aria-invalid`, and `aria-describedby` error associations alongside visual required indicators.
