@@ -25,6 +25,41 @@ powershell -File scripts/deploy_heroku.ps1 -PreflightOnly
 powershell -File scripts/deploy_heroku.ps1 -TestPath tests -PytestArgs "-q"
 ```
 
+## Pelo GitHub Actions (sem depender da sua maquina)
+
+O caminho acima precisa do remoto `heroku` configurado no computador de quem
+publica. Quando isso nao existe -- outra maquina, outra pessoa, um agente --
+use o workflow **Deploy (Heroku)**, em Actions > Deploy (Heroku) > Run
+workflow. Ele pede o `ref` a publicar (padrao `main`) e se deve rodar a suite
+antes (padrao sim).
+
+O workflow faz, na ordem, as mesmas travas do script manual:
+
+1. preflight (`scripts/preflight_deploy.py`);
+2. suite completa, com os mesmos comandos do workflow de testes;
+3. guarda de artefatos sensiveis;
+4. push **sem `--force`**, recusando publicar se o Heroku tem commit que o ref
+   nao tem;
+5. espera o release phase terminar (`scripts/wait_heroku_release.py`) e falha
+   com o log quando o `flask db upgrade` quebra.
+
+### Configuracao (uma vez)
+
+Em Settings > Secrets and variables > Actions, crie dois secrets:
+
+| Secret | Valor |
+|---|---|
+| `HEROKU_API_KEY` | token da conta -- gere um com prazo: `heroku authorizations:create -d "GitHub Actions deploy" -e 2592000` |
+| `HEROKU_APP_NAME` | nome do app no Heroku |
+
+Prefira o token com prazo ao permanente: se vazar, ele expira sozinho. Para
+revogar, `heroku authorizations` e `heroku authorizations:revoke <id>`.
+
+Para exigir aprovacao humana antes de cada deploy, crie um Environment
+chamado `production` (Settings > Environments) com required reviewers e
+acrescente `environment: production` ao job em
+`.github/workflows/deploy.yml`.
+
 ## Por que existe um preflight
 
 O `Procfile` declara:
