@@ -39,6 +39,7 @@ from scripts.sync_pmo_master_status_notes import (
     _overall_status,
     _resolve_sheet_id_by_title,
     _retry_execute,
+    _safe_master_row_identities,
     _sync_relevant_sheets,
 )
 
@@ -132,7 +133,19 @@ def _apply_master_status(service, spreadsheet_id: str) -> Counter:
     # Se colunas foram apagadas (ex.: a M de Status), estende a grade antes de escrever.
     _ensure_master_columns(service, spreadsheet_id, master_sheet_id)
 
-    requests = _build_requests(master_sheet_id, master_visits, match_map)
+    # Confere quem está em cada linha AGORA, imediatamente antes de gravar: a
+    # equipe reordena e reescreve a aba mestre pelo menu da planilha, e escrever
+    # pelo número de linha guardado no banco carimbava o status de um tutor no
+    # cadastro de outro.
+    row_identities = _safe_master_row_identities(service, spreadsheet_id, logger=log)
+    row_counters: Counter = Counter()
+    requests = _build_requests(
+        master_sheet_id,
+        master_visits,
+        match_map,
+        row_identities=row_identities,
+        summary=row_counters,
+    )
     for chunk in _chunked(requests, 200):
         _retry_execute(
             service.spreadsheets().batchUpdate(
@@ -144,6 +157,8 @@ def _apply_master_status(service, spreadsheet_id: str) -> Counter:
     summary["linhas_mestre"] = len(master_visits)
     summary["linhas_com_match"] = matched_count
     summary["requests_mestre"] = len(requests)
+    summary["conferencia_de_linha"] = 1 if row_identities else 0
+    summary.update(row_counters)
     for status, count in status_counts.items():
         summary[f"status_{status}"] = count
     return summary

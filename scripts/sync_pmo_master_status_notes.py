@@ -21,12 +21,15 @@ from services.vacina_pmo_service import (
     PMO_STATUS_COLORS,
     _get_sheets_service_rw,
     _parse_date_object,
+    _row_column_offset,
     infer_visit_status,
     list_vacina_pmo_sheets,
     persist_vacina_pmo_rows,
     pmo_request_sheet_titles,
     sync_vacina_pmo_sheet,
 )
+
+from scripts.audit_pmo_sheet_status_colors import _fetch_sheet_rows, _row_values
 
 
 MASTER_SHEET_TITLE = "Vacinação 2026"
@@ -133,10 +136,10 @@ def _digits(value: str | None) -> str:
     return re.sub(r"\D+", "", value or "")
 
 
-def _phone_keys(visit: PmoVaccinationVisit) -> set[str]:
-    keys = set()
-    for phone in (visit.phone1, visit.phone2):
-        digits = _digits(phone)
+def _phone_digit_keys(*values: str | None) -> set[str]:
+    keys: set[str] = set()
+    for value in values:
+        digits = _digits(value)
         if len(digits) >= 8:
             keys.add(digits[-8:])
         if len(digits) >= 10:
@@ -144,6 +147,21 @@ def _phone_keys(visit: PmoVaccinationVisit) -> set[str]:
         if len(digits) >= 11:
             keys.add(digits[-11:])
     return keys
+
+
+def _phone_keys(visit: PmoVaccinationVisit) -> set[str]:
+    return _phone_digit_keys(visit.phone1, visit.phone2)
+
+
+def _strong_phone_keys(keys: set[str]) -> set[str]:
+    """Só as chaves com DDD (10+ dígitos).
+
+    A chave de 8 dígitos existe para casar um fixo digitado sem DDD, mas duas
+    pessoas diferentes podem terminar nos mesmos 8 dígitos. Quando o telefone é
+    a ÚNICA prova de identidade (conferência de linha da planilha), exigimos a
+    versão com DDD.
+    """
+    return {key for key in keys if len(key) >= 10}
 
 
 def _name_key(visit: PmoVaccinationVisit) -> str:
@@ -158,22 +176,58 @@ def _name_tokens(value: str) -> set[str]:
     }
 
 
-def _names_compatible(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -> bool:
-    left_key = _name_key(left)
-    right_key = _name_key(right)
+def _name_token_list(value: str) -> list[str]:
+    return [token for token in _normalize_text_key(value).split() if token]
+
+
+def _is_ordered_subsequence(short: list[str], long: list[str]) -> bool:
+    iterator = iter(long)
+    return all(token in iterator for token in short)
+
+
+def _name_texts_compatible(left: str, right: str) -> bool:
+    """Duas grafias que podem ser a MESMA pessoa.
+
+    A comparação é por tokens. A versão anterior aceitava substring crua
+    (``"ana lima" in "joana lima"`` é verdadeiro), e bastava isso mais uma
+    coincidência de telefone para o status de um tutor ser compilado no nome de
+    outro. Agora:
+
+    1. grafias idênticas;
+    2. a curta é subsequência ordenada da longa (só faltam nomes do meio);
+    3. só o primeiro nome de um lado, e ele ABRE o nome completo do outro
+       ("Maria" / "Maria Aparecida", nunca "Maria" / "Ana Maria Costa");
+    4. 75% ou mais dos tokens (3+ letras) em comum, com pelo menos dois de cada
+       lado.
+    """
+    left_key = _normalize_text_key(left)
+    right_key = _normalize_text_key(right)
     if not left_key or not right_key:
         return False
     if left_key == right_key:
         return True
-    if left_key in right_key or right_key in left_key:
+
+    left_list = _name_token_list(left)
+    right_list = _name_token_list(right)
+    short, long = sorted((left_list, right_list), key=len)
+    if not short:
+        return False
+    if len(short) == 1:
+        return len(short[0]) >= 3 and short[0] == long[0]
+    if _is_ordered_subsequence(short, long):
         return True
-    left_tokens = _name_tokens(left.tutor_name or "")
-    right_tokens = _name_tokens(right.tutor_name or "")
+
+    left_tokens = _name_tokens(left)
+    right_tokens = _name_tokens(right)
     if not left_tokens or not right_tokens:
         return False
     overlap = len(left_tokens & right_tokens)
     smaller = min(len(left_tokens), len(right_tokens))
     return smaller >= 2 and (overlap / smaller) >= 0.75
+
+
+def _names_compatible(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -> bool:
+    return _name_texts_compatible(left.tutor_name or "", right.tutor_name or "")
 
 
 def _animal_names(visit: PmoVaccinationVisit) -> str:
@@ -278,6 +332,13 @@ def _build_visit_index(visits: list[PmoVaccinationVisit]):
     return by_phone, by_name, by_user
 
 
+def _identity_related(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -> bool:
+    """Nome compatível OU telefone em comum: o mínimo para ser a mesma casa."""
+    if _names_compatible(left, right):
+        return True
+    return bool(_phone_keys(left) & _phone_keys(right))
+
+
 def _matching_visits(
     master_visit: PmoVaccinationVisit,
     *,
@@ -288,6 +349,14 @@ def _matching_visits(
     matches: dict[int, PmoVaccinationVisit] = {}
     if master_visit.tutor_user_id:
         for visit in by_user.get(master_visit.tutor_user_id, []):
+            # A conta do tutor sozinha não basta: vínculos errados herdados de
+            # syncs antigos (quando duas famílias eram fundidas na mesma conta)
+            # colocariam o "Vacinado" de uma casa na linha da outra. Exigimos
+            # que nome ou telefone também batam — o que é grátis para os
+            # vínculos corretos, porque a conta só é reusada quando telefone E
+            # nome conferem.
+            if not _identity_related(master_visit, visit):
+                continue
             matches[visit.id] = visit
     for key in _phone_keys(master_visit):
         for visit in by_phone.get(key, []):
@@ -579,7 +648,261 @@ def _ensure_master_columns(service, spreadsheet_id: str, sheet_id: int) -> None:
         )
 
 
-def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], match_map: dict[int, list[PmoVaccinationVisit]]):
+PMO_NOTE_HEADER = "PetOrlandia PMO"
+_NOTE_TUTOR_RE = re.compile(r"^Tutor:\s*(.+)$", re.MULTILINE)
+
+
+def _cell_note(row: list[Any], index: int) -> str:
+    if index >= len(row):
+        return ""
+    cell = row[index] if isinstance(row[index], dict) else {}
+    return str(cell.get("note") or "").strip()
+
+
+def _note_tutor(note: str) -> str:
+    """Tutor de uma nota escrita por este script (vazio se a nota não é nossa)."""
+    if not note or not note.lstrip().startswith(PMO_NOTE_HEADER):
+        return ""
+    match = _NOTE_TUTOR_RE.search(note)
+    return match.group(1).strip() if match else ""
+
+
+_TIMESTAMP_RE = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4}[\s,]+\d{1,2}:\d{2}")
+
+
+def _identity_offset(values: list[str]) -> int:
+    """Quantas colunas antes do nome do tutor.
+
+    ``_row_column_offset`` só reconhece a coluna de carimbo quando ela é uma
+    data pura; o formulário grava data E hora ("17/08/2026 14:42:13"). Como
+    esta função serve para CONFERIR a linha, ela aceita as duas grafias — e o
+    reconhecimento continua tentando os dois offsets em ``_row_identity``.
+    """
+    offset = _row_column_offset(values)
+    if offset:
+        return 1
+    first = values[0] if values else ""
+    second = values[1] if len(values) > 1 else ""
+    if second and _TIMESTAMP_RE.match(first.strip()):
+        return 1
+    return 0
+
+
+def _row_identity(row: list[Any]) -> dict[str, Any]:
+    """Quem está NA LINHA da planilha agora: nome, telefones e nota já gravada.
+
+    Nome e telefone são coletados nos DOIS offsets possíveis (com e sem coluna
+    de carimbo). Conferir é o objetivo: aceitar as duas leituras evita recusar
+    uma linha correta só porque o carimbo mudou de formato, e continua
+    recusando a linha de outro tutor — nome e telefone de outra casa não batem
+    em nenhum dos offsets.
+    """
+    values = _row_values(row)
+    offset = _identity_offset(values)
+    name = values[0 + offset] if len(values) > offset else ""
+    names = [
+        values[index]
+        for index in (offset, 1 - offset)
+        if len(values) > index and values[index]
+    ]
+    phones: set[str] = set()
+    for index in (5, 6, 7):
+        if len(values) > index:
+            phones |= _phone_digit_keys(values[index])
+    note = _cell_note(row, TIMESTAMP_COLUMN_INDEX)
+    return {
+        "name": name,
+        "name_key": _normalize_text_key(name),
+        "names": names,
+        "phone_keys": phones,
+        "note_tutor": _note_tutor(note),
+    }
+
+
+def _master_row_identities(
+    service,
+    spreadsheet_id: str,
+    *,
+    sheet_title: str = MASTER_SHEET_TITLE,
+    sheet_gid: str = "",
+) -> dict[int, dict[str, Any]]:
+    """Releitura da aba mestre para conferir cada linha ANTES de escrever nela.
+
+    O banco guarda ``source_row``, mas a planilha é reordenada e reescrita pela
+    equipe (o menu "Otimizar Rotas por Cluster" limpa e regrava a aba inteira) e
+    linhas incompletas não voltam do parser. Quando a posição no banco envelhece,
+    escrever pelo número da linha carimba o status de um tutor na linha de outro
+    — foi exatamente o "já vacinado em 20/08" que apareceu no cadastro errado.
+    Com esta leitura, cada escrita é conferida contra quem está na linha agora.
+    """
+    rows = _fetch_sheet_rows(service, spreadsheet_id, sheet_title, sheet_gid)
+    identities: dict[int, dict[str, Any]] = {}
+    for index, row in enumerate(rows, start=1):
+        if index == 1:
+            continue  # cabeçalho
+        identity = _row_identity(row)
+        if not identity["name_key"] and not identity["note_tutor"]:
+            continue
+        identities[index] = identity
+    return identities
+
+
+def _row_matches_visit(identity: dict[str, Any] | None, visit: PmoVaccinationVisit) -> bool:
+    """A linha da planilha ainda é a mesma casa do registro do banco?"""
+    if not identity:
+        return False
+    tutor_name = visit.tutor_name or ""
+    if any(_name_texts_compatible(name, tutor_name) for name in identity.get("names", [])):
+        return True
+    # Nome corrigido na planilha depois do último sync: o telefone com DDD ainda
+    # identifica a casa.
+    return bool(
+        _strong_phone_keys(identity["phone_keys"]) & _strong_phone_keys(_phone_keys(visit))
+    )
+
+
+def _note_is_foreign(identity: dict[str, Any]) -> bool:
+    """A nota gravada por nós fala de um tutor que não é o dono da linha."""
+    note_tutor = identity.get("note_tutor") or ""
+    if not note_tutor:
+        return False
+    names = identity.get("names") or []
+    if not names:
+        return True  # linha esvaziada com nota nossa sobrando
+    return not any(_name_texts_compatible(note_tutor, name) for name in names)
+
+
+def _plan_master_rows(
+    master_visits: list[PmoVaccinationVisit],
+    row_identities: dict[int, dict[str, Any]] | None,
+    summary: Counter | None = None,
+) -> list[tuple[int, PmoVaccinationVisit]]:
+    """Em que linha cada visita da aba mestre pode ser escrita com segurança.
+
+    Sem ``row_identities`` (uso avulso do script, ou falha ao reler a planilha)
+    mantém o comportamento antigo: confia no ``source_row`` do banco.
+    """
+    if not row_identities:
+        return [
+            (visit.source_row, visit)
+            for visit in master_visits
+            if (visit.source_row or 0) > 0
+        ]
+
+    counters = summary if summary is not None else Counter()
+    claimed: dict[int, PmoVaccinationVisit] = {}
+    pending: list[PmoVaccinationVisit] = []
+
+    for visit in master_visits:
+        row = visit.source_row or 0
+        if row <= 0:
+            continue
+        if row in claimed:
+            pending.append(visit)
+            continue
+        if _row_matches_visit(row_identities.get(row), visit):
+            claimed[row] = visit
+        else:
+            pending.append(visit)
+
+    rows_by_name: dict[str, list[int]] = defaultdict(list)
+    for row, identity in row_identities.items():
+        if identity["name_key"]:
+            rows_by_name[identity["name_key"]].append(row)
+
+    for visit in pending:
+        candidates = [
+            row
+            for row in rows_by_name.get(_name_key(visit), [])
+            if row not in claimed and _row_matches_visit(row_identities[row], visit)
+        ]
+        if len(candidates) == 1:
+            claimed[candidates[0]] = visit
+            counters["linhas_realinhadas"] += 1
+        else:
+            counters["linhas_ignoradas_divergentes"] += 1
+
+    return sorted(claimed.items())
+
+
+def _clear_row_requests(sheet_id: int, row_number: int) -> list[dict[str, Any]]:
+    """Apaga uma nota/status nossos que ficaram numa linha de outro tutor."""
+    return [
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": TIMESTAMP_COLUMN_INDEX,
+                    "endColumnIndex": TIMESTAMP_COLUMN_INDEX + 1,
+                },
+                "cell": {
+                    "note": "",
+                    "userEnteredFormat": {"backgroundColor": PMO_STATUS_CLEAR_COLOR},
+                },
+                "fields": "note,userEnteredFormat.backgroundColor",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": STATUS_LINK_COLUMN_INDEX,
+                    "endColumnIndex": STATUS_LINK_COLUMN_INDEX + 1,
+                },
+                "cell": {
+                    "userEnteredValue": {"stringValue": ""},
+                    "userEnteredFormat": {"backgroundColor": PMO_STATUS_CLEAR_COLOR},
+                },
+                "fields": (
+                    "userEnteredValue,textFormatRuns,"
+                    "userEnteredFormat.backgroundColor"
+                ),
+            }
+        },
+    ]
+
+
+def _safe_master_row_identities(
+    service,
+    spreadsheet_id: str,
+    *,
+    sheet_title: str = MASTER_SHEET_TITLE,
+    sheet_gid: str = "",
+    logger=None,
+) -> dict[int, dict[str, Any]] | None:
+    """Identidades das linhas da aba mestre, ou ``None`` se a leitura falhar.
+
+    Falhar a releitura não pode travar a sincronização inteira: sem ela o script
+    volta ao comportamento antigo (escreve pelo ``source_row``). Uma leitura que
+    volta vazia também vira ``None`` — planilha vazia de verdade não tem o que
+    escrever, e leitura truncada não deve virar "todas as linhas divergem".
+    """
+    try:
+        identities = _master_row_identities(
+            service, spreadsheet_id, sheet_title=sheet_title, sheet_gid=sheet_gid
+        )
+    except Exception:
+        message = "[PMO] Falha ao reler a aba mestre para conferir as linhas."
+        if logger is not None:
+            logger.exception(message)
+        else:
+            print(message)
+        return None
+    return identities or None
+
+
+def _build_requests(
+    sheet_id: int,
+    master_visits: list[PmoVaccinationVisit],
+    match_map: dict[int, list[PmoVaccinationVisit]],
+    *,
+    row_identities: dict[int, dict[str, Any]] | None = None,
+    summary: Counter | None = None,
+):
     requests = _build_legend_requests(sheet_id) + [
         {
             "updateDimensionProperties": {
@@ -613,9 +936,10 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
             }
         },
     ]
-    for visit in master_visits:
-        if not visit.source_row or visit.source_row <= 0:
-            continue
+    counters = summary if summary is not None else Counter()
+    plan = _plan_master_rows(master_visits, row_identities, counters)
+    written_rows: set[int] = set()
+    for row_number, visit in plan:
         matches = match_map.get(visit.id, [])
         status = _overall_status(matches)
         status_text, status_runs = _status_link_cell(matches)
@@ -624,13 +948,15 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
         # com cor neutra, apagando o status compilado que já existia ali.
         if not matches:
             continue
+        written_rows.add(row_number)
+        counters["linhas_escritas"] += 1
         requests.append(
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": visit.source_row - 1,
-                        "endRowIndex": visit.source_row,
+                        "startRowIndex": row_number - 1,
+                        "endRowIndex": row_number,
                         "startColumnIndex": TIMESTAMP_COLUMN_INDEX,
                         "endColumnIndex": TIMESTAMP_COLUMN_INDEX + 1,
                     },
@@ -662,8 +988,8 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": visit.source_row - 1,
-                        "endRowIndex": visit.source_row,
+                        "startRowIndex": row_number - 1,
+                        "endRowIndex": row_number,
                         "startColumnIndex": STATUS_LINK_COLUMN_INDEX,
                         "endColumnIndex": STATUS_LINK_COLUMN_INDEX + 1,
                     },
@@ -672,6 +998,16 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
                 }
             }
         )
+
+    # Linhas que ficaram com a nota de OUTRO tutor (a planilha foi reordenada
+    # depois da última escrita) e que ninguém vai reescrever agora: limpar é o
+    # que impede a equipe de ler "já vacinado" no cadastro errado.
+    for row_number, identity in sorted((row_identities or {}).items()):
+        if row_number in written_rows or not _note_is_foreign(identity):
+            continue
+        requests.extend(_clear_row_requests(sheet_id, row_number))
+        counters["linhas_limpas"] += 1
+
     return requests
 
 
@@ -719,7 +1055,15 @@ def main() -> None:
         if master_sheet_id is None:
             raise RuntimeError(f"Aba {MASTER_SHEET_TITLE!r} não encontrada.")
 
-        requests = _build_requests(master_sheet_id, master_visits, match_map)
+        row_identities = _safe_master_row_identities(service, spreadsheet_id)
+        row_counters: Counter = Counter()
+        requests = _build_requests(
+            master_sheet_id,
+            master_visits,
+            match_map,
+            row_identities=row_identities,
+            summary=row_counters,
+        )
         if args.apply and requests:
             for chunk in _chunked(requests, 200):
                 _retry_execute(
@@ -734,7 +1078,10 @@ def main() -> None:
         print(f"linhas_mestre: {len(master_visits)}")
         print(f"linhas_com_match: {matched_count}")
         print(f"notas_preparadas: {len(requests)}")
+        print(f"conferencia_de_linha: {bool(row_identities)}")
         print(f"aplicado: {bool(args.apply)}")
+        for key, count in sorted(row_counters.items()):
+            print(f"{key}: {count}")
         for status, count in sorted(status_counts.items()):
             print(f"status_{status}: {count}")
 
