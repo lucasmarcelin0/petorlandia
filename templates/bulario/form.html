@@ -303,14 +303,15 @@
 
 <!-- Modal exclusão (só no modo edição) -->
 {% if med %}
-<div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modalExcluir" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalExcluirFormLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header border-0 pb-0">
         <div class="d-flex align-items-center gap-2">
-          <div class="bd-warn-icon-sm"><i class="fas fa-triangle-exclamation"></i></div>
-          <h5 class="modal-title fw-bold mb-0">Excluir medicamento</h5>
+          <div class="bd-warn-icon-sm"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
+          <h2 class="modal-title h5 fw-bold mb-0" id="modalExcluirFormLabel">Excluir medicamento</h2>
         </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
         <p class="text-muted mb-0">
@@ -323,7 +324,7 @@
         <form method="POST" action="{{ url_for('bulario_excluir', medicamento_id=med.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger btn-sm">
-            <i class="fas fa-trash me-1"></i>Excluir
+            <i class="fas fa-trash me-1" aria-hidden="true"></i>Excluir
           </button>
         </form>
       </div>
