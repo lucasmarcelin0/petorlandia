@@ -514,6 +514,11 @@ def appointments():
             worker = 'veterinario'
     if worker == 'veterinario' and not is_vet:
         worker = 'tutor'
+    if worker in [None, '', 'estudante'] and current_user.is_authenticated:
+        from helpers import is_active_intern
+        from models import ClinicStaff
+        if is_active_intern(current_user) or ClinicStaff.query.filter_by(user_id=current_user.id).first():
+            worker = 'colaborador'
     clinic_repo = ClinicRepository()
     calendar_access_scope = get_calendar_access_scope(current_user, clinic_repo)
 
@@ -1557,6 +1562,9 @@ def appointments():
     else:
         if worker in ['colaborador', 'admin']:
             clinica_id = current_user.clinica_id
+            if not clinica_id and current_user.is_authenticated:
+                from helpers import internship_clinic_id
+                clinica_id = internship_clinic_id(current_user)
             if current_user.role == 'admin' and worker == 'colaborador':
                 colaborador_id_arg = request.args.get('colaborador_id', type=int)
                 if colaborador_id_arg:

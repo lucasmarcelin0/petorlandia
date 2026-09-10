@@ -39,6 +39,12 @@
     color: #1e40af;
   }
 
+  .pmo-connectivity[data-state="error"] {
+    border-color: #f5c2c7;
+    background: #fdeaec;
+    color: #842029;
+  }
+
   .pmo-stat {
     min-height: 96px;
     border: 1px solid #e5e7eb;
@@ -501,6 +507,14 @@
     border-color: #dc3545;
   }
 
+  /* Falha definitiva (formato recusado, sem permissao): nao adianta reenviar
+     sozinho, entao a borda fica marcada ate alguem tocar na foto. */
+  .pmo-animal-photo-btn.is-failed,
+  .pmo-animal-photo-thumb.is-failed {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+  }
+
   .pmo-animal-photo-btn.is-done {
     color: #fff;
     background-color: #198754;
@@ -548,6 +562,7 @@
   .pmo-animal-photo-badge[data-state="uploading"] { background: #2563eb; }
   .pmo-animal-photo-badge[data-state="pending"] { background: #f59e0b; }
   .pmo-animal-photo-badge[data-state="error"] { background: #dc3545; }
+  .pmo-animal-photo-badge[data-state="failed"] { background: #dc3545; }
 
   .pmo-photo-modal {
     position: fixed;
@@ -587,6 +602,21 @@
     max-height: 70vh;
     object-fit: contain;
     border-radius: 8px;
+  }
+
+  .pmo-photo-modal__error {
+    margin: 0;
+    max-width: min(92vw, 420px);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(220, 53, 69, 0.92);
+    color: #fff;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .pmo-photo-modal__error[hidden] {
+    display: none;
   }
 
   .pmo-photo-modal__actions {
@@ -2086,7 +2116,9 @@
   <div class="pmo-photo-modal__backdrop" data-action="photo-modal-close"></div>
   <div class="pmo-photo-modal__content">
     <img class="pmo-photo-modal__img" id="pmo-photo-modal-img" src="" alt="Foto do animal">
+    <p class="pmo-photo-modal__error" id="pmo-photo-modal-error" hidden></p>
     <div class="pmo-photo-modal__actions">
+      <button type="button" class="btn btn-warning" id="pmo-photo-retry" hidden><i class="fas fa-rotate-right me-1"></i> Tentar enviar de novo</button>
       <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra</button>
       <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1"></i> Da galeria</button>
       <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
@@ -2299,16 +2331,33 @@
   const photoModalImg = document.getElementById('pmo-photo-modal-img');
   const photoRetakeBtn = document.getElementById('pmo-photo-retake');
   const photoPickBtn = document.getElementById('pmo-photo-pick');
+  const photoRetryBtn = document.getElementById('pmo-photo-retry');
+  const photoModalError = document.getElementById('pmo-photo-modal-error');
   let photoModalTarget = null;
 
   function openPhotoModal(url, target) {
     photoModalTarget = target || null;
     photoModalImg.src = url;
+    // O motivo da falha vive aqui, e nao so no console: quem esta em campo
+    // precisa saber se e o formato da foto, a permissao do perfil ou a
+    // internet antes de tentar de novo.
+    const animal = findAnimalByTarget(photoModalTarget);
+    const failed = animal && animal.photoUploadState === 'failed';
+    if (photoModalError) {
+      photoModalError.textContent = failed ? (animal.photoUploadError || 'Não foi possível enviar esta foto.') : '';
+      photoModalError.hidden = !failed;
+    }
+    if (photoRetryBtn) photoRetryBtn.hidden = !failed;
     photoModal.hidden = false;
   }
   function closePhotoModal() {
     photoModal.hidden = true;
     photoModalImg.src = '';
+    if (photoModalError) {
+      photoModalError.textContent = '';
+      photoModalError.hidden = true;
+    }
+    if (photoRetryBtn) photoRetryBtn.hidden = true;
     photoModalTarget = null;
   }
   if (photoModal) {
@@ -2325,6 +2374,13 @@
       closePhotoModal();
       requestAnimalPhoto(target, 'gallery');
     });
+    if (photoRetryBtn) {
+      photoRetryBtn.addEventListener('click', () => {
+        const animal = findAnimalByTarget(photoModalTarget);
+        closePhotoModal();
+        if (animal && animal.id) retryBlockedPhoto(animal.id);
+      });
+    }
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !photoModal.hidden) closePhotoModal();
     });
@@ -5140,6 +5196,10 @@
       attempts,
       nextAttemptAt: Date.now() + queueRetryDelay(attempts),
       lastError: String((error && error.message) || 'Falha temporaria de conexao').slice(0, 240),
+      // Erro que nao muda com o tempo (formato recusado, sem permissao, foto
+      // grande demais): retentar em loop so gastaria bateria e dados e
+      // manteria o vacinador achando que a foto ainda vai subir.
+      blocked: Boolean(error && error.permanent),
     };
   }
 
@@ -5250,6 +5310,7 @@
     photoQueue.objectUrls.set(id, objectUrl);
     animal.pendingImageUrl = objectUrl;
     animal.photoUploadState = uploadState;
+    animal.photoUploadError = uploadState === 'failed' ? (record.lastError || '') : '';
     animal.photoUploadUpdatedAt = record.updatedAt || Date.now();
     return animal;
   }
@@ -5263,6 +5324,7 @@
     if (animal) {
       delete animal.pendingImageUrl;
       delete animal.photoUploadState;
+      delete animal.photoUploadError;
       delete animal.photoUploadUpdatedAt;
     }
   }
@@ -5288,6 +5350,7 @@
 
   function scheduleNextQueueAttempt(records) {
     const future = (records || [])
+      .filter((record) => !record.blocked)
       .map((record) => Number(record.nextAttemptAt || 0))
       .filter((timestamp) => timestamp > Date.now());
     if (!future.length) return;
@@ -5297,14 +5360,28 @@
   async function refreshLocalQueueStatus() {
     if (!connectivityEl) return;
     let photoCount = 0;
+    let blockedCount = 0;
     try {
-      photoCount = (await getQueuedPhotos()).length;
+      const photos = await getQueuedPhotos();
+      blockedCount = photos.filter((record) => record.blocked).length;
+      photoCount = photos.length - blockedCount;
     } catch (_error) {
       photoCount = 0;
+      blockedCount = 0;
     }
     const statusCount = getQueuedStatuses().length;
     const total = photoCount + statusCount;
     const offline = navigator.onLine === false;
+    // Foto travada nao e "sincronizando": ficar girando o spinner para sempre
+    // e o que escondia o problema. Ela ganha o proprio aviso, em vermelho.
+    if (!offline && blockedCount) {
+      connectivityEl.hidden = false;
+      connectivityEl.dataset.state = 'error';
+      const plural = blockedCount === 1 ? 'foto não foi enviada' : 'fotos não foram enviadas';
+      const extra = total ? ` (${total} ${total === 1 ? 'alteração ainda está sincronizando' : 'alterações ainda estão sincronizando'})` : '';
+      connectivityEl.innerHTML = `<i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span>${blockedCount} ${plural}. Toque na foto marcada em vermelho para ver o motivo.${extra}</span>`;
+      return;
+    }
     connectivityEl.hidden = !offline && total === 0;
     connectivityEl.dataset.state = offline ? 'offline' : 'syncing';
     if (offline) {
@@ -5792,8 +5869,23 @@
     return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
   }
 
+  // Alguns seletores (Android, Google Fotos, Arquivos) entregam a foto sem
+  // `type` ou como application/octet-stream. Recusar pelo rotulo barrava foto
+  // boa; o servidor valida o conteudo de verdade antes de guardar.
+  const IMAGE_FILE_EXTENSION = /\.(jpe?g|png|webp|heic|heif|avif|gif|bmp|tiff?)$/i;
+
+  function looksLikeImageFile(file) {
+    if (!file) return false;
+    const type = String(file.type || '');
+    if (type.startsWith('image/')) return true;
+    if (!type || type === 'application/octet-stream') {
+      return IMAGE_FILE_EXTENSION.test(String(file.name || ''));
+    }
+    return false;
+  }
+
   async function prepareAnimalPhoto(file) {
-    if (!file || !String(file.type || '').startsWith('image/')) {
+    if (!looksLikeImageFile(file)) {
       throw new Error('Selecione uma foto válida.');
     }
     if (file.size > 20 * 1024 * 1024) {
@@ -5856,8 +5948,17 @@
       if (!response.ok || !payload.success) {
         const fallback = response.status === 413
           ? 'A foto é muito grande. Tente tirar outra mais leve.'
-          : 'Não foi possível salvar a foto.';
-        throw new Error(payload.message || fallback);
+          : (response.status === 403
+              ? 'Seu perfil não tem permissão para enviar fotos da vacinação.'
+              : 'Não foi possível salvar a foto.');
+        const failure = new Error(payload.message || fallback);
+        // O servidor manda `retryable: false` no que nao adianta repetir; a
+        // sessao vencida (401/302 para o login) tambem precisa de uma acao
+        // humana, entao nao entra no loop de retentativa.
+        failure.permanent = payload.retryable === false
+          || [400, 401, 403, 413, 415].includes(response.status);
+        failure.status = response.status;
+        throw failure;
       }
       // A resposta pode chegar depois de outra acao ter substituido o cartao
       // (por exemplo, marcar "vacinado"). Atualiza sempre o objeto que ainda
@@ -5901,17 +6002,63 @@
       }
       render();
     } catch (error) {
-      await deferQueuedPhoto(record, error).catch(() => null);
+      const permanent = Boolean(error && error.permanent);
+      const deferred = await deferQueuedPhoto(record, error).catch(() => null);
       const currentAnimal = findAnimalById(animalId);
-      if (currentAnimal) currentAnimal.photoUploadState = navigator.onLine === false ? 'pending' : 'error';
+      if (currentAnimal) {
+        currentAnimal.photoUploadState = permanent
+          ? 'failed'
+          : (navigator.onLine === false ? 'pending' : 'error');
+        currentAnimal.photoUploadError = permanent
+          ? String((error && error.message) || 'Não foi possível enviar esta foto.')
+          : '';
+      }
+      if (permanent) {
+        const nome = currentAnimal?.name ? ` (${currentAnimal.name})` : '';
+        const aviso = `Foto não enviada${nome}: ${(error && error.message) || 'motivo desconhecido'}`;
+        window.showAppToast ? window.showAppToast(aviso, 'danger') : alert(aviso);
+      }
       render();
-      console.warn('Foto PMO pendente para reenvio', error);
+      console.warn('Foto PMO pendente para reenvio', error, deferred);
     } finally {
       photoQueue.processing.delete(animalId);
       // Se uma segunda foto substituiu a primeira durante o envio, ela ficou
       // na fila e comeca agora. Falhas reais respeitam o intervalo progressivo.
       scheduleLocalQueueProcessing(0);
       refreshLocalQueueStatus();
+    }
+  }
+
+  async function retryBlockedPhoto(animalId) {
+    const id = Number(animalId);
+    if (!id) return;
+    try {
+      const db = await openPhotoQueueDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(PHOTO_QUEUE_STORE, 'readwrite');
+        const store = tx.objectStore(PHOTO_QUEUE_STORE);
+        const request = store.get(id);
+        request.onsuccess = () => {
+          const current = request.result;
+          if (current) {
+            store.put({ ...current, blocked: false, attempts: 0, nextAttemptAt: 0, lastError: '' });
+          }
+        };
+        request.onerror = () => reject(request.error || new Error('Nao foi possivel ler a foto pendente.'));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('Nao foi possivel reenviar a foto.'));
+      });
+      const animal = findAnimalById(id);
+      if (animal) {
+        animal.photoUploadState = 'uploading';
+        animal.photoUploadError = '';
+      }
+      render();
+      refreshLocalQueueStatus();
+      scheduleLocalQueueProcessing(0);
+    } catch (error) {
+      const msg = (error && error.message) || 'Não foi possível reenviar a foto.';
+      window.showAppToast ? window.showAppToast(msg, 'danger') : alert(msg);
     }
   }
 
@@ -5923,6 +6070,7 @@
       const available = Math.max(0, PHOTO_UPLOAD_CONCURRENCY - photoQueue.processing.size);
       records
         .filter((record) => !photoQueue.processing.has(Number(record.animalId)))
+        .filter((record) => !record.blocked)
         .filter((record) => Number(record.nextAttemptAt || 0) <= now)
         .sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))
         .slice(0, available)
@@ -5996,7 +6144,7 @@
       records.forEach((record) => {
         const uploadState = photoQueue.processing.has(Number(record.animalId))
           ? 'uploading'
-          : (record.lastError ? 'error' : 'pending');
+          : (record.blocked ? 'failed' : (record.lastError ? 'error' : 'pending'));
         if (setAnimalQueuedPhoto(record, uploadState)) changed = true;
       });
       if (changed) render();
@@ -6480,15 +6628,22 @@
   function renderAnimalPhotoControl(animal, index) {
     const stateName = animal.photoUploadState || '';
     const imageUrl = animal.pendingImageUrl || animal.imageUrl || '';
-    const isPending = ['uploading', 'pending', 'error'].includes(stateName);
+    const isPending = ['uploading', 'pending', 'error', 'failed'].includes(stateName);
     const badgeIcon = stateName === 'uploading'
       ? '<span class="spinner-border spinner-border-sm" aria-hidden="true" style="width:10px;height:10px;border-width:1px;"></span>'
-      : (stateName === 'pending' ? '!' : (stateName === 'error' ? '!' : '<i class="fas fa-check"></i>'));
+      : (stateName === 'failed' ? '<i class="fas fa-exclamation"></i>' : (stateName === 'pending' ? '!' : (stateName === 'error' ? '!' : '<i class="fas fa-check"></i>')));
+    // Estado 'failed' e o unico que nao se resolve sozinho: o titulo carrega o
+    // motivo que veio do servidor para o vacinador decidir o que fazer.
+    const failureReason = animal.photoUploadError || 'Não foi possível enviar esta foto.';
     const title = stateName === 'uploading'
       ? 'Foto guardada no aparelho e enviando'
       : (stateName === 'pending'
           ? 'Foto guardada no aparelho; sera reenviada automaticamente'
-          : (stateName === 'error' ? 'Foto guardada no aparelho; nova tentativa automatica em instantes' : 'Ver foto, tirar outra ou escolher da galeria'));
+          : (stateName === 'error'
+              ? 'Foto guardada no aparelho; nova tentativa automatica em instantes'
+              : (stateName === 'failed'
+                  ? `${failureReason} Toque para ver o motivo e tentar de novo.`
+                  : 'Ver foto, tirar outra ou escolher da galeria')));
 
     if (imageUrl) {
       return `

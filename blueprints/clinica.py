@@ -565,12 +565,13 @@ def clinic_detail(clinica_id):
         )
     from models import VetClinicInvite, Specialty
 
-    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
-    if not _is_admin() and not is_owner:
-        abort(403)
     staff = None
     if current_user.is_authenticated:
         staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    is_staff = staff is not None
+    if not _is_admin() and not is_owner and not is_staff:
+        abort(403)
     has_inventory_perm = staff.can_manage_inventory if staff else False
     show_inventory = _is_admin() or is_owner or has_inventory_perm
     inventory_form = InventoryItemForm() if show_inventory else None

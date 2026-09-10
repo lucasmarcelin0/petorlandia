@@ -1,0 +1,143 @@
+# Publica no Heroku a partir do GitHub, sem depender do computador de ninguem.
+#
+# O caminho manual continua valendo (scripts/deploy_heroku.ps1, veja DEPLOY.md).
+# Este workflow existe para quando quem publica nao tem o remoto `heroku`
+# configurado -- inclusive um agente. O segredo mora no GitHub, cada deploy
+# fica registrado em Actions e as mesmas travas do script manual valem aqui:
+# preflight antes, suite completa antes, push sem --force e espera pelo
+# release phase depois.
+name: Deploy (Heroku)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag ou commit a publicar"
+        required: false
+        default: main
+      run_tests:
+        description: "Rodar a suite antes de publicar (desligue so em emergencia)"
+        type: boolean
+        required: false
+        default: true
+
+# Dois deploys ao mesmo tempo brigariam pelo mesmo app: o segundo espera.
+concurrency:
+  group: deploy-heroku
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+    steps:
+      - name: Conferir credenciais
+        run: |
+          missing=""
+          [ -n "$HEROKU_API_KEY" ] || missing="$missing HEROKU_API_KEY"
+          [ -n "$HEROKU_APP_NAME" ] || missing="$missing HEROKU_APP_NAME"
+          if [ -n "$missing" ]; then
+            echo "Faltam secrets:$missing"
+            echo "Configure em Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          # Historico completo: o push para o Heroku precisa dos commits, e a
+          # checagem de fast-forward compara com o que ja esta em producao.
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-flask
+
+      # O release phase do Procfile roda `flask db upgrade`. Se ele quebrar, o
+      # deploy inteiro aborta la no Heroku -- o preflight pega isso aqui.
+      - name: Preflight de deploy
+        run: python scripts/preflight_deploy.py
+
+      # Mesmos comandos do workflow de testes: o que reprova um PR tem de
+      # reprovar um deploy tambem.
+      - name: Suite de testes
+        if: ${{ inputs.run_tests }}
+        env:
+          SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+        run: python -m pytest tests/ -q -p no:cacheprovider
+
+      - name: Guarda de artefatos sensiveis
+        run: python scripts/check_sensitive_artifacts.py
+
+      - name: Versao do release atual
+        id: antes
+        run: |
+          versao=$(curl -sS \
+            -H "Accept: application/vnd.heroku+json; version=3" \
+            -H "Authorization: Bearer $HEROKU_API_KEY" \
+            -H "Range: version ..; order=desc, max=1" \
+            "https://api.heroku.com/apps/$HEROKU_APP_NAME/releases" \
+            | python -c "import json,sys; d=json.load(sys.stdin); print(d[0]['version'] if d else 0)")
+          echo "versao=$versao" >> "$GITHUB_OUTPUT"
+          echo "Release atual em producao: v$versao"
+
+      - name: Publicar
+        id: push
+        run: |
+          set -euo pipefail
+          git remote add heroku "https://heroku:$HEROKU_API_KEY@git.heroku.com/$HEROKU_APP_NAME.git"
+          # App que nunca publicou nao tem `main` remoto: nesse caso nao ha o
+          # que comparar e o push segue direto.
+          if git fetch heroku main; then
+            # Sem --force, de proposito: se producao tem commit que este ref
+            # nao tem, alguem publicou por fora e um push forcado apagaria a
+            # correcao que ja esta no ar. Melhor falhar e alguem olhar.
+            if ! git merge-base --is-ancestor heroku/main HEAD; then
+              echo "O Heroku tem commit que este ref nao tem. Traga producao para o ref antes de publicar:"
+              git log --oneline HEAD..heroku/main | head -20
+              exit 1
+            fi
+            if git merge-base --is-ancestor HEAD heroku/main; then
+              echo "Producao ja esta neste commit; nada a publicar."
+              echo "publicou=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          git push heroku HEAD:main
+          echo "publicou=true" >> "$GITHUB_OUTPUT"
+
+      # `git push` volta quando o build acaba; o `release: flask db upgrade`
+      # roda depois. Sem esperar por ele, migration quebrada passaria por
+      # deploy bem-sucedido.
+      - name: Esperar o release phase
+        if: ${{ steps.push.outputs.publicou == 'true' }}
+        run: |
+          python scripts/wait_heroku_release.py \
+            --app "$HEROKU_APP_NAME" \
+            --after-version "${{ steps.antes.outputs.versao }}"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Deploy Heroku"
+            echo ""
+            echo "- ref publicado: \`${{ inputs.ref }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
+            echo "- suite executada: \`${{ inputs.run_tests }}\`"
+            echo "- publicou: \`${{ steps.push.outputs.publicou || 'nao chegou a publicar' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

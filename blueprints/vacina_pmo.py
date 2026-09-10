@@ -1,6 +1,5 @@
 """Views do domínio vacina_pmo_routes (migrado do app.py)."""
 from flask import Blueprint
-from PIL import Image
 import os, re, requests, threading as _pmo_threading, unicodedata, uuid
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
@@ -972,12 +971,20 @@ def vacina_pmo_animal_name(animal_id):
 @bp.route('/vacina-pmo/animal/<int:animal_id>/photo', methods=['POST'])
 @login_required
 def vacina_pmo_animal_photo(animal_id):
+    # Resposta em JSON (e nao `abort(403)` em HTML): a tela envia a foto por
+    # fetch e so sabe o que aconteceu se o corpo vier legivel. Sem isso o
+    # vacinador ficava com o selo vermelho e nenhuma explicacao.
     if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
+        return jsonify({
+            'success': False,
+            'retryable': False,
+            'message': 'Seu perfil não tem permissão para enviar fotos da vacinação. '
+                       'Peça para um administrador liberar o acesso de vacinador.',
+        }), 403
 
     file = request.files.get('photo')
     if not file or not getattr(file, 'filename', ''):
-        return jsonify({'success': False, 'message': 'Nenhuma foto enviada.'}), 400
+        return jsonify({'success': False, 'retryable': False, 'message': 'Nenhuma foto enviada.'}), 400
 
     try:
         max_photo_bytes = 8 * 1024 * 1024
@@ -985,30 +992,37 @@ def vacina_pmo_animal_photo(animal_id):
         photo_size = file.stream.tell()
         file.stream.seek(0)
         if photo_size <= 0:
-            return jsonify({'success': False, 'message': 'A foto enviada está vazia.'}), 400
+            return jsonify({
+                'success': False,
+                'retryable': False,
+                'message': 'A foto enviada está vazia.',
+            }), 400
         if photo_size > max_photo_bytes:
             return jsonify({
                 'success': False,
+                'retryable': False,
                 'message': 'A foto é muito grande. Use uma imagem de até 8 MB.',
             }), 413
 
+        from services.photo_intake import (
+            PhotoIntakeError,
+            normalize_photo_upload,
+            normalized_filename,
+        )
+
         try:
-            with Image.open(file.stream) as uploaded_image:
-                uploaded_image.verify()
-                image_format = (uploaded_image.format or '').upper()
-        except Exception:
+            # HEIC do iPhone entra aqui e sai JPEG: o navegador do vacinador
+            # nem sempre consegue converter, e a foto boa nao pode ser perdida
+            # por causa do formato.
+            photo = normalize_photo_upload(file.stream.read())
+        except PhotoIntakeError as exc:
             return jsonify({
                 'success': False,
-                'message': 'O arquivo selecionado não é uma foto válida.',
-            }), 400
+                'retryable': False,
+                'message': exc.user_message,
+            }), exc.status_code
         finally:
             file.stream.seek(0)
-
-        if image_format not in {'JPEG', 'PNG', 'WEBP'}:
-            return jsonify({
-                'success': False,
-                'message': 'Formato não compatível. Tire a foto novamente ou use JPG, PNG ou WebP.',
-            }), 415
 
         from services.vacina_pmo_service import ensure_vacina_pmo_real_animal
 
@@ -1016,19 +1030,26 @@ def vacina_pmo_animal_photo(animal_id):
         if animal is None:
             return jsonify({
                 'success': False,
-                'message': 'Este animal ainda não tem cadastro vinculado para guardar a foto.',
+                'retryable': False,
+                'message': 'Este animal ainda não tem cadastro vinculado para guardar a foto. '
+                           'Sincronize a aba e tente de novo.',
             }), 400
 
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        image_url = upload_to_s3(file, filename, folder='animals')
+        filename = f"{uuid.uuid4().hex}_{secure_filename(normalized_filename(file.filename, photo))}"
+        image_url = upload_to_s3(photo.stream, filename, folder='animals')
         if not image_url:
-            return jsonify({'success': False, 'message': 'Falha ao enviar a imagem.'}), 502
+            return jsonify({
+                'success': False,
+                'retryable': True,
+                'message': 'Falha ao enviar a imagem.',
+            }), 502
         # Recusa o fallback local (efêmero no Heroku): sem armazenamento durável
         # a foto sumiria no próximo restart. Melhor avisar para tentar de novo.
         if not image_url.startswith('http'):
             current_app.logger.error("Foto PMO sem armazenamento durável (S3 indisponível): %s", image_url)
             return jsonify({
                 'success': False,
+                'retryable': True,
                 'message': 'Não foi possível guardar a foto agora. Tente novamente em instantes.',
             }), 502
 
@@ -1040,11 +1061,21 @@ def vacina_pmo_animal_photo(animal_id):
         animal.photo_offset_y = 0.0
         db.session.commit()
 
-        return jsonify({'success': True, 'image_url': image_url, 'animal_id': animal.id})
+        if photo.converted:
+            current_app.logger.info(
+                "Foto PMO convertida de %s para JPEG (animal %s)", photo.source_format, animal_id
+            )
+
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'animal_id': animal.id,
+            'converted_from': photo.source_format if photo.converted else '',
+        })
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception("Falha ao salvar foto de animal Vacina PMO")
-        return jsonify({'success': False, 'message': str(exc)}), 500
+        return jsonify({'success': False, 'retryable': True, 'message': str(exc)}), 500
 
 
 @bp.route('/vacina-pmo/animal/<int:animal_id>/photo-src')
