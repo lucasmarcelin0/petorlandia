@@ -137,9 +137,20 @@ def _digits(value: str | None) -> str:
 
 
 def _phone_digit_keys(*values: str | None) -> set[str]:
+    """Sufixos que identificam um telefone, em todas as grafias da planilha.
+
+    Além dos dígitos da célula inteira, cada sequência longa de dígitos vira
+    chave por conta própria: a equipe às vezes digita os dois números na mesma
+    célula ("16992510438 / 16991443152"), e sem isso a colagem dos dois viraria
+    uma chave que não bate com nada.
+    """
     keys: set[str] = set()
+    candidates: list[str] = []
     for value in values:
-        digits = _digits(value)
+        text = str(value or "")
+        candidates.append(_digits(text))
+        candidates.extend(run for run in re.findall(r"\d{8,}", text))
+    for digits in candidates:
         if len(digits) >= 8:
             keys.add(digits[-8:])
         if len(digits) >= 10:
@@ -180,9 +191,28 @@ def _name_token_list(value: str) -> list[str]:
     return [token for token in _normalize_text_key(value).split() if token]
 
 
+def _tokens_match(left: str, right: str) -> bool:
+    """Dois pedaços de nome que podem ser a mesma palavra.
+
+    Igualdade, ou uma inicial abreviando a outra ("Raquel F." / "Raquel
+    Feliciano"). A planilha abrevia sobrenome o tempo todo.
+    """
+    if left == right:
+        return True
+    if len(left) == 1 and right.startswith(left):
+        return True
+    return len(right) == 1 and left.startswith(right)
+
+
 def _is_ordered_subsequence(short: list[str], long: list[str]) -> bool:
     iterator = iter(long)
-    return all(token in iterator for token in short)
+    for token in short:
+        for candidate in iterator:
+            if _tokens_match(token, candidate):
+                break
+        else:
+            return False
+    return True
 
 
 def _name_texts_compatible(left: str, right: str) -> bool:
@@ -763,13 +793,20 @@ def _row_matches_visit(identity: dict[str, Any] | None, visit: PmoVaccinationVis
     if not identity:
         return False
     tutor_name = visit.tutor_name or ""
-    if any(_name_texts_compatible(name, tutor_name) for name in identity.get("names", [])):
-        return True
-    # Nome corrigido na planilha depois do último sync: o telefone com DDD ainda
-    # identifica a casa.
-    return bool(
-        _strong_phone_keys(identity["phone_keys"]) & _strong_phone_keys(_phone_keys(visit))
+    names_ok = any(
+        _name_texts_compatible(name, tutor_name) for name in identity.get("names", [])
     )
+    row_phones = _strong_phone_keys(identity["phone_keys"])
+    visit_phones = _strong_phone_keys(_phone_keys(visit))
+    if row_phones and visit_phones:
+        # Com telefone dos dois lados, nome compatível não basta: dois "Maria"
+        # na mesma rua têm nomes compatíveis e casas diferentes, e aceitar pelo
+        # nome poria o "Vacinado" de uma na linha da outra. Telefone que não
+        # bate é contradição, não falta de informação.
+        return names_ok and bool(row_phones & visit_phones)
+    # Só um dos lados tem telefone utilizável (fixo sem DDD, célula vazia): aí
+    # o nome é a única prova disponível.
+    return names_ok
 
 
 def _status_text_is_ours(text: str) -> bool:
@@ -831,14 +868,24 @@ def _plan_master_rows(
             pending.append(visit)
 
     rows_by_name: dict[str, list[int]] = defaultdict(list)
+    rows_by_phone: dict[str, list[int]] = defaultdict(list)
     for row, identity in row_identities.items():
         if identity["name_key"]:
             rows_by_name[identity["name_key"]].append(row)
+        for key in _strong_phone_keys(identity["phone_keys"]):
+            rows_by_phone[key].append(row)
 
     for visit in pending:
+        # O nome na planilha pode ter sido abreviado ("Raquel F." no banco,
+        # "Raquel Feliciano" na aba): procurar só pela chave exata deixaria a
+        # linha certa de fora. O telefone entra como segunda porta de entrada e
+        # quem decide continua sendo _row_matches_visit.
+        possiveis: set[int] = set(rows_by_name.get(_name_key(visit), []))
+        for key in _strong_phone_keys(_phone_keys(visit)):
+            possiveis.update(rows_by_phone.get(key, []))
         candidates = [
             row
-            for row in rows_by_name.get(_name_key(visit), [])
+            for row in sorted(possiveis)
             if row not in claimed and _row_matches_visit(row_identities[row], visit)
         ]
         if len(candidates) == 1:

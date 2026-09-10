@@ -448,3 +448,84 @@ def test_status_com_nota_do_proprio_tutor_e_preservado(app):
 
     assert _status_rows(requests) == {}
     assert _note_rows(requests) == {}
+
+
+# ---------------------------------------------------------------------------
+# Nome compatível não basta quando os dois lados têm telefone
+# ---------------------------------------------------------------------------
+
+def test_dois_tutores_de_mesmo_nome_nao_se_misturam(app):
+    """"Maria" e "Maria Aparecida" com telefones diferentes são casas diferentes."""
+    master = _visit(tutor_name="Maria", phone1="16991110001", phone2="")
+    campo = _visit(
+        sheet_title="20/08/2026",
+        sheet_gid="9",
+        source_row=2,
+        tutor_name="Maria",
+        phone1="16991110001",
+        phone2="",
+    )
+    _animal(campo, "Bidu", "vacinado")
+
+    # A linha 224 agora é da OUTRA Maria (telefone diferente).
+    identities = {224: _identity("Maria Aparecida", phone="16992220002")}
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], _matches_for(master, campo), row_identities=identities
+    )
+
+    assert _note_rows(requests) == {}
+
+
+def test_mesma_casa_com_telefone_igual_continua_escrevendo(app):
+    master = _visit(tutor_name="Maria", phone1="16991110001", phone2="")
+    campo = _visit(
+        sheet_title="20/08/2026",
+        sheet_gid="9",
+        source_row=2,
+        tutor_name="Maria",
+        phone1="16991110001",
+        phone2="",
+    )
+    _animal(campo, "Bidu", "vacinado")
+
+    identities = {224: _identity("Maria Aparecida", phone="16991110001")}
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], _matches_for(master, campo), row_identities=identities
+    )
+
+    assert "Maria" in _note_rows(requests)[224]
+
+
+def test_realinha_por_telefone_quando_o_nome_foi_abreviado(app):
+    """"Raquel F." no banco e "Raquel Feliciano" na planilha, em outra linha."""
+    master = _visit(tutor_name="Raquel F.")
+    campo = _visit(
+        sheet_title="20/08/2026", sheet_gid="9", source_row=2, tutor_name="Raquel Feliciano"
+    )
+    _animal(campo, "Pipoca", "vacinado")
+
+    identities = {
+        224: _identity("Marina Carmenhan", phone="16993402846"),
+        243: _identity("Raquel Feliciano", phone="16992510438"),
+    }
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], _matches_for(master, campo), row_identities=identities
+    )
+
+    assert list(_note_rows(requests)) == [243]
+
+
+def test_dois_telefones_na_mesma_celula(app):
+    """A equipe às vezes digita os dois números juntos; a linha ainda confere."""
+    master = _visit()
+    campo = _visit(
+        sheet_title="20/08/2026", sheet_gid="9", source_row=2, tutor_name="Raquel Feliciano"
+    )
+    _animal(campo, "Pipoca", "vacinado")
+
+    identities = {224: _identity("Raquel Feliciano", phone="16992510438 / 16991443152")}
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], _matches_for(master, campo), row_identities=identities
+    )
+
+    assert 224 in _note_rows(requests)

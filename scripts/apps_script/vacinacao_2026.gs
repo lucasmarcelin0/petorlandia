@@ -649,6 +649,10 @@ function routeOptimizeByCluster() {
 
     const notes = range.getNotes();
     const backgrounds = range.getBackgrounds();
+    // getValues() devolve o RESULTADO da fórmula. Regravar isso transformaria
+    // os links de WhatsApp (=HYPERLINK) em texto morto, então as fórmulas
+    // viajam junto com a linha e têm prioridade na hora de escrever.
+    const formulas = range.getFormulas();
 
     const header = data[0].slice();
     const offset = detectarOffset_(data);
@@ -666,6 +670,7 @@ function routeOptimizeByCluster() {
 
         processed.push({
           originalData: row.slice(),
+          originalFormulas: formulas[index].slice(),
           originalNotes: notes[index].slice(),
           originalBackgrounds: backgrounds[index].slice(),
           cluster: cluster,
@@ -681,6 +686,7 @@ function routeOptimizeByCluster() {
         // Linha problemática NÃO é descartada: vai para o fim da aba.
         processed.push({
           originalData: row.slice(),
+          originalFormulas: formulas[index].slice(),
           originalNotes: notes[index].slice(),
           originalBackgrounds: backgrounds[index].slice(),
           cluster: "ZZ",
@@ -765,7 +771,11 @@ function routeOptimizeByCluster() {
     const outBackgrounds = [];
 
     processed.forEach(function (item) {
-      const values = item.originalData.slice();
+      const rowFormulas = item.originalFormulas || [];
+      const values = item.originalData.map(function (valor, indice) {
+        const formula = rowFormulas[indice];
+        return (formula !== undefined && formula !== "") ? formula : valor;
+      });
       const rowNotes = item.originalNotes.slice();
       const rowBackgrounds = item.originalBackgrounds.slice();
 
@@ -958,11 +968,13 @@ function debugAddressClassification() {
 // ==============================================================================
 function compilarControleDeDoses() {
   const URL   = 'https://www.petorlandia.com.br/vacina-pmo/webhook/compilar-doses';
-  const TOKEN = obterTokenPMO_();
   try {
+    // Dentro do try de propósito: sem PMO_TOKEN configurado, a mensagem
+    // explicando o que falta chega como aviso na planilha, não como erro cru
+    // do Apps Script.
     const resp = UrlFetchApp.fetch(URL, {
       method: 'post',
-      headers: { 'X-PMO-Token': TOKEN },
+      headers: { 'X-PMO-Token': obterTokenPMO_() },
       muteHttpExceptions: true,
     });
     const ok = resp.getResponseCode() === 200;
