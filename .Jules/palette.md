@@ -18,3 +18,6 @@
 **Learning:** Password inputs require accessible visibility toggles with `aria-label`, `aria-pressed`, and dynamic text announcement so screen reader and keyboard users can verify password entry safely. Search inputs and filtering drawers require explicit `aria-label`, `aria-expanded`, and `aria-controls` bindings to maintain accessible state transitions.
 **Action:** Always provide accessible toggle buttons for password inputs and link collapsible filter drawers to their toggles via `aria-expanded` and `aria-controls`.
 
+## 2026-09-07 - Emoji Action Buttons & Dynamic Item Aria Labels
+**Learning:** Raw emoji action buttons (such as 🗑️) render inconsistently across platforms and fail to convey context to screen readers. Replacing them with standard icon elements (`aria-hidden="true"`) paired with item-specific `aria-label`s (e.g. `aria-label="Remover item {{ item.descricao }}"`) provides clear contextual announcements to screen readers.
+**Action:** Replace raw emoji action buttons with standard Font Awesome icons and always provide descriptive, item-specific `aria-label`s in both static HTML templates and dynamic JS string templates.
