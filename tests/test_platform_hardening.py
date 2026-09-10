@@ -39,6 +39,9 @@ def test_csp_allows_blob_media_and_images(app):
     assert 'blob:' in directives['img-src']
     assert 'media-src' in directives, 'media-src ausente cai em default-src e bloqueia blob:'
     assert 'blob:' in directives['media-src']
+    assert 'frame-src' in directives, 'frame-src ausente cai em default-src e bloqueia embeds do YouTube'
+    assert 'https://www.youtube.com' in directives['frame-src']
+    assert 'https://www.youtube-nocookie.com' in directives['frame-src']
 
 
 def test_service_worker_does_not_intercept_form_posts_and_is_always_revalidated(app):

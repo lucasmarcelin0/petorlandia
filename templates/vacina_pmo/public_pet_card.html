@@ -621,6 +621,13 @@
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen></iframe>
             </div>
+            {% if educational_video.url %}
+              <div style="margin-top:10px;text-align:right;">
+                <a href="{{ educational_video.url }}" target="_blank" rel="noopener noreferrer" style="font-size:0.875rem;color:#1d4ed8;text-decoration:underline;">
+                  Não conseguiu carregar? Assistir diretamente no YouTube &rarr;
+                </a>
+              </div>
+            {% endif %}
           </section>
         {% endif %}
 

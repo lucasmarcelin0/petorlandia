@@ -58,6 +58,7 @@ def _set_request_id_header(response):
             # midia com "Media load rejected by URL safety check".
             "img-src 'self' data: blob: https:; "
             "media-src 'self' data: blob:; "
+            "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
             "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
