@@ -710,12 +710,19 @@ def _row_identity(row: list[Any]) -> dict[str, Any]:
         if len(values) > index:
             phones |= _phone_digit_keys(values[index])
     note = _cell_note(row, TIMESTAMP_COLUMN_INDEX)
+    status_text = (
+        values[STATUS_LINK_COLUMN_INDEX]
+        if len(values) > STATUS_LINK_COLUMN_INDEX
+        else ""
+    )
     return {
         "name": name,
         "name_key": _normalize_text_key(name),
         "names": names,
         "phone_keys": phones,
+        "has_note": bool(note),
         "note_tutor": _note_tutor(note),
+        "status_text": status_text,
     }
 
 
@@ -741,7 +748,11 @@ def _master_row_identities(
         if index == 1:
             continue  # cabeçalho
         identity = _row_identity(row)
-        if not identity["name_key"] and not identity["note_tutor"]:
+        if (
+            not identity["name_key"]
+            and not identity["note_tutor"]
+            and not identity["status_text"]
+        ):
             continue
         identities[index] = identity
     return identities
@@ -759,6 +770,20 @@ def _row_matches_visit(identity: dict[str, Any] | None, visit: PmoVaccinationVis
     return bool(
         _strong_phone_keys(identity["phone_keys"]) & _strong_phone_keys(_phone_keys(visit))
     )
+
+
+def _status_text_is_ours(text: str) -> bool:
+    """O texto da coluna M foi escrito por este script.
+
+    O formato é sempre "<Status geral>\n<Aba> (linha N): <status>". Não diz de
+    QUEM é — por isso só serve para reconhecer sobra nossa, nunca para decidir
+    dono.
+    """
+    stripped = (text or "").strip()
+    if not stripped or "(linha " not in stripped:
+        return False
+    first_line = stripped.splitlines()[0].strip()
+    return first_line in set(STATUS_LABELS.values()) | {"Sem registro"}
 
 
 def _note_is_foreign(identity: dict[str, Any]) -> bool:
@@ -1003,7 +1028,19 @@ def _build_requests(
     # depois da última escrita) e que ninguém vai reescrever agora: limpar é o
     # que impede a equipe de ler "já vacinado" no cadastro errado.
     for row_number, identity in sorted((row_identities or {}).items()):
-        if row_number in written_rows or not _note_is_foreign(identity):
+        if row_number in written_rows:
+            continue
+        # Nota nossa nomeando outro tutor: sobra certa de uma reordenação.
+        foreign_note = _note_is_foreign(identity)
+        # Status nosso na coluna M sem nota nenhuma na coluna A: as duas
+        # coisas são sempre escritas juntas, então um M sozinho é sobra de uma
+        # gravação cuja linha mudou de dono. Quando a nota existe e é do
+        # próprio tutor, nada é tocado.
+        orphan_status = (
+            not identity.get("has_note")
+            and _status_text_is_ours(identity.get("status_text", ""))
+        )
+        if not foreign_note and not orphan_status:
             continue
         requests.extend(_clear_row_requests(sheet_id, row_number))
         counters["linhas_limpas"] += 1

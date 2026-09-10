@@ -373,3 +373,78 @@ def test_ignora_o_cabecalho_e_linhas_vazias():
     ])
 
     assert list(_master_row_identities(service, "sheet-1")) == [3]
+
+
+# ---------------------------------------------------------------------------
+# Status órfão na coluna M (sem nota) — sobra de reordenação anterior
+# ---------------------------------------------------------------------------
+
+def _identity_com_status(name: str, status_text: str, *, phone: str = "") -> dict:
+    row = [{"formattedValue": "17/08/2026 14:42:13"}, {"formattedValue": name}]
+    row += [{"formattedValue": ""} for _ in range(4)]
+    row.append({"formattedValue": phone})
+    while len(row) <= STATUS_LINK_COLUMN_INDEX:
+        row.append({"formattedValue": ""})
+    row[STATUS_LINK_COLUMN_INDEX] = {"formattedValue": status_text}
+    return _row_identity(row)
+
+
+def test_limpa_status_nosso_que_ficou_sem_nota(app):
+    """M com texto nosso e coluna A sem nota: sobra de uma linha que mudou de dono."""
+    master = _visit()
+    identities = {
+        224: _identity_com_status(
+            "Raquel Feliciano",
+            "Vacinado\n20/08/2026 (linha 2): Vacinado - 20/08/2026",
+            phone="16992510438",
+        )
+    }
+
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], {master.id: []}, row_identities=identities
+    )
+
+    assert _status_rows(requests)[224] == ""
+
+
+def test_nao_limpa_texto_digitado_por_pessoa(app):
+    """Texto que não é do nosso formato fica intocado."""
+    master = _visit()
+    identities = {
+        224: _identity_com_status(
+            "Raquel Feliciano", "Ligar de novo na quinta", phone="16992510438"
+        )
+    }
+
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], {master.id: []}, row_identities=identities
+    )
+
+    assert _status_rows(requests) == {}
+
+
+def test_status_com_nota_do_proprio_tutor_e_preservado(app):
+    """Nota nossa do tutor certo + sem match: preserva o compilado que já existia."""
+    master = _visit()
+    row = [
+        {
+            "formattedValue": "17/08/2026 14:42:13",
+            "note": "PetOrlandia PMO\nTutor: Raquel Feliciano\nStatus geral: Vacinado",
+        },
+        {"formattedValue": "Raquel Feliciano"},
+    ]
+    row += [{"formattedValue": ""} for _ in range(4)]
+    row.append({"formattedValue": "16992510438"})
+    while len(row) <= STATUS_LINK_COLUMN_INDEX:
+        row.append({"formattedValue": ""})
+    row[STATUS_LINK_COLUMN_INDEX] = {
+        "formattedValue": "Vacinado\n20/08/2026 (linha 2): Vacinado - 20/08/2026"
+    }
+    identities = {224: _row_identity(row)}
+
+    requests = _build_requests(
+        MASTER_SHEET_ID, [master], {master.id: []}, row_identities=identities
+    )
+
+    assert _status_rows(requests) == {}
+    assert _note_rows(requests) == {}
