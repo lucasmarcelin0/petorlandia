@@ -10,6 +10,7 @@ from flask import abort, current_app, flash, jsonify, make_response, redirect, r
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
+from security.url_safe import is_url_ssrf_safe
 from models import (
     Animal,
     Appointment,
@@ -2606,9 +2607,12 @@ def servicos_vacinas_cidade_por_local():
         return text.strip().lower()
 
     cidade_detectada = None
+    target_url = 'https://nominatim.openstreetmap.org/reverse'
+    if not is_url_ssrf_safe(target_url):
+        return jsonify({'success': False, 'message': 'Serviço de geolocalização indisponível.'}), 502
     try:
         resp = requests.get(
-            'https://nominatim.openstreetmap.org/reverse',
+            target_url,
             params={'lat': lat, 'lon': lng, 'format': 'json', 'addressdetails': 1, 'zoom': 10},
             headers={'User-Agent': 'PetOrlandia/1.0 (+https://petorlandia.com)'},
             timeout=6,
