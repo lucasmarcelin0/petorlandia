@@ -97,7 +97,7 @@
       <input type="number" step="0.01" id="valor-personalizado" class="form-control" placeholder="usar padrão">
     </div>
     <div class="col-md-1">
-      <button type="submit" class="btn btn-success w-100">+</button>
+      <button type="submit" class="btn btn-success w-100" aria-label="Adicionar item ao orçamento" title="Adicionar item ao orçamento">+</button>
     </div>
   </form>
 </div>
@@ -136,7 +136,7 @@
           <small class="d-block text-muted">{{ item.coverage_message }}</small>
         {% endif %}
       </td>
-      <td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento({{ item.id }})">🗑️</button></td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento({{ item.id }})" aria-label="Remover item {{ item.descricao }}" title="Remover item"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></td>
     </tr>
     {% endfor %}
   </tbody>
@@ -482,7 +482,7 @@ async function adicionarItemOrcamento() {
     tr.innerHTML = `<td>${payerBadge(payerType)}<span>${data.descricao}</span></td>` +
                    `<td class="text-end">${data.valor.toFixed(2)}</td>` +
                    `<td class="text-center"><span class="badge bg-${badgeClass}">${badgeLabel}</span>${coverageMessage}</td>` +
-                   `<td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento(${data.id})">🗑️</button></td>`;
+                   `<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento(${data.id})" aria-label="Remover item ${data.descricao}" title="Remover item"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></td>`;
     tbody.appendChild(tr);
     document.getElementById('servico-id').value = '';
     document.getElementById('valor-personalizado').value = '';
