@@ -58,7 +58,7 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
              action('Painel de operação', 'painel_admin.index', 'fa-gauge'),
              action('Alertas', 'admin_notifications', 'fa-bell'),
              action('Funil do produto', 'admin_routes.product_analytics_dashboard', 'fa-chart-line'))
-    if active_vet or worker == 'colaborador' or admin:
+    if active_vet or worker == 'colaborador' or admin or (internship and internship.can_view_full_calendar):
         area('professional', 'Área profissional', 'fa-stethoscope',
              action('Agenda', 'appointments', 'fa-calendar-check'),
              action('Animais', 'novo_animal', 'fa-paw'),

@@ -291,3 +291,33 @@ def test_shared_animal_history_and_prescriptions_are_scoped(monkeypatch, app):
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet2_id))
     resp = client.get(f"/consulta/{animal_id}")
     assert resp.status_code == 404
+
+
+def test_clinic_staff_and_intern_can_access_clinic(monkeypatch, app):
+    from models import ClinicStaff
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        owner = User(name='Owner', email='owner@test.com', password_hash='x')
+        c1 = Clinica(nome='Clinic One')
+        intern_user = User(name='Intern', email='intern@test.com', password_hash='x', worker='estudante')
+        db.session.add_all([owner, c1, intern_user])
+        db.session.flush()
+        c1.owner_id = owner.id
+        staff = ClinicStaff(
+            clinic_id=c1.id,
+            user_id=intern_user.id,
+            is_intern=True,
+            can_view_full_calendar=True,
+            can_view_all_patients=True,
+        )
+        db.session.add(staff)
+        db.session.commit()
+        intern_id = intern_user.id
+        c1_id = c1.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(intern_id))
+    resp = client.get(f'/clinica/{c1_id}')
+    assert resp.status_code == 200
+    assert b'Clinic One' in resp.data

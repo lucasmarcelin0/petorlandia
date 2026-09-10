@@ -12394,6 +12394,10 @@ def _viewer_accessible_clinic_ids(viewer):
     if viewer_clinic and viewer_clinic not in clinic_ids:
         clinic_ids.append(viewer_clinic)
 
+    for staff in getattr(viewer, 'clinic_roles', None) or []:
+        if getattr(staff, 'clinic_id', None) and staff.clinic_id not in clinic_ids:
+            clinic_ids.append(staff.clinic_id)
+
     vet_profile = getattr(viewer, 'veterinario', None)
     for clinic_id in _veterinarian_accessible_clinic_ids(vet_profile):
         if clinic_id not in clinic_ids:

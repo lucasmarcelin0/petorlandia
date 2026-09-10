@@ -199,7 +199,7 @@
             {% endif %}
           </ul>
         </li>
-        {% elif current_user.worker == 'colaborador' %}
+        {% elif current_user.worker == 'colaborador' or is_active_intern(current_user) %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
             <i class="fas fa-calendar-alt me-1 nav-ico--gestao"></i> Agenda
