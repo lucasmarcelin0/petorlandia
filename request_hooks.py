@@ -44,6 +44,16 @@ def _set_request_id_header(response):
                 "Permissions-Policy",
                 "camera=(self), microphone=(self), display-capture=(self), geolocation=(self)",
             )
+        elif request.path.rstrip("/") == "/vacina-pmo":
+            # A tela do vacinador abre a camera dentro da pagina quando o
+            # aparelho nao tem camera nativa de arquivo (notebook). Com
+            # `camera=()` o getUserMedia era bloqueado pelo proprio servidor e
+            # liberar a permissao no navegador nao adiantava: quem trabalhava
+            # no computador nunca conseguia tirar a foto. So a camera, e so
+            # nesta rota.
+            response.headers.setdefault(
+                "Permissions-Policy", "camera=(self), microphone=(), geolocation=(self)"
+            )
         else:
             response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
         response.headers.setdefault(
