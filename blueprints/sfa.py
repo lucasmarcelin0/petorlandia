@@ -158,6 +158,39 @@ def _verificar_webhook_secret() -> bool:
 # Dashboard
 # ---------------------------------------------------------------------------
 
+@bp.route("/entomologia")
+@require_sfa_internal_access
+def entomologia():
+    from services.entomologia_service import load_entomologia, load_reference_maps
+
+    dataset = dict(load_entomologia())
+    dataset['reference_maps'] = [
+        dict(item, url=url_for('sfa_routes.entomologia_mapa', filename=item['file'],
+                               token=_token_admin_informado() or None))
+        for item in load_reference_maps()
+    ]
+
+    response = current_app.make_response(render_template(
+        "sfa/entomologia.html", dataset=dataset,
+    ))
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@bp.route("/entomologia/mapas/<filename>")
+@require_sfa_internal_access
+def entomologia_mapa(filename):
+    from services.entomologia_service import DATA_DIR, load_reference_maps
+
+    if filename not in {item['file'] for item in load_reference_maps()}:
+        abort(404)
+    response = send_file(DATA_DIR / 'maps' / filename)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
 @bp.route("/")
 @require_sfa_internal_access
 def dashboard():
