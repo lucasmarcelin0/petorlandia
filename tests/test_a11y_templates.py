@@ -100,3 +100,15 @@ def test_form_macros_accessibility_attributes():
     assert "'aria_invalid': 'true'" in content
     assert "field.id ~ '-error'" in content
     assert 'invalid-feedback' in content
+
+
+def test_listing_panels_btn_group_a11y_labels():
+    with open("templates/partials/tutores_adicionados.html", "r", encoding="utf-8") as f:
+        tutor_content = f.read()
+    assert 'role="group"' in tutor_content
+    assert 'aria-label="Filtro de escopo dos tutores"' in tutor_content
+
+    with open("templates/partials/animais_adicionados.html", "r", encoding="utf-8") as f:
+        animal_content = f.read()
+    assert 'role="group"' in animal_content
+    assert 'aria-label="Filtro de escopo dos animais"' in animal_content
