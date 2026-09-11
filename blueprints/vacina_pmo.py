@@ -1,6 +1,6 @@
 """Views do domínio vacina_pmo_routes (migrado do app.py)."""
 from flask import Blueprint
-import os, re, requests, threading as _pmo_threading, unicodedata, uuid
+import hashlib, os, re, requests, threading as _pmo_threading, unicodedata, uuid
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from extensions import csrf, db
@@ -1092,6 +1092,17 @@ def vacina_pmo_animal_photo_src(animal_id):
     if not image_url:
         abort(404)
 
+    # A URL da foto muda a cada nova foto (uuid no nome), entao ela identifica
+    # o conteudo: serve de ETag. Responder 304 ANTES de ir ao S3 e o que torna
+    # o reload barato -- antes cada render baixava a imagem inteira de novo
+    # pelo dyno, com 8 s de timeout segurando um worker.
+    etag = f'W/"{hashlib.sha1(image_url.encode("utf-8")).hexdigest()}"'
+    if request.headers.get('If-None-Match') == etag:
+        resposta = current_app.response_class(status=304)
+        resposta.headers['ETag'] = etag
+        resposta.headers['Cache-Control'] = 'private, max-age=3600'
+        return resposta
+
     parsed = urlparse(image_url)
     if not parsed.scheme and image_url.startswith('/static/'):
         requested = (PROJECT_ROOT / image_url.lstrip('/')).resolve()
@@ -1128,7 +1139,12 @@ def vacina_pmo_animal_photo_src(animal_id):
     content_type = (upstream.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower()
     if content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
         abort(415)
-    return send_file(BytesIO(upstream.content), mimetype=content_type, max_age=3600)
+    resposta = send_file(BytesIO(upstream.content), mimetype=content_type, max_age=3600)
+    # `private` porque a foto e do atendimento daquele usuario; `max-age` para
+    # o navegador nao repetir o download. O after_request respeita os dois.
+    resposta.headers['Cache-Control'] = 'private, max-age=3600'
+    resposta.headers['ETag'] = etag
+    return resposta
 
 
 @bp.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
