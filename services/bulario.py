@@ -267,6 +267,27 @@ _DURACAO_PADRAO: List[Tuple[re.Pattern, int, int, str]] = [
 ]
 
 
+# Pre-compiled regex patterns for parsing duration, text cleaning, item extraction, and concentration normalization
+_RE_DUR_FAIXA = re.compile(r'(\d{1,3})\s*(?:a|-|ate)\s*(\d{1,3})\s*dias?')
+_RE_DUR_UNICO = re.compile(r'(?:por|durante|continuidade por|usa-se de)?\s*(\d{1,3})\s*dias?')
+_RE_DUR_SEMANAS = re.compile(r'(\d{1,2})\s*semanas?')
+
+_RE_SPACES = re.compile(r"\s+")
+_RE_TABS_SPACES = re.compile(r"[ \t]+")
+_RE_NEWLINES_3PLUS = re.compile(r"\n{3,}")
+_RE_ITEM_BULLETS = re.compile(r"\s*[•·●▪◦]\s*")
+_RE_ITEM_SEMICOLON = re.compile(r"\s*;\s*")
+_RE_ITEM_PERIOD = re.compile(r"\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ])")
+_RE_ITEM_DASH = re.compile(r"^\s*[-–—]\s*")
+
+_RE_NORM_ML = re.compile(r"\bm\s*l\b|\bml\b", re.IGNORECASE)
+_RE_NORM_SLASH = re.compile(r"\s*/\s*")
+_RE_NORM_CONC_1 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(\d+(?:[.,]\d+)?)\s*(ml|mL|l)\b", re.IGNORECASE)
+_RE_NORM_CONC_2 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(ml|mL|l)\b", re.IGNORECASE)
+_RE_NORM_CONC_3 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b", re.IGNORECASE)
+_RE_NORM_PERCENT = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE)
+
+
 def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     """Retorna (min_dias, max_dias, descricao) de referência para a classe
     do medicamento. Retorna (None, None, None) quando não há padrão aplicável."""
@@ -368,14 +389,14 @@ def _parse_duracao_dias(texto: Optional[str]) -> Tuple[Optional[int], Optional[i
     if not texto:
         return (None, None)
     t = _strip_accents(str(texto)).lower()
-    faixa = re.search(r'(\d{1,3})\s*(?:a|-|ate)\s*(\d{1,3})\s*dias?', t)
+    faixa = _RE_DUR_FAIXA.search(t)
     if faixa:
         return (int(faixa.group(1)), int(faixa.group(2)))
-    unico = re.search(r'(?:por|durante|continuidade por|usa-se de)?\s*(\d{1,3})\s*dias?', t)
+    unico = _RE_DUR_UNICO.search(t)
     if unico:
         val = int(unico.group(1))
         return (val, val)
-    semanas = re.search(r'(\d{1,2})\s*semanas?', t)
+    semanas = _RE_DUR_SEMANAS.search(t)
     if semanas:
         val = int(semanas.group(1)) * 7
         return (val, val)
@@ -519,7 +540,7 @@ def construir_macro_grupos(
 def _texto_limpo(valor: Optional[str]) -> Optional[str]:
     if valor is None:
         return None
-    texto = re.sub(r"\s+", " ", str(valor)).strip()
+    texto = _RE_SPACES.sub(" ", str(valor)).strip()
     return texto or None
 
 
@@ -527,8 +548,8 @@ def _texto_multilinha_limpo(valor: Optional[str]) -> Optional[str]:
     if valor is None:
         return None
     texto = str(valor).replace("\r\n", "\n").replace("\r", "\n")
-    texto = re.sub(r"[ \t]+", " ", texto)
-    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    texto = _RE_TABS_SPACES.sub(" ", texto)
+    texto = _RE_NEWLINES_3PLUS.sub("\n\n", texto)
     texto = texto.strip()
     return texto or None
 
@@ -553,12 +574,12 @@ def _quebrar_em_itens(texto: Optional[str]) -> List[str]:
     if not bruto:
         return []
     candidato = bruto
-    candidato = re.sub(r"\s*[•·●▪◦]\s*", "\n", candidato)
-    candidato = re.sub(r"\s*;\s*", "\n", candidato)
-    candidato = re.sub(r"\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ])", ".\n", candidato)
+    candidato = _RE_ITEM_BULLETS.sub("\n", candidato)
+    candidato = _RE_ITEM_SEMICOLON.sub("\n", candidato)
+    candidato = _RE_ITEM_PERIOD.sub(".\n", candidato)
     partes = []
     for linha in candidato.split("\n"):
-        linha = re.sub(r"^\s*[-–—]\s*", "", linha).strip(" .;-:")
+        linha = _RE_ITEM_DASH.sub("", linha).strip(" .;-:")
         if len(linha) < 3:
             continue
         partes.append(linha)
@@ -1461,25 +1482,22 @@ def _normalizar_concentracao_textual(texto: Optional[str]) -> str:
     s = (texto or '').replace('\xa0', ' ').strip()
     if not s:
         return ''
-    s = re.sub(r'\s+', ' ', s)
-    s = re.sub(r'(?i)\bm\s*l\b|\bml\b', 'mL', s)
-    s = re.sub(r'\s*/\s*', '/', s)
-    s = re.sub(
-        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(\d+(?:[.,]\d+)?)\s*(ml|mL|l)\b',
+    s = _RE_SPACES.sub(' ', s)
+    s = _RE_NORM_ML.sub('mL', s)
+    s = _RE_NORM_SLASH.sub('/', s)
+    s = _RE_NORM_CONC_1.sub(
         lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}/{m.group(3)} {_fmt_unidade_apresentacao(m.group(4))}",
         s,
     )
-    s = re.sub(
-        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(ml|mL|l)\b',
+    s = _RE_NORM_CONC_2.sub(
         lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2) + '/' + m.group(3))}",
         s,
     )
-    s = re.sub(
-        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b',
+    s = _RE_NORM_CONC_3.sub(
         lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}",
         s,
     )
-    s = re.sub(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%', r'\1%', s)
+    s = _RE_NORM_PERCENT.sub(r'\1%', s)
     return s.strip()
 
 
