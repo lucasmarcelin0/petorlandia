@@ -97,7 +97,16 @@ def _set_request_id_header(response):
         response.headers["Cache-Control"] = "no-store"
     elif current_user.is_authenticated:
         # Páginas autenticadas podem conter dados pessoais e clínicos.
-        response.headers["Cache-Control"] = "private, no-store"
+        #
+        # Exceção estreita: uma view pode declarar `private` + `max-age` para
+        # dizer "isto é do próprio usuário e não muda" — é o caso da foto do
+        # animal servida pelo proxy do PMO. Antes esta linha sobrescrevia esse
+        # cabeçalho e o navegador rebaixava a mesma imagem a cada render, com
+        # o dyno buscando tudo de novo no S3. Quem não declara nada continua
+        # em `no-store`.
+        cache_declarado = response.headers.get("Cache-Control", "")
+        if "max-age" not in cache_declarado or "private" not in cache_declarado:
+            response.headers["Cache-Control"] = "private, no-store"
     return response
 
 

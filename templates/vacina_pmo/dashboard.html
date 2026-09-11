@@ -5884,6 +5884,13 @@
     return false;
   }
 
+  // Lado maior da foto enviada. A miniatura da lista tem 40 px, o modal ~400 px
+  // e a carteirinha imprime em torno de 600 px: 1600 px cobre todos com folga.
+  const PHOTO_MAX_SIDE = 1600;
+  const PHOTO_QUALITY = 0.82;
+  // Abaixo disto nao ha o que ganhar reprocessando.
+  const PHOTO_RAW_LIMIT = 500 * 1024;
+
   async function prepareAnimalPhoto(file) {
     if (!looksLikeImageFile(file)) {
       throw new Error('Selecione uma foto válida.');
@@ -5891,7 +5898,12 @@
     if (file.size > 20 * 1024 * 1024) {
       throw new Error('A foto é muito grande. Escolha uma imagem menor.');
     }
-    if (file.size <= 2.5 * 1024 * 1024 && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    // Antes so reduzia acima de 2,5 MB, e quase toda foto de celular cabia
+    // abaixo disso: subia em resolucao cheia (12 MP, ~2 MB) por dado movel do
+    // interior. Era a causa mais comum de "o envio demorou demais" e do selo
+    // vermelho sem explicacao. Agora reduz sempre que houver o que reduzir --
+    // tipicamente 2 MB viram ~250 KB, quase dez vezes menos tempo no ar.
+    if (file.size <= PHOTO_RAW_LIMIT && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       return file;
     }
     if (typeof createImageBitmap !== 'function') {
@@ -5900,16 +5912,17 @@
 
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-      const maxSide = 1600;
-      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(bitmap.width * scale));
       canvas.height = Math.max(1, Math.round(bitmap.height * scale));
       const context = canvas.getContext('2d');
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       if (typeof bitmap.close === 'function') bitmap.close();
-      const blob = await canvasBlob(canvas, 'image/jpeg', 0.86);
+      const blob = await canvasBlob(canvas, 'image/jpeg', PHOTO_QUALITY);
       if (!blob) return file;
+      // Nunca enviar algo maior do que o arquivo que o aparelho ja tinha.
+      if (blob.size >= file.size) return file;
       const baseName = String(file.name || 'foto').replace(/\.[^.]+$/, '') || 'foto';
       return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
     } catch (_error) {
