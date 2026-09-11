@@ -42,7 +42,7 @@
         </a>
         {% endif %}
         {% if scope is defined %}
-        <div class="btn-group btn-group-sm">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Filtro de escopo dos animais">
           <a href="{{ url_for('novo_animal', scope='all') }}"
              class="btn btn-outline-primary {% if current_scope != 'mine' %}active{% endif %}"
              data-scope-value="all">Todos</a>
