@@ -22,14 +22,36 @@ def test_nome_pedido_no_disparo_tem_prioridade():
     assert resolve_app("staging", ["petorlandia", "staging"]) == "staging"
 
 
-def test_varios_apps_sem_escolha_lista_as_opcoes():
+def test_app_com_o_nome_do_repositorio_vence_o_empate():
+    # Caso real: a conta tem oito apps (outros projetos de quem publica) e so
+    # um se chama como o repositorio. Sem isto, publicar pelo celular exigia
+    # digitar o nome a cada vez.
+    disponiveis = [
+        "inglesdinamico", "marcelinoacademy", "marcelinoacademylive", "orla",
+        "pedrocorretora", "petorlandia", "tranquil-sierra-53099",
+        "whispering-crag-62851",
+    ]
+
+    assert resolve_app("", disponiveis, repositorio="petorlandia") == "petorlandia"
+
+
+def test_nome_digitado_vence_o_nome_do_repositorio():
+    assert resolve_app("staging", ["staging", "petorlandia"], "petorlandia") == "staging"
+
+
+def test_varios_apps_sem_nome_igual_ao_repo_lista_as_opcoes():
     with pytest.raises(AppIndefinido) as erro:
-        resolve_app("", ["staging", "petorlandia"])
+        resolve_app("", ["staging", "producao"], repositorio="petorlandia")
 
     mensagem = str(erro.value)
     # A mensagem precisa dizer o que fazer e quais sao as opcoes.
     assert "Run workflow" in mensagem
-    assert "petorlandia" in mensagem and "staging" in mensagem
+    assert "producao" in mensagem and "staging" in mensagem
+
+
+def test_sem_nome_de_repositorio_continua_pedindo_escolha():
+    with pytest.raises(AppIndefinido):
+        resolve_app("", ["staging", "petorlandia"], repositorio="")
 
 
 def test_app_que_a_conta_nao_enxerga_falha_antes_do_push():
