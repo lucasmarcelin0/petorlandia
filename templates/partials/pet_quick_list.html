@@ -65,8 +65,8 @@
       >
         <i class="bi bi-plus-circle me-1"></i> Ver mais pets
       </button>
-      <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
-        <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+      <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets aria-label="Atualizar lista de pacientes">
+        <i class="bi bi-arrow-clockwise me-1"></i><span data-refresh-pets-text>Atualizar lista</span>
       </button>
     </div>
   </div>
@@ -221,6 +221,16 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#{{ component_id }} .spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
 }
 
 @media (max-width: 575.98px) {
@@ -646,6 +656,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (refreshBtn) {
       refreshBtn.disabled = true;
+      refreshBtn.setAttribute('aria-label', 'Atualizando lista de pacientes...');
+      const icon = refreshBtn.querySelector('.bi-arrow-clockwise');
+      if (icon) icon.classList.add('spin');
+      const textSpan = refreshBtn.querySelector('[data-refresh-pets-text]');
+      if (textSpan) textSpan.textContent = 'Atualizando...';
     }
     if (clearBtn) {
       clearBtn.disabled = true;
@@ -747,6 +762,11 @@ document.addEventListener('DOMContentLoaded', function() {
       state.isLoading = false;
       if (refreshBtn) {
         refreshBtn.disabled = false;
+        refreshBtn.setAttribute('aria-label', 'Atualizar lista de pacientes');
+        const icon = refreshBtn.querySelector('.bi-arrow-clockwise');
+        if (icon) icon.classList.remove('spin');
+        const textSpan = refreshBtn.querySelector('[data-refresh-pets-text]');
+        if (textSpan) textSpan.textContent = 'Atualizar lista';
       }
     }
   }
