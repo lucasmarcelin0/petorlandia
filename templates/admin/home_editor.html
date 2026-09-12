@@ -31,8 +31,8 @@
         {% set flag = flag_map[flag_key] %}
         <div class="d-flex align-items-center gap-1">
           <input name="{{ text_key }}" value="{{ texts[text_key] }}" class="form-control rounded-pill text-center" style="width: min(255px, 65vw);" aria-label="Texto do botão">
-            <button type="submit" formaction="{{ url_for('admin_toggle_site_flag') }}" formmethod="post" name="key" value="{{ flag_key }}" class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} este botão">
-              <i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+            <button type="submit" formaction="{{ url_for('admin_toggle_site_flag') }}" formmethod="post" name="key" value="{{ flag_key }}" class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} este botão" aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} este botão">
+              <i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i>
             </button>
         </div>
         {% endfor %}
@@ -49,7 +49,7 @@
           <div><h2 class="h6 mb-1">{{ flag.label }}</h2><p class="small text-muted mb-0">{{ flag.description }}</p></div>
           <form method="post" action="{{ url_for('admin_toggle_site_flag') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ flag.key }}"><input type="hidden" name="return_to" value="home_editor">
-            <button class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco"><i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button>
+            <button class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco" aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco {{ flag.label }}"><i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i></button>
           </form>
         </div>
       </div>
@@ -60,7 +60,7 @@
   <section class="card border-0 shadow-sm rounded-4 p-4 mt-4 {% if not flag_map['home_section_pets'].enabled %}opacity-50{% endif %}">
     <div class="d-flex align-items-center justify-content-between gap-3">
       <div><h2 class="h4 mb-1">{{ texts.pets_title }}</h2><p class="text-muted mb-0">Prévia do bloco de pets da página inicial.</p></div>
-      <form method="post" action="{{ url_for('admin_toggle_site_flag') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="home_section_pets"><input type="hidden" name="return_to" value="home_editor"><button class="btn rounded-circle {% if flag_map['home_section_pets'].enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag_map['home_section_pets'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco"><i class="fa-solid {% if flag_map['home_section_pets'].enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button></form>
+      <form method="post" action="{{ url_for('admin_toggle_site_flag') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="home_section_pets"><input type="hidden" name="return_to" value="home_editor"><button class="btn rounded-circle {% if flag_map['home_section_pets'].enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag_map['home_section_pets'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco" aria-label="{% if flag_map['home_section_pets'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco de pets"><i class="fa-solid {% if flag_map['home_section_pets'].enabled %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i></button></form>
     </div>
   </section>
 </div>
