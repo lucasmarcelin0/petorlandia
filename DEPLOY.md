@@ -71,6 +71,33 @@ chamado `production` (Settings > Environments) com required reviewers e
 acrescente `environment: production` ao job em
 `.github/workflows/deploy.yml`.
 
+## Quando producao tem commit que o repositorio nao tem
+
+Acontece quando alguem publica uma branch direto no Heroku sem passar pelo
+GitHub. O deploy detecta e **se recusa a publicar**:
+
+```
+O Heroku tem commit que este ref nao tem. Traga producao para o ref antes de publicar:
+```
+
+A recusa e proposital: o push e sem `--force`, entao publicar por cima
+apagaria do ar um codigo que nao existe em outro lugar. O conserto e trazer
+producao para o repositorio, nunca forcar.
+
+Pelo celular, use o workflow **Sincronizar producao (Heroku -> GitHub)**: ele
+copia a `main` do Heroku para uma branch nova (`producao/heroku-main-<data>`)
+sem mesclar nada. Abra um Pull Request dessa branch para a `main`, confira o
+que veio e faca o merge. Depois disso o deploy volta a funcionar.
+
+Pelo computador, o equivalente e:
+
+```bash
+git fetch heroku
+git checkout main
+git merge heroku/main
+git push origin main
+```
+
 ## Por que existe um preflight
 
 O `Procfile` declara:
