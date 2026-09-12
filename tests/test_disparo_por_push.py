@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ler_pedido_logs import PedidoInvalido, ler_pedido
+from scripts.ler_pedido_logs import PedidoInvalido, ler_do_ambiente, ler_pedido
 
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -185,7 +185,91 @@ def test_json_quebrado_e_recusado(tmp_path):
         ler_pedido(arquivo)
 
 
-def test_pedido_versionado_no_repositorio_e_valido():
+def test_filtro_com_quebra_de_linha_e_recusado(tmp_path):
+    # GITHUB_OUTPUT e um arquivo de `chave=valor` por linha: uma quebra de
+    # linha no filtro forjaria outras chaves.
+    arquivo = tmp_path / "logs.json"
+    arquivo.write_text(json.dumps({"filtro": "erro\nlinhas=1"}), encoding="utf-8")
+
+    with pytest.raises(PedidoInvalido) as exc:
+        ler_pedido(arquivo)
+    assert "quebra de linha" in str(exc.value)
+
+
+def test_formulario_passa_pela_mesma_validacao_do_arquivo():
+    # Antes so o arquivo era conferido; o que era digitado no formulario ia
+    # cru para o job.
+    assert ler_do_ambiente({"ENTRADA_FILTRO": "animal.*photo", "ENTRADA_LINHAS": "50"}) == {
+        "filtro": "animal.*photo",
+        "linhas": 50,
+    }
+    with pytest.raises(PedidoInvalido):
+        ler_do_ambiente({"ENTRADA_FILTRO": "animal(["})
+    with pytest.raises(PedidoInvalido):
+        ler_do_ambiente({"ENTRADA_LINHAS": "99999"})
+
+
+def test_formulario_vazio_cai_no_padrao():
+    # O formulario manda string vazia quando ninguem digita nada.
+    assert ler_do_ambiente({"ENTRADA_FILTRO": "", "ENTRADA_LINHAS": ""}) == {
+        "filtro": "",
+        "linhas": 500,
+    }
+
+
+# --- o que veio da revisao do Codex no #1842 ------------------------------
+
+
+@pytest.mark.parametrize("arquivo,job", [("deploy.yml", "deploy"), ("logs-heroku.yml", "logs")])
+def test_apagar_a_branch_nao_dispara_o_job(arquivo, job):
+    """Apagar `disparo/*` tambem gera um evento de `push`.
+
+    Ele vem com `deleted: true` e apontando para o commit do branch padrao --
+    que passaria na conferencia de ancestralidade. Sem esta guarda, a faxina
+    de apagar a branch depois de publicar dispararia OUTRA publicacao.
+    """
+    fonte = texto(arquivo)
+    cabecalho = fonte.split("steps:")[0]
+    condicao = re.search(rf"  {job}:\n(?:.*\n)*?    if: (.+)", cabecalho)
+    assert condicao, f"o job {job} precisa de uma guarda contra o evento de delecao"
+    assert "github.event.deleted" in condicao.group(1)
+
+
+def linhas_de_script(fonte):
+    """As linhas que ficam dentro de um bloco `run: |`."""
+    dentro = False
+    for linha in fonte.splitlines():
+        if re.match(r"^        run: \|", linha):
+            dentro = True
+            continue
+        if dentro and linha.strip() and not linha.startswith("          "):
+            dentro = False
+        if dentro:
+            yield linha
+
+
+def test_logs_nao_interpola_nada_dentro_do_script():
+    """`${{ }}` e substituicao textual, nao passagem de argumento.
+
+    Um filtro com aspas ou `$(...)` viraria comando em vez de argumento. Neste
+    workflow tudo passa por variavel de ambiente, sem excecao.
+    """
+    culpadas = [linha.strip() for linha in linhas_de_script(texto("logs-heroku.yml")) if "${{" in linha]
+    assert not culpadas, f"valor interpolado dentro de um script: {culpadas}"
+
+
+def test_deploy_nao_interpola_entrada_de_formulario_dentro_do_script():
+    """`inputs.*` e o que uma pessoa digita: nunca pode virar texto de script.
+
+    O passo "Resumo" roda com `if: always()`, entao um `ref` malformado chega
+    la mesmo quando o checkout falha antes.
+    """
+    culpadas = [
+        linha.strip()
+        for linha in linhas_de_script(texto("deploy.yml"))
+        if re.search(r"\$\{\{[^}]*inputs\.", linha)
+    ]
+    assert not culpadas, f"entrada de formulario interpolada num script: {culpadas}"
     # O arquivo que esta no repo precisa ser lido pelo proprio script: se
     # alguem o quebrar, o teste avisa antes do push disparar o workflow.
     pedido = ler_pedido(RAIZ / ".github" / "disparo" / "logs.json")

@@ -38,6 +38,9 @@ permissions:
 jobs:
   logs:
     runs-on: ubuntu-latest
+    # Apagar a branch tambem gera um evento de `push`. Ler log por engano custa
+    # pouco, mas o job nao tem por que rodar numa faxina de branch.
+    if: ${{ github.event_name != 'push' || github.event.deleted != true }}
     timeout-minutes: 10
     env:
       HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
@@ -60,28 +63,41 @@ jobs:
 
       - name: Resolver app do Heroku
         id: app
+        env:
+          NOME_PEDIDO: ${{ inputs.app || secrets.HEROKU_APP_NAME }}
+          NOME_REPO: ${{ github.event.repository.name }}
         run: |
-          nome=$(python scripts/resolve_heroku_app.py \
-            --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}" \
-            --repo "${{ github.event.repository.name }}")
+          nome=$(python scripts/resolve_heroku_app.py --name "$NOME_PEDIDO" --repo "$NOME_REPO")
           echo "nome=$nome" >> "$GITHUB_OUTPUT"
           echo "Lendo logs de: $nome"
 
       # No `workflow_dispatch` os parametros vem do formulario; no `push` vem do
-      # arquivo de pedido. Daqui para baixo o job nao sabe mais a diferenca.
+      # arquivo de pedido. Daqui para baixo o job nao sabe mais a diferenca --
+      # e os dois passam pela mesma validacao, que antes so o arquivo tinha.
+      #
+      # Tudo que veio de fora entra por variavel de ambiente, nunca interpolado
+      # dentro do texto do script: `${{ }}` e substituicao textual, entao um
+      # filtro com aspas ou `$(...)` viraria comando em vez de argumento.
       - name: Parametros do pedido
         id: pedido
+        env:
+          ENTRADA_FILTRO: ${{ inputs.filtro }}
+          ENTRADA_LINHAS: ${{ inputs.linhas }}
+          EVENTO: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "filtro=${{ inputs.filtro }}" >> "$GITHUB_OUTPUT"
-            echo "linhas=${{ inputs.linhas }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENTO" = "workflow_dispatch" ]; then
+            python scripts/ler_pedido_logs.py --do-ambiente
           else
             python scripts/ler_pedido_logs.py --arquivo .github/disparo/logs.json
           fi
 
       - name: Ultimas linhas
+        env:
+          APP: ${{ steps.app.outputs.nome }}
+          LINHAS: ${{ steps.pedido.outputs.linhas }}
+          FILTRO: ${{ steps.pedido.outputs.filtro }}
         run: |
           python scripts/heroku_logs.py \
-            --app "${{ steps.app.outputs.nome }}" \
-            --lines "${{ steps.pedido.outputs.linhas }}" \
-            --filtro "${{ steps.pedido.outputs.filtro }}"
+            --app "$APP" \
+            --lines "$LINHAS" \
+            --filtro "$FILTRO"
