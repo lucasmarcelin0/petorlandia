@@ -15,6 +15,10 @@ on:
         description: "Branch, tag ou commit a publicar"
         required: false
         default: main
+      app:
+        description: "App do Heroku (vazio = descobre sozinho pelo token)"
+        required: false
+        default: ""
       run_tests:
         description: "Rodar a suite antes de publicar (desligue so em emergencia)"
         type: boolean
@@ -39,11 +43,8 @@ jobs:
     steps:
       - name: Conferir credenciais
         run: |
-          missing=""
-          [ -n "$HEROKU_API_KEY" ] || missing="$missing HEROKU_API_KEY"
-          [ -n "$HEROKU_APP_NAME" ] || missing="$missing HEROKU_APP_NAME"
-          if [ -n "$missing" ]; then
-            echo "Faltam secrets:$missing"
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "Falta o secret HEROKU_API_KEY."
             echo "Configure em Settings > Secrets and variables > Actions > New repository secret."
             exit 1
           fi
@@ -61,6 +62,16 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+
+      # O nome do app nao precisa estar configurado em lugar nenhum: o token
+      # ja diz quais apps a conta tem. Isso e o que torna o deploy possivel
+      # pelo celular, onde nao da para criar secret nem rodar `git remote`.
+      - name: Resolver app do Heroku
+        id: app
+        run: |
+          nome=$(python scripts/resolve_heroku_app.py --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}")
+          echo "nome=$nome" >> "$GITHUB_OUTPUT"
+          echo "Publicando em: $nome"
 
       - name: Instalar dependencias
         run: |
@@ -91,7 +102,7 @@ jobs:
             -H "Accept: application/vnd.heroku+json; version=3" \
             -H "Authorization: Bearer $HEROKU_API_KEY" \
             -H "Range: version ..; order=desc, max=1" \
-            "https://api.heroku.com/apps/$HEROKU_APP_NAME/releases" \
+            "https://api.heroku.com/apps/${{ steps.app.outputs.nome }}/releases" \
             | python -c "import json,sys; d=json.load(sys.stdin); print(d[0]['version'] if d else 0)")
           echo "versao=$versao" >> "$GITHUB_OUTPUT"
           echo "Release atual em producao: v$versao"
@@ -100,7 +111,7 @@ jobs:
         id: push
         run: |
           set -euo pipefail
-          git remote add heroku "https://heroku:$HEROKU_API_KEY@git.heroku.com/$HEROKU_APP_NAME.git"
+          git remote add heroku "https://heroku:$HEROKU_API_KEY@git.heroku.com/${{ steps.app.outputs.nome }}.git"
           # App que nunca publicou nao tem `main` remoto: nesse caso nao ha o
           # que comparar e o push segue direto.
           if git fetch heroku main; then
@@ -128,7 +139,7 @@ jobs:
         if: ${{ steps.push.outputs.publicou == 'true' }}
         run: |
           python scripts/wait_heroku_release.py \
-            --app "$HEROKU_APP_NAME" \
+            --app "${{ steps.app.outputs.nome }}" \
             --after-version "${{ steps.antes.outputs.versao }}"
 
       - name: Resumo
@@ -137,6 +148,7 @@ jobs:
           {
             echo "### Deploy Heroku"
             echo ""
+            echo "- app: \`${{ steps.app.outputs.nome || 'nao resolvido' }}\`"
             echo "- ref publicado: \`${{ inputs.ref }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
             echo "- suite executada: \`${{ inputs.run_tests }}\`"
             echo "- publicou: \`${{ steps.push.outputs.publicou || 'nao chegou a publicar' }}\`"
