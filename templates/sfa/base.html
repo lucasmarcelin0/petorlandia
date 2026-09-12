@@ -21,6 +21,8 @@
     body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; }
     .sfa-sidebar {
       min-height: 100vh;
+      height: 100dvh;
+      overflow-y: auto;
       background: var(--sfa-teal);
       color: white;
       padding-top: 1rem;
@@ -29,6 +31,7 @@
       top: 0; left: 0;
       z-index: 100;
     }
+    .sfa-sidebar > * { flex-shrink: 0; }
     .sfa-sidebar .nav-link {
       color: rgba(255,255,255,.8);
       padding: .5rem 1.25rem;
@@ -158,6 +161,13 @@
       </form>
     </li>
   </ul>
+  <div class="mx-3 my-3 p-2 rounded" style="border:1px solid rgba(255,255,255,.25)">
+    <div class="px-2 mb-1" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7)">Território e vigilância</div>
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.entomologia') }}" {% if request.endpoint == 'sfa_routes.entomologia' %}aria-current="page"{% endif %}>
+      <i class="fas fa-map-location-dot" aria-hidden="true"></i> Dados entomológicos<br><span class="ms-4">e censitários</span>
+    </a>
+  </div>
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>
 

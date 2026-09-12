@@ -3105,6 +3105,16 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "entomologia",
+  "rule": "/sfa/entomologia",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "entomologia_mapa",
+  "rule": "/sfa/entomologia/mapas/<filename>",
+  "methods": "GET"
+ },
+ {
   "endpoint": "enviar_assinatura_bloco_prescricao",
   "rule": "/bloco_prescricao/<int:bloco_id>/assinatura",
   "methods": "POST"
@@ -5832,6 +5842,16 @@
  {
   "endpoint": "sfa_routes.dashboard",
   "rule": "/sfa/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.entomologia",
+  "rule": "/sfa/entomologia",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.entomologia_mapa",
+  "rule": "/sfa/entomologia/mapas/<filename>",
   "methods": "GET"
  },
  {

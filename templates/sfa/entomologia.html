@@ -1,0 +1,118 @@
+{% extends 'sfa/base.html' %}
+{% block title %}Dados entomológicos e censitários — Orlândia{% endblock %}
+{% block page_title %}Território e vigilância{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
+{% endblock %}
+{% block content %}
+<div class="ento-page">
+  <header class="ento-hero">
+    <div><div class="ento-eyebrow">ORLÂNDIA / SÃO PAULO</div>
+      <h1>Um olhar sobre o território</h1>
+      <p>Organize o trabalho de campo com os sinais entomológicos, as dificuldades de acesso e o contexto da cidade.</p>
+    </div>
+    <div class="ento-source-chip"><span class="ento-dot"></span> Vigilância entomológica<br><strong id="source-period">Carregando período…</strong><small>Base importada • Censo de referência: 2022</small></div>
+  </header>
+  <noscript><div class="alert alert-warning">Ative o JavaScript para usar o mapa e os filtros.</div></noscript>
+  <div id="ento-error" class="alert alert-danger" role="alert" hidden></div>
+  <div class="ento-tabs" role="tablist" aria-label="Visões dos dados">
+    <button type="button" role="tab" id="tab-planning" aria-selected="true" aria-controls="panel-planning" data-view="planning">Planejamento</button>
+    <button type="button" role="tab" id="tab-visits" aria-selected="false" aria-controls="panel-visits" tabindex="-1" data-view="visits">Entomologia</button>
+    <button type="button" role="tab" id="tab-census" aria-selected="false" aria-controls="panel-census" tabindex="-1" data-view="census">Censo 2022</button>
+    <button type="button" role="tab" id="tab-reference" aria-selected="false" aria-controls="panel-reference" tabindex="-1" data-view="reference">Mapas de campo</button>
+  </div>
+
+  <section id="panel-planning" role="tabpanel" aria-labelledby="tab-planning">
+    <div class="ento-panel-title"><div><h2>Onde concentrar a próxima revisão de campo</h2><p>Listas para apoiar a equipe municipal. A ordenação indica sinais observados; não estima o risco de dengue.</p></div></div>
+    <div id="planning-freshness" class="ento-notice" role="status"></div>
+    <form id="planning-filters" class="ento-panel ento-filters">
+      <div><label for="planning-end">Data de referência</label><input type="date" id="planning-end" required></div>
+      <div><label for="planning-window">Janela de análise</label><select id="planning-window"><option value="7">7 dias</option><option value="14">14 dias</option><option value="28" selected>28 dias</option></select></div>
+      <div><label for="planning-sector">Setor censitário</label><select id="planning-sector"><option value="">Todos os setores</option></select></div>
+      <div><label for="planning-scale">Detalhamento da lista</label><select id="planning-scale"><option value="sector">Por setor</option><option value="block">Por setor e quarteirão</option></select></div>
+      <p id="planning-error" class="text-danger mb-0" role="alert" hidden></p>
+    </form>
+    <p id="planning-period" class="mt-3" aria-live="polite"></p>
+    <div id="planning-kpis" class="ento-kpis"></div>
+    <div class="ento-planning-grid">
+      <section class="ento-panel"><div class="ento-eyebrow">SUSPEITAS DE DENGUE</div><h2>Base municipal ainda não integrada</h2><p>Sem dados de casos neste painel. Isso não significa zero casos. A cobertura da fonte SINAN/SFA precisa ser confirmada antes de comparar bairros.</p><p>A fila de investigação deverá mostrar notificações recentes, início dos sintomas, local provável de infecção, situação da investigação e tempo até a ação. Participantes da pesquisa devem permanecer identificados como uma população específica.</p></section>
+      <section class="ento-panel"><div class="ento-eyebrow">TERRITÓRIO E MORADIA</div><h2>Do setor ao bairro</h2><p>O Censo 2022 descreve população e domicílios. Para planejar rotas por bairro, falta validar o vínculo entre bairro, setor e quarteirão com a equipe municipal.</p><p>As contagens de visitas podem incluir revisitas. Não são cobertura de residências únicas. Consulte a aba Censo 2022 para dimensionar o território.</p></section>
+    </div>
+    <section class="ento-panel mt-3">
+      <div class="ento-panel-title"><div><h2>Listas de revisão operacional</h2><p>Conferir intervenções e retornos já realizados antes de distribuir trabalho.</p></div><button type="button" id="export-planning" class="btn btn-outline-secondary">Exportar lista CSV</button></div>
+      <div class="ento-queue-control"><label for="planning-queue">Frente de trabalho</label><select id="planning-queue"><option value="focus">Verificar focos registrados</option><option value="access">Recuperar acesso aos imóveis</option><option value="quality">Completar informação de campo</option></select></div>
+      <p id="planning-rule" class="mt-3"></p><p id="planning-count" role="status"></p>
+      <div class="ento-table-wrap"><table class="table table-sm"><thead id="planning-head"></thead><tbody id="planning-rows"></tbody></table></div>
+      <p class="ento-footnote mt-3">Somas de ocorrências, com possíveis revisitas. “—” é ausência de valor informado; zero pode ser uma soma parcial. Larvas em várias datas indicam repetição de registros no território, sem comprovar persistência no mesmo imóvel. A fonte não informa se as pendências continuam abertas.</p>
+    </section>
+    <section class="ento-panel mt-3"><h2>Como o recorte se compara ao anterior</h2><p id="planning-comparison-note"></p><div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Medida</th><th>Janela selecionada</th><th>Janela anterior</th></tr></thead><tbody id="planning-comparison"></tbody></table></div><p class="ento-footnote mt-3">Diferenças podem refletir locais visitados, esforço de busca e preenchimento. Não demonstram aumento ou queda da transmissão.</p></section>
+    <details class="ento-panel ento-method"><summary>Ações propostas e como verificar o retorno à população</summary>
+      <p>Propostas para pactuação com a vigilância, atenção básica e serviços urbanos. Os dados atuais permitem selecionar territórios para revisão; ainda não medem o efeito dessas ações.</p>
+      <div class="ento-table-wrap"><table class="table table-sm ento-programs"><thead><tr><th>Frente</th><th>Trabalho proposto</th><th>Resultado a acompanhar</th></tr></thead><tbody>
+        <tr><td>Imóvel acessível</td><td>Agendar retornos e testar horários alternativos com ACE e ACS; registrar o motivo de não acesso.</td><td>Imóveis anteriormente não acessados que foram inspecionados / imóveis únicos com retorno previsto; horas da equipe por acesso recuperado.</td></tr>
+        <tr><td>Criadouro resolvido</td><td>Verificar focos, identificar o tipo de recipiente e encaminhar problemas de água, resíduos e drenagem ao serviço responsável.</td><td>Problemas com resolução verificada / problemas com verificação prevista; repetição de achados no acompanhamento.</td></tr>
+        <tr><td>Resposta às suspeitas</td><td>Integrar notificações e investigação epidemiológica para orientar a resposta territorial segundo protocolo municipal.</td><td>Tempo da notificação à investigação e à ação; pendências abertas e completude do local provável de infecção.</td></tr>
+        <tr><td>Registro que orienta</td><td>Separar zero, não examinado e não informado; atribuir identificadores de imóvel, visita e ação.</td><td>Completude, duplicações, atualização e territórios sem informação suficiente.</td></tr>
+      </tbody></table></div>
+      <p>Começar com um piloto em territórios comparáveis, registrar esforço e custos e avaliar resultados ao longo do tempo. A queda de notificações, isoladamente, não comprova efeito do programa.</p>
+      <p>A combinação de vigilância e manejo integrado segue a orientação do <a href="https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/a/aedes-aegypti/vigilancia-entomologica" target="_blank" rel="noopener noreferrer">Ministério da Saúde sobre vigilância e controle do vetor</a>. A escolha de intervenções cabe à equipe técnica; a lista não prescreve aplicação de inseticida.</p>
+    </details>
+  </section>
+
+  <section id="panel-visits" role="tabpanel" aria-labelledby="tab-visits" hidden>
+    <form id="ento-filters" class="ento-panel ento-filters">
+      <div><label for="date-start">Data inicial</label><input type="date" id="date-start" required></div>
+      <div><label for="date-end">Data final</label><input type="date" id="date-end" required></div>
+      <div><label for="sector-filter">Setor censitário</label><select id="sector-filter"><option value="">Todos os setores</option></select></div>
+      <div><label for="block-filter">Quarteirão</label><select id="block-filter"><option value="">Todos</option></select></div>
+      <div><label for="result-filter">Resultado de larvas</label><select id="result-filter"><option value="">Todos os resultados</option><option value="positive">Com larvas</option><option value="zero">Zero informado</option><option value="missing">Sem informação</option></select></div>
+      <div><label for="species-filter">Espécie identificada</label><select id="species-filter"><option value="">Todas</option><option value="aegypti">A. aegypti presente</option><option value="albopictus">A. albopictus presente</option></select></div>
+      <div><label for="mapping-filter">Localização</label><select id="mapping-filter"><option value="">Todos os registros</option><option value="mapped">Com setor na malha</option><option value="unmapped">Sem setor na malha</option></select></div>
+      <div class="ento-filter-actions"><button type="reset" class="btn btn-outline-secondary">Limpar filtros</button></div>
+      <p id="filter-error" class="text-danger mb-0" role="alert" hidden></p>
+    </form>
+    <div class="ento-section-line"><p id="filter-summary" role="status" aria-live="polite"></p><span id="source-area"></span></div>
+    <div class="ento-kpis" id="visit-kpis"></div>
+    <div class="ento-notice" id="quality-notice"></div>
+    <div class="ento-map-layout">
+      <section class="ento-panel ento-map-panel">
+        <div class="ento-panel-title"><div><h2>Distribuição por setor</h2><p>Clique em um setor para filtrar a análise.</p></div><button id="map-reset" class="btn btn-sm btn-outline-secondary" type="button">Enquadrar cidade</button></div>
+        <div class="ento-map-toolbar"><label for="map-metric">Colorir por</label><select id="map-metric"><option value="positive">Imóveis com larvas</option><option value="aegypti">Imóveis com A. aegypti</option><option value="albopictus">Imóveis com A. albopictus</option><option value="worked">Imóveis trabalhados</option><option value="closed">Imóveis fechados</option><option value="refused">Recusas</option><option value="aegypti_larvae">Larvas de A. aegypti</option></select></div>
+        <div id="visits-map" class="ento-map" role="region" aria-label="Mapa interativo de visitas por setor censitário"></div>
+        <div id="map-legend" class="ento-legend"></div>
+        <p class="ento-footnote">Limites IBGE 2022. Associação exploratória pelo código do setor; a equivalência com o cadastro operacional ainda precisa ser validada. Os polígonos não indicam a posição de cada imóvel.</p>
+      </section>
+      <aside class="ento-panel ento-detail"><div class="ento-eyebrow">NO RECORTE ATUAL</div><h2>Leitura dos registros</h2><div id="visit-detail"></div><hr><h3>Como interpretar</h3><p>As somas representam ocorrências nas visitas. Um imóvel pode aparecer mais de uma vez no período.</p><p>Campos vazios permanecem sem informação. Os totais de larvas consideram apenas valores preenchidos.</p><p>Esta etapa é descritiva. Não calcula correlações com participantes da pesquisa.</p></aside>
+    </div>
+    <div class="ento-charts">
+      <section class="ento-panel"><div class="ento-panel-title"><div><h2>Evolução no período</h2><p>Meses sem resultado informado aparecem como “s/i”.</p></div><label class="visually-hidden" for="trend-metric">Indicador da evolução</label><select id="trend-metric"><option value="positive">Imóveis com larvas</option><option value="worked">Imóveis trabalhados</option><option value="aegypti_larvae">Larvas de A. aegypti</option></select></div><div id="trend-chart" tabindex="0" role="region" aria-label="Gráfico mensal; deslize para ver todos os meses"></div></section>
+      <section class="ento-panel"><div class="ento-panel-title"><div><h2>Setores com mais registros positivos</h2><p>Imóveis com larvas • até 8 setores do recorte</p></div></div><div id="ranking-chart"></div></section>
+    </div>
+    <section class="ento-panel"><div class="ento-panel-title"><div><h2>Registros de campo</h2><p>Uma linha do arquivo por registro. “—” significa sem informação.</p></div><button id="export-visits" type="button" class="btn btn-outline-secondary">Exportar recorte CSV</button></div>
+      <div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Data</th><th>Setor</th><th>Quarteirão</th><th>Trabalhados</th><th>Fechados</th><th>Recusas</th><th>Com larvas</th><th>A. aegypti</th><th>A. albopictus</th></tr></thead><tbody id="visit-rows"></tbody></table></div>
+      <div class="ento-pagination"><button type="button" id="page-prev" class="btn btn-sm btn-outline-secondary">Anterior</button><span id="page-status" aria-live="polite"></span><button type="button" id="page-next" class="btn btn-sm btn-outline-secondary">Próxima</button></div>
+    </section>
+  </section>
+
+  <section id="panel-census" role="tabpanel" aria-labelledby="tab-census" hidden>
+    <div class="ento-notice">Retrato do Censo 2022. Os filtros de datas, quarteirões e larvas da aba Entomologia não alteram esta população de referência.</div>
+    <div class="ento-panel ento-census-controls"><div><label for="census-sector">Setor censitário</label><select id="census-sector"><option value="">Todo o município</option></select></div><div><label for="census-situation">Situação territorial</label><select id="census-situation"><option value="">Urbana e rural</option><option>Urbana</option><option>Rural</option></select></div><div><label for="census-metric">Indicador no mapa</label><select id="census-metric"><option value="population">População residente</option><option value="households">Domicílios totais</option><option value="occupied_households">Domicílios particulares ocupados</option><option value="density">Densidade demográfica (hab./km²)</option></select></div><button type="button" id="census-reset" class="btn btn-outline-secondary">Limpar seleção</button></div>
+    <div class="ento-kpis" id="census-kpis"></div>
+    <section class="ento-panel ento-map-panel"><div class="ento-panel-title"><div><h2>Contexto censitário</h2><p>Clique no mapa para consultar um setor.</p></div><button type="button" id="export-census" class="btn btn-sm btn-outline-secondary">Exportar Censo CSV</button></div><div id="census-map" class="ento-map" role="region" aria-label="Mapa interativo do Censo 2022"></div><div id="census-legend" class="ento-legend"></div></section>
+    <section class="ento-panel mt-3"><h2>Setores selecionados</h2><div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Setor</th><th>Situação</th><th>População</th><th>Domicílios totais</th><th>Particulares ocupados</th><th>Área (km²)</th><th>Hab./km²</th></tr></thead><tbody id="census-rows"></tbody></table></div></section>
+  </section>
+
+  <section id="panel-reference" role="tabpanel" aria-labelledby="tab-reference" hidden>
+    <div class="ento-notice">Mapas operacionais recebidos em Dados.zip. A numeração de áreas de campo não foi convertida em setores do IBGE. Estas imagens são referências e não mudam com os filtros de visitas.</div>
+    <section class="ento-panel"><div class="ento-panel-title"><div><h2>Mapas da equipe de campo</h2><p>Use o zoom e arraste para examinar quarteirões e anotações.</p></div><label class="visually-hidden" for="reference-select">Mapa de campo</label><select id="reference-select"></select></div><div id="reference-map" class="ento-map ento-reference-map" role="region" aria-label="Mapa operacional com zoom"></div></section>
+  </section>
+  <details class="ento-panel ento-method"><summary>Fontes e critérios de leitura</summary><p><strong>Visitas:</strong> {{ dataset.source.file }}, recebido em Dados.zip. Período disponível indicado no cabeçalho. Nenhum registro foi descartado por semelhança; a fonte não fornece um identificador único confiável de visita. Nomes e logins de agentes não compõem este painel.</p><p><strong>Censo:</strong> <a href="{{ dataset.source.census_url }}" target="_blank" rel="noopener noreferrer">IBGE, malha de setores com atributos do Censo 2022 (SP)</a>. População: V0001; domicílios totais: V0002; domicílios particulares ocupados: V0007. Densidade: população dividida pela área do setor. <a href="https://ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios/malha_com_atributos/Dicionario_de_dados_malha_agregados.xlsx" target="_blank" rel="noopener noreferrer">Dicionário de dados</a>.</p><p><strong>Compatibilidade territorial:</strong> códigos ausentes da malha permanecem nos gráficos, totais e tabela, mas não recebem uma localização estimada. A coincidência de códigos não comprova que os limites operacionais sejam os mesmos do Censo. População e domicílios não são usados como denominadores das visitas.</p><p><strong>Preenchimento de larvas:</strong> percentual de registros com valor em IM. LARVA. Não representa a proporção de imóveis examinados. Não se calcula IIP ou índice de Breteau sem validar o universo inspecionado e a completude dos resultados.</p><p><strong>Referências de campo:</strong> PDF “MAPA VETORES 2018” e 13 imagens do ZIP, preservadas visualmente em versões de consulta. Base carregada como uma fotografia dos arquivos, sem sincronização automática.</p></details>
+</div>
+<script type="application/json" id="ento-dataset">{{ dataset | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_entomologia_model.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_entomologia.js') }}"></script>
+{% endblock %}
