@@ -101,7 +101,7 @@
   <link href="{{ url_for('static', filename='css/clinic.css', v='20260802-mobile-navbar2') }}" rel="stylesheet">
   {# Camada visual do portal do tutor. Mantida separada da base clínica para
      que os padrões de navegação, cards e rodapé evoluam juntos. #}
-  <link href="{{ url_for('static', filename='css/tutor-experience.css', v='20260905-avatar') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/tutor-experience.css', v='20260912-footer-egg') }}" rel="stylesheet">
   {% if current_user.is_authenticated %}
   <link href="{{ url_for('static', filename='css/workspace_nav.css', v='1') }}" rel="stylesheet">
   {% endif %}
@@ -388,7 +388,21 @@
       </nav>
     </div>
     <div class="site-footer__bottom">
-      <span>&copy; 2026 PetOrlândia. Todos os direitos reservados.</span>
+      <span class="site-footer__legal">
+        {# O aviso de copyright e tambem a porta do easter egg: clicar nele
+           revela a patinha que leva para /surpresa. Botao de verdade (e nao
+           um span com onclick) para funcionar com teclado e leitor de tela. #}
+        <button type="button" class="site-footer__egg-key" id="footer-egg-key"
+                aria-expanded="false" aria-controls="footer-egg-link">
+          &copy; 2026 PetOrlândia.
+        </button>
+        Todos os direitos reservados.
+        <a href="{{ url_for('secret_game') }}" target="_blank" rel="noopener"
+           class="site-footer__egg" id="footer-egg-link" hidden title="Surpresa!">
+          <i class="fas fa-paw" aria-hidden="true"></i>
+          <span class="visually-hidden">Abrir a página secreta de jogos</span>
+        </a>
+      </span>
       {% if current_user.is_authenticated and current_user.role == 'admin' %}
       <a href="{{ url_for('admin_home_editor') }}" title="Editar elementos da página inicial">
         <i class="fa-solid fa-house-pen me-1" aria-hidden="true"></i>Editar início
@@ -602,6 +616,7 @@
   {% endif %}
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
   <script src="{{ url_for('static', filename='js/cta_tracking.js', v='20260905') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/footer_egg.js', v='20260912') }}" defer></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
 </body>
