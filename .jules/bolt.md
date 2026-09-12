@@ -23,3 +23,6 @@
 **Learning:** In `helpers.py`, `has_conflict_for_slot` checked time window filters for conflicting appointments/exams. When 0 conflicts were returned in the window (indicating a free slot), fallback clauses (`if not cached_appts and not appointments:`) triggered queries for ALL appointments and exams for the veterinarian across the entire database history. Removing these unnecessary fallbacks provided a 5.3x speedup on slot conflict checks.
 **Action:** Do not issue fallback un-bounded queries when targeted window queries return empty sets indicating no records exist within the range.
 
+## 2026-09-12 - ASCII Fast-Path and Pre-compiled Regexes in Medication Name Normalization
+**Learning:** In `services/medicamento_curadoria.py`, `normalizar_nome_prescrito` ran `unicodedata.normalize("NFKD", texto)` and character-combining filtering loops on every string, along with re-compiling regexes (`[^\w%/.,+\- ]+` and `\s*-\s*`) dynamically on every call. Adding an `isascii()` pre-condition check to short-circuit NFKD decomposition and pre-compiling regex patterns at module level yields a ~40% execution speedup.
+**Action:** Check for ASCII pre-conditions before unicodedata decomposition in string normalization helpers, and pre-compile regular expression patterns at module level.
