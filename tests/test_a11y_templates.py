@@ -112,3 +112,14 @@ def test_listing_panels_btn_group_a11y_labels():
         animal_content = f.read()
     assert 'role="group"' in animal_content
     assert 'aria-label="Filtro de escopo dos animais"' in animal_content
+
+
+def test_home_editor_icon_button_a11y_labels():
+    with open("templates/admin/home_editor.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} este botão"' in content
+    assert 'aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco {{ flag.label }}"' in content
+    assert 'aria-label="{% if flag_map[\'home_section_pets\'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco de pets"' in content
+    assert 'aria-hidden="true"' in content
+
