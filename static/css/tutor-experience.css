@@ -398,6 +398,24 @@
 .site-footer a:hover, .site-footer a:focus-visible { color: var(--tutor-brand-strong); text-decoration: underline; }
 .site-footer__bottom { border-top: 1px solid var(--tutor-line); display: flex; font-size: .8rem; gap: 1rem; justify-content: space-between; margin: 0 auto; max-width: 1200px; padding: 1rem 1.5rem calc(1rem + env(safe-area-inset-bottom)); }
 
+/* O gatilho do easter egg e um <button> para responder a teclado e leitor de
+   tela, mas nao pode PARECER um botao: se anunciar, deixa de ser segredo.
+   `font: inherit` o devolve ao texto do rodape. */
+.site-footer__egg-key { appearance: none; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; }
+/* O foco continua visivel: esconder o segredo nao pode custar a navegacao por
+   teclado de quem nunca vai procura-lo. */
+.site-footer__egg-key:focus-visible { outline: 2px solid var(--tutor-brand-strong); outline-offset: 2px; }
+.site-footer__egg { color: var(--tutor-brand-strong); margin-left: .35rem; }
+.site-footer__egg[hidden] { display: none; }
+/* Aparece com um aceno curto -- o suficiente para o olho pegar num rodape. */
+@media (prefers-reduced-motion: no-preference) {
+  .site-footer__egg { animation: site-footer-egg-in .45s ease-out; }
+  @keyframes site-footer-egg-in {
+    from { opacity: 0; transform: translateY(.35rem) rotate(-18deg); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
 @media (max-width: 767.98px) {
   .messages-support { align-items: flex-start; flex-direction: column; }
   .message-thread { align-items: flex-start; }
