@@ -1,0 +1,98 @@
+# Espelha no GitHub o que esta publicado no Heroku.
+#
+# Existe porque producao pode ter commit que o repositorio nao tem: uma branch
+# publicada direto no Heroku, de uma maquina, sem passar pelo GitHub. Quando
+# isso acontece o deploy se recusa a publicar (o push e sem `--force`, para
+# nao apagar do ar o que ninguem tem em outro lugar) e fica travado ate alguem
+# reconciliar os dois lados.
+#
+# Este workflow so faz uma coisa: copia a `main` do Heroku para uma branch
+# nova aqui. Nada e sobrescrito, nada e mesclado por conta propria -- a
+# comparacao e a resolucao acontecem num Pull Request, onde da para ver o que
+# veio antes de aceitar.
+name: Sincronizar producao (Heroku -> GitHub)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App do Heroku (vazio = descobre sozinho pelo token)"
+        required: false
+        default: ""
+
+concurrency:
+  group: sincronizar-producao
+  cancel-in-progress: false
+
+permissions:
+  # Escrita apenas para criar a branch de espelho; nunca empurra para a main.
+  contents: write
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+    steps:
+      - name: Conferir credenciais
+        run: |
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "Falta o secret HEROKU_API_KEY."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolver app do Heroku
+        id: app
+        run: |
+          nome=$(python scripts/resolve_heroku_app.py \
+            --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}" \
+            --repo "${{ github.event.repository.name }}")
+          echo "nome=$nome" >> "$GITHUB_OUTPUT"
+          echo "Lendo producao de: $nome"
+
+      - name: Trazer a main do Heroku
+        id: espelho
+        run: |
+          set -euo pipefail
+          git remote add heroku "https://heroku:$HEROKU_API_KEY@git.heroku.com/${{ steps.app.outputs.nome }}.git"
+          git fetch heroku main
+          if git merge-base --is-ancestor heroku/main origin/main; then
+            echo "Producao nao tem nada que a main ja nao tenha. Nada a sincronizar."
+            echo "criou=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          branch="producao/heroku-main-$(date -u +%Y%m%d-%H%M)"
+          # Branch nova a cada execucao: nunca sobrescreve espelho anterior.
+          git push origin "heroku/main:refs/heads/$branch"
+          echo "criou=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Commits que producao tem a mais que a main:"
+          git log --oneline origin/main..heroku/main
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Sincronizar producao"
+            echo ""
+            echo "- app lido: \`${{ steps.app.outputs.nome || 'nao resolvido' }}\`"
+            if [ "${{ steps.espelho.outputs.criou }}" = "true" ]; then
+              echo "- branch criada: \`${{ steps.espelho.outputs.branch }}\`"
+              echo ""
+              echo "Abra um Pull Request dessa branch para \`main\` para trazer producao para o repositorio."
+            else
+              echo "- nada a sincronizar: producao nao tem commit que a \`main\` nao tenha."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
