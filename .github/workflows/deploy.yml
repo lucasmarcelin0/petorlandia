@@ -24,6 +24,23 @@ on:
         type: boolean
         required: false
         default: true
+  # Segundo caminho para a mesma publicacao: um push nesta branch vale como o
+  # clique em "Run workflow". Existe porque quem nao tem esse clique (um agente,
+  # ou alguem so com o celular na mao) dependia de outra pessoa para publicar.
+  #
+  # Este caminho e mais estreito do que o formulario, de proposito:
+  #
+  # - so publica commit que JA esta em `main` (conferido no passo "Conferir que
+  #   o commit ja passou por main"). Nao da para publicar codigo que nao passou
+  #   pela revisao do pull request -- empurrar para esta branch escolhe QUANDO
+  #   publicar, nunca O QUE publicar;
+  # - a suite completa roda sempre; nao ha como desligar por aqui.
+  #
+  # Quem pode empurrar a branch ja podia rodar o workflow pelo formulario: a
+  # permissao e a mesma de sempre.
+  push:
+    branches:
+      - disparo/deploy
 
 # Dois deploys ao mesmo tempo brigariam pelo mesmo app: o segundo espera.
 concurrency:
@@ -52,10 +69,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          # No `push` nao ha formulario: publica-se o proprio commit empurrado.
+          ref: ${{ inputs.ref || github.sha }}
           # Historico completo: o push para o Heroku precisa dos commits, e a
           # checagem de fast-forward compara com o que ja esta em producao.
           fetch-depth: 0
+
+      # A trava que torna o caminho por push seguro: o commit empurrado precisa
+      # ja estar em `main`. Sem isto, empurrar para `disparo/deploy` publicaria
+      # qualquer codigo, sem revisao nenhuma -- com isto, empurrar escolhe
+      # QUANDO publicar, e nunca O QUE publicar.
+      - name: Conferir que o commit ja passou por main
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Este commit nao esta em main, entao nao pode ser publicado por aqui."
+            echo "Abra um pull request, faca o merge em main e empurre de novo."
+            echo "Commits que estao aqui e nao estao em main:"
+            git log --oneline origin/main..HEAD | head -20
+            exit 1
+          fi
+          echo "Commit confirmado em main."
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -88,8 +124,11 @@ jobs:
 
       # Mesmos comandos do workflow de testes: o que reprova um PR tem de
       # reprovar um deploy tambem.
+      # `inputs.run_tests` so existe no formulario. Num `push` ele vem vazio, o
+      # que pularia a suite calado -- exatamente o contrario do que o caminho
+      # automatico precisa. Fora do formulario, a suite roda sempre.
       - name: Suite de testes
-        if: ${{ inputs.run_tests }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
         env:
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: python -m pytest tests/ -q -p no:cacheprovider
@@ -151,7 +190,8 @@ jobs:
             echo "### Deploy Heroku"
             echo ""
             echo "- app: \`${{ steps.app.outputs.nome || 'nao resolvido' }}\`"
-            echo "- ref publicado: \`${{ inputs.ref }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
-            echo "- suite executada: \`${{ inputs.run_tests }}\`"
+            echo "- disparo: \`${{ github.event_name }}\`"
+            echo "- ref publicado: \`${{ inputs.ref || github.ref_name }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
+            echo "- suite executada: \`${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}\`"
             echo "- publicou: \`${{ steps.push.outputs.publicou || 'nao chegou a publicar' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

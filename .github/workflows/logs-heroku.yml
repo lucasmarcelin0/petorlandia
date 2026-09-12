@@ -22,6 +22,15 @@ on:
         description: "App do Heroku (vazio = descobre sozinho pelo token)"
         required: false
         default: ""
+  # Segundo caminho para o mesmo job: um push nesta branch vale como o clique
+  # em "Run workflow". Existe porque quem nao tem esse clique (um agente, ou
+  # alguem so com o celular na mao) ficava sem caminho nenhum para investigar
+  # producao. Os parametros vem de .github/disparo/logs.json, na propria
+  # branch. Quem pode empurrar a branch ja podia rodar o workflow: a permissao
+  # e a mesma de sempre.
+  push:
+    branches:
+      - disparo/logs-heroku
 
 permissions:
   contents: read
@@ -58,9 +67,21 @@ jobs:
           echo "nome=$nome" >> "$GITHUB_OUTPUT"
           echo "Lendo logs de: $nome"
 
+      # No `workflow_dispatch` os parametros vem do formulario; no `push` vem do
+      # arquivo de pedido. Daqui para baixo o job nao sabe mais a diferenca.
+      - name: Parametros do pedido
+        id: pedido
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "filtro=${{ inputs.filtro }}" >> "$GITHUB_OUTPUT"
+            echo "linhas=${{ inputs.linhas }}" >> "$GITHUB_OUTPUT"
+          else
+            python scripts/ler_pedido_logs.py --arquivo .github/disparo/logs.json
+          fi
+
       - name: Ultimas linhas
         run: |
           python scripts/heroku_logs.py \
             --app "${{ steps.app.outputs.nome }}" \
-            --lines "${{ inputs.linhas }}" \
-            --filtro "${{ inputs.filtro }}"
+            --lines "${{ steps.pedido.outputs.linhas }}" \
+            --filtro "${{ steps.pedido.outputs.filtro }}"
