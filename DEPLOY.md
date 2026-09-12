@@ -30,8 +30,9 @@ powershell -File scripts/deploy_heroku.ps1 -TestPath tests -PytestArgs "-q"
 O caminho acima precisa do remoto `heroku` configurado no computador de quem
 publica. Quando isso nao existe -- outra maquina, outra pessoa, um agente --
 use o workflow **Deploy (Heroku)**, em Actions > Deploy (Heroku) > Run
-workflow. Ele pede o `ref` a publicar (padrao `main`) e se deve rodar a suite
-antes (padrao sim).
+workflow. Ele pede o `ref` a publicar (padrao `main`), o `app` (vazio =
+descobre sozinho) e se deve rodar a suite antes (padrao sim). Funciona pelo
+app do GitHub no celular.
 
 O workflow faz, na ordem, as mesmas travas do script manual:
 
@@ -45,15 +46,20 @@ O workflow faz, na ordem, as mesmas travas do script manual:
 
 ### Configuracao (uma vez)
 
-Em Settings > Secrets and variables > Actions, crie dois secrets:
+Em Settings > Secrets and variables > Actions, crie **um** secret:
 
 | Secret | Valor |
 |---|---|
 | `HEROKU_API_KEY` | token da conta -- gere um com prazo: `heroku authorizations:create -d "GitHub Actions deploy" -e 2592000` |
-| `HEROKU_APP_NAME` | nome do app no Heroku |
 
 Prefira o token com prazo ao permanente: se vazar, ele expira sozinho. Para
 revogar, `heroku authorizations` e `heroku authorizations:revoke <id>`.
+
+O nome do app nao precisa ser configurado: o token ja diz quais apps a conta
+tem e, havendo um so, o workflow publica nele. Com mais de um, o workflow para
+listando as opcoes e voce escolhe no campo **app** do proprio Run workflow --
+que funciona no celular, onde nao da para criar secret. Um secret opcional
+`HEROKU_APP_NAME` continua sendo aceito como padrao.
 
 Para exigir aprovacao humana antes de cada deploy, crie um Environment
 chamado `production` (Settings > Environments) com required reviewers e
