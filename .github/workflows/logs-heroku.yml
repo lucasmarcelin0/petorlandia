@@ -1,0 +1,66 @@
+# Mostra as ultimas linhas de log do app em producao, na saida da execucao.
+#
+# Existe porque investigar um erro que so acontece em producao exigia o CLI do
+# Heroku -- que nao existe no celular nem num runner. Sem isto, a alternativa
+# era adivinhar.
+#
+# So le: nao publica, nao escreve no repositorio, nao toca em producao.
+name: Logs do Heroku
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Filtrar por (regex). Ex.: animal.*photo"
+        required: false
+        default: ""
+      linhas:
+        description: "Quantas linhas trazer"
+        required: false
+        default: "500"
+      app:
+        description: "App do Heroku (vazio = descobre sozinho pelo token)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+    steps:
+      - name: Conferir credenciais
+        run: |
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "Falta o secret HEROKU_API_KEY."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolver app do Heroku
+        id: app
+        run: |
+          nome=$(python scripts/resolve_heroku_app.py \
+            --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}" \
+            --repo "${{ github.event.repository.name }}")
+          echo "nome=$nome" >> "$GITHUB_OUTPUT"
+          echo "Lendo logs de: $nome"
+
+      - name: Ultimas linhas
+        run: |
+          python scripts/heroku_logs.py \
+            --app "${{ steps.app.outputs.nome }}" \
+            --lines "${{ inputs.linhas }}" \
+            --filtro "${{ inputs.filtro }}"
