@@ -69,7 +69,9 @@ jobs:
       - name: Resolver app do Heroku
         id: app
         run: |
-          nome=$(python scripts/resolve_heroku_app.py --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}")
+          nome=$(python scripts/resolve_heroku_app.py \
+            --name "${{ inputs.app || secrets.HEROKU_APP_NAME }}" \
+            --repo "${{ github.event.repository.name }}")
           echo "nome=$nome" >> "$GITHUB_OUTPUT"
           echo "Publicando em: $nome"
 

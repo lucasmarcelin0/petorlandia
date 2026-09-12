@@ -55,11 +55,16 @@ Em Settings > Secrets and variables > Actions, crie **um** secret:
 Prefira o token com prazo ao permanente: se vazar, ele expira sozinho. Para
 revogar, `heroku authorizations` e `heroku authorizations:revoke <id>`.
 
-O nome do app nao precisa ser configurado: o token ja diz quais apps a conta
-tem e, havendo um so, o workflow publica nele. Com mais de um, o workflow para
-listando as opcoes e voce escolhe no campo **app** do proprio Run workflow --
-que funciona no celular, onde nao da para criar secret. Um secret opcional
-`HEROKU_APP_NAME` continua sendo aceito como padrao.
+O nome do app nao precisa ser configurado. O token ja diz quais apps a conta
+tem, e o workflow escolhe nesta ordem:
+
+1. o nome digitado no campo **app** do Run workflow;
+2. o secret `HEROKU_APP_NAME`, se existir;
+3. o unico app da conta, quando so ha um;
+4. o app que tem exatamente o nome do repositorio.
+
+So quando nada disso resolve ele para, em segundos, listando as opcoes. Na
+pratica: pelo celular e so **Run**, sem preencher nada.
 
 Para exigir aprovacao humana antes de cada deploy, crie um Environment
 chamado `production` (Settings > Environments) com required reviewers e
