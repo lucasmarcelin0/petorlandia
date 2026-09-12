@@ -1035,22 +1035,26 @@ def vacina_pmo_animal_photo(animal_id):
                            'Sincronize a aba e tente de novo.',
             }), 400
 
+        from services.photo_storage import PhotoStorageError, store_photo
+
         filename = f"{uuid.uuid4().hex}_{secure_filename(normalized_filename(file.filename, photo))}"
-        image_url = upload_to_s3(photo.stream, filename, folder='animals')
-        if not image_url:
+        try:
+            image_url = store_photo(photo.stream, filename, folder='animals', uploader=upload_to_s3)
+        except PhotoStorageError as exc:
+            # O motivo tecnico fica no log; a tela recebe a frase em portugues
+            # e o `code`, que diz de uma vez se adianta tentar de novo. Antes
+            # isto virava `str(exc)` do boto3 na tela do vacinador.
+            current_app.logger.error(
+                "Foto PMO nao guardada (animal %s, code=%s): %s",
+                animal_id,
+                exc.code,
+                exc.detail or exc.user_message,
+            )
             return jsonify({
                 'success': False,
-                'retryable': True,
-                'message': 'Falha ao enviar a imagem.',
-            }), 502
-        # Recusa o fallback local (efêmero no Heroku): sem armazenamento durável
-        # a foto sumiria no próximo restart. Melhor avisar para tentar de novo.
-        if not image_url.startswith('http'):
-            current_app.logger.error("Foto PMO sem armazenamento durável (S3 indisponível): %s", image_url)
-            return jsonify({
-                'success': False,
-                'retryable': True,
-                'message': 'Não foi possível guardar a foto agora. Tente novamente em instantes.',
+                'retryable': exc.retryable,
+                'code': exc.code,
+                'message': exc.user_message,
             }), 502
 
         animal.image = image_url
@@ -1076,6 +1080,32 @@ def vacina_pmo_animal_photo(animal_id):
         db.session.rollback()
         current_app.logger.exception("Falha ao salvar foto de animal Vacina PMO")
         return jsonify({'success': False, 'retryable': True, 'message': str(exc)}), 500
+
+
+@bp.route('/vacina-pmo/diagnostico-foto')
+@login_required
+def vacina_pmo_diagnostico_foto():
+    """Diz em segundos se o envio de fotos esta de pe.
+
+    Descobrir que o problema era o armazenamento, e nao a foto, exigia abrir o
+    log do Heroku -- que ninguem tem no celular, no meio da rua. Esta rota
+    responde a mesma pergunta com um toque. Nao devolve credencial nenhuma: so
+    se cada peca esta configurada e o que o S3 respondeu ao teste de escrita.
+    """
+    if current_user.role != 'admin':
+        abort(403)
+
+    from services.photo_storage import diagnose_photo_storage
+
+    relatorio = diagnose_photo_storage()
+    tudo_ok = relatorio['escrita_ok']
+    relatorio['resumo'] = (
+        'Envio de fotos funcionando.'
+        if tudo_ok
+        else 'O envio de fotos está com problema no servidor. '
+             'As fotos tiradas agora ficam guardadas nos aparelhos até isso ser resolvido.'
+    )
+    return jsonify({'success': True, 'ok': tudo_ok, 'diagnostico': relatorio})
 
 
 @bp.route('/vacina-pmo/animal/<int:animal_id>/photo-src')

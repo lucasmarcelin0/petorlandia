@@ -13923,6 +13923,7 @@ from blueprints.vacina_pmo import (  # noqa: E402,F401
     vacina_pmo_avaliacoes,
     vacina_pmo_cobertura_ativa,
     vacina_pmo_criar_dia,
+    vacina_pmo_diagnostico_foto,
     vacina_pmo_doses_compilar,
     vacina_pmo_doses_webhook,
     vacina_pmo_imprimir,

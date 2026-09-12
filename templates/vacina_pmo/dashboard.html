@@ -502,9 +502,11 @@
     border-color: #2563eb;
   }
 
+  /* Ainda tentando sozinho: ambar, o mesmo tom do selo. Reservar o vermelho
+     para o que parou e o que devolve sentido ao vermelho. */
   .pmo-animal-photo-btn.is-error,
   .pmo-animal-photo-thumb.is-error {
-    border-color: #dc3545;
+    border-color: #d97706;
   }
 
   /* Falha definitiva (formato recusado, sem permissao): nao adianta reenviar
@@ -561,7 +563,11 @@
 
   .pmo-animal-photo-badge[data-state="uploading"] { background: #2563eb; }
   .pmo-animal-photo-badge[data-state="pending"] { background: #f59e0b; }
-  .pmo-animal-photo-badge[data-state="error"] { background: #dc3545; }
+  /* Ambar e vermelho deixaram de ser a mesma cor: 'error' ainda vai tentar
+     sozinho, 'failed' parou e depende de uma decisao. Quando os dois eram
+     vermelhos, todo aviso parecia igualmente grave -- e o unico que exigia
+     acao se perdia no meio. */
+  .pmo-animal-photo-badge[data-state="error"] { background: #d97706; }
   .pmo-animal-photo-badge[data-state="failed"] { background: #dc3545; }
 
   .pmo-photo-modal {
@@ -607,15 +613,48 @@
   .pmo-photo-modal__error {
     margin: 0;
     max-width: min(92vw, 420px);
-    padding: 0.5rem 0.75rem;
-    border-radius: 8px;
-    background: rgba(220, 53, 69, 0.92);
-    color: #fff;
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     font-size: 0.85rem;
-    text-align: center;
+    text-align: left;
+    /* Uma barra colorida na lateral em vez de um bloco chapado: o aviso se le
+       de relance sem tomar a tela inteira nem competir com a foto. */
+    border-left: 4px solid currentColor;
   }
 
+  .pmo-photo-modal__error-title {
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .pmo-photo-modal__error-detail {
+    font-weight: 400;
+    opacity: 0.92;
+    line-height: 1.35;
+    /* Mensagem tecnica longa do servidor nao pode esticar o modal. */
+    overflow-wrap: anywhere;
+  }
+
+  /* Tres tons, tres significados: azul so informa, ambar ainda vai tentar
+     sozinho, vermelho parou e espera uma decisao. */
+  .pmo-photo-modal__error[data-tom="info"] { background: #eff6ff; color: #1d4ed8; }
+  .pmo-photo-modal__error[data-tom="aviso"] { background: #fffbeb; color: #b45309; }
+  .pmo-photo-modal__error[data-tom="erro"] { background: #fef2f2; color: #b91c1c; }
+
   .pmo-photo-modal__error[hidden] {
+    display: none;
+  }
+
+  .pmo-photo-modal__copy {
+    flex-basis: 100%;
+    text-decoration: none;
+    color: #64748b;
+  }
+
+  .pmo-photo-modal__copy[hidden] {
     display: none;
   }
 
@@ -2122,6 +2161,7 @@
       <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra</button>
       <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1"></i> Da galeria</button>
       <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
+      <button type="button" class="btn btn-link btn-sm pmo-photo-modal__copy" id="pmo-photo-copy-error" hidden><i class="fas fa-copy me-1"></i> Copiar o erro</button>
     </div>
   </div>
 </div>
@@ -2332,8 +2372,58 @@
   const photoRetakeBtn = document.getElementById('pmo-photo-retake');
   const photoPickBtn = document.getElementById('pmo-photo-pick');
   const photoRetryBtn = document.getElementById('pmo-photo-retry');
+  const photoCopyBtn = document.getElementById('pmo-photo-copy-error');
   const photoModalError = document.getElementById('pmo-photo-modal-error');
   let photoModalTarget = null;
+
+  // Traduz o estado da foto em algo que se le em campo, sem jargao: o que
+  // esta acontecendo, por que, e o que da para fazer agora. Um estado sem
+  // aviso (foto ja salva no servidor) devolve `null` e o modal fica limpo.
+  function photoModalAdvice(animal) {
+    const estado = animal && animal.photoUploadState;
+    if (!estado || estado === 'uploading') {
+      return estado === 'uploading'
+        ? { tom: 'info', titulo: 'Enviando a foto…', detalhe: 'Pode fechar esta tela: o envio continua sozinho.', acao: false }
+        : null;
+    }
+    const motivo = (animal.photoUploadError || '').trim();
+    if (estado === 'pending') {
+      return {
+        tom: 'info',
+        titulo: 'Sem internet agora.',
+        detalhe: 'A foto está guardada neste aparelho e sobe sozinha quando o sinal voltar.',
+        acao: false,
+      };
+    }
+    if (estado === 'error') {
+      const tentativas = Number(animal.photoUploadAttempts || 0);
+      const restantes = Math.max(0, PHOTO_MAX_AUTO_ATTEMPTS - tentativas);
+      return {
+        tom: 'aviso',
+        titulo: 'Ainda não subiu. Tentando de novo sozinho.',
+        detalhe: [
+          motivo,
+          restantes
+            ? `Faltam ${restantes} ${restantes === 1 ? 'tentativa automática' : 'tentativas automáticas'}.`
+            : '',
+        ].filter(Boolean).join(' '),
+        acao: true,
+      };
+    }
+    // 'failed': parou de tentar. Ou o servidor recusou de vez, ou as
+    // tentativas automaticas acabaram sem sucesso.
+    return {
+      tom: 'erro',
+      titulo: animal.photoUploadExhausted
+        ? `Não subiu depois de ${Number(animal.photoUploadAttempts || PHOTO_MAX_AUTO_ATTEMPTS)} tentativas.`
+        : 'Esta foto não pode ser enviada assim.',
+      detalhe: [
+        motivo || 'Não foi possível enviar esta foto.',
+        'A foto continua guardada neste aparelho — não se perdeu.',
+      ].filter(Boolean).join(' '),
+      acao: true,
+    };
+  }
 
   function openPhotoModal(url, target) {
     photoModalTarget = target || null;
@@ -2342,22 +2432,33 @@
     // precisa saber se e o formato da foto, a permissao do perfil ou a
     // internet antes de tentar de novo.
     const animal = findAnimalByTarget(photoModalTarget);
-    const failed = animal && animal.photoUploadState === 'failed';
+    const aviso = photoModalAdvice(animal);
     if (photoModalError) {
-      photoModalError.textContent = failed ? (animal.photoUploadError || 'Não foi possível enviar esta foto.') : '';
-      photoModalError.hidden = !failed;
+      photoModalError.hidden = !aviso;
+      photoModalError.dataset.tom = aviso ? aviso.tom : '';
+      photoModalError.innerHTML = aviso
+        ? `<strong class="pmo-photo-modal__error-title">${escapeHtml(aviso.titulo)}</strong>${
+            aviso.detalhe ? `<span class="pmo-photo-modal__error-detail">${escapeHtml(aviso.detalhe)}</span>` : ''
+          }`
+        : '';
     }
-    if (photoRetryBtn) photoRetryBtn.hidden = !failed;
+    if (photoRetryBtn) photoRetryBtn.hidden = !(aviso && aviso.acao);
+    if (photoCopyBtn) {
+      photoCopyBtn.hidden = !(aviso && aviso.acao);
+      photoCopyBtn.innerHTML = '<i class="fas fa-copy me-1"></i> Copiar o erro';
+    }
     photoModal.hidden = false;
   }
   function closePhotoModal() {
     photoModal.hidden = true;
     photoModalImg.src = '';
     if (photoModalError) {
-      photoModalError.textContent = '';
+      photoModalError.innerHTML = '';
       photoModalError.hidden = true;
+      photoModalError.dataset.tom = '';
     }
     if (photoRetryBtn) photoRetryBtn.hidden = true;
+    if (photoCopyBtn) photoCopyBtn.hidden = true;
     photoModalTarget = null;
   }
   if (photoModal) {
@@ -2379,6 +2480,31 @@
         const animal = findAnimalByTarget(photoModalTarget);
         closePhotoModal();
         if (animal && animal.id) retryBlockedPhoto(animal.id);
+      });
+    }
+    // Um erro que so existe na tela de quem esta em campo nao chega a quem
+    // pode consertar. Este botao transforma a falha em um texto colavel no
+    // WhatsApp -- com animal, hora, estado e a mensagem crua do servidor.
+    if (photoCopyBtn) {
+      photoCopyBtn.addEventListener('click', async () => {
+        const animal = findAnimalByTarget(photoModalTarget);
+        if (!animal) return;
+        const linhas = [
+          'Falha ao enviar foto (Vacina PMO)',
+          `Animal: ${animal.name || '(sem nome)'} (id ${animal.id})`,
+          `Estado: ${animal.photoUploadState || 'desconhecido'}`,
+          `Tentativas: ${Number(animal.photoUploadAttempts || 0)}`,
+          `Motivo: ${animal.photoUploadError || '(sem mensagem)'}`,
+          `Quando: ${new Date().toLocaleString('pt-BR')}`,
+        ].join('\n');
+        try {
+          await navigator.clipboard.writeText(linhas);
+          photoCopyBtn.innerHTML = '<i class="fas fa-check me-1"></i> Copiado';
+        } catch (_error) {
+          // Sem permissao de area de transferencia (navegador antigo, http):
+          // mostrar o texto ainda permite copiar na mao.
+          window.prompt('Copie e envie este texto:', linhas.replace(/\n/g, ' | '));
+        }
       });
     }
     document.addEventListener('keydown', (event) => {
@@ -5094,6 +5220,13 @@
   const STATUS_QUEUE_STORAGE_KEY = 'petorlandia-pmo-status-queue-v1:{{ current_user.id }}';
   const QUEUE_RETRY_BASE_MS = 2500;
   const QUEUE_RETRY_MAX_MS = 60000;
+  // Quantas vezes a foto tenta sozinha antes de parar e mostrar o motivo.
+  // "Temporario" nao pode significar "silencioso para sempre": um erro de
+  // servidor (S3 fora, credencial vencida) repetia em loop e o vacinador so
+  // via um selo vermelho sem explicacao nenhuma. Depois destas tentativas a
+  // foto continua guardada no aparelho, mas o motivo aparece na tela e o
+  // reenvio passa a ser decisao de quem esta em campo.
+  const PHOTO_MAX_AUTO_ATTEMPTS = 4;
   const PHOTO_UPLOAD_CONCURRENCY = 2;
   const STATUS_UPLOAD_CONCURRENCY = 3;
   const photoQueue = {
@@ -5189,17 +5322,24 @@
     return base + Math.floor(Math.random() * 700);
   }
 
-  function deferredQueueRecord(record, error) {
+  function deferredQueueRecord(record, error, { maxAttempts = 0 } = {}) {
     const attempts = Number(record.attempts || 0) + 1;
+    // Erro que nao muda com o tempo (formato recusado, sem permissao, foto
+    // grande demais): retentar em loop so gastaria bateria e dados e
+    // manteria o vacinador achando que a foto ainda vai subir.
+    const permanente = Boolean(error && error.permanent);
+    // Erro que *poderia* passar sozinho mas nao passou. Sem este limite, uma
+    // falha do lado do servidor ficava tentando para sempre e nunca chegava
+    // aos olhos de ninguem.
+    const esgotou = Boolean(maxAttempts) && attempts >= maxAttempts && !permanente;
     return {
       ...record,
       attempts,
       nextAttemptAt: Date.now() + queueRetryDelay(attempts),
       lastError: String((error && error.message) || 'Falha temporaria de conexao').slice(0, 240),
-      // Erro que nao muda com o tempo (formato recusado, sem permissao, foto
-      // grande demais): retentar em loop so gastaria bateria e dados e
-      // manteria o vacinador achando que a foto ainda vai subir.
-      blocked: Boolean(error && error.permanent),
+      lastStatus: Number((error && error.status) || 0) || 0,
+      blocked: permanente || esgotou,
+      exhausted: esgotou,
     };
   }
 
@@ -5213,7 +5353,7 @@
       request.onsuccess = () => {
         const current = request.result;
         if (current && Number(current.updatedAt) === Number(record.updatedAt)) {
-          deferred = deferredQueueRecord(current, error);
+          deferred = deferredQueueRecord(current, error, { maxAttempts: PHOTO_MAX_AUTO_ATTEMPTS });
           store.put(deferred);
         }
       };
@@ -5310,7 +5450,15 @@
     photoQueue.objectUrls.set(id, objectUrl);
     animal.pendingImageUrl = objectUrl;
     animal.photoUploadState = uploadState;
-    animal.photoUploadError = uploadState === 'failed' ? (record.lastError || '') : '';
+    // O motivo acompanha tambem o estado 'error'. Antes ele era descartado
+    // fora de 'failed', entao a tentativa que ainda ia se repetir nao tinha
+    // como explicar por que falhou -- era o buraco que deixava o vacinador
+    // olhando para um selo vermelho mudo.
+    animal.photoUploadError = ['failed', 'error'].includes(uploadState)
+      ? (record.lastError || '')
+      : '';
+    animal.photoUploadAttempts = Number(record.attempts || 0);
+    animal.photoUploadExhausted = Boolean(record.exhausted);
     animal.photoUploadUpdatedAt = record.updatedAt || Date.now();
     return animal;
   }
@@ -5325,6 +5473,8 @@
       delete animal.pendingImageUrl;
       delete animal.photoUploadState;
       delete animal.photoUploadError;
+      delete animal.photoUploadAttempts;
+      delete animal.photoUploadExhausted;
       delete animal.photoUploadUpdatedAt;
     }
   }
@@ -5594,7 +5744,16 @@
       // Respostas de status/nome substituem o cartao inteiro. A foto pode
       // estar subindo ao mesmo tempo e so existir no aparelho; leva esse
       // estado transitorio para o novo objeto para ela nao piscar nem sumir.
-      ['pendingImageUrl', 'photoUploadState', 'photoUploadUpdatedAt'].forEach((key) => {
+      // `photoUploadError` entra na lista: sem ele, marcar "vacinado" logo
+      // depois de uma foto falhar apagava o motivo da falha do cartao novo.
+      [
+        'pendingImageUrl',
+        'photoUploadState',
+        'photoUploadError',
+        'photoUploadAttempts',
+        'photoUploadExhausted',
+        'photoUploadUpdatedAt',
+      ].forEach((key) => {
         if (oldAnimal[key] !== undefined) animal[key] = oldAnimal[key];
       });
       // Uma resposta antiga também não pode apagar a mudança de status mais
@@ -6015,20 +6174,28 @@
       }
       render();
     } catch (error) {
-      const permanent = Boolean(error && error.permanent);
       const deferred = await deferQueuedPhoto(record, error).catch(() => null);
+      // Quem decide se ainda vale tentar e o registro que acabou de ser
+      // gravado: ele ja aplicou tanto o "erro permanente" quanto o limite de
+      // tentativas automaticas. Ler dali evita que a tela e a fila discordem.
+      const parou = deferred
+        ? Boolean(deferred.blocked)
+        : Boolean(error && error.permanent);
+      const motivo = String((error && error.message) || 'Não foi possível enviar esta foto.');
       const currentAnimal = findAnimalById(animalId);
       if (currentAnimal) {
-        currentAnimal.photoUploadState = permanent
+        currentAnimal.photoUploadState = parou
           ? 'failed'
           : (navigator.onLine === false ? 'pending' : 'error');
-        currentAnimal.photoUploadError = permanent
-          ? String((error && error.message) || 'Não foi possível enviar esta foto.')
-          : '';
+        // O motivo fica guardado mesmo quando a tentativa vai se repetir: e
+        // o que o modal mostra quando o vacinador toca na foto.
+        currentAnimal.photoUploadError = navigator.onLine === false ? '' : motivo;
+        currentAnimal.photoUploadAttempts = Number(deferred?.attempts || 0);
+        currentAnimal.photoUploadExhausted = Boolean(deferred?.exhausted);
       }
-      if (permanent) {
+      if (parou) {
         const nome = currentAnimal?.name ? ` (${currentAnimal.name})` : '';
-        const aviso = `Foto não enviada${nome}: ${(error && error.message) || 'motivo desconhecido'}`;
+        const aviso = `Foto não enviada${nome}: ${motivo}`;
         window.showAppToast ? window.showAppToast(aviso, 'danger') : alert(aviso);
       }
       render();
@@ -6054,7 +6221,15 @@
         request.onsuccess = () => {
           const current = request.result;
           if (current) {
-            store.put({ ...current, blocked: false, attempts: 0, nextAttemptAt: 0, lastError: '' });
+            store.put({
+              ...current,
+              blocked: false,
+              exhausted: false,
+              attempts: 0,
+              nextAttemptAt: 0,
+              lastError: '',
+              lastStatus: 0,
+            });
           }
         };
         request.onerror = () => reject(request.error || new Error('Nao foi possivel ler a foto pendente.'));
@@ -6065,6 +6240,8 @@
       if (animal) {
         animal.photoUploadState = 'uploading';
         animal.photoUploadError = '';
+        animal.photoUploadAttempts = 0;
+        animal.photoUploadExhausted = false;
       }
       render();
       refreshLocalQueueStatus();
@@ -6653,7 +6830,9 @@
       : (stateName === 'pending'
           ? 'Foto guardada no aparelho; sera reenviada automaticamente'
           : (stateName === 'error'
-              ? 'Foto guardada no aparelho; nova tentativa automatica em instantes'
+              // O motivo entra no titulo tambem enquanto a tentativa se
+              // repete: era exatamente este o estado que nao explicava nada.
+              ? `${failureReason} Nova tentativa automatica em instantes. Toque para ver os detalhes.`
               : (stateName === 'failed'
                   ? `${failureReason} Toque para ver o motivo e tentar de novo.`
                   : 'Ver foto, tirar outra ou escolher da galeria')));

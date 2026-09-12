@@ -243,7 +243,10 @@ def test_falha_definitiva_para_de_retentar(source):
     assert "failure.permanent = payload.retryable === false" in upload
 
     defer = function_body(source, "deferredQueueRecord")
-    assert "blocked: Boolean(error && error.permanent)" in defer
+    # O erro permanente continua bloqueando a fila; a expressao ganhou um
+    # segundo caso (tentativas esgotadas) mas nao pode perder o primeiro.
+    assert "error.permanent" in defer
+    assert "blocked: permanente || esgotou" in defer
 
     process = function_body(source, "processQueuedPhotos")
     assert ".filter((record) => !record.blocked)" in process
