@@ -196,6 +196,61 @@ def test_rota_devolve_motivo_legivel_quando_o_s3_recusa(app, client, monkeypatch
     assert "administrador" in payload["message"]
 
 
+def test_upload_to_s3_aceita_upload_stream(monkeypatch):
+    import app as app_module
+    from services.photo_intake import _UploadStream
+
+    captured = {}
+
+    class DummyS3:
+        def upload_fileobj(self, fileobj, bucket, key, ExtraArgs=None):
+            captured["bucket"] = bucket
+            captured["key"] = key
+            captured["extra"] = ExtraArgs
+            captured["data"] = fileobj.read()
+
+    monkeypatch.setattr(app_module, "BUCKET", "test-bucket")
+    monkeypatch.setattr(app_module, "_s3", lambda: DummyS3())
+
+    stream = _UploadStream(_image_bytes(), "image/jpeg")
+    # Não pode quebrar com AttributeError: '_UploadStream' object has no attribute 'stream'
+    url = app_module.upload_to_s3(stream, "animal.jpg", folder="animals")
+
+    assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
+    assert captured["bucket"] == "test-bucket"
+    assert captured["key"].startswith("animals/animal.jpg")
+
+
+def test_endpoint_foto_pmo_com_upload_to_s3_real(app, client, monkeypatch):
+    with app.app_context():
+        user_id, pmo_animal_id = _setup_animal("s3-real", email="foto-real@example.com")
+
+    import app as app_module
+
+    captured = {}
+
+    class DummyS3:
+        def upload_fileobj(self, fileobj, bucket, key, ExtraArgs=None):
+            captured["bucket"] = bucket
+            captured["key"] = key
+            captured["extra"] = ExtraArgs
+
+    monkeypatch.setattr(app_module, "BUCKET", "test-bucket")
+    monkeypatch.setattr(app_module, "_s3", lambda: DummyS3())
+
+    _pmo_login(client, user_id)
+    response = client.post(
+        f"/vacina-pmo/animal/{pmo_animal_id}/photo",
+        data={"photo": (BytesIO(_image_bytes()), "thor.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["image_url"].startswith("https://test-bucket.s3.amazonaws.com/animals/")
+
+
 def test_diagnostico_e_so_para_admin(app, client):
     with app.app_context():
         user = User(name="Vacinador", email="vac-diag@example.com", role="vacinador")

@@ -806,7 +806,7 @@ def _runtime_module_attr(name, default):
     return default
 
 
-def upload_to_s3(file, filename, folder="uploads") -> str | None:
+def upload_to_s3(file, filename, folder="uploads", *, reraise: bool = False, **kwargs) -> str | None:
     """Compress and upload a file to S3.
 
     Falls back to saving the file locally under ``static/uploads`` if the
@@ -814,15 +814,32 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
     the public URL of the uploaded file or ``None`` on failure.
     """
     try:
-        fileobj = file
-        max_bytes = int(current_app.config.get("MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
-        original_position = file.stream.tell()
-        file.stream.seek(0, os.SEEK_END)
-        if file.stream.tell() > max_bytes:
-            current_app.logger.warning("Upload rejected: file exceeds configured limit")
-            return None
-        file.stream.seek(original_position)
-        content_type = file.content_type
+        stream = getattr(file, "stream", file)
+        fileobj = stream
+        try:
+            max_bytes = int(current_app.config.get("MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
+            testing = bool(current_app.config.get("TESTING"))
+            allow_local = bool(current_app.config.get("ALLOW_LOCAL_UPLOAD_FALLBACK", False))
+            logger = current_app.logger
+        except RuntimeError:
+            max_bytes = 20 * 1024 * 1024
+            testing = False
+            allow_local = False
+            logger = app.logger
+
+        if hasattr(stream, "seek") and hasattr(stream, "tell"):
+            original_position = stream.tell()
+            stream.seek(0, os.SEEK_END)
+            if stream.tell() > max_bytes:
+                logger.warning("Upload rejected: file exceeds configured limit")
+                return None
+            stream.seek(original_position)
+        content_type = (
+            getattr(file, "content_type", None)
+            or getattr(stream, "content_type", None)
+            or getattr(file, "mimetype", None)
+            or getattr(stream, "mimetype", None)
+        )
         filename = secure_filename(filename)
         bucket = _runtime_module_attr("BUCKET", BUCKET)
         project_root = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT))
@@ -835,18 +852,21 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         is_image = bool(content_type and content_type.startswith("image"))
         if not is_image:
             try:
-                file.stream.seek(0)
-                probe = Image.open(file.stream)
+                if hasattr(stream, "seek"):
+                    stream.seek(0)
+                probe = Image.open(stream)
                 probe.verify()
                 is_image = True
             except Exception:
                 is_image = False
             finally:
-                file.stream.seek(0)
+                if hasattr(stream, "seek"):
+                    stream.seek(0)
 
         if is_image:
-            file.stream.seek(0)
-            image = Image.open(file.stream)
+            if hasattr(stream, "seek"):
+                stream.seek(0)
+            image = Image.open(stream)
             image = ImageOps.exif_transpose(image)  # baixa o EXIF: pixels já saem na orientação certa
             # JPEG does not support alpha. A direct RGBA-to-RGB conversion
             # turns transparent product backgrounds black, so flatten them on
@@ -872,7 +892,8 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         key = f"{folder}/{filename}"
 
         # Keep a copy of the data so that we can retry if S3 upload fails
-        fileobj.seek(0)
+        if hasattr(fileobj, "seek"):
+            fileobj.seek(0)
         data = fileobj.read()
         buffer = BytesIO(data)
 
@@ -883,17 +904,19 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
                     buffer,
                     bucket,
                     key,
-                    ExtraArgs={"ContentType": content_type},
+                    ExtraArgs={"ContentType": content_type or "application/octet-stream"},
                 )
                 return f"https://{bucket}.s3.amazonaws.com/{key}"
             except Exception as exc:  # noqa: BLE001
-                app.logger.exception("S3 upload failed: %s", exc)
+                logger.exception("S3 upload failed: %s", exc)
                 buffer.seek(0)
+                if reraise:
+                    raise
 
         # Never make clinical/user documents public by default. Local fallback
         # remains available only for tests or an explicit development opt-in.
-        if not current_app.config.get("ALLOW_LOCAL_UPLOAD_FALLBACK", False) and not current_app.config.get("TESTING"):
-            current_app.logger.error("Upload storage unavailable; local public fallback disabled")
+        if not allow_local and not testing:
+            logger.error("Upload storage unavailable; local public fallback disabled")
             return None
 
         # Local fallback when S3 is not configured or fails (development/tests)
@@ -905,6 +928,8 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         return f"/static/uploads/{key}"
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Upload failed: %s", exc)
+        if reraise:
+            raise
         return None
 
 

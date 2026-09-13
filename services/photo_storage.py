@@ -133,7 +133,10 @@ def store_photo(stream, filename: str, folder: str = 'animals', uploader=None) -
         from s3_utils import upload_to_s3 as uploader
 
     try:
-        url = uploader(stream, filename, folder=folder)
+        try:
+            url = uploader(stream, filename, folder=folder, reraise=True)
+        except TypeError:
+            url = uploader(stream, filename, folder=folder)
     except Exception as exc:  # noqa: BLE001 - a traducao decide o que fazer
         raise _traduzir(exc) from exc
 

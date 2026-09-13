@@ -17,18 +17,21 @@ s3 = boto3.client(
 
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
-def upload_to_s3(file, filename, folder="uploads"):
+def upload_to_s3(file, filename, folder="uploads", **kwargs):
     filepath = f"{folder}/{secure_filename(filename)}"
     if not BUCKET_NAME:
         logger.warning("S3 bucket is not configured; skipping upload for %s", filepath)
         return None
 
+    stream = getattr(file, "stream", file)
+    content_type = getattr(file, "content_type", None) or getattr(stream, "content_type", None) or "application/octet-stream"
+
     s3.upload_fileobj(
-        file,
+        stream,
         BUCKET_NAME,
         filepath,
         ExtraArgs={
-            "ContentType": file.content_type
+            "ContentType": content_type
         }
     )
     return f"https://{BUCKET_NAME}.s3.amazonaws.com/{filepath}"

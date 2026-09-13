@@ -88,6 +88,15 @@ class _UploadStream(BytesIO):
         super().__init__(data)
         self.content_type = content_type
 
+    @property
+    def stream(self):
+        """Permite que chamadores que esperam um objeto com atributo `.stream` (ex: FileStorage) acessem a própria stream."""
+        return self
+
+    @property
+    def mimetype(self):
+        return self.content_type
+
 
 def ensure_heif_support() -> bool:
     """Registra o decodificador HEIF/HEIC no Pillow. Idempotente.
