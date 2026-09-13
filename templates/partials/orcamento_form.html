@@ -228,23 +228,43 @@ async function criarServico() {
   const valor = parseFloat(document.getElementById('valor-servico').value);
   const codigo = document.getElementById('codigo-servico').value.trim();
   if (!descricao || isNaN(valor)) return;
-  const resp = await fetch('/servico', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
-    body: JSON.stringify({descricao, valor, procedure_code: codigo || null})
-  });
-  if (resp.ok) {
-    const data = await resp.json();
-    const select = document.getElementById('servico-id');
-    const opt = document.createElement('option');
-    opt.value = data.id;
-    const codePart = data.procedure_code ? ` (${data.procedure_code})` : '';
-    opt.textContent = `${data.descricao}${codePart} – R$ ${data.valor.toFixed(2)}`;
-    select.appendChild(opt);
-    select.value = data.id;
-    document.getElementById('descricao-servico').value = '';
-    document.getElementById('valor-servico').value = '';
-    document.getElementById('codigo-servico').value = '';
+  try {
+    const resp = await fetch('/servico', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({descricao, valor, procedure_code: codigo || null})
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const select = document.getElementById('servico-id');
+      const opt = document.createElement('option');
+      opt.value = data.id;
+      const codePart = data.procedure_code ? ` (${data.procedure_code})` : '';
+      opt.textContent = `${data.descricao}${codePart} – R$ ${data.valor.toFixed(2)}`;
+      select.appendChild(opt);
+      select.value = data.id;
+      document.getElementById('descricao-servico').value = '';
+      document.getElementById('valor-servico').value = '';
+      document.getElementById('codigo-servico').value = '';
+    } else {
+      let errMsg = 'Erro ao cadastrar serviço.';
+      try {
+        const errData = await resp.json();
+        if (errData && errData.message) errMsg = errData.message;
+      } catch (_) {}
+      if (typeof showToast === 'function') {
+        showToast(errMsg, 'danger');
+      } else {
+        alert(errMsg);
+      }
+    }
+  } catch (err) {
+    const errMsg = 'Erro de conexão ao cadastrar serviço.';
+    if (typeof showToast === 'function') {
+      showToast(errMsg, 'danger');
+    } else {
+      alert(errMsg);
+    }
   }
 }
 
@@ -460,48 +480,88 @@ async function adicionarItemOrcamento() {
   }
   const payload = {servico_id: servicoId, payer_type: currentPayerType, clinica_id: clinicId};
   if (!isNaN(valor)) payload.valor = valor;
-  const resp = await fetch(`/consulta/${consultaId}/orcamento_item`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
-    body: JSON.stringify(payload)
-  });
-  if (resp.ok) {
-    const data = await resp.json();
-    const tbody = document.querySelector('#orcamento-tabela tbody');
-    const tr = document.createElement('tr');
-    tr.dataset.id = data.id;
-    const payerType = data.payer_type || currentPayerType;
-    tr.dataset.payer = payerType;
-    tr.dataset.value = data.valor;
-    if (payerType !== currentPayerType) {
-      tr.classList.add('d-none');
+  try {
+    const resp = await fetch(`/consulta/${consultaId}/orcamento_item`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify(payload)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const tbody = document.querySelector('#orcamento-tabela tbody');
+      const tr = document.createElement('tr');
+      tr.dataset.id = data.id;
+      const payerType = data.payer_type || currentPayerType;
+      tr.dataset.payer = payerType;
+      tr.dataset.value = data.valor;
+      if (payerType !== currentPayerType) {
+        tr.classList.add('d-none');
+      }
+      const badgeClass = data.coverage_badge || 'secondary';
+      const badgeLabel = data.coverage_label || 'Pendente';
+      const coverageMessage = data.coverage_message ? `<small class="d-block text-muted">${data.coverage_message}</small>` : '';
+      tr.innerHTML = `<td>${payerBadge(payerType)}<span>${data.descricao}</span></td>` +
+                     `<td class="text-end">${data.valor.toFixed(2)}</td>` +
+                     `<td class="text-center"><span class="badge bg-${badgeClass}">${badgeLabel}</span>${coverageMessage}</td>` +
+                     `<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento(${data.id})" aria-label="Remover item ${data.descricao}" title="Remover item"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></td>`;
+      tbody.appendChild(tr);
+      document.getElementById('servico-id').value = '';
+      document.getElementById('valor-personalizado').value = '';
+      applyPayerFilter();
+      updateSummaryTotal(data.total);
+      updateSummaryItems();
+    } else {
+      let errMsg = 'Erro ao adicionar item ao orçamento.';
+      try {
+        const errData = await resp.json();
+        if (errData && errData.message) errMsg = errData.message;
+      } catch (_) {}
+      if (typeof showToast === 'function') {
+        showToast(errMsg, 'danger');
+      } else {
+        alert(errMsg);
+      }
     }
-    const badgeClass = data.coverage_badge || 'secondary';
-    const badgeLabel = data.coverage_label || 'Pendente';
-    const coverageMessage = data.coverage_message ? `<small class="d-block text-muted">${data.coverage_message}</small>` : '';
-    tr.innerHTML = `<td>${payerBadge(payerType)}<span>${data.descricao}</span></td>` +
-                   `<td class="text-end">${data.valor.toFixed(2)}</td>` +
-                   `<td class="text-center"><span class="badge bg-${badgeClass}">${badgeLabel}</span>${coverageMessage}</td>` +
-                   `<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento(${data.id})" aria-label="Remover item ${data.descricao}" title="Remover item"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></td>`;
-    tbody.appendChild(tr);
-    document.getElementById('servico-id').value = '';
-    document.getElementById('valor-personalizado').value = '';
-    applyPayerFilter();
-    updateSummaryTotal(data.total);
-    updateSummaryItems();
+  } catch (err) {
+    const errMsg = 'Erro de conexão ao adicionar item ao orçamento.';
+    if (typeof showToast === 'function') {
+      showToast(errMsg, 'danger');
+    } else {
+      alert(errMsg);
+    }
   }
 }
 
 async function removerItemOrcamento(id) {
-  const resp = await fetch(`/consulta/orcamento_item/${id}`, {method:'DELETE', headers: {'X-CSRFToken': '{{ csrf_token() }}'}});
-  if (resp.ok) {
-    document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
-    const data = await resp.json();
-    updateOrcamentoTotal();
-    if (typeof data.total === 'number') {
-      updateSummaryTotal(data.total);
+  try {
+    const resp = await fetch(`/consulta/orcamento_item/${id}`, {method:'DELETE', headers: {'X-CSRFToken': '{{ csrf_token() }}'}});
+    if (resp.ok) {
+      document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
+      const data = await resp.json();
+      updateOrcamentoTotal();
+      if (typeof data.total === 'number') {
+        updateSummaryTotal(data.total);
+      }
+      updateSummaryItems();
+    } else {
+      let errMsg = 'Erro ao remover item do orçamento.';
+      try {
+        const errData = await resp.json();
+        if (errData && errData.message) errMsg = errData.message;
+      } catch (_) {}
+      if (typeof showToast === 'function') {
+        showToast(errMsg, 'danger');
+      } else {
+        alert(errMsg);
+      }
     }
-    updateSummaryItems();
+  } catch (err) {
+    const errMsg = 'Erro de conexão ao remover item do orçamento.';
+    if (typeof showToast === 'function') {
+      showToast(errMsg, 'danger');
+    } else {
+      alert(errMsg);
+    }
   }
 }
 

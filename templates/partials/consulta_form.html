@@ -141,8 +141,9 @@
           retorno</a>
       </div>
     </div>
-  </div>
-  <form id="edit-return-form" class="row g-3 mt-3 d-none" data-appointment-id="{{ consulta.appointment.id }}">
+  <form id="edit-return-form" class="row g-3 mt-3 d-none" data-appointment-id="{{ consulta.appointment.id }}"
+        method="POST" action="{{ url_for('edit_appointment', appointment_id=consulta.appointment.id) }}" data-sync>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-6">
       {{ appointment_form.veterinario_id.label(class='form-label') }}
       {{ appointment_form.veterinario_id(class='form-select', value=consulta.appointment.veterinario_id) }}
@@ -278,35 +279,9 @@
         }
       });
 
-      document.addEventListener('submit', async function (event) {
-        if (event.target && event.target.id === 'edit-return-form') {
-          event.preventDefault();
-          const formEl = event.target;
-          const formData = new FormData(formEl);
-          const payload = {
-            veterinario_id: formData.get('veterinario_id'),
-            date: formData.get('date'),
-            time: formData.get('time'),
-            notes: formData.get('reason')
-          };
-          const resp = await fetch(`/appointments/${formEl.dataset.appointmentId}/edit`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': '{{ csrf_token() }}',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-          if (resp && resp.ok) {
-            await atualizarRetorno();
-          }
-        }
-      });
-
       document.addEventListener('form-sync-success', async function (ev) {
         const form = ev.detail && ev.detail.form;
-        if (form && form.classList.contains('delete-appointment-form')) {
+        if (form && (form.classList.contains('delete-appointment-form') || form.id === 'edit-return-form')) {
           ev.preventDefault();
           await atualizarRetorno();
         }

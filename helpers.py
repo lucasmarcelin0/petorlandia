@@ -750,7 +750,14 @@ def login_required(f):
 
     return decorated_function
 
-def is_slot_available(veterinario_id, scheduled_at, kind='consulta'):
+def is_slot_available(
+    veterinario_id,
+    scheduled_at,
+    kind='consulta',
+    *,
+    exclude_appointment_id=None,
+    exclude_exam_id=None,
+):
     """Return ``True`` if the veterinarian can take an appointment of ``kind``."""
     from models.agenda import VetSchedule
 
@@ -796,7 +803,13 @@ def is_slot_available(veterinario_id, scheduled_at, kind='consulta'):
         if not available:
             return False
 
-    return not has_conflict_for_slot(veterinario_id, scheduled_at_local, duration)
+    return not has_conflict_for_slot(
+        veterinario_id,
+        scheduled_at_local,
+        duration,
+        exclude_appointment_id=exclude_appointment_id,
+        exclude_exam_id=exclude_exam_id,
+    )
 
 
 def clinicas_do_usuario():

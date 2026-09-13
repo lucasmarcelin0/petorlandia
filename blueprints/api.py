@@ -2584,11 +2584,11 @@ def api_reschedule_appointment(appointment_id):
 
     new_start_utc = normalize_to_utc(new_start)
 
-    existing_local = coerce_to_brazil_tz(appointment.scheduled_at).replace(tzinfo=None)
-
-    if (
-        not is_slot_available(appointment.veterinario_id, new_start_local, kind=appointment.kind)
-        and new_start_local != existing_local
+    if not is_slot_available(
+        appointment.veterinario_id,
+        new_start_local,
+        kind=appointment.kind,
+        exclude_appointment_id=appointment.id,
     ):
         return jsonify({
             'success': False,

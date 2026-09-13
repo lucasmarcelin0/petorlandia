@@ -132,3 +132,75 @@ def test_has_schedule_conflict(app_context):
     assert has_schedule_conflict(vet.id, "Quarta", time(11, 0), time(13, 0)) is True
     assert has_schedule_conflict(vet.id, "Quarta", time(12, 0), time(13, 0)) is False
 
+
+def test_slot_available_with_exclude_appointment_id(app_context):
+    from models import Appointment
+
+    vet_user = User(name="Vet", email="vet_exclude@test", worker="veterinario")
+    vet_user.set_password("x")
+    tutor = User(name="Tutor", email="tutor_exclude@test")
+    tutor.set_password("x")
+    db.session.add_all([vet_user, tutor])
+    db.session.commit()
+
+    vet = Veterinario(user_id=vet_user.id, crmv="111")
+    db.session.add(vet)
+    db.session.commit()
+
+    schedule = VetSchedule(
+        veterinario_id=vet.id,
+        dia_semana="Quarta",
+        hora_inicio=time(9, 0),
+        hora_fim=time(17, 0),
+    )
+    db.session.add(schedule)
+    db.session.commit()
+
+    animal = Animal(name="Bob", owner=tutor)
+    db.session.add(animal)
+    db.session.commit()
+
+    scheduled_at_local = datetime(2024, 5, 1, 10, 0)
+    scheduled_at_utc = (
+        scheduled_at_local.replace(tzinfo=BR_TZ)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+    appt1 = Appointment(
+        animal_id=animal.id,
+        veterinario_id=vet.id,
+        tutor_id=tutor.id,
+        scheduled_at=scheduled_at_utc,
+        status='pending',
+        kind='consulta',
+    )
+    db.session.add(appt1)
+    db.session.commit()
+
+    # Conflicted with itself when no exclude
+    assert is_slot_available(vet.id, scheduled_at_local) is False
+    # Available when excluding itself
+    assert is_slot_available(vet.id, scheduled_at_local, exclude_appointment_id=appt1.id) is True
+
+    # Shifting 15 minutes overlaps itself (30 min duration)
+    shift_15 = scheduled_at_local + timedelta(minutes=15)
+    assert is_slot_available(vet.id, shift_15) is False
+    assert is_slot_available(vet.id, shift_15, exclude_appointment_id=appt1.id) is True
+
+    # Add a second appointment at 10:30
+    appt2 = Appointment(
+        animal_id=animal.id,
+        veterinario_id=vet.id,
+        tutor_id=tutor.id,
+        scheduled_at=scheduled_at_utc + timedelta(minutes=30),
+        status='pending',
+        kind='consulta',
+    )
+    db.session.add(appt2)
+    db.session.commit()
+
+    # When shifting 15 min, it overlaps appt2 (10:15 - 10:45 overlaps 10:30 - 11:00)
+    # Even if appt1 is excluded, appt2 must still block to prevent overbooking!
+    assert is_slot_available(vet.id, shift_15, exclude_appointment_id=appt1.id) is False
+
+

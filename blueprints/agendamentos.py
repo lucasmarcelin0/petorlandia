@@ -2278,13 +2278,23 @@ def edit_appointment(appointment_id):
         abort(403)
 
     if request.method == 'POST':
-        data = request.get_json(silent=True) or {}
+        wants_json = (
+            request.is_json
+            or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            or 'application/json' in request.headers.get('Accept', '')
+        )
+        data = request.get_json(silent=True) or request.form or {}
         date_str = data.get('date')
         time_str = data.get('time')
         vet_id = data.get('veterinario_id')
-        notes = data.get('notes')
+        notes = data.get('notes') if 'notes' in data else data.get('reason')
+        kind = data.get('kind') or appointment.kind or 'consulta'
         if not date_str or not time_str or not vet_id:
-            return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+            msg = 'Dados incompletos.'
+            if wants_json:
+                return jsonify({'success': False, 'message': msg}), 400
+            flash(msg, 'danger')
+            return redirect(request.referrer or url_for('appointments'))
         try:
             scheduled_at_local = datetime.combine(
                 datetime.strptime(date_str, '%Y-%m-%d').date(),
@@ -2292,27 +2302,49 @@ def edit_appointment(appointment_id):
             )
             vet_id = int(vet_id)
         except (ValueError, TypeError):
-            return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
-        existing_local = coerce_to_brazil_tz(appointment.scheduled_at).replace(tzinfo=None)
-        if not is_slot_available(vet_id, scheduled_at_local, kind=appointment.kind) and not (
-            vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
+            msg = 'Dados inválidos.'
+            if wants_json:
+                return jsonify({'success': False, 'message': msg}), 400
+            flash(msg, 'danger')
+            return redirect(request.referrer or url_for('appointments'))
+        if not is_slot_available(
+            vet_id,
+            scheduled_at_local,
+            kind=kind,
+            exclude_appointment_id=appointment.id,
         ):
-            return jsonify({
-                'success': False,
-                'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
-            }), 400
+            current_app.logger.warning(
+                "Tentativa de remarcar agendamento %s para horário indisponível (vet %s, data %s, kind %s)",
+                appointment.id,
+                vet_id,
+                scheduled_at_local,
+                kind,
+            )
+            msg = 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
+            if wants_json:
+                return jsonify({
+                    'success': False,
+                    'message': msg
+                }), 400
+            flash(msg, 'danger')
+            return redirect(request.referrer or url_for('appointments'))
         appointment.veterinario_id = vet_id
         appointment.scheduled_at = normalize_to_utc(scheduled_at_local)
         if notes is not None:
             appointment.notes = notes
+        if kind:
+            appointment.kind = kind
         db.session.commit()
-        card_html = render_template('partials/_appointment_card.html', appt=appointment)
-        return jsonify({
-            'success': True,
-            'message': 'Agendamento atualizado com sucesso.',
-            'card_html': card_html,
-            'appointment_id': appointment.id,
-        })
+        if wants_json:
+            card_html = render_template('partials/_appointment_card.html', appt=appointment)
+            return jsonify({
+                'success': True,
+                'message': 'Agendamento atualizado com sucesso.',
+                'card_html': card_html,
+                'appointment_id': appointment.id,
+            })
+        flash('Agendamento atualizado com sucesso.', 'success')
+        return redirect(request.referrer or url_for('appointments'))
 
     veterinarios = Veterinario.query.all()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
