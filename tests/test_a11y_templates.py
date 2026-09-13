@@ -123,3 +123,11 @@ def test_home_editor_icon_button_a11y_labels():
     assert 'aria-label="{% if flag_map[\'home_section_pets\'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco de pets"' in content
     assert 'aria-hidden="true"' in content
 
+
+def test_product_grid_cart_button_a11y_labels():
+    with open("templates/partials/_product_grid.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="Adicionar {{ product.name }} ao carrinho"' in content
+    assert 'aria-label="Entrar para comprar {{ product.name }}"' in content
+    assert '<i class="fa-solid fa-cart-plus me-1" aria-hidden="true"></i>' in content

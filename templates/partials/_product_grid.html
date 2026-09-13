@@ -54,8 +54,8 @@
               </div>
 
               <!-- Botão -->
-              <button type="submit" class="add-to-cart-btn js-add-to-cart">
-                <i class="fa-solid fa-cart-plus me-1"></i> Adicionar
+              <button type="submit" class="add-to-cart-btn js-add-to-cart" aria-label="Adicionar {{ product.name }} ao carrinho">
+                <i class="fa-solid fa-cart-plus me-1" aria-hidden="true"></i> Adicionar
               </button>
             </div>
           </form>
@@ -64,8 +64,9 @@
              depois do login, em vez de falhar em silêncio. #}
           <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
              class="add-to-cart-btn d-flex align-items-center justify-content-center text-decoration-none"
-             data-cta="product_login_to_buy">
-            <i class="fa-solid fa-cart-plus me-1"></i> Entrar para comprar
+             data-cta="product_login_to_buy"
+             aria-label="Entrar para comprar {{ product.name }}">
+            <i class="fa-solid fa-cart-plus me-1" aria-hidden="true"></i> Entrar para comprar
           </a>
           {% endif %}
         </div>
