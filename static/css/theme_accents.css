@@ -1,20 +1,29 @@
 /* theme_accents.css
-   Toque visual acolhedor e harmonioso derivado do tema da área de trabalho ativa.
+   Toque visual acolhedor, refinado e harmonioso derivado do tema da área de trabalho ativa.
    Single Source of Truth: alimentado por CSS Custom Properties injetadas pelo layout.
 */
 
-/* 1. Aura atmosférica ambiente no topo da página (suave e não intrusiva) */
+/* 1. Atmosfera e background wash sutil e disseminado por toda a página */
+body[data-page-theme] {
+  background-color: #fafbfd;
+  background-image:
+    radial-gradient(ellipse 95% 420px at 50% -40px, var(--theme-tint, #f5f7fc) 0%, transparent 85%),
+    linear-gradient(180deg, var(--theme-tint, #f5f7fc) 0%, rgba(255, 255, 255, 0) 360px);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
 body[data-page-theme]::before {
   content: "";
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 180px;
-  background: radial-gradient(ellipse 65% 130px at 50% 0%, var(--theme-tint, #f5f7fc) 0%, transparent 100%);
+  height: 220px;
+  background: radial-gradient(ellipse 70% 140px at 50% 0%, var(--theme-tint, #f5f7fc) 0%, transparent 100%);
   pointer-events: none;
   z-index: -1;
-  opacity: 0.85;
+  opacity: 0.9;
   transition: opacity 0.3s ease;
 }
 
@@ -23,9 +32,9 @@ body[data-page-theme]::before {
   display: block;
   width: 100%;
   height: 3px;
-  background: linear-gradient(90deg, transparent 2%, var(--theme-area, #194897) 18%, var(--theme-tone-2, #3568bd) 82%, transparent 98%);
+  background: linear-gradient(90deg, transparent 1%, var(--theme-area, #194897) 15%, var(--theme-tone-2, #3568bd) 85%, transparent 99%);
   border-radius: 999px;
-  margin: 6px 0 14px;
+  margin: 4px 0 16px;
   opacity: 0.85;
 }
 
@@ -34,38 +43,245 @@ body[data-page-theme]::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 6px;
 }
 
 .theme-context-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.785rem;
-  font-weight: 600;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
   color: var(--theme-area, #194897);
-  background: var(--theme-tint, #f3f7ff);
+  background: linear-gradient(135deg, #ffffff 20%, var(--theme-tint, #f3f7ff) 100%);
   border: 1px solid var(--theme-edge, #d2dff8);
-  padding: 3px 10px;
+  padding: 4px 14px;
   border-radius: 999px;
-  letter-spacing: 0.01em;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  letter-spacing: 0.015em;
+  box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   user-select: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .theme-context-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 3px 10px -1px rgba(0, 0, 0, 0.08);
+  border-color: var(--theme-tone-3, #9cbeef);
 }
 
 .theme-context-badge .workspace-emoji {
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
 }
 
-/* 4. Acentos sutis de foco e navegação ativa respeitando acessibilidade */
+.theme-context-badge:hover .workspace-emoji {
+  transform: scale(1.15) rotate(-4deg);
+}
+
+/* 4. Tipografia mais bonita e prestigiada nos títulos */
+body[data-page-theme] h1,
+body[data-page-theme] .h1 {
+  color: var(--theme-ink, #142c4b);
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+body[data-page-theme] h2,
+body[data-page-theme] .h2 {
+  color: var(--theme-area, #194897);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+body[data-page-theme] h3,
+body[data-page-theme] .h3 {
+  color: var(--theme-ink, #142c4b);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+body[data-page-theme] h4,
+body[data-page-theme] .h4,
+body[data-page-theme] h5,
+body[data-page-theme] .h5 {
+  color: var(--theme-ink, #142c4b);
+  font-weight: 600;
+}
+
+/* Títulos de seção e divisores temáticos */
+body[data-page-theme] .pmo-section-title,
+body[data-page-theme] .section-title,
+body[data-page-theme] .workspace-section-title {
+  color: var(--theme-area, #194897) !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--theme-edge, #d2dff8) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+body[data-page-theme] .pmo-section-title::before,
+body[data-page-theme] .section-title::before,
+body[data-page-theme] .workspace-section-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 1.05em;
+  background: var(--theme-area, #194897);
+  border-radius: 3px;
+}
+
+/* 5. Background colour sutil e disseminado nos cards, panels e containers */
+
+/* Cards e Painéis */
+body[data-page-theme] .card,
+body[data-page-theme] .pmo-panel {
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  background: linear-gradient(180deg, #ffffff 78%, var(--theme-tint, #f3f7ff) 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+body[data-page-theme] .card-header,
+body[data-page-theme] .pmo-panel__header {
+  background: linear-gradient(180deg, var(--theme-tint, #f3f7ff) 0%, rgba(255, 255, 255, 0.6) 100%) !important;
+  border-bottom: 1px solid var(--theme-edge, #d2dff8) !important;
+  color: var(--theme-ink, #142c4b) !important;
+  font-weight: 650;
+  border-top-left-radius: 11px;
+  border-top-right-radius: 11px;
+}
+
+/* Toolbars e Barras de Ferramentas / Filtros */
+body[data-page-theme] .pmo-toolbar,
+body[data-page-theme] .filter-toolbar,
+body[data-page-theme] .dashboard-toolbar {
+  background: linear-gradient(180deg, #ffffff 25%, var(--theme-tint, #f3f7ff) 100%) !important;
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px -3px rgba(0, 0, 0, 0.04);
+}
+
+/* Stat Cards / Caixas de Métricas e KPIs */
+body[data-page-theme] .pmo-stat,
+body[data-page-theme] .pmo-kpi-card,
+body[data-page-theme] .kpi-card,
+body[data-page-theme] .stat-box {
+  background: linear-gradient(140deg, #ffffff 35%, var(--theme-tint, #f3f7ff) 100%) !important;
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  border-top: 3px solid var(--theme-area, #194897) !important;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+body[data-page-theme] .pmo-stat:hover,
+body[data-page-theme] .pmo-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px -3px rgba(0, 0, 0, 0.07);
+}
+
+body[data-page-theme] .pmo-stat__value,
+body[data-page-theme] .kpi-value {
+  color: var(--theme-area, #194897) !important;
+  font-weight: 750;
+}
+
+body[data-page-theme] .pmo-stat .text-muted,
+body[data-page-theme] .kpi-label {
+  color: var(--theme-ink, #142c4b) !important;
+  opacity: 0.8;
+  font-weight: 550;
+}
+
+/* Cards de Animais, Itens de Lista e Visitas */
+body[data-page-theme] .pmo-vac-card {
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  background: linear-gradient(180deg, #ffffff 60%, var(--theme-tint, #f3f7ff) 100%) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  border-radius: 12px;
+}
+
+body[data-page-theme] .pmo-vac-card .pmo-vac-photo {
+  background: var(--theme-tint, #f3f7ff) !important;
+  border: 1px solid var(--theme-edge, #d2dff8);
+}
+
+body[data-page-theme] .pmo-step {
+  background: var(--theme-tint, #f3f7ff) !important;
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  color: var(--theme-ink, #142c4b) !important;
+}
+
+body[data-page-theme] .pmo-step .n {
+  color: var(--theme-area, #194897) !important;
+}
+
+body[data-page-theme] .pmo-bar {
+  background: var(--theme-tint, #f3f7ff) !important;
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+}
+
+/* 6. Cabeçalhos de Tabela em harmonia suave */
+body[data-page-theme] .table thead th,
+body[data-page-theme] .pmo-table th {
+  background-color: var(--theme-tint, #f3f7ff) !important;
+  color: var(--theme-ink, #142c4b) !important;
+  border-bottom: 2px solid var(--theme-edge, #d2dff8) !important;
+  font-weight: 650;
+}
+
+/* 7. Breadcrumbs e Navegação Auxiliar */
+body[data-page-theme] .breadcrumb {
+  background: var(--theme-tint, #f3f7ff) !important;
+  border: 1px solid var(--theme-edge, #d2dff8) !important;
+  border-radius: 8px;
+}
+
+body[data-page-theme] .breadcrumb-item.active {
+  color: var(--theme-area, #194897) !important;
+  font-weight: 600;
+}
+
+/* 8. Botões e Ações Principais no tom da área */
+body[data-page-theme] .btn-primary {
+  background-color: var(--theme-area, #194897) !important;
+  border-color: var(--theme-area, #194897) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.12);
+}
+
+body[data-page-theme] .btn-primary:hover,
+body[data-page-theme] .btn-primary:focus {
+  background-color: var(--theme-tone-2, #3568bd) !important;
+  border-color: var(--theme-tone-2, #3568bd) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
+body[data-page-theme] .btn-outline-primary {
+  color: var(--theme-area, #194897) !important;
+  border-color: var(--theme-tone-3, #9cbeef) !important;
+  background-color: transparent;
+}
+
+body[data-page-theme] .btn-outline-primary:hover,
+body[data-page-theme] .btn-outline-primary:active,
+body[data-page-theme] .btn-check:checked + .btn-outline-primary {
+  background-color: var(--theme-area, #194897) !important;
+  border-color: var(--theme-area, #194897) !important;
+  color: #ffffff !important;
+}
+
+/* 9. Acentos de Foco e Campos de Formulário */
 body[data-page-theme] .navbar .nav-link.active {
   color: var(--theme-area, #194897) !important;
   font-weight: 600;
@@ -75,7 +291,8 @@ body[data-page-theme] :focus-visible {
   outline-color: var(--theme-area, #194897);
 }
 
-/* 5. Acento opcional para cards de destaque na área temática */
-body[data-page-theme] .card-theme-accent {
-  border-top: 3px solid var(--theme-area, #194897);
+body[data-page-theme] .form-control:focus,
+body[data-page-theme] .form-select:focus {
+  border-color: var(--theme-tone-2, #3568bd) !important;
+  box-shadow: 0 0 0 0.25rem var(--theme-tint, #f3f7ff) !important;
 }
