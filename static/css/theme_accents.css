@@ -1,0 +1,81 @@
+/* theme_accents.css
+   Toque visual acolhedor e harmonioso derivado do tema da área de trabalho ativa.
+   Single Source of Truth: alimentado por CSS Custom Properties injetadas pelo layout.
+*/
+
+/* 1. Aura atmosférica ambiente no topo da página (suave e não intrusiva) */
+body[data-page-theme]::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: radial-gradient(ellipse 65% 130px at 50% 0%, var(--theme-tint, #f5f7fc) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+/* 2. Barra delicada de acento em degradê no topo do conteúdo principal */
+.theme-accent-bar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 2%, var(--theme-area, #194897) 18%, var(--theme-tone-2, #3568bd) 82%, transparent 98%);
+  border-radius: 999px;
+  margin: 6px 0 14px;
+  opacity: 0.85;
+}
+
+/* 3. Badge acolhedor de contexto da área (ex: 💉 Área do Vacinador) */
+.theme-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.theme-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.785rem;
+  font-weight: 600;
+  color: var(--theme-area, #194897);
+  background: var(--theme-tint, #f3f7ff);
+  border: 1px solid var(--theme-edge, #d2dff8);
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-context-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.theme-context-badge .workspace-emoji {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* 4. Acentos sutis de foco e navegação ativa respeitando acessibilidade */
+body[data-page-theme] .navbar .nav-link.active {
+  color: var(--theme-area, #194897) !important;
+  font-weight: 600;
+}
+
+body[data-page-theme] :focus-visible {
+  outline-color: var(--theme-area, #194897);
+}
+
+/* 5. Acento opcional para cards de destaque na área temática */
+body[data-page-theme] .card-theme-accent {
+  border-top: 3px solid var(--theme-area, #194897);
+}

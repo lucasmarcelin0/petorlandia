@@ -524,6 +524,15 @@ def inject_user_experience():
     return dict(user_experience=current_experience())
 
 
+def inject_page_theme():
+    from services.theme_service import get_all_workspace_themes, get_current_page_theme
+
+    return dict(
+        current_page_theme=get_current_page_theme(),
+        all_workspace_themes=get_all_workspace_themes(),
+    )
+
+
 _PROCESSORS = (
     inject_unread_count,
     inject_admin_action_notifications,
@@ -544,6 +553,7 @@ _PROCESSORS = (
     inject_default_pickup_address,
     inject_activation_progress,
     inject_user_experience,
+    inject_page_theme,
 )
 
 

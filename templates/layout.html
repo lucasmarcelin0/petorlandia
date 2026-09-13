@@ -105,6 +105,22 @@
   {% if current_user.is_authenticated %}
   <link href="{{ url_for('static', filename='css/workspace_nav.css', v='1') }}" rel="stylesheet">
   {% endif %}
+  <link href="{{ url_for('static', filename='css/theme_accents.css', v='20260913-1') }}" rel="stylesheet">
+  {% if all_workspace_themes %}
+  <style>
+    :root {
+      {% for _t_key, _t_val in all_workspace_themes.items() %}
+      --area-{{ _t_key }}: {{ _t_val.area }};
+      --tone-2-{{ _t_key }}: {{ _t_val.tone2 }};
+      --tone-3-{{ _t_key }}: {{ _t_val.tone3 }};
+      --tone-4-{{ _t_key }}: {{ _t_val.tone4 }};
+      --ink-{{ _t_key }}: {{ _t_val.ink }};
+      --tint-{{ _t_key }}: {{ _t_val.tint }};
+      --edge-{{ _t_key }}: {{ _t_val.edge }};
+      {% endfor %}
+    }
+  </style>
+  {% endif %}
 
   {% if config.GA_MEASUREMENT_ID %}
   <!-- Analytics opcionais: nenhum recurso do Google é carregado antes da
@@ -326,7 +342,8 @@
 {# Identifica de quem é a sessão para o JS separar preferências salvas no
    navegador. Sem isso, um dispositivo compartilhado entrega as preferências
    (e o termo de busca) de uma pessoa para a próxima que entrar. #}
-<body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}">
+<body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}"
+      {%- if current_page_theme %} data-page-theme="{{ current_page_theme.key }}" style="--theme-area: {{ current_page_theme.area }}; --theme-tone-2: {{ current_page_theme.tone2 }}; --theme-tone-3: {{ current_page_theme.tone3 }}; --theme-tone-4: {{ current_page_theme.tone4 }}; --theme-ink: {{ current_page_theme.ink }}; --theme-tint: {{ current_page_theme.tint }}; --theme-edge: {{ current_page_theme.edge }};"{% endif -%}>
   <a href="#main-content" class="visually-hidden-focusable btn btn-primary position-absolute top-0 start-0 m-2" style="z-index: 1090;">
     Pular para o conteúdo principal
   </a>
@@ -352,6 +369,15 @@
 
   <!-- Main Content -->
   <main id="main-content" class="container" tabindex="-1">
+    {% if current_page_theme %}
+    <div class="theme-context-header d-print-none" aria-hidden="true">
+      <span class="theme-context-badge">
+        <span class="workspace-emoji">{{ current_page_theme.emoji }}</span>
+        <span>{{ current_page_theme.label }}</span>
+      </span>
+    </div>
+    <span class="theme-accent-bar d-print-none" aria-hidden="true"></span>
+    {% endif %}
     {% block main %}
     {% endblock %}
   </main>
