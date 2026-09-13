@@ -80,6 +80,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "admin_home_editor",
+  "rule": "/admin/home-editor",
+  "methods": "GET"
+ },
+ {
   "endpoint": "admin_notification_mark_read",
   "rule": "/admin/notificacoes/<int:notification_id>/ler",
   "methods": "POST"
@@ -120,6 +125,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "admin_protocol_proposals",
+  "rule": "/admin/propostas-protocolos",
+  "methods": "GET"
+ },
+ {
   "endpoint": "admin_rejeitar_clinica",
   "rule": "/admin/clinica/<int:clinica_id>/rejeitar",
   "methods": "POST"
@@ -148,6 +158,11 @@
   "endpoint": "admin_routes.admin_criar_convite",
   "rule": "/admin/parcerias/convite",
   "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_home_editor",
+  "rule": "/admin/home-editor",
+  "methods": "GET"
  },
  {
   "endpoint": "admin_routes.admin_notification_mark_read",
@@ -185,6 +200,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "admin_routes.admin_protocol_proposals",
+  "rule": "/admin/propostas-protocolos",
+  "methods": "GET"
+ },
+ {
   "endpoint": "admin_routes.admin_rejeitar_clinica",
   "rule": "/admin/clinica/<int:clinica_id>/rejeitar",
   "methods": "POST"
@@ -200,8 +220,18 @@
   "methods": "POST"
  },
  {
+  "endpoint": "admin_routes.admin_start_protocol_proposal_review",
+  "rule": "/admin/propostas-protocolos/<int:proposal_id>/iniciar-revisao",
+  "methods": "POST"
+ },
+ {
   "endpoint": "admin_routes.admin_toggle_site_flag",
   "rule": "/admin/site-flags/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_update_home_texts",
+  "rule": "/admin/home-editor/texts",
   "methods": "POST"
  },
  {
@@ -210,8 +240,18 @@
   "methods": "GET"
  },
  {
+  "endpoint": "admin_routes.product_analytics_dashboard",
+  "rule": "/admin/analytics-produto",
+  "methods": "GET"
+ },
+ {
   "endpoint": "admin_set_delivery_status",
   "rule": "/admin/delivery_requests/<int:req_id>/status/<status>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_start_protocol_proposal_review",
+  "rule": "/admin/propostas-protocolos/<int:proposal_id>/iniciar-revisao",
   "methods": "POST"
  },
  {
@@ -237,6 +277,11 @@
  {
   "endpoint": "admin_unarchive_delivery",
   "rule": "/admin/delivery_requests/<int:req_id>/unarchive",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_update_home_texts",
+  "rule": "/admin/home-editor/texts",
   "methods": "POST"
  },
  {
@@ -318,6 +363,11 @@
   "endpoint": "agendamentos_routes.schedule_exam",
   "rule": "/animal/<int:animal_id>/schedule_exam",
   "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.toggle_other_agendas",
+  "rule": "/api/admin/toggle_other_agendas",
+  "methods": "GET,POST"
  },
  {
   "endpoint": "agendamentos_routes.update_appointment_status",
@@ -1125,6 +1175,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "arquivar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>",
+  "methods": "DELETE"
+ },
+ {
   "endpoint": "ativar_acompanhamento_tratamento",
   "rule": "/bloco_prescricao/<int:bloco_id>/acompanhamento",
   "methods": "POST"
@@ -1143,6 +1198,11 @@
   "endpoint": "atualizar_bloco_prescricao",
   "rule": "/bloco_prescricao/<int:bloco_id>/atualizar",
   "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>",
+  "methods": "PUT"
  },
  {
   "endpoint": "atualizar_protocolo_clinico_inline",
@@ -1855,6 +1915,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "clinic_internship_cases",
+  "rule": "/clinica/<int:clinica_id>/estagio/<int:user_id>/casos",
+  "methods": "GET,POST"
+ },
+ {
   "endpoint": "clinic_invites",
   "rule": "/convites/clinica",
   "methods": "GET,POST"
@@ -1903,6 +1968,11 @@
   "endpoint": "clinic_stock",
   "rule": "/clinica/<int:clinica_id>/estoque",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_value",
+  "rule": "/clinica/<int:clinica_id>/valor",
+  "methods": "GET"
  },
  {
   "endpoint": "clinica.action_view",
@@ -1970,6 +2040,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "clinica_routes.clinic_internship_cases",
+  "rule": "/clinica/<int:clinica_id>/estagio/<int:user_id>/casos",
+  "methods": "GET,POST"
+ },
+ {
   "endpoint": "clinica_routes.clinic_invites",
   "rule": "/convites/clinica",
   "methods": "GET,POST"
@@ -2020,6 +2095,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "clinica_routes.clinic_value",
+  "rule": "/clinica/<int:clinica_id>/valor",
+  "methods": "GET"
+ },
+ {
   "endpoint": "clinica_routes.clinicas",
   "rule": "/clinicas",
   "methods": "GET"
@@ -2053,6 +2133,11 @@
   "endpoint": "clinica_routes.enviar_orcamento",
   "rule": "/orcamento/<int:orcamento_id>/enviar",
   "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.export_clinic_data",
+  "rule": "/clinica/<int:clinica_id>/exportar-dados",
+  "methods": "GET"
  },
  {
   "endpoint": "clinica_routes.external_clinic_first_access_invite",
@@ -2225,6 +2310,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "comprar_novamente",
+  "rule": "/pedidos/<int:order_id>/comprar-novamente",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "comprar_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/comprar",
+  "methods": "POST"
+ },
+ {
   "endpoint": "confirm_share_request",
   "rule": "/api/shares/confirm",
   "methods": "POST"
@@ -2335,6 +2430,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "consulta_routes.arquivar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>",
+  "methods": "DELETE"
+ },
+ {
   "endpoint": "consulta_routes.ativar_acompanhamento_tratamento",
   "rule": "/bloco_prescricao/<int:bloco_id>/acompanhamento",
   "methods": "POST"
@@ -2353,6 +2453,11 @@
   "endpoint": "consulta_routes.atualizar_bloco_prescricao",
   "rule": "/bloco_prescricao/<int:bloco_id>/atualizar",
   "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>",
+  "methods": "PUT"
  },
  {
   "endpoint": "consulta_routes.atualizar_protocolo_clinico_inline",
@@ -2390,6 +2495,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "consulta_routes.contratar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/contratar",
+  "methods": "GET,POST"
+ },
+ {
   "endpoint": "consulta_routes.criar_apresentacao_medicamento",
   "rule": "/apresentacao_medicamento",
   "methods": "POST"
@@ -2407,6 +2517,11 @@
  {
   "endpoint": "consulta_routes.criar_prescricao",
   "rule": "/consulta/<int:consulta_id>/prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas",
   "methods": "POST"
  },
  {
@@ -2478,6 +2593,11 @@
   "endpoint": "consulta_routes.enviar_foto_tratamento",
   "rule": "/tratamento/<int:tratamento_id>/foto",
   "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.exames_frequentes",
+  "rule": "/exames_frequentes",
+  "methods": "GET"
  },
  {
   "endpoint": "consulta_routes.finalizar_consulta",
@@ -2555,6 +2675,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "consulta_routes.listar_propostas_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas",
+  "methods": "GET"
+ },
+ {
   "endpoint": "consulta_routes.marcar_administracao_tratamento",
   "rule": "/tratamento/registro/<int:registro_id>/marcar",
   "methods": "POST"
@@ -2628,6 +2753,16 @@
   "endpoint": "consulta_routes.salvar_prescricoes_lote",
   "rule": "/consulta/<int:consulta_id>/prescricao/lote",
   "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.short_prescription_url",
+  "rule": "/r/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.short_treatment_url",
+  "rule": "/t/<int:tratamento_id>",
+  "methods": "GET"
  },
  {
   "endpoint": "consulta_routes.toggle_medicamento_favorito",
@@ -2795,6 +2930,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "contratar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/contratar",
+  "methods": "GET,POST"
+ },
+ {
   "endpoint": "contratar_plano",
   "rule": "/plano-saude/<int:animal_id>/contratar",
   "methods": "POST"
@@ -2847,6 +2987,11 @@
  {
   "endpoint": "criar_prescricao",
   "rule": "/consulta/<int:consulta_id>/prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_proposta_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas",
   "methods": "POST"
  },
  {
@@ -3050,6 +3195,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "dismiss_activation_bar",
+  "rule": "/inicio/ativacao/dispensar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "dismiss_home_alert",
+  "rule": "/inicio/alertas/dispensar",
+  "methods": "POST"
+ },
+ {
   "endpoint": "edit_appointment",
   "rule": "/appointments/<int:appointment_id>/edit",
   "methods": "GET,POST"
@@ -3180,6 +3335,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "exames_frequentes",
+  "rule": "/exames_frequentes",
+  "methods": "GET"
+ },
+ {
   "endpoint": "exames_imagem_compartilhar",
   "rule": "/exames-imagem/<int:exame_id>/compartilhar",
   "methods": "POST"
@@ -3200,6 +3360,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "export_clinic_data",
+  "rule": "/clinica/<int:clinica_id>/exportar-dados",
+  "methods": "GET"
+ },
+ {
   "endpoint": "export_tcle_signatures_csv",
   "rule": "/sfa/tcle/assinaturas.csv",
   "methods": "GET"
@@ -3212,6 +3377,11 @@
  {
   "endpoint": "external_onboarding_invite",
   "rule": "/acesso-laudo/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "favicon_ico",
+  "rule": "/favicon.ico",
   "methods": "GET"
  },
  {
@@ -3520,6 +3690,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "fresh_csrf_token",
+  "rule": "/csrf-token",
+  "methods": "GET"
+ },
+ {
   "endpoint": "generate_qr",
   "rule": "/generate_qr/<int:animal_id>",
   "methods": "GET"
@@ -3685,6 +3860,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "historico_instrumentos",
+  "rule": "/sfa/instrumentos/historico",
+  "methods": "GET"
+ },
+ {
   "endpoint": "historico_orcamentos_partial",
   "rule": "/consulta/<int:consulta_id>/historico_orcamentos",
   "methods": "GET"
@@ -3767,6 +3947,11 @@
  {
   "endpoint": "listar_medicamentos_favoritos",
   "rule": "/medicamentos_favoritos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "listar_propostas_protocolo_clinico",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/propostas",
   "methods": "GET"
  },
  {
@@ -3885,6 +4070,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "loja_routes.comprar_novamente",
+  "rule": "/pedidos/<int:order_id>/comprar-novamente",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.comprar_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/comprar",
+  "methods": "POST"
+ },
+ {
   "endpoint": "loja_routes.confirmar_recebimento_pedido",
   "rule": "/pedidos/<int:order_id>/confirmar-recebimento",
   "methods": "POST"
@@ -3973,6 +4168,11 @@
   "endpoint": "loja_routes.produto_detail",
   "rule": "/produto/<int:product_id>",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.produto_toggle_status",
+  "rule": "/produto/<int:product_id>/toggle-status",
+  "methods": "POST"
  },
  {
   "endpoint": "loja_routes.racao_assinar",
@@ -4542,6 +4742,11 @@
  {
   "endpoint": "paciente_detail",
   "rule": "/sfa/paciente/<id_estudo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "paciente_form_qrcode",
+  "rule": "/sfa/paciente/<id_estudo>/qrcode/<stage>.png",
   "methods": "GET"
  },
  {
@@ -5270,6 +5475,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "product_analytics_dashboard",
+  "rule": "/admin/analytics-produto",
+  "methods": "GET"
+ },
+ {
   "endpoint": "productcategory.action_view",
   "rule": "/painel/productcategory/action/",
   "methods": "POST"
@@ -5318,6 +5528,11 @@
   "endpoint": "produto_detail",
   "rule": "/produto/<int:product_id>",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "produto_toggle_status",
+  "rule": "/produto/<int:product_id>/toggle-status",
+  "methods": "POST"
  },
  {
   "endpoint": "professional_services_manage",
@@ -5510,6 +5725,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "public_profile_panel",
+  "rule": "/inicio/perfil/<profile_key>",
+  "methods": "GET"
+ },
+ {
   "endpoint": "publish_inventory_to_loja",
   "rule": "/estoque/item/<int:item_id>/publicar",
   "methods": "POST"
@@ -5580,13 +5800,18 @@
   "methods": "GET,POST"
  },
  {
-  "endpoint": "redirect_t10",
+  "endpoint": "redirect_t10_legacy",
   "rule": "/sfa/p/<token>/t10",
   "methods": "GET,POST"
  },
  {
   "endpoint": "redirect_t30",
   "rule": "/sfa/p/<token>/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "redirect_t7",
+  "rule": "/sfa/p/<token>/t7",
   "methods": "GET,POST"
  },
  {
@@ -5880,6 +6105,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "sfa_routes.historico_instrumentos",
+  "rule": "/sfa/instrumentos/historico",
+  "methods": "GET"
+ },
+ {
   "endpoint": "sfa_routes.marcar_whatsapp",
   "rule": "/sfa/paciente/<id_estudo>/whatsapp",
   "methods": "POST"
@@ -5887,6 +6117,11 @@
  {
   "endpoint": "sfa_routes.paciente_detail",
   "rule": "/sfa/paciente/<id_estudo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.paciente_form_qrcode",
+  "rule": "/sfa/paciente/<id_estudo>/qrcode/<stage>.png",
   "methods": "GET"
  },
  {
@@ -5905,13 +6140,18 @@
   "methods": "GET,POST"
  },
  {
-  "endpoint": "sfa_routes.redirect_t10",
+  "endpoint": "sfa_routes.redirect_t10_legacy",
   "rule": "/sfa/p/<token>/t10",
   "methods": "GET,POST"
  },
  {
   "endpoint": "sfa_routes.redirect_t30",
   "rule": "/sfa/p/<token>/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.redirect_t7",
+  "rule": "/sfa/p/<token>/t7",
   "methods": "GET,POST"
  },
  {
@@ -5955,13 +6195,18 @@
   "methods": "GET,POST"
  },
  {
-  "endpoint": "sfa_routes.t10_form_config",
+  "endpoint": "sfa_routes.t10_config_legacy",
   "rule": "/sfa/config/t10",
-  "methods": "GET,POST"
+  "methods": "GET"
  },
  {
   "endpoint": "sfa_routes.t30_form_config",
   "rule": "/sfa/config/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.t7_form_config",
+  "rule": "/sfa/config/t7",
   "methods": "GET,POST"
  },
  {
@@ -5970,18 +6215,38 @@
   "methods": "GET"
  },
  {
+  "endpoint": "sfa_routes.trabalho",
+  "rule": "/sfa/trabalho",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.trabalho_registrar",
+  "rule": "/sfa/trabalho/registrar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.vigilancia_semanal",
+  "rule": "/sfa/vigilancia-semanal",
+  "methods": "GET"
+ },
+ {
   "endpoint": "sfa_routes.webhook_t0",
   "rule": "/sfa/webhook/t0",
   "methods": "POST"
  },
  {
-  "endpoint": "sfa_routes.webhook_t10",
+  "endpoint": "sfa_routes.webhook_t10_legacy",
   "rule": "/sfa/webhook/t10",
   "methods": "POST"
  },
  {
   "endpoint": "sfa_routes.webhook_t30",
   "rule": "/sfa/webhook/t30",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.webhook_t7",
+  "rule": "/sfa/webhook/t7",
   "methods": "POST"
  },
  {
@@ -5993,6 +6258,16 @@
   "endpoint": "shares_api",
   "rule": "/api/shares",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "short_prescription_url",
+  "rule": "/r/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "short_treatment_url",
+  "rule": "/t/<int:tratamento_id>",
+  "methods": "GET"
  },
  {
   "endpoint": "sim_portal.sim_account_preview",
@@ -6105,6 +6380,21 @@
   "methods": "POST"
  },
  {
+  "endpoint": "site_routes.dismiss_activation_bar",
+  "rule": "/inicio/ativacao/dispensar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.dismiss_home_alert",
+  "rule": "/inicio/alertas/dispensar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.favicon_ico",
+  "rule": "/favicon.ico",
+  "methods": "GET"
+ },
+ {
   "endpoint": "site_routes.index",
   "rule": "/",
   "methods": "GET"
@@ -6158,6 +6448,11 @@
   "endpoint": "site_routes.professional_services_manage",
   "rule": "/veterinario/servicos",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.public_profile_panel",
+  "rule": "/inicio/perfil/<profile_key>",
+  "methods": "GET"
  },
  {
   "endpoint": "site_routes.responder_solicitacao",
@@ -6272,6 +6567,26 @@
  {
   "endpoint": "site_routes.student_hub",
   "rule": "/estudantes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.student_internship_clinic",
+  "rule": "/estagio/clinica/<int:clinica_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.student_practice",
+  "rule": "/estudantes/pratica",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.student_practice_stage",
+  "rule": "/estudantes/pratica/etapa/<stage_key>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.student_professional_area",
+  "rule": "/estudantes/area-profissional",
   "methods": "GET"
  },
  {
@@ -6485,6 +6800,26 @@
   "methods": "GET"
  },
  {
+  "endpoint": "student_internship_clinic",
+  "rule": "/estagio/clinica/<int:clinica_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "student_practice",
+  "rule": "/estudantes/pratica",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "student_practice_stage",
+  "rule": "/estudantes/pratica/etapa/<stage_key>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "student_professional_area",
+  "rule": "/estudantes/area-profissional",
+  "methods": "GET"
+ },
+ {
   "endpoint": "support",
   "rule": "/support",
   "methods": "GET"
@@ -6500,13 +6835,18 @@
   "methods": "GET,POST"
  },
  {
-  "endpoint": "t10_form_config",
+  "endpoint": "t10_config_legacy",
   "rule": "/sfa/config/t10",
-  "methods": "GET,POST"
+  "methods": "GET"
  },
  {
   "endpoint": "t30_form_config",
   "rule": "/sfa/config/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "t7_form_config",
+  "rule": "/sfa/config/t7",
   "methods": "GET,POST"
  },
  {
@@ -6590,8 +6930,23 @@
   "methods": "DELETE,POST"
  },
  {
+  "endpoint": "toggle_other_agendas",
+  "rule": "/api/admin/toggle_other_agendas",
+  "methods": "GET,POST"
+ },
+ {
   "endpoint": "toggle_pesquisa_racoes_tutor",
   "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "trabalho",
+  "rule": "/sfa/trabalho",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "trabalho_registrar",
+  "rule": "/sfa/trabalho/registrar",
   "methods": "POST"
  },
  {
@@ -6800,6 +7155,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "vacina_pmo_dia_frascos",
+  "rule": "/vacina-pmo/dia/<date_str>/frascos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_diagnostico_foto",
+  "rule": "/vacina-pmo/diagnostico-foto",
+  "methods": "GET"
+ },
+ {
   "endpoint": "vacina_pmo_doses_compilar",
   "rule": "/vacina-pmo/doses/compilar",
   "methods": "POST"
@@ -6817,6 +7182,21 @@
  {
   "endpoint": "vacina_pmo_painel",
   "rule": "/vacina-pmo/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_painel_pipeline",
+  "rule": "/vacina-pmo/painel/pipeline",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_painel_planilha",
+  "rule": "/vacina-pmo/painel/planilha",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_painel_vacinados",
+  "rule": "/vacina-pmo/painel/vacinados",
   "methods": "GET"
  },
  {
@@ -6890,6 +7270,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_dia_frascos",
+  "rule": "/vacina-pmo/dia/<date_str>/frascos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_diagnostico_foto",
+  "rule": "/vacina-pmo/diagnostico-foto",
+  "methods": "GET"
+ },
+ {
   "endpoint": "vacina_pmo_routes.vacina_pmo_doses_compilar",
   "rule": "/vacina-pmo/doses/compilar",
   "methods": "POST"
@@ -6907,6 +7297,21 @@
  {
   "endpoint": "vacina_pmo_routes.vacina_pmo_painel",
   "rule": "/vacina-pmo/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_painel_pipeline",
+  "rule": "/vacina-pmo/painel/pipeline",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_painel_planilha",
+  "rule": "/vacina-pmo/painel/planilha",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_painel_vacinados",
+  "rule": "/vacina-pmo/painel/vacinados",
   "methods": "GET"
  },
  {
@@ -6960,8 +7365,23 @@
   "methods": "POST"
  },
  {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_updates",
+  "rule": "/vacina-pmo/updates",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_visit_add_animal",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/animal",
+  "methods": "POST"
+ },
+ {
   "endpoint": "vacina_pmo_routes.vacina_pmo_visit_attended_by",
   "rule": "/vacina-pmo/visit/<int:visit_id>/attended-by",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_visit_create",
+  "rule": "/vacina-pmo/visit",
   "methods": "POST"
  },
  {
@@ -7000,8 +7420,23 @@
   "methods": "POST"
  },
  {
+  "endpoint": "vacina_pmo_updates",
+  "rule": "/vacina-pmo/updates",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_visit_add_animal",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/animal",
+  "methods": "POST"
+ },
+ {
   "endpoint": "vacina_pmo_visit_attended_by",
   "rule": "/vacina-pmo/visit/<int:visit_id>/attended-by",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_visit_create",
+  "rule": "/vacina-pmo/visit",
   "methods": "POST"
  },
  {
@@ -7250,6 +7685,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "vigilancia_semanal",
+  "rule": "/sfa/vigilancia-semanal",
+  "methods": "GET"
+ },
+ {
   "endpoint": "waitlist_signup",
   "rule": "/lista-de-espera",
   "methods": "POST"
@@ -7310,13 +7750,18 @@
   "methods": "POST"
  },
  {
-  "endpoint": "webhook_t10",
+  "endpoint": "webhook_t10_legacy",
   "rule": "/sfa/webhook/t10",
   "methods": "POST"
  },
  {
   "endpoint": "webhook_t30",
   "rule": "/sfa/webhook/t30",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "webhook_t7",
+  "rule": "/sfa/webhook/t7",
   "methods": "POST"
  },
  {
