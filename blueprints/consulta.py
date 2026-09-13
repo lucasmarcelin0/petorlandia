@@ -1166,6 +1166,11 @@ def agendar_retorno(consulta_id):
         ).all()
     )
     form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+    wants_json = (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
     if form.validate_on_submit():
         payload = ReturnAppointmentDTO(
             date=form.date.data,
@@ -1198,10 +1203,36 @@ def agendar_retorno(consulta_id):
                     },
                 )
                 db.session.commit()
-        flash(result.message, result.category)
+            if wants_json:
+                return jsonify({
+                    'success': True,
+                    'message': result.message,
+                    'category': result.category,
+                    'appointment_id': getattr(result, 'appointment_id', None) or (consulta.appointment.id if consulta.appointment else None),
+                }), 200
+            flash(result.message, result.category)
+        else:
+            if wants_json:
+                return jsonify({
+                    'success': False,
+                    'message': result.message,
+                    'category': result.category or 'danger',
+                }), 400
+            flash(result.message, result.category)
     else:
-        flash('Erro ao agendar retorno.', 'danger')
-    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+        err_msg = 'Erro ao agendar retorno.'
+        if form.errors:
+            err_details = [f"{field}: {', '.join(errs)}" for field, errs in form.errors.items()]
+            err_msg += f" {'; '.join(err_details)}"
+        if wants_json:
+            return jsonify({
+                'success': False,
+                'message': err_msg,
+                'category': 'danger',
+                'errors': form.errors,
+            }), 400
+        flash(err_msg, 'danger')
+    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
 
 
 @bp.route('/retorno/<int:appointment_id>/start', methods=['POST'])

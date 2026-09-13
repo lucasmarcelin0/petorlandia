@@ -2292,7 +2292,7 @@ def edit_appointment(appointment_id):
         if not date_str or not time_str or not vet_id:
             msg = 'Dados incompletos.'
             if wants_json:
-                return jsonify({'success': False, 'message': msg}), 400
+                return jsonify({'success': False, 'message': msg, 'category': 'danger'}), 400
             flash(msg, 'danger')
             return redirect(request.referrer or url_for('appointments'))
         try:
@@ -2304,7 +2304,7 @@ def edit_appointment(appointment_id):
         except (ValueError, TypeError):
             msg = 'Dados inválidos.'
             if wants_json:
-                return jsonify({'success': False, 'message': msg}), 400
+                return jsonify({'success': False, 'message': msg, 'category': 'danger'}), 400
             flash(msg, 'danger')
             return redirect(request.referrer or url_for('appointments'))
         if not is_slot_available(
@@ -2324,7 +2324,8 @@ def edit_appointment(appointment_id):
             if wants_json:
                 return jsonify({
                     'success': False,
-                    'message': msg
+                    'message': msg,
+                    'category': 'danger'
                 }), 400
             flash(msg, 'danger')
             return redirect(request.referrer or url_for('appointments'))

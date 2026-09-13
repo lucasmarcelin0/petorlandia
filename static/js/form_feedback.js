@@ -249,13 +249,20 @@
     if (status) return status;
 
     status = document.createElement('div');
-    status.className = 'form-status-message alert d-none mt-3';
+    status.className = 'col-12 form-status-message alert d-none mt-3';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
 
     const button = getButton(form);
-    if (button && button.parentNode === form) {
-      form.insertBefore(status, button);
+    if (button) {
+      const buttonWrapper = button.closest('.col-12, .col, [class*="col-"]');
+      if (buttonWrapper && buttonWrapper.parentNode === form) {
+        form.insertBefore(status, buttonWrapper);
+      } else if (button.parentNode === form) {
+        form.insertBefore(status, button);
+      } else {
+        form.appendChild(status);
+      }
     } else {
       form.appendChild(status);
     }
@@ -273,6 +280,9 @@
     });
     const normalized = STATUS_VARIANTS.includes(variant) ? variant : 'info';
     status.classList.add(`alert-${normalized}`);
+    try {
+      status.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {}
   }
 
   function normalizeResult(result, options = {}) {

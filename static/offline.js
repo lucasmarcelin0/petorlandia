@@ -245,13 +245,16 @@
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
+  if (typeof window.showToast !== 'function') {
+    window.showToast = showToast;
+  }
+
   function showFormMessage(form, message, category = 'info'){
     if(!message) return;
     if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
       window.FormFeedback.showStatus(form, message, category);
-    } else {
-      showToast(message, category);
     }
+    showToast(message, category);
   }
 
   function isCsrfFailure(resp, json){

@@ -204,12 +204,44 @@ def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):
         }
     )
     assert resp.status_code == 302
+    assert resp.headers['Location'].endswith(f'/consulta/{animal_id}?c={consulta_id}')
     with client.session_transaction() as sess:
         flashes = sess.get('_flashes', [])
     assert ('danger', 'Horário indisponível para o veterinário selecionado.') in flashes
     with flask_app.app_context():
         assert Appointment.query.count() == 1
         assert Appointment.query.filter_by(consulta_id=consulta_id).count() == 0
+
+    # Chamada assíncrona (data-sync com Accept: application/json)
+    resp_json = client.post(
+        f'/agendar_retorno/{consulta_id}',
+        data={
+            'animal_id': animal_id,
+            'veterinario_id': vet_id,
+            'date': '2024-05-01',
+            'time': '10:00',
+            'reason': 'Reavaliação',
+        },
+        headers={'Accept': 'application/json'},
+    )
+    assert resp_json.status_code == 400
+    payload = resp_json.get_json()
+    assert payload['success'] is False
+    assert payload['category'] == 'danger'
+    assert 'Horário indisponível' in payload['message']
+
+    # Validação de campos obrigatórios com retorno JSON
+    resp_bad = client.post(
+        f'/agendar_retorno/{consulta_id}',
+        data={
+            'animal_id': animal_id,
+            'veterinario_id': vet_id,
+        },
+        headers={'Accept': 'application/json'},
+    )
+    assert resp_bad.status_code == 400
+    assert resp_bad.get_json()['success'] is False
+    assert resp_bad.get_json()['category'] == 'danger'
 
 
 def test_iniciar_retorno_cria_consulta_e_badge(client, monkeypatch):

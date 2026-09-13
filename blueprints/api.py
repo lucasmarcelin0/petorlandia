@@ -2593,6 +2593,7 @@ def api_reschedule_appointment(appointment_id):
         return jsonify({
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.',
+            'category': 'danger',
         }), 400
 
     appointment.scheduled_at = new_start_utc

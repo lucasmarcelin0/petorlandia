@@ -317,6 +317,7 @@ def test_edit_appointment_prevents_overbooking_with_other_appointment(client, mo
     })
     assert resp.status_code == 400
     assert resp.get_json()['success'] is False
+    assert resp.get_json()['category'] == 'danger'
     assert 'indisponível' in resp.get_json()['message']
 
     # Also test api_reschedule_appointment
@@ -327,6 +328,7 @@ def test_edit_appointment_prevents_overbooking_with_other_appointment(client, mo
     )
     # Note: 10:15 overlaps 10:30 (appt2), so 10:15 should be blocked by appt2!
     assert resp_reschedule.status_code == 400
+    assert resp_reschedule.get_json()['category'] == 'danger'
 
     # Moving appt1 to 09:30 (no conflict with appt2) succeeds!
     resp_ok = client.post(

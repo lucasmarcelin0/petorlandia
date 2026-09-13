@@ -141,6 +141,7 @@
           retorno</a>
       </div>
     </div>
+  </div>
   <form id="edit-return-form" class="row g-3 mt-3 d-none" data-appointment-id="{{ consulta.appointment.id }}"
         method="POST" action="{{ url_for('edit_appointment', appointment_id=consulta.appointment.id) }}" data-sync>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -166,6 +167,7 @@
       {{ appointment_form.reason.label(class='form-label') }}
       {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
     </div>
+    <div class="col-12 form-status-message alert d-none" role="status" aria-live="polite"></div>
     <div class="col-12 d-flex gap-2">
       <button type="submit" class="btn btn-primary">Salvar</button>
       <button type="button" class="btn btn-outline-secondary cancelar-retorno">Cancelar</button>
@@ -175,7 +177,7 @@
   <hr class="my-4">
   <button type="button" class="btn btn-outline-primary mb-3" id="toggle-retorno-form">Agendar Retorno</button>
   <form id="agendar-retorno-form" method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}"
-    class="row g-3 d-none">
+    class="row g-3 d-none" data-sync>
     <h5 class="mb-3">Agendar Retorno</h5>
     {{ appointment_form.hidden_tag() }}
     <input type="hidden" name="animal_id" value="{{ animal.id }}">
@@ -201,6 +203,7 @@
       {{ appointment_form.reason.label(class='form-label') }}
       {{ appointment_form.reason(class='form-control', rows=3) }}
     </div>
+    <div class="col-12 form-status-message alert d-none" role="status" aria-live="polite"></div>
     <div class="col-12">
       {{ appointment_form.submit(class='btn btn-primary') }}
     </div>
@@ -281,7 +284,7 @@
 
       document.addEventListener('form-sync-success', async function (ev) {
         const form = ev.detail && ev.detail.form;
-        if (form && (form.classList.contains('delete-appointment-form') || form.id === 'edit-return-form')) {
+        if (form && (form.classList.contains('delete-appointment-form') || form.id === 'edit-return-form' || form.id === 'agendar-retorno-form')) {
           ev.preventDefault();
           await atualizarRetorno();
         }
