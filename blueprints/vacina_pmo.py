@@ -505,6 +505,13 @@ def vacina_pmo_sync():
             sheet_gid=result.sheet_gid,
             sheet_title=result.sheet_title,
         )
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('sheet_synced', {
+                'sheet_gid': result.sheet_gid,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento sheet_synced no realtime", exc_info=True)
         return jsonify(
             {
                 'success': True,
@@ -926,6 +933,31 @@ def vacina_pmo_route_undo():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+
+@bp.route('/vacina-pmo/updates', methods=['GET'])
+@login_required
+def vacina_pmo_updates():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    try:
+        from services.pmo_realtime import get_pmo_events_since
+
+        since_val = request.args.get('since')
+        since_id = None
+        if since_val is not None and since_val != '':
+            try:
+                since_id = int(since_val)
+            except (TypeError, ValueError):
+                since_id = None
+
+        sheet_gid = (request.args.get('sheet_gid') or '').strip()
+        result = get_pmo_events_since(since_id=since_id, sheet_gid=sheet_gid)
+        return jsonify({'success': True, **result})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao obter atualizações em tempo real do Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @bp.route('/vacina-pmo/animal/<int:animal_id>/status', methods=['POST'])
 @login_required
 def vacina_pmo_animal_status(animal_id):
@@ -940,6 +972,17 @@ def vacina_pmo_animal_status(animal_id):
             (payload.get('status') or '').strip(),
             immune_since=(payload.get('immuneSince') or '').strip() or None,
         )
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('status_updated', {
+                'animal_id': animal_id,
+                'status': (payload.get('status') or '').strip(),
+                'immune_since': (payload.get('immuneSince') or '').strip() or None,
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento status_updated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         # Regra de negocio (data invalida, sem dose anterior): a mensagem e
@@ -960,6 +1003,16 @@ def vacina_pmo_animal_name(animal_id):
 
         payload = request.get_json(silent=True) or {}
         row = update_vacina_pmo_animal_name(animal_id, payload.get('name') or '')
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('animal_name_updated', {
+                'animal_id': animal_id,
+                'name': payload.get('name') or '',
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento animal_name_updated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -1064,6 +1117,22 @@ def vacina_pmo_animal_photo(animal_id):
         animal.photo_offset_x = 0.0
         animal.photo_offset_y = 0.0
         db.session.commit()
+
+        try:
+            from models import PmoVaccinationAnimal
+            from services.pmo_realtime import record_pmo_event
+
+            pmo_animal = PmoVaccinationAnimal.query.get(animal_id)
+            sheet_gid = pmo_animal.visit.sheet_gid if (pmo_animal and pmo_animal.visit) else ''
+            record_pmo_event('photo_updated', {
+                'animal_id': animal_id,
+                'real_animal_id': animal.id,
+                'image_url': image_url,
+                'image_proxy_url': f"/vacina-pmo/animal/{animal_id}/photo-src",
+                'sheet_gid': sheet_gid,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento photo_updated no realtime", exc_info=True)
 
         if photo.converted:
             current_app.logger.info(
@@ -1187,6 +1256,15 @@ def vacina_pmo_visit_attended_by(visit_id):
 
         payload = request.get_json(silent=True) or {}
         row = update_vacina_pmo_visit_attended_by(visit_id, payload.get('attended_by'))
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('row_mutated', {
+                'visit_id': visit_id,
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento row_mutated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -1204,6 +1282,14 @@ def vacina_pmo_visit_create():
         from services.vacina_pmo_service import create_vacina_pmo_visit
 
         row = create_vacina_pmo_visit(request.get_json(silent=True) or {})
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('visit_created', {
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento visit_created no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -1225,6 +1311,15 @@ def vacina_pmo_visit_add_animal(visit_id):
         row = add_vacina_pmo_visit_animal(
             visit_id, payload.get('name'), payload.get('species')
         )
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('row_mutated', {
+                'visit_id': visit_id,
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento row_mutated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -1244,6 +1339,15 @@ def vacina_pmo_visit_losses(visit_id):
 
         payload = request.get_json(silent=True) or {}
         row = update_vacina_pmo_visit_losses(visit_id, payload.get('losses'))
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('row_mutated', {
+                'visit_id': visit_id,
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento row_mutated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -1281,6 +1385,15 @@ def vacina_pmo_visit_note(visit_id):
 
         payload = request.get_json(silent=True) or {}
         row = append_vacina_pmo_visit_note(visit_id, payload.get('note'))
+        try:
+            from services.pmo_realtime import record_pmo_event
+            record_pmo_event('row_mutated', {
+                'visit_id': visit_id,
+                'sheet_gid': row.get('sheet_gid', '') if isinstance(row, dict) else '',
+                'row': row,
+            })
+        except Exception:
+            current_app.logger.warning("Falha ao registrar evento row_mutated no realtime", exc_info=True)
         return jsonify({'success': True, 'row': row})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400

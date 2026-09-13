@@ -545,6 +545,17 @@
     display: block;
   }
 
+  @keyframes pmoPulseGlow {
+    0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7); transform: scale(1); }
+    50% { box-shadow: 0 0 0 7px rgba(25, 135, 84, 0); transform: scale(1.08); }
+    100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); transform: scale(1); }
+  }
+
+  .pmo-photo-fresh-update {
+    animation: pmoPulseGlow 1.6s ease-out 2;
+    border-color: #198754 !important;
+  }
+
   .pmo-animal-photo-badge {
     position: absolute;
     right: -4px;
@@ -5994,6 +6005,18 @@
     }
   }
 
+  const pmoBroadcast = (typeof BroadcastChannel !== 'undefined')
+    ? new BroadcastChannel('petorlandia_pmo_realtime')
+    : null;
+
+  function broadcastLocalEvent(type, data) {
+    if (pmoBroadcast) {
+      try {
+        pmoBroadcast.postMessage({ type, data });
+      } catch (_e) {}
+    }
+  }
+
   async function saveAnimalStatus(animalId, status, immuneSince) {
     if (!animalId) return null;
     const controller = new AbortController();
@@ -6012,6 +6035,15 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || 'Não foi possível salvar a alteração.');
+      }
+      if (payload.row) {
+        broadcastLocalEvent('status_updated', {
+          animal_id: animalId,
+          status,
+          immune_since: immuneSince || '',
+          sheet_gid: sheetEl.value,
+          row: payload.row,
+        });
       }
       return payload;
     } catch (error) {
@@ -6138,6 +6170,12 @@
       const currentAnimal = findAnimalById(animal.id) || animal;
       currentAnimal.animalId = payload.animal_id || currentAnimal.animalId;
       if (payload.image_url) currentAnimal.imageUrl = payload.image_url;
+      broadcastLocalEvent('photo_updated', {
+        animal_id: animal.id,
+        image_url: payload.image_url,
+        image_proxy_url: `/vacina-pmo/animal/${animal.id}/photo-src`,
+        sheet_gid: sheetEl.value,
+      });
       return payload;
     } catch (error) {
       if (error && error.name === 'AbortError') {
@@ -6973,7 +7011,7 @@
       return '<span class="text-muted">Nomes não informados</span>';
     }
     return row.animals.map((animal, index) => `
-      <div class="pmo-animal-item">
+      <div class="pmo-animal-item" data-animal-id="${animal.id || ''}">
         <div>
           ${row.editingAnimalNameIndex === index ? `
             <form class="pmo-animal-name-form" data-action="animal-name-form" data-animal-index="${index}">
@@ -7981,6 +8019,166 @@
       await syncSheet('pmo-sync-inline', { silent: true });
     }
   });
+  // ─── Sincronização em Tempo Real (Multi-usuários / Telas Simultâneas) ───
+  function isUserTyping() {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tag = active.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || active.isContentEditable;
+  }
+
+  function handleRealtimeEvent(event) {
+    if (!event || !event.type) return;
+    const { type, data } = event;
+    const currentGid = String(sheetEl.value || '').trim();
+    const eventGid = String(data?.sheet_gid || '').trim();
+
+    // Se o evento foi emitido para uma aba específica e o usuário está em outra, ignora
+    if (eventGid && currentGid && eventGid !== currentGid) {
+      return;
+    }
+
+    if (type === 'photo_updated') {
+      const animal = findAnimalById(data.animal_id);
+      if (animal) {
+        animal.imageUrl = data.image_url || animal.imageUrl;
+        animal.imageProxyUrl = data.image_proxy_url || animal.imageProxyUrl;
+        if (animal.photoUploadState !== 'uploading') {
+          delete animal.pendingImageUrl;
+          delete animal.photoUploadState;
+          delete animal.photoUploadError;
+          delete animal.photoUploadAttempts;
+          delete animal.photoUploadExhausted;
+          delete animal.photoUploadUpdatedAt;
+        }
+      }
+
+      // Atualiza cirurgicamente o botão/miniatura no DOM nas visões de cards e tabela
+      document.querySelectorAll(`.pmo-animal-item[data-animal-id="${data.animal_id}"]`).forEach((itemEl) => {
+        const statusDiv = itemEl.querySelector('.pmo-animal-status');
+        const oldBtn = statusDiv?.querySelector('.pmo-animal-photo-btn, .pmo-animal-photo-thumb');
+        if (oldBtn && animal) {
+          const index = oldBtn.dataset.animalIndex;
+          const temp = document.createElement('div');
+          temp.innerHTML = renderAnimalPhotoControl(animal, index);
+          const newBtn = temp.firstElementChild;
+          if (newBtn) {
+            newBtn.classList.add('pmo-photo-fresh-update');
+            oldBtn.replaceWith(newBtn);
+          }
+        }
+      });
+
+      renderStats(state.rows);
+      scheduleDayStockRefresh();
+    } else if (type === 'status_updated') {
+      const animal = findAnimalById(data.animal_id);
+      if (animal && animal.statusSaveState !== 'uploading') {
+        animal.status = data.status || animal.status;
+        if (data.immune_since) animal.immuneSince = data.immune_since;
+        if (data.row) {
+          replaceStateRow(normalizeSyncedRows([data.row])[0]);
+        }
+        if (!isUserTyping()) {
+          render();
+        }
+      }
+    } else if (type === 'animal_name_updated' || type === 'row_mutated') {
+      if (data.row) {
+        replaceStateRow(normalizeSyncedRows([data.row])[0]);
+        if (!isUserTyping()) {
+          render();
+        }
+      }
+    } else if (type === 'visit_created' || type === 'sheet_synced') {
+      loadSavedState(true);
+    }
+  }
+
+  if (pmoBroadcast) {
+    pmoBroadcast.onmessage = (evt) => {
+      if (evt.data) {
+        handleRealtimeEvent(evt.data);
+      }
+    };
+  }
+
+  let lastServerEventId = null;
+  let isPollingUpdates = false;
+  let realtimePollTimer = null;
+
+  async function pollRealtimeUpdates() {
+    if (isPollingUpdates || !navigator.onLine) return;
+    isPollingUpdates = true;
+
+    try {
+      const params = new URLSearchParams();
+      if (lastServerEventId !== null) {
+        params.set('since', String(lastServerEventId));
+      } else {
+        params.set('since', '-1');
+      }
+
+      const currentGid = String(sheetEl.value || '').trim();
+      if (currentGid) {
+        params.set('sheet_gid', currentGid);
+      }
+
+      const response = await fetch(`/vacina-pmo/updates?${params.toString()}`, {
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json().catch(() => ({}));
+      if (!data || !data.success) return;
+
+      if (data.reset) {
+        lastServerEventId = Number(data.latest_id) || 0;
+        await loadSavedState(true);
+        return;
+      }
+
+      if (lastServerEventId === null) {
+        lastServerEventId = Number(data.latest_id) || 0;
+      } else {
+        lastServerEventId = Number(data.latest_id) || lastServerEventId;
+        if (Array.isArray(data.events) && data.events.length > 0) {
+          for (const ev of data.events) {
+            handleRealtimeEvent(ev);
+          }
+        }
+      }
+    } catch (_err) {
+      // Ignora falhas pontuais de conexão móvel
+    } finally {
+      isPollingUpdates = false;
+    }
+  }
+
+  function scheduleNextRealtimePoll() {
+    window.clearTimeout(realtimePollTimer);
+    const delay = document.hidden ? 30000 : 3000;
+    realtimePollTimer = window.setTimeout(async () => {
+      await pollRealtimeUpdates();
+      scheduleNextRealtimePoll();
+    }, delay);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      pollRealtimeUpdates();
+    }
+    scheduleNextRealtimePoll();
+  });
+
+  window.addEventListener('online', () => {
+    pollRealtimeUpdates();
+  });
+
+  scheduleNextRealtimePoll();
+
   render();
   hydrateLocalQueues();
 })();
