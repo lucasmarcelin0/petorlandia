@@ -71,9 +71,9 @@ def main() -> None:
             )
 
     graficos_html_path = OUTPUT_DIR / f"sfa_graficos_testes_a4_{timestamp}.html"
-    formularios_html_path = OUTPUT_DIR / f"sfa_perguntas_t0_t10_t30_a4_{timestamp}.html"
+    formularios_html_path = OUTPUT_DIR / f"sfa_perguntas_t0_t7_t30_a4_{timestamp}.html"
     graficos_pdf_path = OUTPUT_DIR / f"sfa_graficos_testes_a4_{timestamp}.pdf"
-    formularios_pdf_path = OUTPUT_DIR / f"sfa_perguntas_t0_t10_t30_a4_{timestamp}.pdf"
+    formularios_pdf_path = OUTPUT_DIR / f"sfa_perguntas_t0_t7_t30_a4_{timestamp}.pdf"
 
     graficos_html_path.write_text(graficos_html, encoding="utf-8")
     formularios_html_path.write_text(formularios_html, encoding="utf-8")

@@ -7,7 +7,7 @@ from models import User
 from models.sfa import (
     SfaPaciente,
     SfaRespostaT0,
-    SfaRespostaT10,
+    SfaRespostaT7,
     SfaRespostaT30,
     SfaSinanLog,
 )
@@ -122,7 +122,7 @@ def test_sfa_webhook_requires_secret_outside_testing(app, client, monkeypatch):
     ("stage", "submitter_name", "response_model"),
     [
         ("t0", "on_submit_t0", SfaRespostaT0),
-        ("t10", "on_submit_t10", SfaRespostaT10),
+        ("t7", "on_submit_t7", SfaRespostaT7),
         ("t30", "on_submit_t30", SfaRespostaT30),
     ],
 )
@@ -235,7 +235,7 @@ def test_sfa_rotina_manual_nao_sincroniza_t0_legado(app, client, monkeypatch):
     monkeypatch.setattr(
         sfa_service,
         "verificar_seguimento",
-        lambda: {"atrasados_t10": ["SFA-10"], "atrasados_t30": []},
+        lambda: {"atrasados_t7": ["SFA-10"], "atrasados_t30": []},
     )
 
     response = client.post("/sfa/rotina")
@@ -245,7 +245,7 @@ def test_sfa_rotina_manual_nao_sincroniza_t0_legado(app, client, monkeypatch):
         flashes = sess.get("_flashes", [])
     assert (
         "info",
-        "Rotina concluída: 1 T10 atrasados, 0 T30 atrasados.",
+        "Rotina concluída: 1 T7 atrasados, 0 T30 atrasados.",
     ) in flashes
     assert all("T0 importada" not in message for _category, message in flashes)
 
@@ -266,7 +266,7 @@ def test_sfa_rotina_diaria_preserva_sinan_e_seguimento_sem_sync_t0(app, monkeypa
     monkeypatch.setattr(
         sfa_service,
         "verificar_seguimento",
-        lambda: {"atrasados_t10": ["SFA-10"], "atrasados_t30": ["SFA-30"]},
+        lambda: {"atrasados_t7": ["SFA-10"], "atrasados_t30": ["SFA-30"]},
     )
 
     resultado = sfa_service.rodar_rotina_diaria(app)
@@ -274,6 +274,6 @@ def test_sfa_rotina_diaria_preserva_sinan_e_seguimento_sem_sync_t0(app, monkeypa
     assert resultado == {
         "novos": 2,
         "erros": 0,
-        "atrasados_t10": ["SFA-10"],
+        "atrasados_t7": ["SFA-10"],
         "atrasados_t30": ["SFA-30"],
     }

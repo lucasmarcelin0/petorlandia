@@ -1,0 +1,66 @@
+{% extends 'sfa/base.html' %}
+{% block title %}Organização do trabalho — SFA{% endblock %}
+{% block content %}
+{% macro campo(nome, rotulo, valor='', tipo='text', obrigatorio=true) %}
+<label class="form-label d-block mt-2">{{ rotulo }}<input class="form-control" type="{{ tipo }}" name="{{ nome }}" value="{{ valor or '' }}" {% if obrigatorio %}required{% endif %}></label>
+{% endmacro %}
+{% macro inicio(operacao, episodio='') %}
+<form method="post" action="{{ url_for('sfa_routes.trabalho_registrar') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="operacao" value="{{ operacao }}"><input type="hidden" name="id_estudo" value="{{ episodio }}">
+{% endmacro %}
+{% macro fim(label='Salvar registro') %}
+{{ campo('responsavel','Responsável por este registro') }}<button class="btn btn-primary mt-2">{{ label }}</button></form>
+{% endmacro %}
+{% macro evento_select(obrigatorio=true) %}
+<label class="form-label d-block">Evento<select name="evento_id" class="form-select" {% if obrigatorio %}required{% endif %}><option value="">Selecione</option>{% for e in eventos %}<option value="{{ e.id }}">#{{ e.id }} — {{ e.titulo }}</option>{% endfor %}</select></label>
+{% endmacro %}
+<h1 class="h3">Organização do trabalho</h1>
+<p>Uma matrícula identifica um episódio. Contatos, eventos coletivos e ações têm históricos próprios. Concluir o T30 encerra o acompanhamento individual; cada ação exige execução e verificação.</p>
+<div class="row g-3 mb-3">
+ <div class="col-md-4"><div class="card card-body"><strong>{{ acoes|rejectattr('status','equalto','VERIFICADA')|list|length }} ações a concluir</strong><a href="#acoes">Organizar responsáveis e prazos</a></div></div>
+ <div class="col-md-4"><div class="card card-body"><strong>{{ pendencias|length }} episódios com pendências de dados</strong><a href="#qualidade">Conferir antes de decidir</a></div></div>
+ <div class="col-md-4"><div class="card card-body"><strong>Pacientes e território</strong><a href="{{ url_for('sfa_routes.vigilancia_semanal') }}">Comparação semanal com visitas e larvas</a></div></div>
+</div>
+<form method="get" class="card card-body mb-3"><label class="form-label" for="episodio">Episódio para acompanhar</label><div class="input-group"><select id="episodio" name="episodio" class="form-select"><option value="">Visão geral</option>{% for paciente in pacientes %}<option value="{{ paciente.id_estudo }}" {% if p and p.id_estudo == paciente.id_estudo %}selected{% endif %}>{{ paciente.id_estudo }} — {{ paciente.nome }}</option>{% endfor %}</select><button class="btn btn-primary">Abrir</button></div></form>
+{% if p %}
+<div class="card card-body mb-3">
+<h2 class="h4">{{ p.id_estudo }} · <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}">Ficha e respostas</a></h2>
+<p class="mb-1">{% if calendario.inicio %}<strong>D{{ calendario.dia_doenca }} da doença</strong> · D0: {{ calendario.inicio.strftime('%d/%m/%Y') }} · T7: {{ calendario.t7.strftime('%d/%m/%Y') }} · T30: {{ calendario.t30.strftime('%d/%m/%Y') }}{% else %}<strong>Calendário aguardando revisão:</strong> {{ calendario.fonte }}{% endif %}</p>
+<p class="small text-muted">Fonte: {{ calendario.fonte }}. Datas acima são alvos do calendário por doença; as respostas guardam a data real da coleta. Um T10 histórico não é convertido em T7.</p>
+<details><summary>Conferir início dos sintomas, território e classificação</summary>
+{{ inicio('contexto',p.id_estudo) }}
+{{ campo('inicio_sintomas','Início dos sintomas revisado', p.contexto.inicio_sintomas if p.contexto else '', 'date', false) }}
+{{ campo('fonte_inicio','Fonte da data (ficha, entrevista e data da conferência)',p.contexto.fonte_inicio if p.contexto else '',obrigatorio=false) }}
+<p class="small">Uma revisão documentada resolve divergências entre T0 e SINAN. Deixar a data vazia remove a revisão e volta a consultar as fontes originais.</p>
+{{ campo('setor','Código do setor operacional',p.contexto.setor if p.contexto else '',obrigatorio=false) }}
+<label class="form-label d-block">Tipo de local<select name="tipo_local" class="form-select">{% for v,l in [('INDEFINIDO','Ainda não definido'),('RESIDENCIA','Residência'),('PROVAVEL_INFECCAO','Provável local de infecção')] %}<option value="{{ v }}" {% if p.contexto and p.contexto.tipo_local==v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+{{ campo('fonte_local','Fonte da conferência do endereço e setor',p.contexto.fonte_local if p.contexto else '',obrigatorio=false) }}
+<label class="d-block"><input type="checkbox" name="local_validado" value="1" {% if p.contexto and p.contexto.local_validado %}checked{% endif %}> Conferi o local na malha operacional do levantamento</label>
+<p class="small">Não basta o nome do bairro. A comparação semanal usa apenas residência validada; o provável local de infecção fica identificado separadamente e não entra nessa comparação.</p>
+<label class="form-label d-block">Classificação do episódio<select name="classificacao" class="form-select">{% for v in ['INDEFINIDA','SUSPEITO','CONFIRMADO','DESCARTADO'] %}<option {% if p.contexto and p.contexto.classificacao==v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+{{ campo('fonte_classificacao','Fonte e critério da classificação',p.contexto.fonte_classificacao if p.contexto else '',obrigatorio=false) }}
+{{ fim('Salvar revisão e recalcular pendências') }}</details>
+</div>
+<div class="row g-3 mb-3"><div class="col-lg-6"><div class="card card-body h-100"><h2 class="h5">Registrar tentativa de contato</h2>
+{{ inicio('contato',p.id_estudo) }}
+<label class="form-label">Etapa<select name="etapa" class="form-select">{% for v in ['T0','T7','T30','REVISAO'] %}<option>{{ v }}</option>{% endfor %}</select></label>
+<label class="form-label">Canal<select name="canal" class="form-select">{% for v in ['TELEFONE','WHATSAPP','PRESENCIAL','OUTRO'] %}<option>{{ v }}</option>{% endfor %}</select></label>
+<label class="form-label d-block">Resultado<select name="resultado" class="form-select">{% for v in ['SEM_RETORNO','ACEITOU','RECUSOU','NAO_LOCALIZADO','REAGENDADO','PERDA_CONFIRMADA'] %}<option>{{ v }}</option>{% endfor %}</select></label>
+{{ campo('motivo','Motivo / observação (obrigatório em recusa, perda ou reagendamento)',obrigatorio=false) }}
+{{ campo('proximo_contato','Próximo contato combinado',tipo='date',obrigatorio=false) }}
+<p class="small">Registre o contato que você realizou. Este formulário não envia mensagens. Recusa suspende a fila de contato; perda exige decisão registrada.</p>
+{{ fim() }}</div></div>
+<div class="col-lg-6"><div class="card card-body h-100"><h2 class="h5">Histórico de contatos</h2><ul>{% for c in p.contatos|reverse %}<li class="mb-2">{{ c.ocorrido_em.strftime('%d/%m/%Y %H:%M') }} UTC · {{ c.etapa }} · {{ c.canal }} · <strong>{{ c.resultado }}</strong> · {{ c.responsavel }}<br>{{ c.motivo or '' }}{% if c.proximo_contato %}<br>Próximo: {{ c.proximo_contato.strftime('%d/%m/%Y') }}{% endif %}</li>{% else %}<li>Nenhuma tentativa registrada neste histórico.</li>{% endfor %}</ul>
+<h3 class="h6">Vincular episódio a um evento investigado</h3>{{ inicio('vinculo',p.id_estudo) }}{{ evento_select() }}{{ campo('fonte','Evidência do vínculo (local, período e exposição)') }}{{ fim('Vincular') }}</div></div></div>
+{% endif %}
+<div class="card card-body mb-3" id="acoes"><h2 class="h4">Ações e verificação</h2>
+<details class="mb-3"><summary>Planejar uma ação</summary>{{ inicio('acao',p.id_estudo if p else '') }}{{ evento_select(false) }}{{ campo('setor','Setor operacional (se a ação for territorial)',obrigatorio=false) }}{{ campo('tipo','Tipo da ação (ex.: visita, busca ativa, bloqueio)') }}{{ campo('motivo','Motivo e objetivo verificável') }}{{ campo('prazo','Prazo',tipo='date') }}{{ fim('Criar ação') }}</details>
+<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Ação / vínculo</th><th>Responsável / prazo</th><th>Situação / resultado</th><th>Registrar andamento</th></tr></thead><tbody>
+{% for a in acoes %}<tr><td>#{{ a.id }} {{ a.tipo }}<br>{{ a.motivo }}<br><small>{{ a.id_estudo or '' }} {% if a.evento_id %}Evento #{{ a.evento_id }}{% endif %} {{ a.setor or '' }}</small></td><td>{{ a.responsavel }}<br><span class="{% if a.prazo < hoje and a.status != 'VERIFICADA' %}text-danger fw-bold{% endif %}">{{ a.prazo.strftime('%d/%m/%Y') }}</span></td><td>{{ a.status }}<br>{{ a.resultado or '' }}{% if a.verificado_em %}<br>Verificado por {{ a.verificador }}: {{ a.evidencia_verificacao }}{% endif %}</td><td><details><summary>Atualizar #{{ a.id }}</summary>{{ inicio('acao_status',p.id_estudo if p else '') }}<input type="hidden" name="acao_id" value="{{ a.id }}"><select name="status" class="form-select">{% if a.status == 'ABERTA' %}<option>EM_ANDAMENTO</option>{% endif %}{% if a.status in ['ABERTA','EM_ANDAMENTO'] %}<option>EXECUTADA</option>{% endif %}{% if a.status == 'EXECUTADA' %}<option>VERIFICADA</option>{% endif %}{% if a.status in ['EXECUTADA','VERIFICADA'] %}<option value="ABERTA">Reabrir</option>{% endif %}</select>{{ campo('resultado','Resultado / motivo de reabertura',obrigatorio=false) }}{{ campo('evidencia_verificacao','Evidência de verificação',obrigatorio=false) }}{{ campo('horas','Horas totais aplicadas (opcional)',obrigatorio=false) }}{{ campo('custo','Custo total em R$ (opcional)',obrigatorio=false) }}{{ fim() }}</details></td></tr>{% else %}<tr><td colspan="4">Nenhuma ação registrada.</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card card-body mb-3"><h2 class="h4">Eventos coletivos</h2><p>Um sinal relatado no formulário precisa de avaliação da equipe. Registre local, período e exposição; a classificação acionável não é inferida automaticamente.</p>
+<details><summary>Registrar evento para investigação</summary>{{ inicio('evento') }}{{ campo('titulo','Nome do evento') }}{{ campo('local','Local de exposição') }}{{ campo('inicio','Início do período',tipo='date') }}{{ campo('fim','Fim do período (se conhecido)',tipo='date',obrigatorio=false) }}{{ campo('exposicao','Exposição suspeita e fonte da informação') }}{{ fim('Registrar evento') }}</details>
+{% for e in eventos %}<details class="mt-3 border-top pt-2"><summary>#{{ e.id }} {{ e.titulo }} · {{ e.avaliacao }} · {{ e.vinculos|length }} episódios vinculados</summary><p>{{ e.local }} · {{ e.inicio }} a {{ e.fim or 'em investigação' }}<br>{{ e.exposicao }}<br>{{ e.justificativa or 'Avaliação pendente' }} · {{ e.avaliador or '' }}</p><p>Episódios: {% for v in e.vinculos %}<a href="{{ url_for('sfa_routes.trabalho',episodio=v.id_estudo) }}">{{ v.id_estudo }}</a> ({{ v.fonte }}); {% else %}nenhum vínculo confirmado{% endfor %}</p>{{ inicio('avaliacao') }}<input type="hidden" name="evento_id" value="{{ e.id }}"><label>Avaliação independente<select name="avaliacao" class="form-select">{% for v in ['PENDENTE','ACIONAVEL','NAO_ACIONAVEL','INCONCLUSIVO'] %}<option {% if e.avaliacao==v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>{{ campo('justificativa','Critério, evidências e justificativa da avaliação') }}{{ fim('Registrar avaliação') }}</details>{% endfor %}</div>
+<div class="card card-body" id="qualidade"><h2 class="h4">Pendências de qualidade</h2><p>Estas pendências indicam o que conferir. Dado ausente não significa resposta negativa.</p><ul>{% for item in pendencias %}<li><a href="{{ url_for('sfa_routes.trabalho',episodio=item.paciente.id_estudo) }}">{{ item.paciente.id_estudo }}</a>: {{ item.motivos|join('; ') }}.</li>{% else %}<li>Nenhuma pendência nas verificações disponíveis.</li>{% endfor %}</ul></div>
+<datalist id="setores">{% for s in setores %}<option value="{{ s }}">{% endfor %}</datalist>
+{% endblock %}

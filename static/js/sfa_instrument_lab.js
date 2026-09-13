@@ -171,8 +171,8 @@
         }
       ]
     },
-    t10: {
-      label: 'T10',
+    t7: {
+      label: 'T7',
       purpose: 'Descobrir se o caso isolado virou um sinal coletivo e se a possível fonte continua ativa.',
       summary: [
         'Atualiza novos casos e novas pistas de exposição.',
@@ -260,12 +260,12 @@
       label: 'T30',
       purpose: 'Encerrar o possível sinal coletivo: fonte esclarecida, interrompida ou ainda invisível.',
       summary: [
-        'Verifica novos casos desde o T10 e informação final sobre a fonte.',
+        'Verifica novos casos desde o T7 e informação final sobre a fonte.',
         'Registra orientação ou ação percebida sem atribuir causalidade.',
         'Pergunta se surgiram casos depois da ação apenas de modo descritivo.',
         'Mantém desfecho individual e custo como informação complementar enxuta.'
       ],
-      imported: ['nome e contato', 'respostas T0/T10', 'linha diagnóstica', 'atendimentos e exames', 'dias e gastos anteriores'],
+      imported: ['nome e contato', 'respostas T0/T7', 'linha diagnóstica', 'atendimentos e exames', 'dias e gastos anteriores'],
       sections: [
         {
           title: 'Encerramento individual e segurança', icon: 'fa-circle-check', questions: [
@@ -290,7 +290,7 @@
               'Exames ainda pendentes', 'Recebi resultado, mas não entendi', 'Não recebi informação'
             ], {
               labelFor: () => {
-                const previous = state.answers.t10.diagnosis_now || state.answers.t0.understood_diagnosis;
+                const previous = state.answers.t7.diagnosis_now || state.answers.t0.understood_diagnosis;
                 return previous
                   ? `No último contato, você relatou “${previous}”. Depois disso, recebeu nova informação?`
                   : 'Depois do último contato, recebeu nova informação sobre o diagnóstico?';
@@ -331,7 +331,7 @@
           ]
         },
         {
-          title: 'Carga adicional desde o T10', icon: 'fa-calendar-check', questions: [
+          title: 'Carga adicional desde o T7', icon: 'fa-calendar-check', questions: [
             question('additional_days', 'Quantos dias adicionais ficou completamente sem suas atividades desde o último contato?', 'number', [], { min: 0, max: 30 }),
             question('additional_expense_any', 'Houve novos gastos desde o último contato?', 'radio', ['Não', 'Sim']),
             question('additional_expense', 'Total aproximado dos novos gastos (R$)', 'number', [], {
@@ -358,7 +358,7 @@
       safety: [noCurrentDanger], days_unable: '3', expense_any: 'Sim', expense_total: '75',
       caregiver_stop: 'Não', open_exposure: ''
     },
-    t10: {
+    t7: {
       trajectory: 'Recuperado', safety: [noCurrentDanger], returned_care: 'Não',
       diagnosis_update: 'Não recebi informação', new_similar: 'Sim',
       new_similar_detail: 'Mais 3 pessoas, todas após a feira do fim de semana',
@@ -377,7 +377,7 @@
 
   const state = {
     stage: 't0',
-    answers: { t0: {}, t10: {}, t30: {} },
+    answers: { t0: {}, t7: {}, t30: {} },
     stageStartedAt: { t0: Date.now() },
     cohort: null,
     signals: [],
@@ -406,10 +406,10 @@
   }
 
   function priorCollectiveSignalMentioned() {
-    const t10 = state.answers.t10 || {};
+    const t7 = state.answers.t7 || {};
     return priorT0ExposureMentioned()
-      || t10.new_similar === 'Sim'
-      || t10.new_exposure_info === 'Sim';
+      || t7.new_similar === 'Sim'
+      || t7.new_exposure_info === 'Sim';
   }
 
   function isVisible(item, answers) {
@@ -621,9 +621,9 @@
 
     const nextButton = byId('sfa-lab-next');
     if (state.stage === 't0') {
-      nextButton.innerHTML = 'Ir para T10 <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>';
+      nextButton.innerHTML = 'Ir para T7 <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>';
       nextButton.hidden = false;
-    } else if (state.stage === 't10') {
+    } else if (state.stage === 't7') {
       nextButton.innerHTML = 'Ir para T30 <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>';
       nextButton.hidden = false;
     } else {
@@ -717,7 +717,7 @@
   const scenarioDefinitions = {
     detectable: {
       description: 'Cinco pistas sentinela coexistem entre 100 respostas: coadoecimento alimentar, lama com sinais de roedores, carrapatos, concentração territorial de mosquitos e um evento coletivo. São hipóteses para verificação humana, não diagnósticos.',
-      t10Count: 86,
+      t7Count: 86,
       t30Count: 76,
       ial: { eligible: 72, collected: 62, valid: 58, positive: 24 },
       clusters: [
@@ -729,7 +729,7 @@
           matchReason: 'Mesmo alimento e evento, com oito participantes e inícios concentrados em três dias.', confidence: 0.97,
           decisions: [
             simulatedDecision('D-SIM-001', 'Verificação do preparo e dos alimentos servidos', 8, 'Executada', 'Vigilância Sanitária', 'Principal', ['T0: item/origem', 'T0: coadoecidos'], ['exposure', 'place', 'date'], 8),
-            simulatedDecision('D-SIM-002', 'Orientação aos participantes do evento', 9, 'Executada', 'Vigilância Epidemiológica', 'Principal', ['T0: coadoecidos', 'T10: pessoas expostas'], ['exposure', 'place', 'followup', 'active'], 26),
+            simulatedDecision('D-SIM-002', 'Orientação aos participantes do evento', 9, 'Executada', 'Vigilância Epidemiológica', 'Principal', ['T0: coadoecidos', 'T7: pessoas expostas'], ['exposure', 'place', 'followup', 'active'], 26),
             simulatedDecision('D-SIM-003', 'Rastreio de ingredientes e fornecedores', 10, 'Em andamento', 'Vigilância Sanitária', 'Contributiva', ['T0: item/origem/local'], ['exposure', 'place', 'date'], 3)
           ]
         },
@@ -758,36 +758,36 @@
           key: 'vector:mosquitos-jardim-boa-vista', label: 'Muitos mosquitos — Jardim Boa Vista', domain: 'Vetor/território',
           size: 7, onsetStart: 25, onsetSpan: 6, location: 'Jardim Boa Vista', potentialExposed: 42,
           sinanVisible: true, active: true, sourceStateT30: 'Esclarecida, mas não interrompida',
-          action: true, postActionCases: true, discoverAt: 'T10', windowDays: 14, reviewStatus: 'accepted',
+          action: true, postActionCases: true, discoverAt: 'T7', windowDays: 14, reviewStatus: 'accepted',
           matchReason: 'Relatos repetidos de alta presença de mosquitos no mesmo território; o sinal orienta verificação vetorial e não atribui a febre aos mosquitos.', confidence: 0.88,
           decisions: [
-            simulatedDecision('D-SIM-007', 'Vistoria de possíveis criadouros no território', 31, 'Executada', 'Controle de Vetores', 'Principal', ['T0: vetores/território', 'T10: fonte ativa'], ['exposure', 'place', 'followup', 'active'], 42),
-            simulatedDecision('D-SIM-008', 'Reforço de orientação para eliminação de criadouros', 32, 'Executada', 'Controle de Vetores', 'Contributiva', ['T10: pessoas ainda expostas'], ['exposure', 'place', 'followup'], 42)
+            simulatedDecision('D-SIM-007', 'Vistoria de possíveis criadouros no território', 31, 'Executada', 'Controle de Vetores', 'Principal', ['T0: vetores/território', 'T7: fonte ativa'], ['exposure', 'place', 'followup', 'active'], 42),
+            simulatedDecision('D-SIM-008', 'Reforço de orientação para eliminação de criadouros', 32, 'Executada', 'Controle de Vetores', 'Contributiva', ['T7: pessoas ainda expostas'], ['exposure', 'place', 'followup'], 42)
           ]
         },
         {
           key: 'event:escola-aurora', label: 'Evento — Escola Municipal Aurora', domain: 'Trabalho/escola/evento',
           size: 4, onsetStart: 36, onsetSpan: 3, location: 'Escola Municipal Aurora', potentialExposed: 18,
           sinanVisible: true, active: false, sourceStateT30: 'Aparentemente interrompida',
-          action: true, postActionCases: false, discoverAt: 'T10', windowDays: 7, reviewStatus: 'accepted',
-          matchReason: 'Mesma instituição e mesmo evento informados no T10.', confidence: 0.94,
+          action: true, postActionCases: false, discoverAt: 'T7', windowDays: 7, reviewStatus: 'accepted',
+          matchReason: 'Mesma instituição e mesmo evento informados no T7.', confidence: 0.94,
           decisions: [
-            simulatedDecision('D-SIM-009', 'Contato com a instituição', 40, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['SINAN: tempo/território', 'T10: evento específico'], ['exposure', 'place', 'followup'], 4),
-            simulatedDecision('D-SIM-010', 'Orientação ao grupo exposto', 41, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['T10: instituição e coexpostos'], ['exposure', 'place', 'followup'], 18)
+            simulatedDecision('D-SIM-009', 'Contato com a instituição', 40, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['SINAN: tempo/território', 'T7: evento específico'], ['exposure', 'place', 'followup'], 4),
+            simulatedDecision('D-SIM-010', 'Orientação ao grupo exposto', 41, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['T7: instituição e coexpostos'], ['exposure', 'place', 'followup'], 18)
           ]
         }
       ]
     },
     sporadic: {
       description: 'Exposições variadas e pouco específicas, sem duas pessoas diretamente ligadas à mesma fonte. O resultado honesto é não abrir uma fila artificial de sinais.',
-      t10Count: 84,
+      t7Count: 84,
       t30Count: 74,
       ial: { eligible: 68, collected: 56, valid: 52, positive: 16 },
       clusters: []
     },
     attrition: {
-      description: 'Dois vínculos surgem no T0, mas apenas 58 pessoas respondem ao T10 e 40 ao T30. A detecção permanece; urgência e encerramento ficam incompletos.',
-      t10Count: 58,
+      description: 'Dois vínculos surgem no T0, mas apenas 58 pessoas respondem ao T7 e 40 ao T30. A detecção permanece; urgência e encerramento ficam incompletos.',
+      t7Count: 58,
       t30Count: 40,
       ial: { eligible: 70, collected: 50, valid: 44, positive: 14 },
       clusters: [
@@ -811,7 +811,7 @@
     },
     semantic: {
       description: 'Seis participantes descrevem a mesma exposição com grafias diferentes. A normalização apenas sugere a correspondência; a validação continua humana.',
-      t10Count: 90,
+      t7Count: 90,
       t30Count: 82,
       ial: { eligible: 74, collected: 66, valid: 62, positive: 26 },
       clusters: [
@@ -837,7 +837,7 @@
     },
     falsefriends: {
       description: 'Expressões parecidas escondem duas fontes e dois locais distintos. O sistema deve mostrar a dúvida para rejeição humana, não fundir casos automaticamente.',
-      t10Count: 88,
+      t7Count: 88,
       t30Count: 78,
       ial: { eligible: 66, collected: 58, valid: 54, positive: 18 },
       clusters: [
@@ -860,7 +860,7 @@
     },
     onehealth: {
       description: 'Um evento de adoecimento animal e exposição humana na mesma propriedade permanece ativo. A fila explicita a articulação One Health sem inferir etiologia.',
-      t10Count: 92,
+      t7Count: 92,
       t30Count: 84,
       ial: { eligible: 78, collected: 70, valid: 64, positive: 20 },
       clusters: [
@@ -906,9 +906,9 @@
     const diagnoses = ['Dengue', 'Sem definição', 'Dengue', 'Chikungunya', 'Sem definição'];
     const broadDomains = ['Ambiente/água', 'Animal/rural', 'Alimento/água/produto', 'Trabalho/escola/evento'];
     const participantIndexes = Array.from({ length: COHORT_SIZE }, (_, index) => index);
-    const t10Indexes = participantIndexes.filter((index) => responseSelected(index, scenario.t10Count, 7));
-    const t10Set = new Set(t10Indexes);
-    const t30Set = new Set(t10Indexes
+    const t7Indexes = participantIndexes.filter((index) => responseSelected(index, scenario.t7Count, 7));
+    const t7Set = new Set(t7Indexes);
+    const t30Set = new Set(t7Indexes
       .slice()
       .sort((a, b) => (((a * 23) + 13) % 101) - (((b * 23) + 13) % 101))
       .slice(0, scenario.t30Count));
@@ -928,7 +928,7 @@
       const variant = cluster && Array.isArray(cluster.variants) && cluster.variants.length
         ? cluster.variants[assigned.within % cluster.variants.length]
         : null;
-      const t10Responded = t10Set.has(index);
+      const t7Responded = t7Set.has(index);
       const t30Responded = t30Set.has(index);
       const recordedDiagnosis = diagnoses[index % diagnoses.length];
       const understoodDiagnosis = index % 6 === 0
@@ -957,9 +957,9 @@
         linkComplete,
         hasNewInformation: Boolean(cluster || hasBroadExposure),
         reportedOthers: cluster ? 1 + (index % 3) : (index % 11 === 0 ? 1 : 0),
-        t10Responded,
+        t7Responded,
         t30Responded,
-        sourceActiveT10: cluster && t10Responded ? cluster.active : null,
+        sourceActiveT7: cluster && t7Responded ? cluster.active : null,
         sourceStateT30: cluster && t30Responded ? cluster.sourceStateT30 : null,
         actionObservedT30: Boolean(cluster && t30Responded && cluster.action),
         postActionCases: cluster && t30Responded ? cluster.postActionCases : null,
@@ -998,7 +998,7 @@
     return Array.from(grouped.entries()).map(([groupingKey, group]) => {
       const configuredStage = group[0].discoverAt || 'T0';
       const available = group.filter((record) => configuredStage === 'T0'
-        || (configuredStage === 'T10' && record.t10Responded)
+        || (configuredStage === 'T7' && record.t7Responded)
         || (configuredStage === 'T30' && record.t30Responded));
       if (!available.length) return null;
 
@@ -1010,8 +1010,8 @@
 
       const first = available[0];
       const activeValues = group
-        .filter((record) => record.t10Responded && typeof record.sourceActiveT10 === 'boolean')
-        .map((record) => record.sourceActiveT10);
+        .filter((record) => record.t7Responded && typeof record.sourceActiveT7 === 'boolean')
+        .map((record) => record.sourceActiveT7);
       const activeState = activeValues.includes(true) && activeValues.includes(false)
         ? 'Conflitante'
         : (activeValues.includes(true) ? true : (activeValues.includes(false) ? false : null));
@@ -1040,7 +1040,7 @@
           : 'Aparentemente interrompida';
         statusClass = 'is-closed';
       } else if (finalSourceState === 'Ainda ativa' || finalSourceState === 'Esclarecida, mas não interrompida' || activeState === true) {
-        status = finalSourceState === 'Desconhecida' ? 'Fonte possivelmente ativa no T10' : finalSourceState;
+        status = finalSourceState === 'Desconhecida' ? 'Fonte possivelmente ativa no T7' : finalSourceState;
         statusClass = 'is-urgent';
       } else if (activeState === 'Conflitante') {
         status = 'Informação conflitante sobre permanência';
@@ -1060,7 +1060,7 @@
         potentialExposed: first.potentialExposed,
         stage: configuredStage,
         stageCoverage: `${available.length}/${group.length}`,
-        t10Coverage: `${group.filter((record) => record.t10Responded).length}/${group.length}`,
+        t7Coverage: `${group.filter((record) => record.t7Responded).length}/${group.length}`,
         t30Coverage: `${group.filter((record) => record.t30Responded).length}/${group.length}`,
         sinanVisible: first.sinanVisible,
         active: finalSourceState === 'Ainda ativa' || finalSourceState === 'Esclarecida, mas não interrompida' || activeState === true,
@@ -1503,11 +1503,11 @@
   }
 
   function renderFollowup(records) {
-    const t10 = records.filter((record) => record.t10Responded).length;
+    const t7 = records.filter((record) => record.t7Responded).length;
     const t30 = records.filter((record) => record.t30Responded).length;
     byId('sfa-lab-followup').innerHTML = [
       barRow('T0', records.length, COHORT_SIZE, ''),
-      barRow('T10', t10, COHORT_SIZE, 'is-orange'),
+      barRow('T7', t7, COHORT_SIZE, 'is-orange'),
       barRow('T30', t30, COHORT_SIZE, 'is-muted')
     ].join('');
   }
@@ -1569,9 +1569,9 @@
       exposurePlace: kept.place ? record.exposurePlace : null,
       exposureDateKnown: kept.date ? record.exposureDateKnown : false,
       linkComplete: Boolean(record.linkComplete && kept.exposure && kept.place && kept.date),
-      sourceActiveT10: kept.active ? record.sourceActiveT10 : null,
+      sourceActiveT7: kept.active ? record.sourceActiveT7 : null,
       sourceStateT30: kept.active ? record.sourceStateT30 : null,
-      t10Responded: kept.followup ? record.t10Responded : false,
+      t7Responded: kept.followup ? record.t7Responded : false,
       t30Responded: kept.followup ? record.t30Responded : false,
       actionObservedT30: kept.followup ? record.actionObservedT30 : false,
       postActionCases: kept.followup ? record.postActionCases : null
@@ -1596,12 +1596,12 @@
   }
 
   function renderDataPreview(records) {
-    const t10 = records.filter((record) => record.t10Responded).length;
+    const t7 = records.filter((record) => record.t7Responded).length;
     const t30 = records.filter((record) => record.t30Responded).length;
     const specific = records.filter((record) => record.specificity === 'specific').length;
     const discordant = records.filter((record) => record.recordedDiagnosis !== record.understoodDiagnosis).length;
     byId('sfa-lab-data-summary').innerHTML = [
-      `${COHORT_SIZE} episódios no T0`, `${t10} linhas T10`, `${t30} linhas T30`,
+      `${COHORT_SIZE} episódios no T0`, `${t7} linhas T7`, `${t30} linhas T30`,
       `${specific} vínculos específicos`, `${discordant} comparações diagnósticas divergentes`
     ].map((label) => `<span>${escapeHtml(label)}</span>`).join('');
 
@@ -1610,7 +1610,7 @@
       <td>dia ${record.onsetDay}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(record.exposureLabel || 'Sem vínculo específico')}</td>
-      <td>${record.t10Responded ? 'respondido' : 'ausente'}</td>
+      <td>${record.t7Responded ? 'respondido' : 'ausente'}</td>
       <td>${record.t30Responded ? 'respondido' : 'ausente'}</td>
       <td>${record.recordedDiagnosis === record.understoodDiagnosis ? 'concordante' : 'divergente'}</td>
     </tr>`).join('');
@@ -1759,8 +1759,8 @@
   });
   byId('sfa-lab-next').addEventListener('click', () => {
     if (!validateCurrentStage()) return;
-    if (state.stage === 't0') switchStage('t10');
-    else if (state.stage === 't10') switchStage('t30');
+    if (state.stage === 't0') switchStage('t7');
+    else if (state.stage === 't7') switchStage('t30');
     else switchView('cohort');
   });
   byId('sfa-lab-run-cohort').addEventListener('click', renderCohort);

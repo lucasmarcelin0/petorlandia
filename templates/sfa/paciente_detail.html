@@ -68,6 +68,7 @@
 {% endblock %}
 
 {% block content %}
+<a class="btn btn-outline-primary mb-3" href="{{ url_for('sfa_routes.trabalho',episodio=p.id_estudo) }}">Tempo de doença, contatos e ações deste episódio</a>
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card shadow-sm mb-3">
@@ -211,7 +212,7 @@
         <div class="row text-center">
           {% for etapa, data_campo, status_campo in [
               ('T0', 'data_t0', 'status_t0'),
-              ('T10', 'data_t10', 'status_t10'),
+              ('T7', 'data_t7', 'status_t7'),
               ('T30', 'data_t30', 'status_t30'),
           ] %}
           {% set status = p[status_campo] if p[status_campo] is defined else getattr(p, status_campo, '') %}
@@ -399,18 +400,18 @@
           <i class="fas fa-bug me-1"></i>Debug T0
         </a>
         {% endif %}
-        {% if url_t10 %}
-        <a href="{{ url_t10 }}" target="_blank" class="btn btn-sm btn-outline-primary">
-          <i class="fas fa-external-link-alt me-1"></i>Abrir T10
+        {% if url_t7 %}
+        <a href="{{ url_t7 }}" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-external-link-alt me-1"></i>Abrir T7
         </a>
-        <a href="{{ url_for('sfa_routes.paciente_form_qrcode', id_estudo=p.id_estudo, stage='t10') }}"
+        <a href="{{ url_for('sfa_routes.paciente_form_qrcode', id_estudo=p.id_estudo, stage='t7') }}"
            target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">
-          <i class="fas fa-qrcode me-1"></i>QR T10
+          <i class="fas fa-qrcode me-1"></i>QR T7
         </a>
         {% endif %}
-        {% if url_t10_debug %}
-        <a href="{{ url_t10_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-          <i class="fas fa-bug me-1"></i>Debug T10
+        {% if url_t7_debug %}
+        <a href="{{ url_t7_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-bug me-1"></i>Debug T7
         </a>
         {% endif %}
         {% if url_t30 %}

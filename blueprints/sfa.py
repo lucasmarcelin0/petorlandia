@@ -10,7 +10,7 @@ Rotas:
   POST /sfa/paciente/<id>/whatsapp → Marca status WhatsApp
   GET  /sfa/p/<token>           → Redirect para formulário T0 (substitui doGet do GAS)
   POST /sfa/webhook/t0          → Compatibilidade legada desativada (410)
-  POST /sfa/webhook/t10         → Compatibilidade legada desativada (410)
+  POST /sfa/webhook/t7         → Compatibilidade legada desativada (410)
   POST /sfa/webhook/t30         → Compatibilidade legada desativada (410)
   POST /sfa/sync                → Dispara sincronização SINAN manualmente
   POST /sfa/rotina              → Roda todas as rotinas (verificar_seguimento etc.)
@@ -198,7 +198,7 @@ def dashboard():
         stats_painel, link_whatsapp, normalizar_telefone, diagnostico_configuracao, resumo_dados_teste_sfa
     )
     from services.sfa_service import (
-        msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
+        msg_convite_t0, msg_lembrete_t7, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
     )
 
     mes_selecionado = request.args.get("mes", "").strip()
@@ -224,8 +224,8 @@ def dashboard():
             try:
                 if acao == "Convidar T0":
                     msg = msg_convite_t0(p.nome, p.id_estudo, p.token_acesso or "")
-                elif "T10" in acao:
-                    msg = msg_lembrete_t10(p.nome, p.id_estudo, p.token_acesso or "")
+                elif "T7" in acao:
+                    msg = msg_lembrete_t7(p.nome, p.id_estudo, p.token_acesso or "")
                 elif "T30" in acao:
                     msg = msg_lembrete_t30(p.nome, p.id_estudo, p.token_acesso or "")
                 else:
@@ -264,8 +264,8 @@ def _coletar_filtros_pacientes() -> dict[str, str]:
         "data_notificacao_ate": request.args.get("data_notificacao_ate", "").strip(),
         "respondido_t0_de": request.args.get("respondido_t0_de", "").strip(),
         "respondido_t0_ate": request.args.get("respondido_t0_ate", "").strip(),
-        "respondido_t10_de": request.args.get("respondido_t10_de", "").strip(),
-        "respondido_t10_ate": request.args.get("respondido_t10_ate", "").strip(),
+        "respondido_t7_de": request.args.get("respondido_t7_de", "").strip(),
+        "respondido_t7_ate": request.args.get("respondido_t7_ate", "").strip(),
         "respondido_t30_de": request.args.get("respondido_t30_de", "").strip(),
         "respondido_t30_ate": request.args.get("respondido_t30_ate", "").strip(),
         "proxima_acao_ate": request.args.get("proxima_acao_ate", "").strip(),
@@ -288,8 +288,8 @@ def _filtros_pacientes_vazios(visao: str = "reais") -> dict[str, str]:
         "data_notificacao_ate": "",
         "respondido_t0_de": "",
         "respondido_t0_ate": "",
-        "respondido_t10_de": "",
-        "respondido_t10_ate": "",
+        "respondido_t7_de": "",
+        "respondido_t7_ate": "",
         "respondido_t30_de": "",
         "respondido_t30_ate": "",
         "proxima_acao_ate": "",
@@ -376,7 +376,7 @@ def _timestamp_conditions(field, start_value: str, end_value: str):
 
 
 def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
-    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30, SfaSinanLog
     from services.sfa_service import SFA_TEST_MARKER, SFA_TEST_NAME_PREFIX, formatar_data, parse_data
     from extensions import db
     from sqlalchemy import exists, func
@@ -395,8 +395,8 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
     data_notificacao_ate = filtros.get("data_notificacao_ate", "").strip()
     respondido_t0_de = filtros.get("respondido_t0_de", "").strip()
     respondido_t0_ate = filtros.get("respondido_t0_ate", "").strip()
-    respondido_t10_de = filtros.get("respondido_t10_de", "").strip()
-    respondido_t10_ate = filtros.get("respondido_t10_ate", "").strip()
+    respondido_t7_de = filtros.get("respondido_t7_de", "").strip()
+    respondido_t7_ate = filtros.get("respondido_t7_ate", "").strip()
     respondido_t30_de = filtros.get("respondido_t30_de", "").strip()
     respondido_t30_ate = filtros.get("respondido_t30_ate", "").strip()
     proxima_acao_ate = filtros.get("proxima_acao_ate", "").strip()
@@ -490,13 +490,13 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
             .where(SfaSinanLog.revisao_status.in_(["TRANSCRITO", "REVISAR"]))
         )
 
-    if respondido_t10_de or respondido_t10_ate:
-        filtros_t10 = _timestamp_conditions(SfaRespostaT10.timestamp, respondido_t10_de, respondido_t10_ate)
-        if filtros_t10:
+    if respondido_t7_de or respondido_t7_ate:
+        filtros_t7 = _timestamp_conditions(SfaRespostaT7.timestamp, respondido_t7_de, respondido_t7_ate)
+        if filtros_t7:
             q = q.filter(
                 exists()
-                .where(SfaRespostaT10.id_estudo == SfaPaciente.id_estudo)
-                .where(*filtros_t10)
+                .where(SfaRespostaT7.id_estudo == SfaPaciente.id_estudo)
+                .where(*filtros_t7)
             )
 
     if respondido_t30_de or respondido_t30_ate:
@@ -799,8 +799,8 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
     grupo_a = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "A")
     grupo_b = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "B")
     t0s = [getattr(paciente, "resposta_t0", None) for paciente in pacientes if getattr(paciente, "resposta_t0", None)]
-    t10s = [_resposta_recente(getattr(paciente, "respostas_t10", [])) for paciente in pacientes]
-    t10s = [resposta for resposta in t10s if resposta]
+    t7s = [_resposta_recente(getattr(paciente, "respostas_t7", [])) for paciente in pacientes]
+    t7s = [resposta for resposta in t7s if resposta]
     t30s = [_resposta_recente(getattr(paciente, "respostas_t30", [])) for paciente in pacientes]
     t30s = [resposta for resposta in t30s if resposta]
 
@@ -938,10 +938,10 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
                 _increment_grouped(dominios_exposicao_grouped, "Ambiental", grupo)
             if alimentares:
                 _increment_grouped(dominios_exposicao_grouped, "Alimentar", grupo)
-        resposta_t10 = _resposta_recente(getattr(paciente, "respostas_t10", []))
-        if resposta_t10:
-            payload_t10 = json.loads(getattr(resposta_t10, "dados_json", "{}") or "{}")
-            melhora = payload_t10.get("classificacao_melhora") or "Nao informado"
+        resposta_t7 = _resposta_recente(getattr(paciente, "respostas_t7", []))
+        if resposta_t7:
+            payload_t7 = json.loads(getattr(resposta_t7, "dados_json", "{}") or "{}")
+            melhora = payload_t7.get("classificacao_melhora") or "Nao informado"
             melhorias[melhora] = melhorias.get(melhora, 0) + 1
             _increment_grouped(melhorias_grouped, melhora, grupo)
         resposta_t30 = _resposta_recente(getattr(paciente, "respostas_t30", []))
@@ -985,7 +985,7 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         "B": grupo_metrics["B"]["pacientes"],
     }
     distributions = [
-        _dashboard_grouped_distribution("Evolução percebida no T10", melhorias_grouped),
+        _dashboard_grouped_distribution("Evolução percebida no T7", melhorias_grouped),
         _dashboard_grouped_distribution("Estado final no T30", estados_finais_grouped),
         _dashboard_grouped_distribution("Retorno às atividades", retornos_grouped),
         _dashboard_grouped_distribution("Tipo de residência", residencias_grouped),
@@ -1031,7 +1031,7 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         item["pct"] = round((item["value"] / max_cost) * 100, 1) if max_cost else 0
 
     dias_t0 = []
-    dias_t10 = []
+    dias_t7 = []
     dias_t30 = []
     for paciente in pacientes:
         inicio = parse_data(getattr(getattr(paciente, "resposta_t0", None), "data_inicio_sintomas", ""))
@@ -1039,14 +1039,14 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
             continue
         if paciente.data_t0 and parse_data(paciente.data_t0):
             dias_t0.append((parse_data(paciente.data_t0) - inicio).days)
-        if paciente.data_t10 and parse_data(paciente.data_t10):
-            dias_t10.append((parse_data(paciente.data_t10) - inicio).days)
+        if paciente.data_t7 and parse_data(paciente.data_t7):
+            dias_t7.append((parse_data(paciente.data_t7) - inicio).days)
         if paciente.data_t30 and parse_data(paciente.data_t30):
             dias_t30.append((parse_data(paciente.data_t30) - inicio).days)
 
     timeline_cards = [
         {"label": "Dias médios até T0", "value": _avg(dias_t0)},
-        {"label": "Dias médios até T10", "value": _avg(dias_t10)},
+        {"label": "Dias médios até T7", "value": _avg(dias_t7)},
         {"label": "Dias médios até T30", "value": _avg(dias_t30)},
     ]
 
@@ -1156,23 +1156,23 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
     }
     for paciente in pacientes:
         resposta_t0 = getattr(paciente, "resposta_t0", None)
-        resposta_t10 = _resposta_recente(getattr(paciente, "respostas_t10", []))
+        resposta_t7 = _resposta_recente(getattr(paciente, "respostas_t7", []))
         resposta_t30 = _resposta_recente(getattr(paciente, "respostas_t30", []))
         if not resposta_t30:
             continue
 
         payload_t0 = json.loads(getattr(resposta_t0, "dados_json", "{}") or "{}") if resposta_t0 else {}
-        payload_t10 = json.loads(getattr(resposta_t10, "dados_json", "{}") or "{}") if resposta_t10 else {}
+        payload_t7 = json.loads(getattr(resposta_t7, "dados_json", "{}") or "{}") if resposta_t7 else {}
         payload_t30 = json.loads(getattr(resposta_t30, "dados_json", "{}") or "{}")
         inicio_sintomas = payload_t0.get("data_inicio_sintomas") or getattr(resposta_t0, "data_inicio_sintomas", "")
         estado = str(payload_t30.get("estado_saude_final") or "")
         retorno = _retorno_atividades_temporal_sfa(payload_t30.get("retorno_atividades_normais"))
         if not retorno:
             continue
-        melhora_t10 = str(payload_t10.get("classificacao_melhora") or "").startswith("Melhorando")
-        dias_ate_t10 = _days_between(inicio_sintomas, getattr(paciente, "data_t10", ""))
+        melhora_t7 = str(payload_t7.get("classificacao_melhora") or "").startswith("Melhorando")
+        dias_ate_t7 = _days_between(inicio_sintomas, getattr(paciente, "data_t7", ""))
         dias_ate_t30 = _days_between(inicio_sintomas, getattr(paciente, "data_t30", ""))
-        dias_ate_melhora = dias_ate_t10 if melhora_t10 and dias_ate_t10 is not None else dias_ate_t30
+        dias_ate_melhora = dias_ate_t7 if melhora_t7 and dias_ate_t7 is not None else dias_ate_t30
         custo_total = float(
             (getattr(resposta_t30, "custo_remedios", 0) or 0)
             + (getattr(resposta_t30, "custo_consultas", 0) or 0)
@@ -1292,14 +1292,14 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
 def _formularios_impressao_sfa() -> list[dict[str, object]]:
     from services.sfa_service import (
         carregar_t0_form_schema,
-        carregar_t10_form_schema,
+        carregar_t7_form_schema,
         carregar_t30_form_schema,
         iterar_campos_form,
     )
 
     formularios = [
         ("T0", carregar_t0_form_schema()),
-        ("T10", carregar_t10_form_schema()),
+        ("T7", carregar_t7_form_schema()),
         ("T30", carregar_t30_form_schema()),
     ]
     itens = []
@@ -1317,18 +1317,18 @@ def _formularios_impressao_sfa() -> list[dict[str, object]]:
 
 REVIEW_KIND_LABELS = {
     "t0": "Formulario T0",
-    "t10": "Formulario T10",
+    "t7": "Formulario T7",
     "t30": "Formulario T30",
     "graficos": "Resultados possiveis — 100 respostas sinteticas",
 }
 
 
 def _review_schema_loader(kind: str):
-    from services.sfa_service import carregar_t0_form_schema, carregar_t10_form_schema, carregar_t30_form_schema
+    from services.sfa_service import carregar_t0_form_schema, carregar_t7_form_schema, carregar_t30_form_schema
 
     loaders = {
         "t0": carregar_t0_form_schema,
-        "t10": carregar_t10_form_schema,
+        "t7": carregar_t7_form_schema,
         "t30": carregar_t30_form_schema,
     }
     return loaders.get(kind)
@@ -1425,7 +1425,7 @@ def _collect_question_review_payload(kind: str, schema: dict) -> dict:
 def _review_form_field_index() -> dict[str, dict[str, object]]:
     from services.sfa_service import (
         carregar_t0_form_schema,
-        carregar_t10_form_schema,
+        carregar_t7_form_schema,
         carregar_t30_form_schema,
         iterar_campos_form,
     )
@@ -1433,7 +1433,7 @@ def _review_form_field_index() -> dict[str, dict[str, object]]:
     index = {}
     for stage, schema in [
         ("T0", carregar_t0_form_schema()),
-        ("T10", carregar_t10_form_schema()),
+        ("T7", carregar_t7_form_schema()),
         ("T30", carregar_t30_form_schema()),
     ]:
         for field in iterar_campos_form(schema):
@@ -1457,10 +1457,10 @@ def _review_form_field_index() -> dict[str, dict[str, object]]:
         "bairro": "Bairro do cadastro/SINAN",
         "data_nascimento": "Data de nascimento",
         "data_t0": "Data em que T0 foi registrado",
-        "data_t10": "Data em que T10 foi registrado",
+        "data_t7": "Data em que T7 foi registrado",
         "data_t30": "Data em que T30 foi registrado",
         "status_t0": "Status operacional do T0",
-        "status_t10": "Status operacional do T10",
+        "status_t7": "Status operacional do T7",
         "status_t30": "Status operacional do T30",
     }
     for key, label in cadastro_fields.items():
@@ -1515,7 +1515,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "review_prompt": "Este bloco permite reconhecer rapidamente uma exposicao coletiva potencialmente acionavel?",
             "items": [
                 "Outros doentes na mesma epoca",
-                "Novos casos no T10/T30",
+                "Novos casos no T7/T30",
                 "Nova pista ou informacao sobre a fonte",
             ],
             "questions": _review_question_refs(
@@ -1524,8 +1524,8 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t0", "vinculo_local", "localiza o possivel vinculo"),
                 ("t0", "vinculo_data_periodo", "delimita a janela temporal"),
                 ("t0", "vinculo_exposicao_suspeita", "registra a hipotese inicial"),
-                ("t10", "novos_casos_semelhantes", "atualiza novos casos"),
-                ("t10", "nova_pista_exposicao", "registra pista surgida depois do T0"),
+                ("t7", "novos_casos_semelhantes", "atualiza novos casos"),
+                ("t7", "nova_pista_exposicao", "registra pista surgida depois do T0"),
                 ("t30", "novos_casos_semelhantes", "verifica novos casos no fechamento"),
                 ("t30", "nova_informacao_fonte", "registra nova informacao sobre a fonte"),
             ),
@@ -1539,8 +1539,8 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "questions": _review_question_refs(
                 ("t0", "fonte_ainda_ativa", "prioriza a verificacao inicial"),
                 ("t0", "outras_pessoas_ainda_expostas", "indica risco atual para terceiros"),
-                ("t10", "fonte_ainda_ativa", "reavalia a permanencia da fonte"),
-                ("t10", "outras_pessoas_ainda_expostas", "reavalia pessoas em risco"),
+                ("t7", "fonte_ainda_ativa", "reavalia a permanencia da fonte"),
+                ("t7", "outras_pessoas_ainda_expostas", "reavalia pessoas em risco"),
                 ("t30", "fonte_ainda_ativa", "encerra ou mantem o alerta"),
                 ("t30", "outras_pessoas_ainda_expostas", "verifica exposicao residual"),
                 ("t30", "orientacao_ou_acao_percebida", "confere a percepcao do participante, sem contar como decisao administrativa"),
@@ -1577,8 +1577,8 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t0", "diagnostico_medico", "linha de base do que foi comunicado"),
                 ("t0", "diagnostico_medico_qual", "diagnostico ou suspeita entendida"),
                 ("t0", "diagnostico_medico_status", "suspeita ou confirmacao"),
-                ("t10", "diagnostico_medico", "mudanca desde o T0"),
-                ("t10", "diagnostico_medico_qual", "nova informacao entendida"),
+                ("t7", "diagnostico_medico", "mudanca desde o T0"),
+                ("t7", "diagnostico_medico_qual", "nova informacao entendida"),
                 ("t30", "diagnostico_medico", "mudanca final"),
                 ("t30", "diagnostico_medico_qual", "informacao final entendida"),
             ),
@@ -1594,9 +1594,9 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t0", "custo_total", "gasto total inicial"),
                 ("t0", "ausencia_familiar", "necessidade de cuidador"),
                 ("t0", "dias_cuidador", "dias do cuidador"),
-                ("t10", "dias_incap_novos", "dias adicionais"),
-                ("t10", "custo_outros", "gasto total adicional"),
-                ("t10", "perda_renda", "perda de renda declarada"),
+                ("t7", "dias_incap_novos", "dias adicionais"),
+                ("t7", "custo_outros", "gasto total adicional"),
+                ("t7", "perda_renda", "perda de renda declarada"),
                 ("t30", "dias_incap_novos", "dias adicionais finais"),
                 ("t30", "custo_outros", "gasto total adicional final"),
                 ("t30", "perda_renda", "nova perda de renda declarada"),
@@ -1607,12 +1607,12 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "title": "Seguimento e seguranca",
             "description": "Acompanha mudancas essenciais e sinais que orientam nova avaliacao, sem repetir a ficha clinica.",
             "review_prompt": "O seguimento esta curto e seguro para o participante?",
-            "items": ["Evolucao T10", "Retorno funcional T30", "Sinais de seguranca"],
+            "items": ["Evolucao T7", "Retorno funcional T30", "Sinais de seguranca"],
             "questions": _review_question_refs(
                 ("t0", "sinais_alerta_atuais", "orienta procura de atendimento"),
-                ("t10", "classificacao_melhora", "evolucao intermediaria"),
-                ("t10", "sinais_alerta_atuais", "seguranca no seguimento"),
-                ("t10", "retornou_servico_saude", "captura atendimento fora da rede visivel"),
+                ("t7", "classificacao_melhora", "evolucao intermediaria"),
+                ("t7", "sinais_alerta_atuais", "seguranca no seguimento"),
+                ("t7", "retornou_servico_saude", "captura atendimento fora da rede visivel"),
                 ("t30", "estado_saude_final", "estado complementar no fechamento"),
                 ("t30", "retorno_atividades_normais", "retorno funcional"),
                 ("t30", "sinais_alerta_atuais", "seguranca no fechamento"),
@@ -2028,8 +2028,8 @@ def paciente_detail(id_estudo: str):
     from models.sfa import SfaPaciente, SfaAuditoria
     from services.sfa_service import (
         link_whatsapp, normalizar_telefone,
-        msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30,
-        gerar_url_t0, gerar_url_t10, gerar_url_t30,
+        msg_convite_t0, msg_lembrete_t7, msg_lembrete_t30,
+        gerar_url_t0, gerar_url_t7, gerar_url_t30,
         montar_visao_resposta_formulario, obter_resposta_formulario,
     )
 
@@ -2044,7 +2044,7 @@ def paciente_detail(id_estudo: str):
     def _summary_currency(stage, instrument_version, payload, resposta) -> str:
         if stage == "t0":
             candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
-        elif instrument_version == "collective-v2":
+        elif instrument_version in {"collective-v2", "collective-v3-disease-clock"}:
             # No instrumento essencial, custo_outros representa o gasto total
             # incremental. A propriedade do modelo permanece como fallback
             # para respostas persistidas antes desta leitura versionada.
@@ -2078,13 +2078,13 @@ def paciente_detail(id_estudo: str):
     links_whatsapp = {}
     if tel:
         links_whatsapp["T0"] = link_whatsapp(tel, msg_convite_t0(p.nome, p.id_estudo, p.token_acesso or ""))
-        links_whatsapp["T10"] = link_whatsapp(tel, msg_lembrete_t10(p.nome, p.id_estudo, p.token_acesso or ""))
+        links_whatsapp["T7"] = link_whatsapp(tel, msg_lembrete_t7(p.nome, p.id_estudo, p.token_acesso or ""))
         links_whatsapp["T30"] = link_whatsapp(tel, msg_lembrete_t30(p.nome, p.id_estudo, p.token_acesso or ""))
 
     url_t0 = gerar_url_t0(p.id_estudo, p.token_acesso or "")
     url_t0_debug = gerar_url_t0(p.id_estudo, p.token_acesso or "", debug=True)
-    url_t10 = gerar_url_t10(p.id_estudo, p.token_acesso or "")
-    url_t10_debug = gerar_url_t10(p.id_estudo, p.token_acesso or "", debug=True)
+    url_t7 = gerar_url_t7(p.id_estudo, p.token_acesso or "")
+    url_t7_debug = gerar_url_t7(p.id_estudo, p.token_acesso or "", debug=True)
     url_t30 = gerar_url_t30(p.id_estudo, p.token_acesso or "")
     url_t30_debug = gerar_url_t30(p.id_estudo, p.token_acesso or "", debug=True)
 
@@ -2092,7 +2092,8 @@ def paciente_detail(id_estudo: str):
 
     for stage, stage_label, icon, badge_class in [
         ("t0", "T0", "fas fa-clipboard-list", "success"),
-        ("t10", "T10", "fas fa-clipboard-check", "warning"),
+        ("t7", "T7", "fas fa-clipboard-check", "warning"),
+        ("t10", "T10 histórico", "fas fa-history", "secondary"),
         ("t30", "T30", "fas fa-flag-checkered", "primary"),
     ]:
         resposta = obter_resposta_formulario(p, stage)
@@ -2113,7 +2114,7 @@ def paciente_detail(id_estudo: str):
                     ("Gasto total", summary_cost),
                 ]
             )
-        elif stage == "t10":
+        elif stage in {"t7", "t10"}:
             summary = _compact_summary(
                 [
                     ("Evolucao", payload.get("classificacao_melhora")),
@@ -2152,8 +2153,8 @@ def paciente_detail(id_estudo: str):
                            response_views=response_views,
                            url_t0=url_t0,
                            url_t0_debug=url_t0_debug,
-                           url_t10=url_t10,
-                           url_t10_debug=url_t10_debug,
+                           url_t7=url_t7,
+                           url_t7_debug=url_t7_debug,
                            url_t30=url_t30,
                            url_t30_debug=url_t30_debug)
 
@@ -2164,12 +2165,12 @@ def paciente_form_qrcode(id_estudo: str, stage: str):
     import qrcode
 
     from models.sfa import SfaPaciente
-    from services.sfa_service import gerar_url_t0, gerar_url_t10, gerar_url_t30
+    from services.sfa_service import gerar_url_t0, gerar_url_t7, gerar_url_t30
 
     stage_key = str(stage or "").strip().lower()
     url_builders = {
         "t0": gerar_url_t0,
-        "t10": gerar_url_t10,
+        "t7": gerar_url_t7,
         "t30": gerar_url_t30,
     }
     url_builder = url_builders.get(stage_key)
@@ -2285,8 +2286,8 @@ def _resposta_publica_existente(paciente, form_stage: str) -> bool:
     stage = str(form_stage or "").strip().lower()
     if stage == "t0":
         return bool(getattr(paciente, "resposta_t0", None))
-    if stage == "t10":
-        return bool(getattr(paciente, "respostas_t10", []))
+    if stage == "t7":
+        return bool(getattr(paciente, "respostas_t7", []))
     if stage == "t30":
         return bool(getattr(paciente, "respostas_t30", []))
     return False
@@ -2324,6 +2325,12 @@ def _render_public_native_form(
                 "com o pesquisador."
             ),
         ), 404
+
+    from services.sfa_workflow import impedimento_etapa
+    if not _resposta_publica_existente(paciente, form_stage):
+        impedimento = impedimento_etapa(paciente, form_stage)
+        if impedimento:
+            return render_template("sfa/erro.html", mensagem=impedimento), 409
 
     schema = filtrar_form_schema_condicional(schema_loader(), paciente, form_stage)
     values = initial_builder(paciente, schema)
@@ -2466,23 +2473,23 @@ def redirect_t0(token: str):
     )
 
 
-@bp.route("/p/<token>/t10", methods=["GET", "POST"])
+@bp.route("/p/<token>/t7", methods=["GET", "POST"])
 @csrf.exempt
-def redirect_t10(token: str):
+def redirect_t7(token: str):
     from services.sfa_service import (
-        carregar_t10_form_schema,
-        coletar_resposta_t10_nativa,
-        construir_valores_iniciais_t10,
-        on_submit_t10,
+        carregar_t7_form_schema,
+        coletar_resposta_t7_nativa,
+        construir_valores_iniciais_t7,
+        on_submit_t7,
     )
     return _render_public_native_form(
         token=token,
-        form_stage="t10",
-        form_name="Formulario T10",
-        schema_loader=carregar_t10_form_schema,
-        initial_builder=construir_valores_iniciais_t10,
-        collector=coletar_resposta_t10_nativa,
-        submitter=on_submit_t10,
+        form_stage="t7",
+        form_name="Formulario T7",
+        schema_loader=carregar_t7_form_schema,
+        initial_builder=construir_valores_iniciais_t7,
+        collector=coletar_resposta_t7_nativa,
+        submitter=on_submit_t7,
     )
 
 
@@ -2519,16 +2526,16 @@ def t0_form_config():
     )
 
 
-@bp.route("/config/t10", methods=["GET", "POST"])
+@bp.route("/config/t7", methods=["GET", "POST"])
 @require_sfa_internal_access
-def t10_form_config():
-    from services.sfa_service import carregar_t10_form_schema, salvar_t10_form_schema
+def t7_form_config():
+    from services.sfa_service import carregar_t7_form_schema, salvar_t7_form_schema
 
     return _render_form_config(
-        form_name="Formulario T10",
-        form_stage="t10",
-        schema_loader=carregar_t10_form_schema,
-        schema_saver=salvar_t10_form_schema,
+        form_name="Formulario T7",
+        form_stage="t7",
+        schema_loader=carregar_t7_form_schema,
+        schema_saver=salvar_t7_form_schema,
     )
 
 
@@ -2562,15 +2569,15 @@ def webhook_t0():
     }), 410
 
 
-@bp.route("/webhook/t10", methods=["POST"])
+@bp.route("/webhook/t7", methods=["POST"])
 @csrf.exempt
-def webhook_t10():
+def webhook_t7():
     if not _verificar_webhook_secret():
         abort(403)
     return jsonify({
         "ok": False,
         "error": "legacy_form_disabled",
-        "stage": "t10",
+        "stage": "t7",
         "message": "O formulario legado foi desativado. Use o formulario essencial do participante.",
     }), 410
 
@@ -2601,7 +2608,7 @@ def sync_sinan():
     from services.sfa_service import sincronizar_sinan
     resultado = sincronizar_sinan()
     flash(
-        f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s).",
+        f"SINAN sync: {resultado['novos']} novo(s), {resultado.get('atualizados', 0)} atualizado(s), {resultado['erros']} erro(s).",
         "info",
     )
     if resultado.get("mensagem"):
@@ -2627,8 +2634,31 @@ def rodar_rotina():
     db.session.commit()
 
     flash(
-        f"Rotina concluída: {len(resultado['atrasados_t10'])} T10 atrasados, "
+        f"Rotina concluída: {len(resultado['atrasados_t7'])} T7 atrasados, "
         f"{len(resultado['atrasados_t30'])} T30 atrasados.",
         "info"
     )
     return redirect(url_for("sfa_routes.dashboard"))
+
+
+from blueprints.sfa_workflow_routes import register as _register_workflow_routes
+_register_workflow_routes(bp, require_sfa_internal_access)
+
+
+@bp.route('/p/<token>/t10', methods=['GET', 'POST'])
+def redirect_t10_legacy(token):
+    if request.method == 'POST':
+        return render_template('sfa/erro.html', mensagem='O instrumento T10 foi arquivado. Use o link atual da equipe.'), 410
+    return redirect(url_for('sfa_routes.redirect_t7', token=token), code=302)
+
+
+@bp.route('/webhook/t10', methods=['POST'])
+@csrf.exempt
+def webhook_t10_legacy():
+    return jsonify(ok=False, erro='T10 histórico: integração desativada.'), 410
+
+
+@bp.route('/config/t10')
+@require_sfa_internal_access
+def t10_config_legacy():
+    return redirect(url_for('sfa_routes.historico_instrumentos', versao='collective-v2', etapa='t10'))

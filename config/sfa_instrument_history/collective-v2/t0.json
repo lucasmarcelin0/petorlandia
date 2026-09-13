@@ -1,0 +1,620 @@
+{
+  "instrument_version": "collective-v2",
+  "title": "T0 - Exposicoes coletivas e prevencao",
+  "subtitle": "Perguntas adicionais ao SINAN para reconhecer exposicoes coletivas que possam ser verificadas pela Vigilancia.",
+  "submit_label": "Enviar resposta T0",
+  "sections": [
+    {
+      "title": "Participacao",
+      "description": "A identificacao e os dados do SINAN ja estao vinculados nos bastidores.",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "Quem esta respondendo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A propria pessoa",
+            "Pai, mae ou responsavel",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "Nome e relacao de quem responde",
+          "type": "text",
+          "required": true,
+          "placeholder": "Ex.: Maria, mae",
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "not_equals",
+                "value": "A propria pessoa"
+              }
+            ]
+          }
+        },
+        {
+          "key": "aceite_tcle",
+          "label": "Consentimento para participar",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "O aceite e obrigatorio para registrar as respostas.",
+          "options": [
+            "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Possivel vinculo coletivo",
+      "description": "Queremos saber se outras pessoas adoeceram e o que pode ter sido compartilhado.",
+      "fields": [
+        {
+          "key": "outras_pessoas_com_sintomas",
+          "label": "Voce soube de outra pessoa com febre ou sintomas parecidos perto da mesma epoca?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ]
+        },
+        {
+          "key": "outras_pessoas_quantidade",
+          "label": "Aproximadamente quantas outras pessoas adoeceram?",
+          "type": "number",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_compartilhado",
+          "label": "O que essas pessoas podem ter compartilhado?",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Casa",
+            "Vizinhanca",
+            "Trabalho",
+            "Escola",
+            "Servico de saude",
+            "Refeicao ou alimento",
+            "Evento",
+            "Viagem ou transporte",
+            "Atividade com animais",
+            "Outro",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_local",
+          "label": "Onde ocorreu esse possivel vinculo?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Local, estabelecimento, propriedade ou referencia; escreva Nao sei se necessario",
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_data_periodo",
+          "label": "Quando essas pessoas adoeceram?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Data ou periodo aproximado; escreva Nao sei se necessario",
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_exposicao_suspeita",
+          "label": "Qual exposicao em comum voce suspeita?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Produto, alimento, animal, local, atividade ou evento; escreva Nao sei se necessario",
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Ambiente, animais, alimentos e produtos",
+      "description": "Marque apenas situacoes ocorridas nos 15 dias antes dos primeiros sintomas. Os detalhes so aparecem quando podem ajudar a verificar uma fonte.",
+      "fields": [
+        {
+          "key": "exposicao_ambiental",
+          "label": "Houve alguma destas situacoes ambientais ou de deslocamento?",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Agua suja/lama/enchente",
+            "Rio/corrego/pesca/natacao",
+            "Mata/trilha/camping",
+            "Area rural/chacara",
+            "Muitos mosquitos ou outros vetores",
+            "Viagem ou permanencia em outro municipio",
+            "Nenhuma exposicao ambiental"
+          ]
+        },
+        {
+          "key": "exposicao_ambiental_detalhe",
+          "label": "Onde, quando e o que aconteceu?",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Local + data ou periodo + situacao",
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_ambiental",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma exposicao ambiental"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_ambiental_outros_doentes",
+          "label": "Outras pessoas expostas nesse local tambem adoeceram?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_ambiental",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma exposicao ambiental"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_animal",
+          "label": "Houve contato animal ou evento relacionado a animais que possa ser relevante?",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "Caes e gatos aparecem separados. Selecione contato rotineiro somente quando parecer relacionado ao episodio.",
+          "options": [
+            "Caes",
+            "Gatos",
+            "Gado/porcos/galinhas",
+            "Roedores",
+            "Animal doente ou morte incomum",
+            "Aborto/parto/placenta",
+            "Urina/fezes/sangue/carcaca",
+            "Mordida ou arranhadura",
+            "Carrapato",
+            "Trabalho ou atividade com animais",
+            "Nenhum contato animal relevante"
+          ]
+        },
+        {
+          "key": "exposicao_animal_detalhe",
+          "label": "Qual animal, o que ocorreu, onde e quando?",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Especie + evento + local + data ou periodo",
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_animal",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhum contato animal relevante"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_animal_outros_doentes",
+          "label": "Outros animais ou pessoas ligados ao evento adoeceram?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_animal",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhum contato animal relevante"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar",
+          "label": "Houve alguma destas exposicoes a alimento, agua ou produto?",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Carne malpassada/crua",
+            "Leite cru/queijo nao pasteurizado",
+            "Ovos crus/maionese caseira",
+            "Agua nao tratada",
+            "Comida de rua/barracas",
+            "Refeicao em evento ou estabelecimento",
+            "Alimento ou produto com aspecto suspeito",
+            "Outras pessoas que consumiram tambem adoeceram",
+            "Nenhuma dessas"
+          ]
+        },
+        {
+          "key": "exposicao_alimentar_item",
+          "label": "Qual alimento, agua ou produto?",
+          "type": "text",
+          "required": true,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_origem",
+          "label": "Marca, produtor, origem ou local de compra/consumo",
+          "type": "text",
+          "required": true,
+          "help_text": "Se nao souber, informe Nao sei.",
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_data",
+          "label": "Data aproximada do consumo ou contato",
+          "type": "date",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_expostos",
+          "label": "Aproximadamente quantas pessoas consumiram ou tiveram contato?",
+          "type": "number",
+          "required": false,
+          "min": 1,
+          "max": 999,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_doentes",
+          "label": "Aproximadamente quantas dessas pessoas adoeceram?",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "max": 999,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas"
+            ]
+          }
+        },
+        {
+          "key": "outra_exposicao_suspeita",
+          "label": "Existe algum alimento, produto, animal, lugar, atividade ou evento suspeito que nao perguntamos?",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "Opcional"
+        },
+        {
+          "key": "fonte_ainda_ativa",
+          "label": "A possivel fonte ou situacao ainda existe?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "exposicao_ambiental",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhuma exposicao ambiental"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "exposicao_animal",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhum contato animal relevante"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhuma dessas"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "outras_pessoas_ainda_expostas",
+          "label": "Outras pessoas ainda podem estar expostas?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "exposicao_ambiental",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhuma exposicao ambiental"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "exposicao_animal",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhum contato animal relevante"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhuma dessas"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Comunicacao diagnostica e seguranca",
+      "description": "Esta secao registra o que foi entendido pela pessoa; nao substitui o resultado oficial nem faz diagnostico.",
+      "fields": [
+        {
+          "key": "diagnostico_medico",
+          "label": "O profissional de saude informou algum diagnostico ou suspeita?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_status",
+          "label": "Essa informacao foi apresentada como:",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Suspeita",
+            "Confirmacao",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual diagnostico ou suspeita voce entendeu que recebeu?",
+          "type": "select",
+          "required": true,
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Virose ou sindrome viral indefinida",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "diagnostico_medico",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "diagnostico_medico_status",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual_outro",
+          "label": "Qual foi o outro diagnostico ou suspeita?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Escreva o diagnostico ou suspeita informado pelo profissional",
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico_qual",
+            "operator": "equals",
+            "value": "Outro"
+          }
+        },
+        {
+          "key": "sinais_alerta_atuais",
+          "label": "Voce apresenta agora algum destes sinais?",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "Esta pergunta serve apenas para orientar nova avaliacao. Em emergencia, procure atendimento presencial ou ligue 192.",
+          "options": [
+            "Falta de ar importante",
+            "Desmaio ou confusao",
+            "Sangramento importante",
+            "Piora intensa ou preocupacao urgente",
+            "Nenhum destes sinais agora"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Carga essencial ate o T0",
+      "description": "Informe somente o impacto ocorrido desde o inicio dos sintomas ate hoje.",
+      "fields": [
+        {
+          "key": "dias_incap",
+          "label": "Por quantos dias ficou completamente sem conseguir realizar suas atividades habituais?",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "houve_gasto",
+          "label": "Houve algum gasto da familia por causa deste episodio?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "custo_total",
+          "label": "Valor total aproximado gasto ate agora (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "houve_gasto",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "ausencia_familiar",
+          "label": "Outra pessoa deixou suas atividades para cuidar de voce?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "dias_cuidador",
+          "label": "Por aproximadamente quantos dias?",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 60,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "ausencia_familiar",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        }
+      ]
+    }
+  ]
+}

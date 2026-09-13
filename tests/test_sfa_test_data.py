@@ -2,7 +2,7 @@ import json
 from types import SimpleNamespace
 
 from extensions import db
-from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30, SfaSinanLog
 from services.sfa_service import (
     apagar_lote_pacientes_teste_sfa,
     filtrar_pacientes_reais_sfa,
@@ -20,7 +20,7 @@ def test_sfa_test_batch_generation_and_cleanup(app):
         assert len(pacientes) == 20
         assert all(paciente_eh_teste_sfa(paciente) for paciente in pacientes)
         assert SfaRespostaT0.query.count() == 20
-        assert SfaRespostaT10.query.count() == 20
+        assert SfaRespostaT7.query.count() == 20
         assert SfaRespostaT30.query.count() == 20
         assert SfaSinanLog.query.count() == 20
         payloads_t0 = [
@@ -50,7 +50,7 @@ def test_sfa_test_batch_generation_and_cleanup(app):
         assert limpeza["removidos"] == 20
         assert SfaPaciente.query.count() == 0
         assert SfaRespostaT0.query.count() == 0
-        assert SfaRespostaT10.query.count() == 0
+        assert SfaRespostaT7.query.count() == 0
         assert SfaRespostaT30.query.count() == 0
         assert SfaSinanLog.query.count() == 0
 
@@ -75,7 +75,7 @@ def test_paciente_eh_teste_sfa_reconhece_marcadores_antigos():
             ficha_sinan="",
             token_acesso="",
             resposta_t0=SimpleNamespace(dados_json=json.dumps({"_sfa_test_batch": "teste-20260422"})),
-            respostas_t10=[],
+            respostas_t7=[],
             respostas_t30=[],
         )
     )

@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def native_t0_app(monkeypatch):
     schema_holder = {
         "t0": sfa_service.carregar_t0_form_schema(),
-        "t10": sfa_service.carregar_t10_form_schema(),
+        "t7": sfa_service.carregar_t7_form_schema(),
         "t30": sfa_service.carregar_t30_form_schema(),
     }
     paciente = SimpleNamespace(
@@ -27,7 +27,7 @@ def native_t0_app(monkeypatch):
         data_nascimento="01/01/2000",
         endereco="Rua Exemplo, 123",
         resposta_t0=None,
-        respostas_t10=[],
+        respostas_t7=[],
         respostas_t30=[],
     )
 
@@ -42,7 +42,7 @@ def native_t0_app(monkeypatch):
 
     monkeypatch.setattr("blueprints.sfa._buscar_paciente_publico_t0", fake_busca)
     monkeypatch.setattr(sfa_service, "carregar_t0_form_schema", lambda: _schema_copy("t0"))
-    monkeypatch.setattr(sfa_service, "carregar_t10_form_schema", lambda: _schema_copy("t10"))
+    monkeypatch.setattr(sfa_service, "carregar_t7_form_schema", lambda: _schema_copy("t7"))
     monkeypatch.setattr(sfa_service, "carregar_t30_form_schema", lambda: _schema_copy("t30"))
 
     app = Flask(__name__, template_folder=str(PROJECT_ROOT / "templates"))
@@ -88,7 +88,7 @@ def _payload_t0():
     }
 
 
-def _payload_t10():
+def _payload_t7():
     return {
         "classificacao_melhora": "Melhorando",
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
@@ -149,14 +149,15 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
     assert 'name="nome"' not in html
     assert 'name="ficha_sinan"' not in html
     assert 'name="data_nascimento"' not in html
-    assert 'name="data_inicio_sintomas"' not in html
+    assert 'name="data_inicio_sintomas"' in html
     assert "TCLE_SFA_Orlandia_v1.docx" in html
-    assert "nome completo vinculado a este convite sera usado como assinatura" in html
+    assert "será registrado quem consentiu" in html
 
 
 def test_public_native_followup_reusa_identidade_sem_repetir_inputs(native_t0_app):
     app, paciente, _schema_holder = native_t0_app
     paciente.resposta_t0 = SimpleNamespace(
+        data_inicio_sintomas="01/07/2026",
         dados_json=json.dumps(
             {
                 "cpf": "12345678900",
@@ -166,12 +167,12 @@ def test_public_native_followup_reusa_identidade_sem_repetir_inputs(native_t0_ap
     )
     client = app.test_client()
 
-    response = client.get(f"/sfa/p/{paciente.token_acesso}/t10")
+    response = client.get(f"/sfa/p/{paciente.token_acesso}/t7")
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Ola, Maria Teste." in html
-    assert "T10 - Novas pistas e permanencia da fonte" in html
+    assert "T7 - Novas pistas e permanencia da fonte" in html
     assert 'name="cpf"' not in html
     assert 'name="nome"' not in html
     assert "Maria Teste T0" not in html
@@ -204,7 +205,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "collective-v2"
+    assert captured["_instrument_version"] == "collective-v3-disease-clock"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -262,12 +263,13 @@ def test_tcle_signatures_page_renderiza_lista(native_t0_app, monkeypatch):
 @pytest.mark.parametrize(
     ("url", "expected_title"),
     [
-        ("/sfa/p/token-abc/t10", "T10 - Novas pistas e permanencia da fonte"),
+        ("/sfa/p/token-abc/t7", "T7 - Novas pistas e permanencia da fonte"),
         ("/sfa/p/token-abc/t30", "T30 - Encerramento do risco coletivo"),
     ],
 )
 def test_public_native_followups_get_renderiza_formulario(native_t0_app, url, expected_title):
     app, _paciente, _schema_holder = native_t0_app
+    _paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
 
     response = client.get(url)
@@ -277,26 +279,27 @@ def test_public_native_followups_get_renderiza_formulario(native_t0_app, url, ex
     assert expected_title in html
 
 
-def test_public_native_t10_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
+def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
     app, paciente, _schema_holder = native_t0_app
+    paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
     captured = {}
 
     def fake_on_submit(dados):
         captured.update(dados)
-        paciente.respostas_t10 = [object()]
+        paciente.respostas_t7 = [object()]
         return {"ok": True, "id_estudo": paciente.id_estudo}
 
-    monkeypatch.setattr(sfa_service, "on_submit_t10", fake_on_submit)
+    monkeypatch.setattr(sfa_service, "on_submit_t7", fake_on_submit)
 
-    response = client.post(f"/sfa/p/{paciente.token_acesso}/t10", data=_payload_t10())
+    response = client.post(f"/sfa/p/{paciente.token_acesso}/t7", data=_payload_t7())
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
-    assert captured["_origem"] == "native_t10_form"
-    assert captured["_instrument_version"] == "collective-v2"
+    assert captured["_origem"] == "native_t7_form"
+    assert captured["_instrument_version"] == "collective-v3-disease-clock"
     assert captured["dias_incap_novos"] == "3"
     assert captured["diagnostico_medico_qual"] == ""
     assert captured["novos_casos_quantidade"] == ""
@@ -307,6 +310,7 @@ def test_public_native_t10_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
     app, paciente, _schema_holder = native_t0_app
+    paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
     captured = {}
 
@@ -324,7 +328,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "collective-v2"
+    assert captured["_instrument_version"] == "collective-v3-disease-clock"
     assert captured["estado_saude_final"] == "Quase recuperado(a) - diferencas minimas"
     assert captured["diagnostico_medico_qual"] == ""
     assert captured["novos_casos_quantidade"] == ""
@@ -337,7 +341,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
 @pytest.mark.parametrize(
     ("attr_name", "url"),
     [
-        ("respostas_t10", "/sfa/p/token-abc/t10"),
+        ("respostas_t7", "/sfa/p/token-abc/t7"),
         ("respostas_t30", "/sfa/p/token-abc/t30"),
     ],
 )
@@ -387,12 +391,13 @@ def test_t0_form_config_salva_schema_editavel(native_t0_app, monkeypatch):
     "url",
     [
         "/sfa/config/t0",
-        "/sfa/config/t10",
+        "/sfa/config/t7",
         "/sfa/config/t30",
     ],
 )
 def test_form_config_get_renderiza_editor_visual(native_t0_app, url):
     app, _paciente, _schema_holder = native_t0_app
+    _paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
 
     response = client.get(url)
@@ -407,7 +412,7 @@ def test_form_config_get_renderiza_editor_visual(native_t0_app, url):
 @pytest.mark.parametrize(
     ("url", "stage", "title"),
     [
-        ("/sfa/config/t10", "t10", "T10 Editado no Painel"),
+        ("/sfa/config/t7", "t7", "T7 Editado no Painel"),
         ("/sfa/config/t30", "t30", "T30 Editado no Painel"),
     ],
 )
@@ -496,7 +501,7 @@ def test_patient_filters_collect_month_and_symptom_start_date(native_t0_app):
     app, _paciente, _schema_holder = native_t0_app
 
     with app.test_request_context(
-        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_inicio_sintomas_ate=2026-03-31&data_notificacao_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t0_de=2026-03-18&respondido_t10_ate=2026-03-28&respondido_t30_de=2026-04-01&proxima_acao_ate=2026-03-25&situacao_data=atrasados&grupo=A"
+        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_inicio_sintomas_ate=2026-03-31&data_notificacao_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t0_de=2026-03-18&respondido_t7_ate=2026-03-28&respondido_t30_de=2026-04-01&proxima_acao_ate=2026-03-25&situacao_data=atrasados&grupo=A"
     ):
         filtros = _coletar_filtros_pacientes()
 
@@ -507,7 +512,7 @@ def test_patient_filters_collect_month_and_symptom_start_date(native_t0_app):
     assert filtros["data_notificacao_de"] == "2026-03-01"
     assert filtros["data_notificacao_ate"] == "2026-03-20"
     assert filtros["respondido_t0_de"] == "2026-03-18"
-    assert filtros["respondido_t10_ate"] == "2026-03-28"
+    assert filtros["respondido_t7_ate"] == "2026-03-28"
     assert filtros["respondido_t30_de"] == "2026-04-01"
     assert filtros["proxima_acao_ate"] == "2026-03-25"
     assert filtros["situacao_data"] == "atrasados"
@@ -528,7 +533,7 @@ def test_patient_list_renders_new_symptom_filters(native_t0_app, monkeypatch):
     monkeypatch.setattr("blueprints.sfa._anexar_datas_notificacao_sinan", lambda pacientes: None)
 
     response = client.get(
-        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t10_de=2026-03-23&respondido_t30_ate=2026-04-17&proxima_acao_ate=2026-03-28&situacao_data=vence_7_dias"
+        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t7_de=2026-03-23&respondido_t30_ate=2026-04-17&proxima_acao_ate=2026-03-28&situacao_data=vence_7_dias"
     )
 
     html = response.get_data(as_text=True)
@@ -541,7 +546,7 @@ def test_patient_list_renders_new_symptom_filters(native_t0_app, monkeypatch):
     assert 'value="2026-03-01"' in html
     assert 'name="data_notificacao_ate"' in html
     assert 'value="2026-03-20"' in html
-    assert 'name="respondido_t10_de"' in html
+    assert 'name="respondido_t7_de"' in html
     assert 'value="2026-03-23"' in html
     assert 'name="respondido_t30_ate"' in html
     assert 'value="2026-04-17"' in html
@@ -559,7 +564,7 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
     paciente.grupo = "A"
     paciente.bairro = "Centro"
     paciente.data_t0 = "20/03/2026"
-    paciente.data_t10 = "30/03/2026"
+    paciente.data_t7 = "30/03/2026"
     paciente.data_t30 = "19/04/2026"
     paciente.resposta_t0 = SimpleNamespace(
         data_inicio_sintomas="18/03/2026",
@@ -582,7 +587,7 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
             }
         ),
     )
-    paciente.respostas_t10 = [
+    paciente.respostas_t7 = [
         SimpleNamespace(
             timestamp=datetime(2026, 3, 30, 10, 0, 0),
             dias_incap_novos=4,
@@ -637,7 +642,7 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
     assert "Custo Médio por Retorno às Atividades" in html
     assert "Comparação Grupo A vs B" in html
     assert "Prevalência de Sintomas no T0" in html
-    assert "Evolução percebida no T10" in html
+    assert "Evolução percebida no T7" in html
     assert "Estado final no T30" in html
     assert "Contato com animais" in html
     assert "Riscos ambientais" in html

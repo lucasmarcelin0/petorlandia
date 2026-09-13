@@ -431,11 +431,11 @@
       </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
-          Gera um lote isolado para validar T0/T10/T30 sem misturar esses registros ao fluxo real.
+          Gera um lote isolado para validar T0/T7/T30 sem misturar esses registros ao fluxo real.
         </p>
         <div class="small mb-3">
           <div><strong>Total:</strong> {{ resumo_testes.total }}</div>
-          <div><strong>T0:</strong> {{ resumo_testes.com_t0 }} | <strong>T10:</strong> {{ resumo_testes.com_t10 }} | <strong>T30:</strong> {{ resumo_testes.com_t30 }}</div>
+          <div><strong>T0:</strong> {{ resumo_testes.com_t0 }} | <strong>T7:</strong> {{ resumo_testes.com_t7 }} | <strong>T30:</strong> {{ resumo_testes.com_t30 }}</div>
         </div>
         <form method="POST" action="{{ url_for('sfa_routes.gerar_teste_dados') }}" class="row g-2 mb-2">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -6,12 +6,12 @@ from werkzeug.datastructures import MultiDict
 
 from services import sfa_service
 from services.sfa_service import (
-    carregar_t10_form_schema,
+    carregar_t7_form_schema,
     carregar_t30_form_schema,
     carregar_t0_form_schema,
     coletar_resposta_t0_nativa,
     construir_valores_iniciais_t0,
-    construir_valores_iniciais_t10,
+    construir_valores_iniciais_t7,
     construir_valores_iniciais_t30,
     salvar_t0_form_schema,
     serializar_t0_form_schema,
@@ -32,7 +32,7 @@ def _paciente_fake():
         endereco="Rua Exemplo, 123",
         bairro="Centro",
         resposta_t0=None,
-        respostas_t10=[],
+        respostas_t7=[],
         respostas_t30=[],
     )
 
@@ -68,7 +68,7 @@ def test_carregar_t0_form_schema_eh_instrumento_coletivo_essencial():
     fields = _fields_by_key(schema)
 
     assert schema["title"] == "T0 - Exposicoes coletivas e prevencao"
-    assert schema["instrument_version"] == "collective-v2"
+    assert schema["instrument_version"] == "collective-v3-disease-clock"
     assert IMPORTED_KEYS.isdisjoint(fields)
     assert "vacinas_12_meses" not in fields
     assert {
@@ -115,32 +115,32 @@ def test_normalizar_payload_t0_exposicoes_converte_legado_para_categorias_atuais
     assert normalized["exposicao_ambiental"] == ["Area rural/chacara"]
 
 
-def test_carregar_t10_t30_form_schemas_tem_campos_coletivos_e_custo_totalizado():
-    schema_t10 = carregar_t10_form_schema()
+def test_carregar_t7_t30_form_schemas_tem_campos_coletivos_e_custo_totalizado():
+    schema_t7 = carregar_t7_form_schema()
     schema_t30 = carregar_t30_form_schema()
-    fields_t10 = _fields_by_key(schema_t10)
+    fields_t7 = _fields_by_key(schema_t7)
     fields_t30 = _fields_by_key(schema_t30)
 
-    assert schema_t10["title"] == "T10 - Novas pistas e permanencia da fonte"
+    assert schema_t7["title"] == "T7 - Novas pistas e permanencia da fonte"
     assert schema_t30["title"] == "T30 - Encerramento do risco coletivo"
-    assert schema_t10["instrument_version"] == "collective-v2"
-    assert schema_t30["instrument_version"] == "collective-v2"
-    assert IMPORTED_KEYS.isdisjoint(fields_t10)
+    assert schema_t7["instrument_version"] == "collective-v3-disease-clock"
+    assert schema_t30["instrument_version"] == "collective-v3-disease-clock"
+    assert IMPORTED_KEYS.isdisjoint(fields_t7)
     assert IMPORTED_KEYS.isdisjoint(fields_t30)
     assert {
         "classificacao_melhora",
         "novos_casos_semelhantes",
         "nova_pista_exposicao",
-    } <= fields_t10.keys()
+    } <= fields_t7.keys()
     assert {
         "estado_saude_final",
         "nova_informacao_fonte",
         "orientacao_ou_acao_percebida",
     } <= fields_t30.keys()
-    assert "custo_outros" in fields_t10
+    assert "custo_outros" in fields_t7
     assert "custo_outros" in fields_t30
     for removed_key in ("custo_remedios", "custo_consultas", "custo_transporte"):
-        assert removed_key not in fields_t10
+        assert removed_key not in fields_t7
         assert removed_key not in fields_t30
 
 
@@ -156,24 +156,24 @@ def test_diagnostico_medico_permanece_nos_followups_como_atualizacao():
         )
     )
 
-    schema_t10 = sfa_service.filtrar_form_schema_condicional(
-        carregar_t10_form_schema(), paciente, "t10"
+    schema_t7 = sfa_service.filtrar_form_schema_condicional(
+        carregar_t7_form_schema(), paciente, "t7"
     )
     schema_t30 = sfa_service.filtrar_form_schema_condicional(
         carregar_t30_form_schema(), paciente, "t30"
     )
-    fields_t10 = _fields_by_key(schema_t10)
+    fields_t7 = _fields_by_key(schema_t7)
     fields_t30 = _fields_by_key(schema_t30)
 
-    assert "diagnostico_medico" in fields_t10
-    assert "diagnostico_medico_qual" in fields_t10
-    assert fields_t10["diagnostico_medico_qual_outro"]["visible_if"] == {
+    assert "diagnostico_medico" in fields_t7
+    assert "diagnostico_medico_qual" in fields_t7
+    assert fields_t7["diagnostico_medico_qual_outro"]["visible_if"] == {
         "source": "current",
         "key": "diagnostico_medico_qual",
         "operator": "equals",
         "value": "Outro",
     }
-    assert "Depois do T0" in fields_t10["diagnostico_medico"]["label"]
+    assert "Depois do T0" in fields_t7["diagnostico_medico"]["label"]
     assert "diagnostico_medico" in fields_t30
     assert "diagnostico_medico_qual" in fields_t30
     assert fields_t30["diagnostico_medico_qual_outro"]["visible_if"] == {
@@ -213,11 +213,11 @@ def test_valores_iniciais_nao_reexibem_dados_importados():
     )
 
     values_t0 = construir_valores_iniciais_t0(paciente, carregar_t0_form_schema())
-    values_t10 = construir_valores_iniciais_t10(paciente, carregar_t10_form_schema())
+    values_t7 = construir_valores_iniciais_t7(paciente, carregar_t7_form_schema())
     values_t30 = construir_valores_iniciais_t30(paciente, carregar_t30_form_schema())
 
     assert IMPORTED_KEYS.isdisjoint(values_t0)
-    assert IMPORTED_KEYS.isdisjoint(values_t10)
+    assert IMPORTED_KEYS.isdisjoint(values_t7)
     assert IMPORTED_KEYS.isdisjoint(values_t30)
 
 
@@ -233,7 +233,7 @@ def test_coletar_resposta_t0_nativa_salva_contexto_e_versao_sem_campos_visiveis(
     assert dados["nome"] == "Maria Teste"
     assert dados["data_nascimento"] == "01/01/2000"
     assert dados["_imported_context"]["ficha_sinan"] == "3032976"
-    assert dados["_instrument_version"] == "collective-v2"
+    assert dados["_instrument_version"] == "collective-v3-disease-clock"
     assert dados["_submitted_stage"] == "t0"
     assert dados["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
 
@@ -301,7 +301,7 @@ def test_tampering_checkbox_nenhuma_com_exposicao_positiva_e_rejeitado():
     )
 
 
-def test_prior_abre_ou_mantem_condicional_fechada_no_t10():
+def test_prior_abre_ou_mantem_condicional_fechada_no_t7():
     paciente_com_pista = _paciente_fake()
     paciente_com_pista.resposta_t0 = SimpleNamespace(
         dados_json=json.dumps(
@@ -327,12 +327,12 @@ def test_prior_abre_ou_mantem_condicional_fechada_no_t10():
 
     aberto = _fields_by_key(
         sfa_service.filtrar_form_schema_condicional(
-            carregar_t10_form_schema(), paciente_com_pista, "t10"
+            carregar_t7_form_schema(), paciente_com_pista, "t7"
         )
     )["fonte_ainda_ativa"]
     fechado_ate_gatilho_atual = _fields_by_key(
         sfa_service.filtrar_form_schema_condicional(
-            carregar_t10_form_schema(), paciente_sem_pista, "t10"
+            carregar_t7_form_schema(), paciente_sem_pista, "t7"
         )
     )["fonte_ainda_ativa"]
 
@@ -370,5 +370,5 @@ def test_salvar_t0_form_schema_em_arquivo_temporario(monkeypatch):
 
     assert saved_path == schema_path
     assert persisted["title"] == "T0 Ajustado em Teste"
-    assert persisted["instrument_version"] == "collective-v2"
+    assert persisted["instrument_version"] == "collective-v3-disease-clock"
     schema_path.unlink(missing_ok=True)

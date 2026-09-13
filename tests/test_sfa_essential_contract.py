@@ -8,7 +8,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
     "t0": PROJECT_ROOT / "config" / "sfa_t0_form.json",
-    "t10": PROJECT_ROOT / "config" / "sfa_t10_form.json",
+    "t7": PROJECT_ROOT / "config" / "sfa_t7_form.json",
     "t30": PROJECT_ROOT / "config" / "sfa_t30_form.json",
 }
 
@@ -31,7 +31,7 @@ ESSENTIAL_KEYS = {
         "custo_total",
         "ausencia_familiar",
     },
-    "t10": {
+    "t7": {
         "classificacao_melhora",
         "sinais_alerta_atuais",
         "retornou_servico_saude",
@@ -96,7 +96,7 @@ CONDITIONAL_KEYS = {
         "custo_total",
         "dias_cuidador",
     },
-    "t10": {
+    "t7": {
         "diagnostico_medico_qual",
         "diagnostico_medico_status",
         "novos_casos_quantidade",
@@ -186,7 +186,7 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
     if source == "current":
         assert key in known_keys[stage], f"{stage}: condicao referencia campo atual inexistente: {key}"
     else:
-        prior_stages = ("t0",) if stage == "t10" else (("t0", "t10") if stage == "t30" else ())
+        prior_stages = ("t0",) if stage == "t7" else (("t0", "t7") if stage == "t30" else ())
         assert prior_stages, f"{stage}: T0 nao pode depender de resposta prior"
         assert any(key in known_keys[item] for item in prior_stages), (
             f"{stage}: condicao referencia campo anterior inexistente: {key}"
@@ -204,15 +204,15 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
         assert "value" in rule, f"{stage}: {operator} exige value"
 
 
-@pytest.mark.parametrize("stage", ["t0", "t10", "t30"])
+@pytest.mark.parametrize("stage", ["t0", "t7", "t30"])
 def test_active_sfa_schema_is_collective_v2(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "collective-v2"
+    assert schema.get("instrument_version") == "collective-v3-disease-clock"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 
-@pytest.mark.parametrize("stage", ["t0", "t10", "t30"])
+@pytest.mark.parametrize("stage", ["t0", "t7", "t30"])
 def test_active_sfa_schema_omits_imported_identification_and_vaccines(stage):
     fields = _fields(_load_schema(stage))
     keys = {str(field.get("key") or "") for field in fields}
@@ -228,7 +228,7 @@ def test_active_sfa_schema_omits_imported_identification_and_vaccines(stage):
     assert not any(label.startswith("vacina") for label in labels)
 
 
-@pytest.mark.parametrize("stage", ["t0", "t10", "t30"])
+@pytest.mark.parametrize("stage", ["t0", "t7", "t30"])
 def test_active_sfa_schema_keeps_essential_collective_keys(stage):
     keys = {str(field.get("key") or "") for field in _fields(_load_schema(stage))}
     missing = ESSENTIAL_KEYS[stage] - keys
@@ -237,7 +237,7 @@ def test_active_sfa_schema_keeps_essential_collective_keys(stage):
 
 
 def test_active_sfa_visible_if_rules_match_the_shared_condition_dsl():
-    schemas = {stage: _load_schema(stage) for stage in ("t0", "t10", "t30")}
+    schemas = {stage: _load_schema(stage) for stage in ("t0", "t7", "t30")}
     known_keys = {
         stage: {str(field.get("key") or "") for field in _fields(schema)}
         for stage, schema in schemas.items()
@@ -254,7 +254,7 @@ def test_active_sfa_visible_if_rules_match_the_shared_condition_dsl():
     assert conditional_count >= 12, "os instrumentos essenciais devem manter ramificacao condicional relevante"
 
 
-@pytest.mark.parametrize("stage", ["t0", "t10", "t30"])
+@pytest.mark.parametrize("stage", ["t0", "t7", "t30"])
 def test_detail_questions_only_open_after_their_trigger(stage):
     fields_by_key = {
         str(field.get("key") or ""): field

@@ -130,7 +130,7 @@
       <div class="col-lg-6">
         <div class="border rounded p-3 h-100 study-block" style="--study-color:#015F73">
           <h6>Pergunta e objetivo geral</h6>
-          <p class="small mb-2"><strong>Pergunta:</strong> entre notificações de síndrome febril aguda em Orlândia, o seguimento T0/T10/T30 acrescenta a identificação de exposições compartilhadas e sinais coletivos verificáveis em relação à ficha SINAN inicial?</p>
+          <p class="small mb-2"><strong>Pergunta:</strong> entre notificações de síndrome febril aguda em Orlândia, o seguimento T0/T7/T30 acrescenta a identificação de exposições compartilhadas e sinais coletivos verificáveis em relação à ficha SINAN inicial?</p>
           <p class="small mb-0"><strong>Objetivo:</strong> estimar o rendimento incremental, a oportunidade e a completude desse seguimento, sem atribuir efeito causal nesta etapa.</p>
         </div>
       </div>
@@ -138,7 +138,7 @@
         <div class="border rounded p-3 h-100 study-block" style="--study-color:#198754">
           <h6>Desenho e unidades de análise</h6>
           <ul class="small mb-0">
-            <li>Coorte observacional prospectiva com acompanhamento em T0, T10 e T30.</li>
+            <li>Coorte observacional prospectiva com acompanhamento em T0, T7 e T30.</li>
             <li>Participante como unidade das análises clínicas e de completude.</li>
             <li>Episódio ou agrupamento como unidade do desfecho coletivo principal.</li>
             <li>Comparação interna: informação disponível no SINAN versus informação acumulada no seguimento.</li>
@@ -150,7 +150,7 @@
           <h6>Variáveis dependentes</h6>
           <ul class="small mb-0">
             <li><strong>Primária proposta:</strong> sinal coletivo acionável, confirmado por adjudicação independente (sim/não).</li>
-            <li>Rendimento incremental do T0/T10/T30 sobre o SINAN.</li>
+            <li>Rendimento incremental do T0/T7/T30 sobre o SINAN.</li>
             <li>Tempo entre início dos sintomas, notificação e detecção do sinal.</li>
             <li>Completude e perda de seguimento; manutenção da fonte e aparecimento de novos casos.</li>
             <li>Impacto funcional e econômico individual como desfechos secundários.</li>
@@ -277,8 +277,8 @@
           </div>
           <div class="col-md-4">
             <div class="border rounded p-3 h-100">
-              <div class="text-muted small">Sem T10</div>
-              <div class="fs-4 fw-bold text-warning">{{ analise.missing.t10 }}</div>
+              <div class="text-muted small">Sem T7</div>
+              <div class="fs-4 fw-bold text-warning">{{ analise.missing.t7 }}</div>
             </div>
           </div>
           <div class="col-md-4">
@@ -328,8 +328,8 @@
             <th>Inicio sintomas</th>
             <th>T0</th>
             <th>Dia T0</th>
-            <th>T10</th>
-            <th>Dia T10</th>
+            <th>T7</th>
+            <th>Dia T7</th>
             <th>T30</th>
             <th>Dia T30</th>
           </tr>
@@ -355,8 +355,8 @@
             <td>{{ row.inicio_sintomas }}</td>
             <td>{{ row.t0_data }}</td>
             <td>{{ row.t0_dia_doenca }}</td>
-            <td>{{ row.t10_data }}</td>
-            <td>{{ row.t10_dia_doenca }}</td>
+            <td>{{ row.t7_data }}</td>
+            <td>{{ row.t7_dia_doenca }}</td>
             <td>{{ row.t30_data }}</td>
             <td>{{ row.t30_dia_doenca }}</td>
           </tr>

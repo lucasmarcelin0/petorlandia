@@ -30,7 +30,7 @@ def test_qr_operacional_usa_link_nativo_de_cada_etapa(app, client, monkeypatch):
 
     expected_targets = {
         "t0": "https://localhost/sfa/p/token-qr-operacional",
-        "t10": "https://localhost/sfa/p/token-qr-operacional/t10",
+        "t7": "https://localhost/sfa/p/token-qr-operacional/t7",
         "t30": "https://localhost/sfa/p/token-qr-operacional/t30",
     }
     for stage, expected_target in expected_targets.items():

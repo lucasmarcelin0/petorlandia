@@ -14,7 +14,7 @@ def test_dashboard_testes_expoe_contato_animal_pelas_opcoes_atuais():
             bairro="Centro",
             data_nascimento="01/01/1990",
             data_t0="20/03/2026",
-            data_t10="30/03/2026",
+            data_t7="30/03/2026",
             data_t30="19/04/2026",
             resposta_t0=SimpleNamespace(
                 data_inicio_sintomas="18/03/2026",
@@ -23,7 +23,7 @@ def test_dashboard_testes_expoe_contato_animal_pelas_opcoes_atuais():
                 tipo_residencia=payload.get("tipo_residencia", "Casa urbana"),
                 dados_json=json.dumps(payload),
             ),
-            respostas_t10=[],
+            respostas_t7=[],
             respostas_t30=[],
         )
 

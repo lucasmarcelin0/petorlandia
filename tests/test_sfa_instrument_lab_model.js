@@ -23,9 +23,9 @@ assert.strictEqual(model.cohortSize, 100);
 
 const cohort = model.buildSyntheticCohort('detectable');
 assert.strictEqual(cohort.length, 100);
-assert.strictEqual(cohort.filter((record) => record.t10Responded).length, 86);
+assert.strictEqual(cohort.filter((record) => record.t7Responded).length, 86);
 assert.strictEqual(cohort.filter((record) => record.t30Responded).length, 76);
-assert(cohort.every((record) => !record.t30Responded || record.t10Responded), 'T30 deve ser subconjunto de T10.');
+assert(cohort.every((record) => !record.t30Responded || record.t7Responded), 'T30 deve ser subconjunto de T7.');
 assert(cohort.every((record) => !record.ialSampleCollected || record.ialEligible));
 assert(cohort.every((record) => !record.ialValidResult || record.ialSampleCollected));
 assert(cohort.every((record) => !record.ialEtiologyPositive || record.ialValidResult));
@@ -34,8 +34,8 @@ const signals = model.buildSignals(cohort);
 assert.strictEqual(signals.length, 5);
 const school = signals.find((signal) => signal.key === 'event:escola-aurora');
 assert(school);
-assert.strictEqual(school.stage, 'T10');
-assert.strictEqual(school.directCases, 4, 'O sinal T10 deve usar apenas quem respondeu T10.');
+assert.strictEqual(school.stage, 'T7');
+assert.strictEqual(school.directCases, 4, 'O sinal T7 deve usar apenas quem respondeu T7.');
 assert.strictEqual(school.stageCoverage, '4/4');
 
 const foodborne = signals.find((signal) => signal.key === 'food:almoco-comunitario');
@@ -71,9 +71,9 @@ function record(overrides) {
     linkComplete: true,
     onsetDay: 1,
     reportedOthers: 0,
-    t10Responded: false,
+    t7Responded: false,
     t30Responded: false,
-    sourceActiveT10: null,
+    sourceActiveT7: null,
     sourceStateT30: null,
     actionObservedT30: false,
     postActionCases: null,
@@ -108,7 +108,7 @@ assert.strictEqual(
 );
 
 const eventWithoutFollowup = cohort.map((item) => Object.assign({}, item, {
-  t10Responded: false,
+  t7Responded: false,
   t30Responded: false
 }));
 assert(!model.buildSignals(eventWithoutFollowup).some((signal) => signal.key === 'event:escola-aurora'));
@@ -125,16 +125,16 @@ assert.strictEqual(decisions.length, 10);
 assert(decisions.every((decision) => decision.id && decision.status && decision.owner && decision.reportContribution));
 
 const expectedScenarios = {
-  semantic: { t10: 90, t30: 82 },
-  falsefriends: { t10: 88, t30: 78 },
-  onehealth: { t10: 92, t30: 84 }
+  semantic: { t7: 90, t30: 82 },
+  falsefriends: { t7: 88, t30: 78 },
+  onehealth: { t7: 92, t30: 84 }
 };
 Object.entries(expectedScenarios).forEach(([scenarioKey, expected]) => {
   const scenarioCohort = model.buildSyntheticCohort(scenarioKey);
   assert.strictEqual(scenarioCohort.length, 100, `${scenarioKey} deve manter n=100.`);
-  assert.strictEqual(scenarioCohort.filter((item) => item.t10Responded).length, expected.t10);
+  assert.strictEqual(scenarioCohort.filter((item) => item.t7Responded).length, expected.t7);
   assert.strictEqual(scenarioCohort.filter((item) => item.t30Responded).length, expected.t30);
-  assert(scenarioCohort.every((item) => !item.t30Responded || item.t10Responded), `${scenarioKey}: T30 deve estar contido em T10.`);
+  assert(scenarioCohort.every((item) => !item.t30Responded || item.t7Responded), `${scenarioKey}: T30 deve estar contido em T7.`);
 });
 
 const semanticCohort = model.buildSyntheticCohort('semantic');
@@ -184,9 +184,9 @@ assert(ial.every((step) => step.value <= step.denominator));
 const utility = model.buildQuestionUtility();
 assert(utility.some((row) => row.imported && row.seconds === 0));
 assert(utility.some((row) => row.question === 'O que exatamente pode ter sido compartilhado?' && row.roleModifier === 'is-core'));
-assert(!model.stages.t10.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income'));
+assert(!model.stages.t7.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income'));
 assert(!model.stages.t30.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income'));
-assert(model.stages.t10.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income_any'));
+assert(model.stages.t7.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income_any'));
 assert.strictEqual((source.match(/<div class="sfa-lab__comparison-row">/g) || []).length, 1, 'Cada linha comparativa deve abrir apenas um contêiner.');
 
 console.log('SFA instrument lab model checks passed');

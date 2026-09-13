@@ -5,7 +5,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from services.sfa_service import (
-    carregar_t10_form_schema,
+    carregar_t7_form_schema,
     gerar_csv_assinaturas_tcle,
     gerar_csv_exportacao_analitica,
     gerar_csv_exportacao_cadastro,
@@ -33,15 +33,15 @@ def _fake_patient():
         endereco="Avenida 4 2067",
         grupo="B",
         status_t0="T0_Completo",
-        status_t10="T10_Completo",
+        status_t7="T7_Completo",
         status_t30="Aguardando",
         status_geral="Em_Andamento",
         data_t0="18/03/2026",
-        data_t10="28/03/2026",
+        data_t7="28/03/2026",
         data_t30="17/04/2026",
-        fase_atual="Entre T0 e T10",
-        proxima_fase="T10",
-        proxima_acao="Aguardar T10",
+        fase_atual="Entre T0 e T7",
+        proxima_fase="T7",
+        proxima_acao="Aguardar T7",
         prioridade_operacional="Baixa",
         dias_para_acao=10,
         data_proxima_acao="28/03/2026",
@@ -69,11 +69,11 @@ def _fake_patient():
                 "houve_gasto": "Nao",
             }
         ),
-        respostas_t10=[
+        respostas_t7=[
             _fake_response(
                 {
                     "_instrument_version": "collective-v2",
-                    "_submitted_stage": "t10",
+                    "_submitted_stage": "t7",
                     "classificacao_melhora": "Melhorando",
                     "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
                     "novos_casos_semelhantes": "Nao",
@@ -100,10 +100,10 @@ def test_montar_visao_resposta_formulario_agrupar_campos_e_listas():
     )
 
     view = montar_visao_resposta_formulario(
-        "t10", response, schema=carregar_t10_form_schema()
+        "t7", response, schema=carregar_t7_form_schema()
     )
 
-    assert view["stage"] == "t10"
+    assert view["stage"] == "t7"
     assert view["instrument_version"] == "collective-v2"
     assert view["submitted_at"] == "23/03/2026 10:30"
     alertas_field = next(
@@ -122,7 +122,7 @@ def test_gerar_csv_exportacao_cadastro_inclui_colunas_operacionais():
 
     assert rows[0]["id_estudo"] == "SFA-123"
     assert rows[0]["status_geral"] == "Em_Andamento"
-    assert rows[0]["proxima_acao"] == "Aguardar T10"
+    assert rows[0]["proxima_acao"] == "Aguardar T7"
 
 
 def test_gerar_csv_exportacao_analitica_achata_instrumento_atual_sem_repetir_importados():
@@ -131,11 +131,11 @@ def test_gerar_csv_exportacao_analitica_achata_instrumento_atual_sem_repetir_imp
 
     assert rows[0]["id_estudo"] == "SFA-123"
     assert rows[0]["t0__instrument_version"] == "collective-v2"
-    assert rows[0]["t10__instrument_version"] == "collective-v2"
+    assert rows[0]["t7__instrument_version"] == "collective-v2"
     assert rows[0]["t0__respondent_role"] == "A propria pessoa"
     assert rows[0].get("t0__cpf", "") == ""
-    assert rows[0]["t10__classificacao_melhora"] == "Melhorando"
-    assert rows[0]["t10__custo_outros"] == "18.50"
+    assert rows[0]["t7__classificacao_melhora"] == "Melhorando"
+    assert rows[0]["t7__custo_outros"] == "18.50"
 
 
 def _chart_value(chart, label):
@@ -161,7 +161,7 @@ def test_montar_analise_respostas_agrega_exposicoes_coletivas_e_dias_da_doenca()
             },
             when=datetime(2026, 3, 3, 9, 0, 0),
         ),
-        respostas_t10=[
+        respostas_t7=[
             _fake_response({}, when=datetime(2026, 3, 12, 9, 0, 0))
         ],
         respostas_t30=[
@@ -182,7 +182,7 @@ def test_montar_analise_respostas_agrega_exposicoes_coletivas_e_dias_da_doenca()
             },
             when=datetime(2026, 3, 20, 9, 0, 0),
         ),
-        respostas_t10=[],
+        respostas_t7=[],
         respostas_t30=[],
     )
 

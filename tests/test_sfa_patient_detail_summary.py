@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 
 from extensions import db
-from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30
+from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30
 
 
 def test_detalhe_resume_respostas_collective_v2_com_indicadores_acionaveis(
@@ -29,7 +29,7 @@ def test_detalhe_resume_respostas_collective_v2_com_indicadores_acionaveis(
                 }
             ),
         )
-        t10 = SfaRespostaT10(
+        t7 = SfaRespostaT7(
             id_estudo="SFA-RESUMO",
             dias_incap_novos=2,
             custo_outros=Decimal("18.75"),
@@ -60,7 +60,7 @@ def test_detalhe_resume_respostas_collective_v2_com_indicadores_acionaveis(
                 }
             ),
         )
-        db.session.add_all([paciente, t0, t10, t30])
+        db.session.add_all([paciente, t0, t7, t30])
         db.session.commit()
 
     response = client.get("/sfa/paciente/SFA-RESUMO")

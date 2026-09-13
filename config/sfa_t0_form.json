@@ -1,7 +1,7 @@
 {
-  "instrument_version": "collective-v2",
+  "instrument_version": "collective-v3-disease-clock",
   "title": "T0 - Exposicoes coletivas e prevencao",
-  "subtitle": "Perguntas adicionais ao SINAN para reconhecer exposicoes coletivas que possam ser verificadas pela Vigilancia.",
+  "subtitle": "Perguntas adicionais ao SINAN para reconhecer exposicoes coletivas que possam ser verificadas pela Vigilancia. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
   "submit_label": "Enviar resposta T0",
   "sections": [
     {
@@ -50,6 +50,20 @@
           "options": [
             "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
           ]
+        }
+      ]
+    },
+    {
+      "title": "Tempo de doença",
+      "description": "O primeiro dia de sintomas é D0. Confira a data trazida do SINAN. Se não souber, deixe em branco para revisão pela equipe.",
+      "fields": [
+        {
+          "key": "data_inicio_sintomas",
+          "label": "Em que dia começaram os sintomas deste episódio?",
+          "type": "date",
+          "required": false,
+          "prefill": "data_inicio_sintomas",
+          "help_text": "T7 = 7 dias após esta data; T30 = 30 dias após esta data. A data da entrevista é registrada separadamente."
         }
       ]
     },

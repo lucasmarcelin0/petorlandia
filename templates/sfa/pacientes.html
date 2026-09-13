@@ -88,14 +88,14 @@
                value="{{ filtros.respondido_t0_ate }}">
       </div>
       <div class="col-sm-2">
-        <label class="form-label form-label-sm mb-1">T10 respondido de</label>
-        <input type="date" name="respondido_t10_de" class="form-control form-control-sm"
-               value="{{ filtros.respondido_t10_de }}">
+        <label class="form-label form-label-sm mb-1">T7 respondido de</label>
+        <input type="date" name="respondido_t7_de" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t7_de }}">
       </div>
       <div class="col-sm-2">
-        <label class="form-label form-label-sm mb-1">T10 respondido até</label>
-        <input type="date" name="respondido_t10_ate" class="form-control form-control-sm"
-               value="{{ filtros.respondido_t10_ate }}">
+        <label class="form-label form-label-sm mb-1">T7 respondido até</label>
+        <input type="date" name="respondido_t7_ate" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t7_ate }}">
       </div>
       <div class="col-sm-2">
         <label class="form-label form-label-sm mb-1">T30 respondido de</label>
@@ -131,7 +131,7 @@
         </a>
         {% endif %}
         <a href="{{ url_for('sfa_routes.formularios_print') }}" class="btn btn-sm btn-outline-dark" target="_blank" rel="noopener">
-          Perguntas T0/T10/T30
+          Perguntas T0/T7/T30
         </a>
         <a href="{{ url_for('sfa_routes.analise_respostas', **filtros) }}" class="btn btn-sm btn-outline-success">
           Analise respostas
@@ -539,7 +539,7 @@
             <th>Grupo</th>
             <th>Status</th>
             <th>T0</th>
-            <th>T10</th>
+            <th>T7</th>
             <th>T30</th>
             <th>Prioridade</th>
             <th>Ação</th>
@@ -594,12 +594,12 @@
               </span>
             </td>
             <td>
-              {% if p.status_t10 == 'T10_Completo' %}
+              {% if p.status_t7 == 'T7_Completo' %}
                 <span class="badge bg-success">OK</span>
-              {% elif p.status_t10 == 'ATRASADO' %}
+              {% elif p.status_t7 == 'ATRASADO' %}
                 <span class="badge bg-danger">Atrasado</span>
-              {% elif p.status_t10 == 'Aguardando' %}
-                <span class="badge bg-warning text-dark">{{ p.data_t10 or 'Ag.' }}</span>
+              {% elif p.status_t7 == 'Aguardando' %}
+                <span class="badge bg-warning text-dark">{{ p.data_t7 or 'Ag.' }}</span>
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}

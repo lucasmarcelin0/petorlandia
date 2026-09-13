@@ -12,7 +12,7 @@ Funções públicas principais (equivalentes ao GAS):
   - verificar_seguimento()       ← verificarSeguimento()
   - consolidar_banco()           ← consolidarBanco()
   - on_submit_t0(dados)          ← onSubmitT0(e)
-  - on_submit_t10(dados)         ← onSubmitT10(e)
+  - on_submit_t7(dados)         ← onSubmitT7(e)
   - on_submit_t30(dados)         ← onSubmitT30(e)
   - gerar_url_t0(paciente)       ← gerarUrlT0Participante()
   - link_whatsapp(tel, msg)      ← linkWhatsApp()
@@ -45,7 +45,8 @@ log = logging.getLogger("sfa_service")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FORM_SCHEMA_FILES = {
     "t0": "config/sfa_t0_form.json",
-    "t10": "config/sfa_t10_form.json",
+    "t7": "config/sfa_t7_form.json",
+    "t10": "config/sfa_t10_form.json",  # somente leitura histórica
     "t30": "config/sfa_t30_form.json",
 }
 SFA_INSTRUMENT_HISTORY_ROOT = PROJECT_ROOT / "config" / "sfa_instrument_history"
@@ -68,8 +69,8 @@ LEGACY_T0_CONSENT_ACCEPTED = "Aceito participar voluntariamente deste estudo."
 # Configuração (lida de variáveis de ambiente ou fallback)
 # ---------------------------------------------------------------------------
 
-DIAS_T10 = int(os.getenv("SFA_DIAS_T10", "10"))
-DIAS_T30 = int(os.getenv("SFA_DIAS_T30", "30"))
+DIAS_T7 = 7
+DIAS_T30 = 30
 DIAS_LEMBRETE = int(os.getenv("SFA_DIAS_LEMBRETE", "2"))
 DIAS_SEM_T0_ALERTA = int(os.getenv("SFA_DIAS_SEM_T0_ALERTA", "5"))
 TOLERANCIA_ALERTA_DIAS = int(os.getenv("SFA_TOLERANCIA_ALERTA_DIAS", "1"))
@@ -95,8 +96,8 @@ FORM_T0_ID = os.getenv(
     "SFA_FORM_T0_ID",
     "1PbQj5rF4OkeNOYN44rCoVbbDYE-GftwHn-BNGC3-kmg",
 )
-FORM_T10_ID = os.getenv(
-    "SFA_FORM_T10_ID",
+FORM_T7_ID = os.getenv(
+    "SFA_FORM_T7_ID",
     "1v8WL_3ecBUDU2N3CDDQeCULvwYI3UHCjA950aFwQj3g",
 )
 FORM_T30_ID = os.getenv(
@@ -108,12 +109,12 @@ T0_RESPONSE_RANGE = os.getenv("SFA_T0_RESPONSE_RANGE", "A:ZZ")
 T0_RESPONSE_TITLE = os.getenv("SFA_T0_RESPONSE_TITLE", "")
 T0_RESPONSE_GID = os.getenv("SFA_T0_RESPONSE_GID", "")
 T0_FORM_SCHEMA_FILE = os.getenv("SFA_T0_FORM_SCHEMA_FILE", DEFAULT_FORM_SCHEMA_FILES["t0"])
-T10_FORM_SCHEMA_FILE = os.getenv("SFA_T10_FORM_SCHEMA_FILE", DEFAULT_FORM_SCHEMA_FILES["t10"])
+T7_FORM_SCHEMA_FILE = os.getenv("SFA_T7_FORM_SCHEMA_FILE", DEFAULT_FORM_SCHEMA_FILES["t7"])
 T30_FORM_SCHEMA_FILE = os.getenv("SFA_T30_FORM_SCHEMA_FILE", DEFAULT_FORM_SCHEMA_FILES["t30"])
 
-LINK_FORM_T10 = os.getenv(
-    "SFA_LINK_FORM_T10",
-    f"https://docs.google.com/forms/d/{FORM_T10_ID}/viewform",
+LINK_FORM_T7 = os.getenv(
+    "SFA_LINK_FORM_T7",
+    f"https://docs.google.com/forms/d/{FORM_T7_ID}/viewform",
 )
 LINK_FORM_T30 = os.getenv(
     "SFA_LINK_FORM_T30",
@@ -127,9 +128,9 @@ ENTRY_T0_FICHA_SINAN = os.getenv("SFA_ENTRY_T0_FICHA_SINAN", "")
 ENTRY_T0_NOME = os.getenv("SFA_ENTRY_T0_NOME", "entry.2001573769")
 ENTRY_T0_DATA_NASC_BASE = os.getenv("SFA_ENTRY_T0_DATA_NASC_BASE", "entry.1487617078")
 ENTRY_T0_TOKEN = os.getenv("SFA_ENTRY_T0_TOKEN", "")
-ENTRY_T10_NOME = os.getenv("SFA_ENTRY_T10_NOME", "entry.1342379317")
-# Pendente: rodar salvarEntryIdsAcompanhamentos() no GAS para descobrir entry de id_estudo no T10/T30
-ENTRY_T10_ID_ESTUDO = os.getenv("SFA_ENTRY_T10_ID_ESTUDO", "")
+ENTRY_T7_NOME = os.getenv("SFA_ENTRY_T7_NOME", "entry.1342379317")
+# Pendente: rodar salvarEntryIdsAcompanhamentos() no GAS para descobrir entry de id_estudo no T7/T30
+ENTRY_T7_ID_ESTUDO = os.getenv("SFA_ENTRY_T7_ID_ESTUDO", "")
 ENTRY_T30_NOME = os.getenv("SFA_ENTRY_T30_NOME", "entry.937246935")
 ENTRY_T30_ID_ESTUDO = os.getenv("SFA_ENTRY_T30_ID_ESTUDO", "")
 
@@ -336,6 +337,7 @@ def paciente_eh_teste_sfa(paciente) -> bool:
     token_acesso = str(getattr(paciente, "token_acesso", "") or "")
     if (
         SFA_TEST_MARKER in observacao
+        or str(getattr(paciente, "id_estudo", "")).upper().startswith("SFA-TESTE")
         or nome.startswith(SFA_TEST_NAME_PREFIX)
         or ficha_sinan.upper().startswith("TESTE-")
         or token_acesso.lower().startswith("teste-")
@@ -346,6 +348,7 @@ def paciente_eh_teste_sfa(paciente) -> bool:
     resposta_t0 = getattr(paciente, "resposta_t0", None)
     if resposta_t0:
         respostas.append(resposta_t0)
+    respostas.extend(list(getattr(paciente, "respostas_t7", []) or []))
     respostas.extend(list(getattr(paciente, "respostas_t10", []) or []))
     respostas.extend(list(getattr(paciente, "respostas_t30", []) or []))
     for resposta in respostas:
@@ -374,7 +377,8 @@ def _schema_file_for_stage(form_stage: str) -> str:
     stage = _normalize_form_stage(form_stage)
     mapping = {
         "t0": T0_FORM_SCHEMA_FILE,
-        "t10": T10_FORM_SCHEMA_FILE,
+        "t7": T7_FORM_SCHEMA_FILE,
+        "t10": "config/sfa_t10_form.json",
         "t30": T30_FORM_SCHEMA_FILE,
     }
     return mapping[stage] or DEFAULT_FORM_SCHEMA_FILES[stage]
@@ -402,8 +406,8 @@ def carregar_t0_form_schema() -> dict:
     return carregar_form_schema("t0")
 
 
-def carregar_t10_form_schema() -> dict:
-    return carregar_form_schema("t10")
+def carregar_t7_form_schema() -> dict:
+    return carregar_form_schema("t7")
 
 
 def carregar_t30_form_schema() -> dict:
@@ -483,7 +487,7 @@ def listar_historico_instrumentos() -> list[dict[str, object]]:
             continue
 
         stage_summaries: dict[str, dict[str, object]] = {}
-        for stage in ("t0", "t10", "t30"):
+        for stage in ("t0", "t7", "t10", "t30"):
             stages = raw_version.get("stages")
             if not isinstance(stages, dict) or stage not in stages:
                 continue
@@ -570,7 +574,7 @@ _VISIBLE_IF_OPERATORS = {
     "absent",
     "positive",
 }
-_VISIBLE_IF_SOURCES = {"current", "prior", "latest_prior", "t0", "t10"}
+_VISIBLE_IF_SOURCES = {"current", "prior", "latest_prior", "t0", "t7"}
 
 
 def _erros_regra_visibilidade_schema(
@@ -763,8 +767,8 @@ def salvar_t0_form_schema(schema: dict) -> Path:
     return salvar_form_schema("t0", schema)
 
 
-def salvar_t10_form_schema(schema: dict) -> Path:
-    return salvar_form_schema("t10", schema)
+def salvar_t7_form_schema(schema: dict) -> Path:
+    return salvar_form_schema("t7", schema)
 
 
 def salvar_t30_form_schema(schema: dict) -> Path:
@@ -810,12 +814,12 @@ def _buscar_valor_respostas_anteriores(paciente, key: str) -> object:
     staged_responses: list[object] = []
 
     respostas_t30 = list(getattr(paciente, "respostas_t30", []) or [])
-    respostas_t10 = list(getattr(paciente, "respostas_t10", []) or [])
+    respostas_t7 = list(getattr(paciente, "respostas_t7", []) or [])
 
     if respostas_t30:
         staged_responses.extend(sorted(respostas_t30, key=_chave_ordem_resposta, reverse=True))
-    if respostas_t10:
-        staged_responses.extend(sorted(respostas_t10, key=_chave_ordem_resposta, reverse=True))
+    if respostas_t7:
+        staged_responses.extend(sorted(respostas_t7, key=_chave_ordem_resposta, reverse=True))
 
     resposta_t0 = getattr(paciente, "resposta_t0", None)
     if resposta_t0:
@@ -949,11 +953,11 @@ def _avaliar_regra_visibilidade(
     if not key:
         return True
     source = normalizar_nome_chave(rule.get("source") or "current")
-    if source in {"prior", "latest_prior", "t0", "t10"}:
+    if source in {"prior", "latest_prior", "t0", "t7"}:
         payloads = list(prior_payloads or [])
         if source == "latest_prior":
             payloads = payloads[-1:]
-        elif source in {"t0", "t10"}:
+        elif source in {"t0", "t7"}:
             payloads = [
                 payload for payload in payloads
                 if str(payload.get("_submitted_stage") or "").strip().lower() == source
@@ -1025,7 +1029,7 @@ def _resolver_regra_visibilidade_para_cliente(
             "const": _avaliar_regra_visibilidade(rule, {}, prior_payloads)
         }
     source = normalizar_nome_chave(rule.get("source") or "current")
-    if source in {"prior", "latest_prior", "t0", "t10"}:
+    if source in {"prior", "latest_prior", "t0", "t7"}:
         return {
             "const": _avaliar_regra_visibilidade(rule, {}, prior_payloads)
         }
@@ -1039,15 +1043,17 @@ def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, 
     stage = _normalize_form_stage(form_stage)
     payloads: list[dict[str, object]] = []
 
-    if stage in {"t10", "t30"}:
+    if stage in {"t7", "t10", "t30"}:
         resposta_t0 = getattr(paciente, "resposta_t0", None)
         if resposta_t0:
             payloads.append(_carregar_payload_resposta(resposta_t0))
 
     if stage == "t30":
-        respostas_t10 = list(getattr(paciente, "respostas_t10", []) or [])
-        respostas_t10.sort(key=_chave_ordem_resposta)
-        payloads.extend(_carregar_payload_resposta(resposta) for resposta in respostas_t10)
+        respostas_t7 = list(getattr(paciente, "respostas_t7", []) or [])
+        respostas_t7.sort(key=_chave_ordem_resposta)
+        payloads.extend(_carregar_payload_resposta(resposta) for resposta in respostas_t7)
+        payloads.extend(_carregar_payload_resposta(resposta) for resposta in
+                        list(getattr(paciente, "respostas_t10", []) or []))
 
     return [payload for payload in payloads if payload]
 
@@ -1113,7 +1119,7 @@ def obter_resposta_formulario(paciente, form_stage: str):
     if stage == "t0":
         return getattr(paciente, "resposta_t0", None)
 
-    attr_name = "respostas_t10" if stage == "t10" else "respostas_t30"
+    attr_name = f"respostas_{stage}"
     respostas = list(getattr(paciente, attr_name, []) or [])
     return max(respostas, key=_chave_ordem_resposta) if respostas else None
 
@@ -1146,6 +1152,8 @@ def t0_consentimento_aceito(decisao: object) -> bool:
 
 
 def _nome_assinatura_tcle(payload: dict[str, object]) -> str:
+    if payload.get("respondent_role") in {"Pai, mae ou responsavel", "Outra pessoa autorizada"}:
+        return str(payload.get("respondent_name") or "").strip()
     return str(
         payload.get("tcle_assinado_por")
         or payload.get("assinatura_tcle_nome")
@@ -1280,10 +1288,12 @@ def _colunas_fixas_exportacao() -> list[str]:
         "endereco",
         "grupo",
         "status_t0",
+        "status_t7",
         "status_t10",
         "status_t30",
         "status_geral",
         "data_t0",
+        "data_t7",
         "data_t10",
         "data_t30",
         "fase_atual",
@@ -1345,6 +1355,7 @@ def _colunas_formulario_exportacao(form_stage: str, schema: Optional[object] = N
 def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict]] = None) -> dict[str, str]:
     schemas = schemas or {
         "t0": _schemas_exportacao_por_stage("t0"),
+        "t7": _schemas_exportacao_por_stage("t7"),
         "t10": _schemas_exportacao_por_stage("t10"),
         "t30": _schemas_exportacao_por_stage("t30"),
     }
@@ -1358,7 +1369,7 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
     for field in SINAN_EXPORT_FIELDS:
         row[f"sinan__{field}"] = _serializar_valor_csv(dados_sinan.get(field))
 
-    for stage in ("t0", "t10", "t30"):
+    for stage in ("t0", "t7", "t10", "t30"):
         resposta, payload = obter_payload_formulario(paciente, stage)
         row[f"{stage}__respondido_em"] = _serializar_valor_csv(getattr(resposta, "timestamp", ""))
         row[f"{stage}__instrument_version"] = versao_instrumento_payload(payload) if resposta else ""
@@ -1367,6 +1378,15 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
             for field in iterar_campos_form(stage_schema):
                 row[f"{stage}__{field['key']}"] = _serializar_valor_csv(payload.get(field["key"]))
 
+    from services.sfa_workflow import resumo_calendario
+    calendario = resumo_calendario(paciente)
+    row["episodio__inicio_sintomas"] = str(calendario["inicio"] or "")
+    row["episodio__fonte_inicio"] = calendario["fonte"]
+    for etapa in ("t0", "t7", "t10", "t30"):
+        _, payload = obter_payload_formulario(paciente, etapa)
+        meta = payload.get("_calendario", {})
+        for key in ("dia_doenca", "data_coleta", "data_alvo", "inicio_sintomas", "intervalo_desde", "intervalo_ate"):
+            row[f"{etapa}__calendario_{key}"] = _serializar_valor_csv(meta.get(key))
     return row
 
 
@@ -1650,8 +1670,12 @@ def _parse_data_analise(value: object) -> Optional[date]:
 
 def _data_resposta_stage(stage: str, resposta, payload: dict[str, object]) -> Optional[date]:
     stage = _normalize_form_stage(stage)
+    coleta = _parse_data_analise(payload.get("_calendario", {}).get("data_coleta"))
+    if coleta:
+        return coleta
     payload_keys = {
         "t0": ("data_entrevista_t0",),
+        "t7": ("data_entrevista_t7",),
         "t10": ("data_entrevista_t10",),
         "t30": ("data_entrevista_t30",),
     }
@@ -1784,9 +1808,9 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
     sinan_sex_counter: Counter = Counter()
     sinan_race_counter: Counter = Counter()
     sinan_ns1_counter: Counter = Counter()
-    timing_counter = {stage: Counter() for stage in ("t0", "t10", "t30")}
+    timing_counter = {stage: Counter() for stage in ("t0", "t7", "t30")}
 
-    respostas_por_stage = {stage: 0 for stage in ("t0", "t10", "t30")}
+    respostas_por_stage = {stage: 0 for stage in ("t0", "t7", "t30")}
     total_com_inicio = 0
     total_sem_inicio = 0
     total_sinan_estruturado = 0
@@ -1810,11 +1834,8 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
 
         resposta_t0, payload_t0 = obter_payload_formulario(paciente, "t0")
         payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
-        inicio_doenca = _parse_data_analise(
-            payload_t0.get("data_inicio_sintomas")
-            or getattr(resposta_t0, "data_inicio_sintomas", None)
-            or dados_sinan.get("data_inicio_sintomas")
-        )
+        from services.sfa_workflow import inicio_doenca as resolver_inicio
+        inicio_doenca, _ = resolver_inicio(paciente)
         if inicio_doenca:
             total_com_inicio += 1
         else:
@@ -1871,7 +1892,15 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
         if selected_food:
             domains.append("Alimentar")
             domain_counter["Alimentar"] += 1
-        overlap_counter[" + ".join(domains) if domains else "Sem risco informado"] += 1
+        if domains:
+            categoria_exposicao = " + ".join(domains)
+        elif not resposta_t0:
+            categoria_exposicao = "T0 não respondido"
+        elif not (answered_animals or answered_food or answered_activities):
+            categoria_exposicao = "Exposições não informadas"
+        else:
+            categoria_exposicao = "Sem exposição relatada nos campos respondidos"
+        overlap_counter[categoria_exposicao] += 1
 
         row = {
             "id_estudo": getattr(paciente, "id_estudo", "") or "-",
@@ -1880,13 +1909,13 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
             "inicio_sintomas": formatar_data(inicio_doenca) or "Sem data",
             "t0_data": "-",
             "t0_dia_doenca": "-",
-            "t10_data": "-",
-            "t10_dia_doenca": "-",
+            "t7_data": "-",
+            "t7_dia_doenca": "-",
             "t30_data": "-",
             "t30_dia_doenca": "-",
         }
 
-        for stage in ("t0", "t10", "t30"):
+        for stage in ("t0", "t7", "t30"):
             resposta, payload = obter_payload_formulario(paciente, stage)
             if not resposta:
                 continue
@@ -1899,11 +1928,11 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
             row[f"{stage}_data"] = formatar_data(response_date) or "Sem data"
             row[f"{stage}_dia_doenca"] = _formatar_dia_doenca(days_since_onset)
 
-        if inicio_doenca or resposta_t0 or getattr(paciente, "respostas_t10", None) or getattr(paciente, "respostas_t30", None):
+        if inicio_doenca or resposta_t0 or getattr(paciente, "respostas_t7", None) or getattr(paciente, "respostas_t30", None):
             timeline_rows.append(row)
 
     timing_datasets = []
-    for stage, label in (("t0", "T0"), ("t10", "T10"), ("t30", "T30")):
+    for stage, label in (("t0", "T0"), ("t7", "T7"), ("t30", "T30")):
         timing_datasets.append(
             {
                 "label": label,
@@ -1925,7 +1954,7 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
         ],
         "missing": {
             "data_inicio_sintomas": total_sem_inicio,
-            "t10": len(pacientes) - respostas_por_stage["t10"],
+            "t7": len(pacientes) - respostas_por_stage["t7"],
             "t30": len(pacientes) - respostas_por_stage["t30"],
             "sinan_estruturado": len(pacientes) - total_sinan_estruturado,
             "sinan_revisao": total_sinan_revisar,
@@ -2020,19 +2049,24 @@ def gerar_csv_exportacao_cadastro(pacientes) -> str:
 def gerar_csv_exportacao_analitica(pacientes) -> str:
     schemas = {
         "t0": _schemas_exportacao_por_stage("t0"),
+        "t7": _schemas_exportacao_por_stage("t7"),
         "t10": _schemas_exportacao_por_stage("t10"),
         "t30": _schemas_exportacao_por_stage("t30"),
     }
     fieldnames = (
         _colunas_fixas_exportacao()
         + _colunas_sinan_exportacao()
-        + [f"{stage}__respondido_em" for stage in ("t0", "t10", "t30")]
-        + [f"{stage}__instrument_version" for stage in ("t0", "t10", "t30")]
+        + [f"{stage}__respondido_em" for stage in ("t0", "t7", "t10", "t30")]
+        + [f"{stage}__instrument_version" for stage in ("t0", "t7", "t10", "t30")]
         + _colunas_formulario_exportacao("t0", schemas["t0"])
+        + _colunas_formulario_exportacao("t7", schemas["t7"])
         + _colunas_formulario_exportacao("t10", schemas["t10"])
         + _colunas_formulario_exportacao("t30", schemas["t30"])
     )
 
+    fieldnames += ["episodio__inicio_sintomas", "episodio__fonte_inicio"]
+    fieldnames += [f"{etapa}__calendario_{key}" for etapa in ("t0", "t7", "t10", "t30")
+                   for key in ("dia_doenca", "data_coleta", "data_alvo", "inicio_sintomas", "intervalo_desde", "intervalo_ate")]
     output = io.StringIO(newline="")
     writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
@@ -2058,10 +2092,14 @@ def construir_valores_iniciais_form(paciente, schema: dict) -> dict[str, object]
 
 
 def construir_valores_iniciais_t0(paciente, schema: dict) -> dict[str, object]:
-    return construir_valores_iniciais_form(paciente, schema)
+    from services.sfa_workflow import inicio_doenca
+    values = construir_valores_iniciais_form(paciente, schema)
+    inicio, _ = inicio_doenca(paciente)
+    values["data_inicio_sintomas"] = inicio.isoformat() if inicio else ""
+    return values
 
 
-def construir_valores_iniciais_t10(paciente, schema: dict) -> dict[str, object]:
+def construir_valores_iniciais_t7(paciente, schema: dict) -> dict[str, object]:
     return construir_valores_iniciais_form(paciente, schema)
 
 
@@ -2227,8 +2265,13 @@ def coletar_resposta_nativa(
     if not dados.get("data_nascimento"):
         dados["data_nascimento"] = paciente.data_nascimento or ""
     imported_context = montar_contexto_importado_formulario(paciente)
-    if not dados.get("data_inicio_sintomas") and imported_context.get("data_inicio_sintomas"):
+    if stage != "t0" and not dados.get("data_inicio_sintomas") and imported_context.get("data_inicio_sintomas"):
         dados["data_inicio_sintomas"] = imported_context["data_inicio_sintomas"]
+    if stage == "t0" and dados.get("data_inicio_sintomas"):
+        from services.sfa_workflow import hoje_local
+        inicio = parse_data(dados["data_inicio_sintomas"])
+        if not inicio or inicio > hoje_local():
+            errors["data_inicio_sintomas"] = "O início dos sintomas deve ser uma data válida, até hoje."
     dados["_imported_context"] = imported_context
     dados["_instrument_version"] = str(
         schema.get("instrument_version") or "unversioned"
@@ -2250,8 +2293,8 @@ def coletar_resposta_t0_nativa(schema: dict, form_data, paciente) -> tuple[dict,
     return dados, errors
 
 
-def coletar_resposta_t10_nativa(schema: dict, form_data, paciente) -> tuple[dict, dict[str, str]]:
-    return coletar_resposta_nativa("t10", schema, form_data, paciente)
+def coletar_resposta_t7_nativa(schema: dict, form_data, paciente) -> tuple[dict, dict[str, str]]:
+    return coletar_resposta_nativa("t7", schema, form_data, paciente)
 
 
 def coletar_resposta_t30_nativa(schema: dict, form_data, paciente) -> tuple[dict, dict[str, str]]:
@@ -2439,7 +2482,7 @@ def anexar_dados_sinan_pacientes(pacientes) -> None:
             )
         except (RuntimeError, ProgrammingError, OperationalError, NoSuchTableError, InternalError):
             # Algumas rotas sao exercitadas com objetos simulados e sem o banco
-            # principal registrado; a analise continua com o T0/T10/T30.
+            # principal registrado; a analise continua com o T0/T7/T30.
             logs = []
 
     latest_by_patient = {}
@@ -2455,10 +2498,10 @@ def anexar_dados_sinan_pacientes(pacientes) -> None:
         paciente._sinan_log = log_sinan
         paciente._sinan_dados = dados
         paciente._data_notificacao_sinan = str(dados.get("data_notificacao") or "")
-        paciente._data_inicio_sintomas = (
-            str(getattr(getattr(paciente, "resposta_t0", None), "data_inicio_sintomas", "") or "")
-            or str(dados.get("data_inicio_sintomas") or "")
-        )
+        from services.sfa_workflow import inicio_doenca
+        inicio, fonte = inicio_doenca(paciente)
+        paciente._data_inicio_sintomas = formatar_data(inicio) if inicio else ""
+        paciente._fonte_inicio_sintomas = fonte
 
 
 def _chave_dedup_sinan_dados(dados: dict) -> Optional[str]:
@@ -2765,9 +2808,9 @@ def diagnostico_configuracao() -> dict:
             "detail": FORM_T0_ID or "Não configurado",
         },
         {
-            "label": "Formulário T10",
-            "ok": bool(FORM_T10_ID),
-            "detail": FORM_T10_ID or "Não configurado",
+            "label": "Formulário T7",
+            "ok": bool(FORM_T7_ID),
+            "detail": FORM_T7_ID or "Não configurado",
         },
         {
             "label": "Formulário T30",
@@ -2852,7 +2895,7 @@ def criar_paciente_manual(dados: dict) -> tuple[bool, str, Optional[object]]:
 
 
 def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
-    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30, SfaSinanLog
 
     total = max(1, min(int(quantidade or 20), 100))
     hoje = date.today()
@@ -2951,8 +2994,8 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
         data_notificacao = hoje - timedelta(days=42 - indice)
         data_inicio = data_notificacao - timedelta(days=(indice % 4) + 1)
         data_t0 = data_notificacao + timedelta(days=1)
-        data_t10 = data_t0 + timedelta(days=10)
-        data_t30 = data_t0 + timedelta(days=30)
+        data_t7 = data_inicio + timedelta(days=7)
+        data_t30 = data_inicio + timedelta(days=30)
         grupo = "A" if indice % 2 == 0 else "B"
         sexo = "Feminino" if indice % 2 == 0 else "Masculino"
         ocupacao = ocupacoes[indice % len(ocupacoes)]
@@ -2992,11 +3035,11 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             endereco=f"Rua Teste {100 + seq}",
             grupo=grupo,
             status_t0="T0_Completo",
-            status_t10="T10_Completo",
+            status_t7="T7_Completo",
             status_t30="T30_Completo",
             status_geral="COMPLETO",
             data_t0=formatar_data(data_t0),
-            data_t10=formatar_data(data_t10),
+            data_t7=formatar_data(data_t7),
             data_t30=formatar_data(data_t30),
             observacao_operacional=observacao,
             token_acesso=token,
@@ -3070,7 +3113,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "_sfa_test_batch": batch_id,
         }
         payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
-        payload_t10 = {
+        payload_t7 = {
             "id_estudo": id_estudo,
             "nome": nome,
             "classificacao_melhora": melhorias[indice % len(melhorias)],
@@ -3082,7 +3125,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "impacto_atividades": impacto_atual,
             "retornou_servico_saude": "Sim" if indice % 3 == 0 else "Nao",
             "quantas_vezes_retornou": str(indice % 3),
-            "internacao_t10": "Sim" if indice % 9 == 0 else "Nao",
+            "internacao_t7": "Sim" if indice % 9 == 0 else "Nao",
             "diagnostico_definitivo": ["Sim, dengue", "Exames pendentes", "Nao"][indice % 3],
             "dias_incap_novos": str(1 + (indice % 4)),
             "custo_remedios": f"{10 + indice * 2:.2f}",
@@ -3135,15 +3178,15 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             )
         )
         db.session.add(
-            SfaRespostaT10(
+            SfaRespostaT7(
                 id_estudo=id_estudo,
-                timestamp=datetime.combine(data_t10, datetime.min.time()),
-                dias_incap_novos=int(payload_t10["dias_incap_novos"]),
-                custo_remedios=Decimal(payload_t10["custo_remedios"]),
-                custo_consultas=Decimal(payload_t10["custo_consultas"]),
-                custo_transporte=Decimal(payload_t10["custo_transporte"]),
-                custo_outros=Decimal(payload_t10["custo_outros"]),
-                dados_json=json.dumps(payload_t10, ensure_ascii=False),
+                timestamp=datetime.combine(data_t7, datetime.min.time()),
+                dias_incap_novos=int(payload_t7["dias_incap_novos"]),
+                custo_remedios=Decimal(payload_t7["custo_remedios"]),
+                custo_consultas=Decimal(payload_t7["custo_consultas"]),
+                custo_transporte=Decimal(payload_t7["custo_transporte"]),
+                custo_outros=Decimal(payload_t7["custo_outros"]),
+                dados_json=json.dumps(payload_t7, ensure_ascii=False),
             )
         )
         db.session.add(
@@ -3165,7 +3208,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
 
 
 def apagar_lote_pacientes_teste_sfa(batch_id: str | None = None) -> dict[str, int | str]:
-    from models.sfa import SfaAuditoria, SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+    from models.sfa import SfaAuditoria, SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30, SfaSinanLog
 
     batch = str(batch_id or "").strip()
     pacientes = [paciente for paciente in SfaPaciente.query.all() if paciente_eh_teste_sfa(paciente)]
@@ -3182,7 +3225,7 @@ def apagar_lote_pacientes_teste_sfa(batch_id: str | None = None) -> dict[str, in
         return {"batch_id": batch, "removidos": 0}
 
     SfaRespostaT30.query.filter(SfaRespostaT30.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
-    SfaRespostaT10.query.filter(SfaRespostaT10.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    SfaRespostaT7.query.filter(SfaRespostaT7.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
     SfaRespostaT0.query.filter(SfaRespostaT0.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
     SfaAuditoria.query.filter(SfaAuditoria.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
     if fichas:
@@ -3203,7 +3246,7 @@ def resumo_dados_teste_sfa() -> dict[str, int]:
     return {
         "total": len(testes),
         "com_t0": sum(1 for paciente in testes if getattr(paciente, "status_t0", "") == "T0_Completo"),
-        "com_t10": sum(1 for paciente in testes if getattr(paciente, "status_t10", "") == "T10_Completo"),
+        "com_t7": sum(1 for paciente in testes if getattr(paciente, "status_t7", "") == "T7_Completo"),
         "com_t30": sum(1 for paciente in testes if getattr(paciente, "status_t30", "") == "T30_Completo"),
     }
 
@@ -3220,12 +3263,12 @@ def _gerar_url_etapa(
     stage = _normalize_form_stage(form_stage)
     route_map = {
         "t0": "sfa_routes.redirect_t0",
-        "t10": "sfa_routes.redirect_t10",
+        "t7": "sfa_routes.redirect_t7",
         "t30": "sfa_routes.redirect_t30",
     }
     suffix_map = {
         "t0": "",
-        "t10": "/t10",
+        "t7": "/t7",
         "t30": "/t30",
     }
 
@@ -3252,8 +3295,8 @@ def gerar_url_t0(id_estudo: str, token_acesso: str = "", debug: bool = False) ->
     return _gerar_url_etapa("t0", id_estudo, token_acesso, debug)
 
 
-def gerar_url_t10(id_estudo: str, token_acesso: str = "", debug: bool = False) -> str:
-    return _gerar_url_etapa("t10", id_estudo, token_acesso, debug)
+def gerar_url_t7(id_estudo: str, token_acesso: str = "", debug: bool = False) -> str:
+    return _gerar_url_etapa("t7", id_estudo, token_acesso, debug)
 
 
 def gerar_url_t30(id_estudo: str, token_acesso: str = "", debug: bool = False) -> str:
@@ -3275,7 +3318,7 @@ def msg_convite_t0(nome: str, id_estudo: str, token_acesso: str = "") -> str:
         "sobre sindromes febris e exposicoes que podem estar sendo compartilhadas no municipio.\n\n"
         "Informacoes importantes:\n"
         "- Participacao voluntaria\n"
-        "- Apenas 3 entrevistas rapidas (hoje, em 10 e em 30 dias)\n"
+        "- Entrevistas T0, T7 e T30, com os acompanhamentos contados a partir do início dos sintomas\n"
         "- Suas respostas podem ajudar a Vigilancia a reconhecer situacoes e proteger outras pessoas\n\n"
         f"Codigo do participante: {id_estudo}\n\n"
         "Se topar participar, acesse o link abaixo. Seus dados ja estao preenchidos:\n"
@@ -3299,13 +3342,13 @@ def _link_prefilled(base_url: str, nome: str, id_estudo: str,
     return f"{base_url}{sep}usp=pp_url&{urlencode(params)}"
 
 
-def msg_lembrete_t10(nome: str, id_estudo: str, token_acesso: str = "") -> str:
+def msg_lembrete_t7(nome: str, id_estudo: str, token_acesso: str = "") -> str:
     n = primeiro_nome(nome)
-    link = gerar_url_t10(id_estudo, token_acesso)
+    link = gerar_url_t7(id_estudo, token_acesso)
     return (
         f"Ola, {n}.\n\n"
         f"Aqui e {NOME_PESQUISADOR}, da pesquisa sobre sindromes febris de Orlandia.\n\n"
-        "Ja se passaram cerca de 10 dias e chegou o momento do acompanhamento T10.\n\n"
+        "O acompanhamento T7 tem como referência sete dias após o início dos sintomas.\n\n"
         f"Codigo do participante: {id_estudo}\n"
         f"Acesse e responda:\n{link}\n\n"
         "Obrigado pela sua participacao."
@@ -3318,7 +3361,7 @@ def msg_lembrete_t30(nome: str, id_estudo: str, token_acesso: str = "") -> str:
     return (
         f"Ola, {n}.\n\n"
         f"Aqui e {NOME_PESQUISADOR}, da pesquisa sobre sindromes febris de Orlandia.\n\n"
-        "Chegamos ao final do seu acompanhamento de 30 dias.\n\n"
+        "O acompanhamento T30 tem como referência trinta dias após o início dos sintomas.\n\n"
         f"Codigo do participante: {id_estudo}\n"
         "Seus dados ja estao preenchidos. Acesse e responda:\n"
         f"{link}\n\n"
@@ -3342,7 +3385,7 @@ def msg_revisao_pendente(nome: str, id_estudo: str) -> str:
 # ---------------------------------------------------------------------------
 
 ACOES_QUE_GERAM_CONTATO = {
-    "Convidar T0", "Lembrar T10", "Cobrar T10",
+    "Convidar T0", "Lembrar T7", "Cobrar T7",
     "Lembrar T30", "Cobrar T30", "Revisar cadastro",
 }
 
@@ -3352,13 +3395,14 @@ def calcular_acao_operacional(paciente) -> dict:
     Dado um SfaPaciente, retorna um dicionário com prioridade, fase, ação e
     data alvo — idêntico à lógica calcularAcaoOperacional() do GAS.
     """
-    hoje = date.today()
+    from services.sfa_workflow import hoje_local
+    hoje = hoje_local()
     grupo = paciente.grupo or ""
     st_t0 = paciente.status_t0 or ""
-    st_t10 = paciente.status_t10 or ""
+    st_t7 = paciente.status_t7 or ""
     st_t30 = paciente.status_t30 or ""
     st_geral = paciente.status_geral or ""
-    dt_t10 = parse_data(paciente.data_t10)
+    dt_t7 = parse_data(paciente.data_t7)
     dt_t30 = parse_data(paciente.data_t30)
 
     prioridade = "Baixa"
@@ -3367,36 +3411,47 @@ def calcular_acao_operacional(paciente) -> dict:
     fase_atual = "Triagem"
     proxima_fase = "A definir"
 
-    if grupo == GRUPO_PENDENTE:
-        prioridade, acao, data_alvo = "Alta", "Revisar cadastro", hoje
-        fase_atual, proxima_fase = "Revisao", "Definir inclusao"
+    if getattr(paciente, "retorno_contato", "") == "RECUSOU":
+        fase_atual, proxima_fase, acao = "Recusou participação", "Revisão pela equipe", "Sem contato automático"
+
+    elif st_t7 == "REVISAR_DATA" or st_t30 == "REVISAR_DATA":
+        prioridade, acao, data_alvo = "Alta", "Confirmar início dos sintomas", hoje
+        fase_atual, proxima_fase = "Revisão de data", "Agendar pelo dia da doença"
 
     elif "PERDA" in st_geral:
         prioridade, acao, data_alvo = "Alta", "Revisar perda", hoje
         fase_atual, proxima_fase = "Perda de seguimento", "Encerrar ou recuperar"
 
+    elif grupo == GRUPO_PENDENTE:
+        prioridade, acao, data_alvo = "Alta", "Revisar cadastro", hoje
+        fase_atual, proxima_fase = "Revisao", "Definir inclusao"
+
     elif st_geral == "SINAN_Notificado" or st_t0 == "SINAN_Aguardando_T0":
         prioridade, acao, data_alvo = "Alta", "Convidar T0", hoje
         fase_atual, proxima_fase = "Aguardando T0", "T0"
 
-    elif st_t10 == "ATRASADO":
-        prioridade, acao, data_alvo = "Alta", "Cobrar T10", dt_t10 or hoje
-        fase_atual, proxima_fase = "T10 atrasado", "T10"
+    elif st_t30 == "ATRASADO" or (st_t30 == "Aguardando" and dt_t30 and dt_t30 <= hoje):
+        prioridade, acao, data_alvo = "Alta", "Cobrar T30", dt_t30 or hoje
+        fase_atual, proxima_fase = "T30 pendente", "T30"
+
+    elif st_t7 == "ATRASADO":
+        prioridade, acao, data_alvo = "Alta", "Cobrar T7", dt_t7 or hoje
+        fase_atual, proxima_fase = "T7 atrasado", "T7"
 
     elif st_t30 == "ATRASADO":
         prioridade, acao, data_alvo = "Alta", "Cobrar T30", dt_t30 or hoje
         fase_atual, proxima_fase = "T30 atrasado", "T30"
 
-    elif st_t10 == "Aguardando" and dt_t10:
-        dias = (dt_t10 - hoje).days
+    elif st_t7 == "Aguardando" and dt_t7:
+        dias = (dt_t7 - hoje).days
         if dias <= 0:
-            prioridade, acao = "Alta", "Cobrar T10"
+            prioridade, acao = "Alta", "Cobrar T7"
         elif dias <= DIAS_LEMBRETE:
-            prioridade, acao = "Media", "Lembrar T10"
+            prioridade, acao = "Media", "Lembrar T7"
         else:
-            prioridade, acao = "Baixa", "Aguardar T10"
-        data_alvo = dt_t10
-        fase_atual, proxima_fase = "Entre T0 e T10", "T10"
+            prioridade, acao = "Baixa", "Aguardar T7"
+        data_alvo = dt_t7
+        fase_atual, proxima_fase = "Entre T0 e T7", "T7"
 
     elif st_t30 == "Aguardando" and dt_t30:
         dias = (dt_t30 - hoje).days
@@ -3407,7 +3462,7 @@ def calcular_acao_operacional(paciente) -> dict:
         else:
             prioridade, acao = "Baixa", "Aguardar T30"
         data_alvo = dt_t30
-        fase_atual, proxima_fase = "Entre T10 e T30", "T30"
+        fase_atual, proxima_fase = "Entre T7 e T30", "T30"
 
     elif "COMPLETO" in st_geral:
         fase_atual, proxima_fase, acao = "Completo", "Encerrado", "Sem acao"
@@ -3415,6 +3470,12 @@ def calcular_acao_operacional(paciente) -> dict:
     elif st_geral == "Em_Andamento":
         prioridade, acao = "Media", "Monitorar"
         fase_atual, proxima_fase = "Em andamento", "Acompanhar"
+
+    contatos = list(getattr(paciente, "contatos", []) or [])
+    ultimo = contatos[-1] if contatos else None
+    if ultimo and ultimo.proximo_contato and ultimo.proximo_contato > hoje and acao in ACOES_QUE_GERAM_CONTATO:
+        data_alvo = ultimo.proximo_contato
+        prioridade, acao = "Baixa", "Aguardar contato combinado"
 
     dias_para_acao = (data_alvo - hoje).days if data_alvo else None
 
@@ -3439,7 +3500,8 @@ def atualizar_operacional_paciente(paciente) -> None:
     if etapa_nova != etapa_anterior:
         if acao in ACOES_QUE_GERAM_CONTATO:
             paciente.status_whatsapp = "NAO_ENVIADO"
-            paciente.retorno_contato = "PENDENTE"
+            if not getattr(paciente, "contatos", None):
+                paciente.retorno_contato = "PENDENTE"
             paciente.data_ultimo_whatsapp = ""
 
     paciente.fase_atual = resumo["fase_atual"]
@@ -3454,8 +3516,8 @@ def _etapa_de_acao(acao: str) -> str:
     a = acao or ""
     if "T0" in a:
         return "T0"
-    if "T10" in a:
-        return "T10"
+    if "T7" in a:
+        return "T7"
     if "T30" in a:
         return "T30"
     if "Revisar" in a:
@@ -3847,6 +3909,7 @@ def sincronizar_sinan() -> dict:
     }
 
     novos = 0
+    atualizados = 0
     erros = 0
     linhas_ajustadas = []
 
@@ -3856,7 +3919,7 @@ def sincronizar_sinan() -> dict:
             row.append("")
 
         chave = chave_dedup_sinan(row)
-        if not chave or chave in chaves_importadas:
+        if not chave:
             continue
 
         nome = str(row[COLS_SINAN["NOME"]] or "").strip()
@@ -3899,13 +3962,20 @@ def sincronizar_sinan() -> dict:
             data_nasc = formatar_data(d) if d else str(data_nasc_raw)
         data_nasc = _sanitize_limited_text(data_nasc, 20, "data_nascimento", ajustes_linha)
 
-        is_positivo = ("positiv" in resultado and "não positiv" not in resultado
-                       and "nao positiv" not in resultado)
-        is_reagente = ("reagente" in resultado and "não reagente" not in resultado
-                       and "nao reagente" not in resultado)
-        grupo = "A" if (is_positivo or is_reagente) else "B"
+        from services.sfa_source_reconciliation import grupo_resultado, reconciliar
+        grupo = grupo_resultado(resultado)
+        if chave in chaves_importadas:
+            log_existente = SfaSinanLog.query.filter_by(chave_dedup=chave).first()
+            if log_existente:
+                with db.session.begin_nested():
+                    mudou = reconciliar(log_existente, dict(nome=nome, telefone=telefone, bairro=bairro,
+                        data_notificacao=data_not, data_inicio_sintomas=data_ini,
+                        tipo_exame=tipo_exame, resultado=resultado, grupo=grupo))
+                atualizados += int(mudou)
+            continue
 
         try:
+            transacao_linha = db.session.begin_nested()
             id_estudo = proximo_id_estudo()
             paciente = SfaPaciente(
                 id_estudo=id_estudo,
@@ -3942,9 +4012,10 @@ def sincronizar_sinan() -> dict:
             chaves_importadas.add(chave)
             if ajustes_linha:
                 linhas_ajustadas.append({"chave": chave, "campos": ajustes_linha})
+            transacao_linha.commit()
             novos += 1
         except Exception as exc:
-            db.session.rollback()
+            transacao_linha.rollback()
             log.error("Erro ao importar caso SINAN %s: %s", chave, exc)
             erros += 1
 
@@ -3955,6 +4026,7 @@ def sincronizar_sinan() -> dict:
         log.error("Erro ao commit sincronização SINAN: %s", exc)
         erros += novos
         novos = 0
+        atualizados = 0
 
     if linhas_ajustadas:
         registrar_auditoria(
@@ -3969,7 +4041,7 @@ def sincronizar_sinan() -> dict:
         )
 
     log.info("SINAN sync: %d novos, %d erros, %d ajustes", novos, erros, len(linhas_ajustadas))
-    return {"novos": novos, "erros": erros, "ajustes": len(linhas_ajustadas)}
+    return {"novos": novos, "atualizados": atualizados, "erros": erros, "ajustes": len(linhas_ajustadas)}
 
 
 # ---------------------------------------------------------------------------
@@ -3998,8 +4070,11 @@ def on_submit_t0(dados: dict) -> dict:
     dados["aceite_tcle"] = (
         aceite_tcle if isinstance(aceite_tcle, list) else [str(aceite_tcle or "").strip()]
     )
-    dados["tcle_assinado_por"] = nome
-    dados["assinatura_tcle_nome"] = nome
+    assinante = _nome_assinatura_tcle(dados)
+    if not assinante:
+        return {"ok": False, "erro": "Identifique a pessoa que está consentindo, inclusive quando for representante."}
+    dados["tcle_assinado_por"] = assinante
+    dados["assinatura_tcle_nome"] = assinante
     dados["consentimento_registrado_em"] = (
         str(dados.get("consentimento_registrado_em") or "").strip()
         or datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -4015,9 +4090,11 @@ def on_submit_t0(dados: dict) -> dict:
                              "T0 recebido sem token_acesso, id_estudo, ficha_sinan e sem nome/data de nascimento.")
         return {"ok": False, "erro": "Identificação insuficiente"}
 
-    hoje = date.today()
-    dt_t10 = hoje + timedelta(days=DIAS_T10)
-    dt_t30 = hoje + timedelta(days=DIAS_T30)
+    from services.sfa_workflow import hoje_local, aplicar_calendario, metadados_coleta
+    hoje = hoje_local()
+    inicio_informado = parse_data(dados.get("data_inicio_sintomas"))
+    if dados.get("data_inicio_sintomas") and (not inicio_informado or inicio_informado > hoje):
+        return {"ok": False, "erro": "Início dos sintomas inválido ou futuro"}
 
     paciente = None
 
@@ -4038,23 +4115,28 @@ def on_submit_t0(dados: dict) -> dict:
     if not paciente and nome and data_nasc:
         nome_norm = normalizar_nome_chave(nome)
         nasc_norm = str(parse_data(data_nasc) or "")
-        for p in SfaPaciente.query.all():
-            if (normalizar_nome_chave(p.nome or "") == nome_norm
-                    and str(parse_data(p.data_nascimento) or "") == nasc_norm):
-                paciente = p
-                log.warning("T0 vinculado por nome+data (sem id_estudo): linha %s", p.id_estudo)
-                break
+        candidatos = [p for p in SfaPaciente.query.all()
+                      if normalizar_nome_chave(p.nome or "") == nome_norm
+                      and str(parse_data(p.data_nascimento) or "") == nasc_norm]
+        if len(candidatos) > 1:
+            return {"ok": False, "erro": "Há mais de um episódio para esta pessoa. Use o link ou identificador do episódio."}
+        if candidatos:
+            paciente = candidatos[0]
+            log.warning("T0 vinculado por nome+data: episódio %s", paciente.id_estudo)
 
     acao = "atualizado"
+
+    if paciente and paciente.resposta_t0:
+        return {"ok": True, "id_estudo": paciente.id_estudo, "acao": "ja_registrado"}
+    if paciente and paciente.retorno_contato == "RECUSOU":
+        return {"ok": False, "erro": "Participação recusada; revisar com a equipe."}
 
     if paciente:
         if ficha_sinan and not paciente.ficha_sinan:
             paciente.ficha_sinan = ficha_sinan
         paciente.data_t0 = formatar_data(hoje)
-        paciente.data_t10 = formatar_data(dt_t10)
-        paciente.data_t30 = formatar_data(dt_t30)
         paciente.status_t0 = "T0_Completo"
-        paciente.status_t10 = "Aguardando"
+        paciente.status_t7 = "Aguardando"
         paciente.status_t30 = "Aguardando"
         paciente.status_geral = "Em_Andamento"
         atualizar_operacional_paciente(paciente)
@@ -4068,10 +4150,8 @@ def on_submit_t0(dados: dict) -> dict:
             data_nascimento=data_nasc,
             grupo=GRUPO_PENDENTE,
             data_t0=formatar_data(hoje),
-            data_t10=formatar_data(dt_t10),
-            data_t30=formatar_data(dt_t30),
             status_t0="T0_Completo",
-            status_t10="Aguardando",
+            status_t7="Aguardando",
             status_t30="Aguardando",
             status_geral="Em_Andamento",
         )
@@ -4097,34 +4177,47 @@ def on_submit_t0(dados: dict) -> dict:
         ausencia_familiar=dados.get("ausencia_familiar", ""),
         dados_json=json.dumps(dados, ensure_ascii=False),
     )
+    paciente.resposta_t0 = resposta
     db.session.add(resposta)
+    aplicar_calendario(paciente)
+    metadados_coleta(paciente, "t0", dados)
+    resposta.dados_json = json.dumps(dados, ensure_ascii=False)
+    atualizar_operacional_paciente(paciente)
     db.session.commit()
 
     return {"ok": True, "id_estudo": paciente.id_estudo, "acao": acao}
 
 
-def on_submit_t10(dados: dict) -> dict:
-    """Processa submissão do formulário T10."""
+def on_submit_t7(dados: dict) -> dict:
+    """Processa submissão do formulário T7."""
     from extensions import db
-    from models.sfa import SfaPaciente, SfaRespostaT10
+    from models.sfa import SfaPaciente, SfaRespostaT7
 
     id_estudo = str(dados.get("id_estudo") or "").strip()
     if not id_estudo:
-        registrar_auditoria("WARN", "T10_SEM_IDENTIFICADOR", "on_submit_t10",
-                             "T10 recebido sem id_estudo.")
+        registrar_auditoria("WARN", "T7_SEM_IDENTIFICADOR", "on_submit_t7",
+                             "T7 recebido sem id_estudo.")
         return {"ok": False, "erro": "id_estudo ausente"}
 
     paciente = SfaPaciente.query.filter_by(id_estudo=id_estudo).first()
     if not paciente:
-        registrar_auditoria("ERROR", "STATUS_NAO_ATUALIZADO", "on_submit_t10",
-                             f"T10 recebido mas paciente não encontrado: {id_estudo}",
+        registrar_auditoria("ERROR", "STATUS_NAO_ATUALIZADO", "on_submit_t7",
+                             f"T7 recebido mas paciente não encontrado: {id_estudo}",
                              id_estudo=id_estudo)
         return {"ok": False, "erro": "Paciente não encontrado"}
 
-    paciente.status_t10 = "T10_Completo"
+    from services.sfa_workflow import impedimento_etapa, metadados_coleta
+    if getattr(paciente, "respostas_t7", None):
+        return {"ok": True, "id_estudo": id_estudo, "acao": "ja_registrado"}
+    impedimento = impedimento_etapa(paciente, "t7")
+    if impedimento:
+        return {"ok": False, "erro": impedimento}
+    metadados_coleta(paciente, "t7", dados)
+
+    paciente.status_t7 = "T7_Completo"
     atualizar_operacional_paciente(paciente)
 
-    resposta = SfaRespostaT10(
+    resposta = SfaRespostaT7(
         id_estudo=id_estudo,
         dias_incap_novos=_safe_int(dados.get("dias_incap_novos")),
         custo_remedios=_decimal_ou_zero(dados.get("custo_remedios")),
@@ -4156,8 +4249,16 @@ def on_submit_t30(dados: dict) -> dict:
                              id_estudo=id_estudo)
         return {"ok": False, "erro": "Paciente não encontrado"}
 
-    if not list(getattr(paciente, "respostas_t10", []) or []):
-        paciente.status_t10 = "T10_Nao_respondido"
+    from services.sfa_workflow import impedimento_etapa, metadados_coleta
+    if getattr(paciente, "respostas_t30", None):
+        return {"ok": True, "id_estudo": id_estudo, "acao": "ja_registrado"}
+    impedimento = impedimento_etapa(paciente, "t30")
+    if impedimento:
+        return {"ok": False, "erro": impedimento}
+    metadados_coleta(paciente, "t30", dados)
+
+    if not list(getattr(paciente, "respostas_t7", []) or []) and not getattr(paciente, "respostas_t10", None):
+        paciente.status_t7 = "T7_Nao_respondido"
     paciente.status_t30 = "T30_Completo"
     paciente.status_geral = "COMPLETO"
     atualizar_operacional_paciente(paciente)
@@ -4290,54 +4391,28 @@ def sincronizar_respostas_t0() -> dict:
 
 
 def verificar_seguimento() -> dict:
-    """
-    Verifica prazos de T10 e T30 e atualiza status de atraso.
-    Retorna contagens de atrasados.
-    """
+    """Atualiza pendências pelo início dos sintomas; atraso não confirma perda."""
     from extensions import db
     from models.sfa import SfaPaciente
-
-    hoje = date.today()
-    sem_t0 = []
-    atras_t10 = []
-    atras_t30 = []
-
-    pacientes = SfaPaciente.query.filter(
-        SfaPaciente.status_geral != "COMPLETO"
-    ).all()
-
+    from services.sfa_workflow import hoje_local, aplicar_calendario
+    hoje = hoje_local()
+    resultado = {"sem_t0": [], "atrasados_t7": [], "atrasados_t30": []}
+    pacientes = SfaPaciente.query.filter(SfaPaciente.status_geral != "COMPLETO").all()
+    anexar_dados_sinan_pacientes(pacientes)
     for p in pacientes:
-        # Sem T0 há muito tempo
+        if paciente_eh_teste_sfa(p) or p.retorno_contato == "RECUSOU":
+            continue
+        aplicar_calendario(p)
         if p.status_geral == "SINAN_Notificado" and p.timestamp_cadastro:
-            ts = p.timestamp_cadastro
-            if hasattr(ts, "date"):
-                ts = ts.date()
-            dias_sem = (hoje - ts).days
-            if dias_sem >= DIAS_SEM_T0_ALERTA:
-                sem_t0.append(p.id_estudo)
-
-        # T10 atrasado
-        dt10 = parse_data(p.data_t10)
-        if p.status_t10 == "Aguardando" and dt10:
-            dias = (dt10 - hoje).days
-            if dias < -TOLERANCIA_ALERTA_DIAS:
-                p.status_t10 = "ATRASADO"
-                atras_t10.append(p.id_estudo)
-
-        # T30 atrasado → perda de seguimento
-        dt30 = parse_data(p.data_t30)
-        if p.status_t30 == "Aguardando" and dt30:
-            dias = (dt30 - hoje).days
-            if dias < -TOLERANCIA_ALERTA_DIAS:
-                p.status_t30 = "ATRASADO"
-                p.status_geral = "PERDA_SEGUIMENTO"
-                atras_t30.append(p.id_estudo)
-
+            ts = p.timestamp_cadastro.date() if hasattr(p.timestamp_cadastro, "date") else p.timestamp_cadastro
+            if (hoje - ts).days >= DIAS_SEM_T0_ALERTA:
+                resultado["sem_t0"].append(p.id_estudo)
+        for etapa in ("t7", "t30"):
+            if getattr(p, f"status_{etapa}", "") == "ATRASADO":
+                resultado[f"atrasados_{etapa}"].append(p.id_estudo)
         atualizar_operacional_paciente(p)
-
     db.session.commit()
-    log.info("verificar_seguimento: %d T10 atrasados, %d T30 atrasados", len(atras_t10), len(atras_t30))
-    return {"sem_t0": sem_t0, "atrasados_t10": atras_t10, "atrasados_t30": atras_t30}
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -4357,14 +4432,16 @@ def contatos_do_dia() -> dict:
         novos = [
             paciente
             for paciente in SfaPaciente.query.filter_by(status_geral="SINAN_Notificado").all()
-            if not paciente_eh_teste_sfa(paciente)
+            if not paciente_eh_teste_sfa(paciente) and getattr(paciente, "retorno_contato", "") != "RECUSOU"
         ]
     except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
         db.session.rollback()
         log.warning("SFA: tabela 'sfa_paciente' não encontrada em contatos_do_dia", exc_info=False)
-        return {"data": hoje.strftime("%d/%m/%Y"), "novos": [], "t10": [], "t30": []}
+        return {"data": hoje.strftime("%d/%m/%Y"), "novos": [], "t7": [], "t30": []}
 
     def vencendo_em(paciente, campo_data: str, status: str) -> bool:
+        if calcular_acao_operacional(paciente)["acao"] not in ACOES_QUE_GERAM_CONTATO:
+            return False
         if getattr(paciente, f"status_{campo_data}") != "Aguardando":
             return False
         dt = parse_data(getattr(paciente, f"data_{campo_data}"))
@@ -4373,13 +4450,13 @@ def contatos_do_dia() -> dict:
         return 0 <= (dt - hoje).days <= DIAS_LEMBRETE
 
     todos = filtrar_pacientes_reais_sfa(_safe_query_all(SfaPaciente))
-    pend_t10 = [p for p in todos if vencendo_em(p, "t10", "Aguardando")]
+    pend_t7 = [p for p in todos if vencendo_em(p, "t7", "Aguardando")]
     pend_t30 = [p for p in todos if vencendo_em(p, "t30", "Aguardando")]
 
     return {
         "data": hoje.strftime("%d/%m/%Y"),
         "novos": novos,
-        "t10": pend_t10,
+        "t7": pend_t7,
         "t30": pend_t30,
     }
 
@@ -4399,18 +4476,13 @@ def _parse_month_value(value: str) -> tuple[int, int] | None:
     return parsed.year, parsed.month
 
 
-def _paciente_no_mes_inicio_sintomas(paciente, month_value: str, sinan_ids_no_mes: set[str] | None = None) -> bool:
+def _paciente_no_mes_inicio_sintomas(paciente, month_value: str, sinan_ids_no_mes=None) -> bool:
     parsed_month = _parse_month_value(month_value)
     if not parsed_month:
         return True
-    if getattr(paciente, "id_estudo", "") in (sinan_ids_no_mes or set()):
-        return True
-    resposta_t0 = getattr(paciente, "resposta_t0", None)
-    data_inicio = parse_data(getattr(resposta_t0, "data_inicio_sintomas", ""))
-    if not data_inicio:
-        return False
-    year, month = parsed_month
-    return data_inicio.year == year and data_inicio.month == month
+    from services.sfa_workflow import inicio_doenca
+    inicio, _ = inicio_doenca(paciente)
+    return bool(inicio and (inicio.year, inicio.month) == parsed_month)
 
 
 def stats_painel(mes_inicio_sintomas: str = "") -> dict:

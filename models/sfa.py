@@ -32,6 +32,7 @@ class SfaStatusEtapa(str, enum.Enum):
     ATRASADO = "ATRASADO"
     SINAN_AGUARDANDO = "SINAN_Aguardando_T0"
     T0_COMPLETO = "T0_Completo"
+    T7_COMPLETO = "T7_Completo"
     T10_COMPLETO = "T10_Completo"
     T30_COMPLETO = "T30_Completo"
 
@@ -81,12 +82,14 @@ class SfaPaciente(db.Model):
 
     # Status das etapas
     status_t0 = db.Column(db.String(30), default=SfaStatusEtapa.SINAN_AGUARDANDO.value)
+    status_t7 = db.Column(db.String(30))
     status_t10 = db.Column(db.String(30))
     status_t30 = db.Column(db.String(30))
     status_geral = db.Column(db.String(30), default=SfaStatusGeral.SINAN_NOTIFICADO.value)
 
     # Datas de acompanhamento (armazenadas como string DD/MM/YYYY para compatibilidade)
     data_t0 = db.Column(db.String(15))
+    data_t7 = db.Column(db.String(15))
     data_t10 = db.Column(db.String(15))
     data_t30 = db.Column(db.String(15))
 
@@ -117,6 +120,10 @@ class SfaPaciente(db.Model):
     resposta_t0 = db.relationship("SfaRespostaT0", backref="paciente", uselist=False,
                                    foreign_keys="SfaRespostaT0.id_estudo",
                                    primaryjoin="SfaPaciente.id_estudo == SfaRespostaT0.id_estudo")
+    respostas_t7 = db.relationship("SfaRespostaT7", backref="paciente",
+                                   foreign_keys="SfaRespostaT7.id_estudo")
+    contexto = db.relationship("SfaContextoEpisodio", backref="paciente", uselist=False)
+    contatos = db.relationship("SfaContato", backref="paciente", order_by="SfaContato.ocorrido_em")
     respostas_t10 = db.relationship("SfaRespostaT10", backref="paciente",
                                      foreign_keys="SfaRespostaT10.id_estudo",
                                      primaryjoin="SfaPaciente.id_estudo == SfaRespostaT10.id_estudo")
@@ -165,6 +172,32 @@ class SfaRespostaT0(db.Model):
 
 class SfaRespostaT10(db.Model):
     __tablename__ = "sfa_resposta_t10"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), index=True)
+    timestamp = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    dias_incap_novos = db.Column(db.Integer, default=0)
+    custo_remedios = db.Column(db.Numeric(10, 2), default=0)
+    custo_consultas = db.Column(db.Numeric(10, 2), default=0)
+    custo_transporte = db.Column(db.Numeric(10, 2), default=0)
+    custo_outros = db.Column(db.Numeric(10, 2), default=0)
+
+    dados_json = db.Column(db.Text)
+
+    @property
+    def custo_total(self):
+        return (
+            (self.custo_remedios or 0)
+            + (self.custo_consultas or 0)
+            + (self.custo_transporte or 0)
+            + (self.custo_outros or 0)
+        )
+
+
+class SfaRespostaT7(db.Model):
+    __tablename__ = "sfa_resposta_t7"
+    __table_args__ = (UniqueConstraint("id_estudo", name="uq_sfa_t7_episodio"),)
 
     id = db.Column(db.Integer, primary_key=True)
     id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), index=True)
@@ -276,3 +309,78 @@ class SfaInstrumentReview(db.Model):
     payload_json = db.Column(db.Text)
     ip_address = db.Column(db.String(60))
     user_agent = db.Column(db.Text)
+
+
+class SfaContextoEpisodio(db.Model):
+    """Uma matrícula do estudo representa um episódio; revisões são auditadas."""
+    __tablename__ = "sfa_contexto_episodio"
+    id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), primary_key=True)
+    inicio_sintomas = db.Column(db.Date)
+    fonte_inicio = db.Column(db.String(200))
+    responsavel = db.Column(db.String(160))
+    setor = db.Column(db.String(15), index=True)
+    malha = db.Column(db.String(30))
+    tipo_local = db.Column(db.String(30))
+    fonte_local = db.Column(db.String(200))
+    local_validado = db.Column(db.Boolean, nullable=False, default=False)
+    classificacao = db.Column(db.String(40))
+    fonte_classificacao = db.Column(db.String(200))
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class SfaContato(db.Model):
+    __tablename__ = "sfa_contato"
+    id = db.Column(db.Integer, primary_key=True)
+    id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), nullable=False, index=True)
+    ocorrido_em = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    etapa = db.Column(db.String(10), nullable=False)
+    canal = db.Column(db.String(30), nullable=False)
+    resultado = db.Column(db.String(30), nullable=False)
+    responsavel = db.Column(db.String(160), nullable=False)
+    motivo = db.Column(db.Text)
+    proximo_contato = db.Column(db.Date)
+
+
+class SfaEventoColetivo(db.Model):
+    __tablename__ = "sfa_evento_coletivo"
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    local = db.Column(db.String(300), nullable=False)
+    inicio = db.Column(db.Date, nullable=False)
+    fim = db.Column(db.Date)
+    exposicao = db.Column(db.Text, nullable=False)
+    avaliacao = db.Column(db.String(30), nullable=False, default="PENDENTE")
+    avaliador = db.Column(db.String(160))
+    justificativa = db.Column(db.Text)
+    avaliado_em = db.Column(db.DateTime(timezone=True))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow)
+    vinculos = db.relationship("SfaEventoVinculo", backref="evento")
+
+
+class SfaEventoVinculo(db.Model):
+    __tablename__ = "sfa_evento_vinculo"
+    evento_id = db.Column(db.Integer, db.ForeignKey("sfa_evento_coletivo.id"), primary_key=True)
+    id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), primary_key=True)
+    fonte = db.Column(db.String(200), nullable=False)
+    vinculado_em = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+
+class SfaAcao(db.Model):
+    __tablename__ = "sfa_acao"
+    id = db.Column(db.Integer, primary_key=True)
+    id_estudo = db.Column(db.String(30), db.ForeignKey("sfa_paciente.id_estudo"), index=True)
+    evento_id = db.Column(db.Integer, db.ForeignKey("sfa_evento_coletivo.id"), index=True)
+    setor = db.Column(db.String(15))
+    motivo = db.Column(db.Text, nullable=False)
+    tipo = db.Column(db.String(40), nullable=False)
+    responsavel = db.Column(db.String(160), nullable=False)
+    prazo = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(30), nullable=False, default="ABERTA", index=True)
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow)
+    executado_em = db.Column(db.DateTime(timezone=True))
+    verificado_em = db.Column(db.DateTime(timezone=True))
+    resultado = db.Column(db.Text)
+    evidencia_verificacao = db.Column(db.Text)
+    verificador = db.Column(db.String(160))
+    horas = db.Column(db.Numeric(8, 2))
+    custo = db.Column(db.Numeric(10, 2))

@@ -24,6 +24,30 @@
           "sha256": "73fbc02f30f001bfb099b66126ad276b3f36e089233bc36c8825b3656845abbd"
         }
       }
+    },
+    {
+      "id": "collective-v2",
+      "label": "Exposições coletivas — T0/T10/T30 (anterior ao calendário por doença)",
+      "status": "archived",
+      "archived_at": "2026-09-12",
+      "description": "Preserva as perguntas e o calendário anterior à adoção de T7 e T30 pelo início dos sintomas.",
+      "stages": {
+        "t0": {
+          "file": "collective-v2/t0.json",
+          "field_count": 34,
+          "sha256": "ad79bffe6d6cb2de2f0408ea62cc9d7adda63022200538ebe2395e5949c208e0"
+        },
+        "t10": {
+          "file": "collective-v2/t10.json",
+          "field_count": 18,
+          "sha256": "859abb408d4648cda7fd01593efbc3499705ae23b9e066408e3022dd75f7dda0"
+        },
+        "t30": {
+          "file": "collective-v2/t30.json",
+          "field_count": 20,
+          "sha256": "7405d87a16ab90dac2dd965bcdfa4790a7f28c2de1cd17657ecd8777e68c45d5"
+        }
+      }
     }
   ]
 }
