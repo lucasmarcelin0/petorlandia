@@ -62,6 +62,25 @@ class FakeButton extends FakeElement {
     this.form = null;
   }
 
+  closest(selector) {
+    if (!this.parentNode) return null;
+    let current = this.parentNode;
+    while (current && current !== fakeDocument) {
+      // Basic mock implementation for the tests
+      if (current.classList && selector.split(',').some(sel => {
+        let cleanSel = sel.trim();
+        if (cleanSel.startsWith('.')) {
+          return current.classList.contains(cleanSel.substring(1));
+        }
+        return false;
+      })) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+
   dispatchEvent() {}
 }
 
