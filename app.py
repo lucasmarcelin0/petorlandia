@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import wraps
 from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
-from typing import Iterable, Optional, Set, Dict
+from typing import Iterable, Optional, Dict
 
 # Tests and factory imports may load this module through either name. Keep both
 # aliases pointed at the same module so runtime monkeypatches and configuration
