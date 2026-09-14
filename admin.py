@@ -21,6 +21,7 @@ import uuid
 from datetime import timedelta
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from decimal import Decimal
 import re
 from time_utils import now_in_brazil, coerce_to_brazil_tz
@@ -304,7 +305,7 @@ class AdminDashboard(BaseView):
                  f'Pedido #{o.id} — {nome} (R$ {o.total_value():.2f})',
                  url_for('order.index_view'))
 
-        for dr in DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).limit(10):
+        for dr in DeliveryRequest.query.options(joinedload(DeliveryRequest.requested_by)).order_by(DeliveryRequest.requested_at.desc()).limit(10):
             solicitante = dr.requested_by.name if dr.requested_by else '—'
             _add(dr.requested_at, 'bi-truck', 'warning',
                  f'Entrega do pedido #{dr.order_id} ({dr.status}) — {solicitante}',
