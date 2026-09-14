@@ -57,11 +57,12 @@
       </div>
       <div class="appointment-card__status-actions">
         <span class="status-badge status-{{ appt.status }}">{{ status_label }}</span>
-        <div class="appointment-card__primary-actions" aria-label="Ações principais">
+        <div class="appointment-card__primary-actions" aria-label="Ações principais do agendamento">
           <a
             href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
             class="btn btn-sm btn-primary"
             title="Ficha do Animal"
+            aria-label="Ficha do animal {{ appt.animal.name }}"
           >
             <i class="fa-solid fa-file-medical me-1" aria-hidden="true"></i>
             Ficha do Animal
@@ -71,6 +72,7 @@
               href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
               class="btn btn-sm btn-outline-success"
               title="Iniciar Consulta"
+              aria-label="Iniciar consulta para {{ appt.animal.name }}"
             >
               <i class="fa-solid fa-stethoscope me-1" aria-hidden="true"></i>
               Iniciar Consulta
@@ -80,6 +82,7 @@
               href="{{ url_for('edit_appointment', appointment_id=appt.id) }}"
               class="btn btn-sm btn-outline-info"
               title="Propor novo horário"
+              aria-label="Propor novo horário para {{ appt.animal.name }}"
             >
               <i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>
               Propor novo horário
@@ -91,7 +94,7 @@
               type="button"
               data-bs-toggle="dropdown"
               aria-expanded="false"
-              aria-label="Mais ações"
+              aria-label="Mais ações para o agendamento de {{ appt.animal.name }}"
             >
               <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
             </button>
