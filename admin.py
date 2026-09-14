@@ -21,6 +21,7 @@ import uuid
 from datetime import timedelta
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from decimal import Decimal
 import re
 from time_utils import now_in_brazil, coerce_to_brazil_tz
@@ -298,7 +299,11 @@ class AdminDashboard(BaseView):
             _add(u.created_at, 'bi-person-plus-fill', 'primary',
                  f'Novo usuário: {u.name}', url_for('user.index_view'))
 
-        for o in Order.query.order_by(Order.created_at.desc()).limit(10):
+        from models.loja import OrderItem
+        for o in Order.query.options(
+            joinedload(Order.user),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).order_by(Order.created_at.desc()).limit(10):
             nome = o.user.name if o.user else 'Usuário removido'
             _add(o.created_at, 'bi-cart-fill', 'success',
                  f'Pedido #{o.id} — {nome} (R$ {o.total_value():.2f})',
