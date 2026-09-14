@@ -33,6 +33,7 @@ def run(dry_run: bool = False) -> int:
     from app_factory import create_app
     from extensions import db
     from models import PmoVaccinationVisit, Vacina
+    from sqlalchemy.orm import joinedload
     from services.vacina_pmo_service import (
         PMO_CAMPAIGN_VET_EMAIL,
         PMO_VACCINE_FABRICANTE,
@@ -48,7 +49,7 @@ def run(dry_run: bool = False) -> int:
             return 2
 
         addresses_updated = 0
-        for visit in PmoVaccinationVisit.query.all():
+        for visit in PmoVaccinationVisit.query.options(joinedload(PmoVaccinationVisit.tutor_user)).all():
             tutor = visit.tutor_user
             if tutor and visit.address and not tutor.address:
                 log.info(
