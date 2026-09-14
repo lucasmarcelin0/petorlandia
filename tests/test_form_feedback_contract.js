@@ -63,6 +63,10 @@ class FakeButton extends FakeElement {
   }
 
   dispatchEvent() {}
+
+  closest(selector) {
+    return null;
+  }
 }
 
 class FakeForm extends FakeElement {
