@@ -52,6 +52,11 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    if (selector.includes("col")) return null;
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {
