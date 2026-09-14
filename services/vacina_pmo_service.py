@@ -16,6 +16,7 @@ from typing import Any
 
 import requests
 from extensions import db
+from security.url_safe import is_url_ssrf_safe
 from flask import current_app, has_request_context, url_for
 from models import (
     Animal,
@@ -490,9 +491,12 @@ def _pmo_geocode_google(address: str) -> tuple[float, float] | None:
     if not api_key or not normalized:
         return None
     full = f"{normalized}, Orlândia, SP, Brasil"
+    target_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    if not is_url_ssrf_safe(target_url):
+        return None
     try:
         response = requests.get(
-            "https://maps.googleapis.com/maps/api/geocode/json",
+            target_url,
             params={
                 "address": full,
                 "components": "locality:Orlandia|administrative_area:SP|country:BR",
@@ -564,10 +568,13 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     # Free-text Nominatim fallback with longer timeout
     http = requests.Session()
     http.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
+    target_url = "https://nominatim.openstreetmap.org/search"
+    if not is_url_ssrf_safe(target_url):
+        return _pmo_orlandia_local_geocode(normalized)
     for query in _pmo_address_queries(normalized)[:_pmo_route_geocode_variants()]:
         try:
             response = http.get(
-                "https://nominatim.openstreetmap.org/search",
+                target_url,
                 params={"q": query, "format": "json", "limit": 3, "countrycodes": "br"},
                 timeout=5,
             )

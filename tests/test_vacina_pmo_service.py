@@ -1,6 +1,7 @@
 import re
 from datetime import date, timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -4470,3 +4471,27 @@ def test_reconcile_fusao_e_idempotente(app, monkeypatch):
     # A marca de envios não se acumula a cada passagem.
     assert linhas[0][10].count("envios") == 1
     assert "2 envios" in linhas[0][10]
+
+
+def test_pmo_geocode_via_google_maps_ssrf_protection(monkeypatch):
+    from services.vacina_pmo_service import _pmo_geocode_google
+
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "fake-key")
+
+    with patch("services.vacina_pmo_service.is_url_ssrf_safe", return_value=False) as mock_ssrf, \
+         patch("requests.get") as mock_get:
+        res = _pmo_geocode_google("Rua Um, 100")
+        assert res is None
+        mock_ssrf.assert_called_once_with("https://maps.googleapis.com/maps/api/geocode/json")
+        mock_get.assert_not_called()
+
+
+def test_pmo_route_geocode_address_ssrf_protection(monkeypatch):
+    from services.vacina_pmo_service import _pmo_geocode_address
+
+    with patch("services.vacina_pmo_service.is_url_ssrf_safe", return_value=False) as mock_ssrf, \
+         patch("services.vacina_pmo_service._pmo_geocode_google", return_value=None), \
+         patch("helpers.geocode_address", return_value=None):
+        coords = _pmo_geocode_address("Rua Vinte, 500")
+        assert coords == (-20.7242, -47.8829)
+        mock_ssrf.assert_called_with("https://nominatim.openstreetmap.org/search")
