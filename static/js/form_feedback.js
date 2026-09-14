@@ -255,6 +255,7 @@
 
     const button = getButton(form);
     if (button) {
+      if (!button.closest) button.closest = () => null;
       const buttonWrapper = button.closest('.col-12, .col, [class*="col-"]');
       if (buttonWrapper && buttonWrapper.parentNode === form) {
         form.insertBefore(status, buttonWrapper);
