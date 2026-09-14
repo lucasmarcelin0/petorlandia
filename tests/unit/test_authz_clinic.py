@@ -1,7 +1,12 @@
 import pytest
 from unittest.mock import Mock
 
-from authz import can_view_clinic, can_manage_clinic
+from authz import (
+    can_view_clinic,
+    can_manage_clinic,
+    can_view_fiscal_documents,
+    can_manage_fiscal_documents,
+)
 
 
 @pytest.fixture
@@ -144,3 +149,60 @@ class TestCanManageClinic:
 
     def test_tutor_cannot_manage_any_clinic(self, tutor_user):
         assert not can_manage_clinic(tutor_user, 1)
+
+class TestCanViewFiscalDocuments:
+    def test_none_inputs(self, admin_user):
+        assert not can_view_fiscal_documents(None, 1)
+        assert not can_view_fiscal_documents(admin_user, None)
+        assert not can_view_fiscal_documents(None, None)
+
+    def test_admin_can_view_any_clinic(self, admin_user):
+        assert can_view_fiscal_documents(admin_user, 1)
+        assert can_view_fiscal_documents(admin_user, 999)
+
+    def test_owner_can_view_own_clinic(self, owner_user):
+        assert can_view_fiscal_documents(owner_user, 1)
+
+    def test_owner_cannot_view_other_clinic(self, owner_user):
+        assert not can_view_fiscal_documents(owner_user, 2)
+
+    def test_staff_cannot_view_any_clinic(self, staff_user):
+        assert not can_view_fiscal_documents(staff_user, 1)
+
+    def test_vet_cannot_view_any_clinic(self, vet_user):
+        assert not can_view_fiscal_documents(vet_user, 1)
+
+    def test_intern_cannot_view_any_clinic(self, intern_user):
+        assert not can_view_fiscal_documents(intern_user, 1)
+
+    def test_tutor_cannot_view_any_clinic(self, tutor_user):
+        assert not can_view_fiscal_documents(tutor_user, 1)
+
+
+class TestCanManageFiscalDocuments:
+    def test_none_inputs(self, admin_user):
+        assert not can_manage_fiscal_documents(None, 1)
+        assert not can_manage_fiscal_documents(admin_user, None)
+        assert not can_manage_fiscal_documents(None, None)
+
+    def test_admin_can_manage_any_clinic(self, admin_user):
+        assert can_manage_fiscal_documents(admin_user, 1)
+        assert can_manage_fiscal_documents(admin_user, 999)
+
+    def test_owner_can_manage_own_clinic(self, owner_user):
+        assert can_manage_fiscal_documents(owner_user, 1)
+
+    def test_owner_cannot_manage_other_clinic(self, owner_user):
+        assert not can_manage_fiscal_documents(owner_user, 2)
+
+    def test_staff_cannot_manage_any_clinic(self, staff_user):
+        assert not can_manage_fiscal_documents(staff_user, 1)
+
+    def test_vet_cannot_manage_any_clinic(self, vet_user):
+        assert not can_manage_fiscal_documents(vet_user, 1)
+
+    def test_intern_cannot_manage_any_clinic(self, intern_user):
+        assert not can_manage_fiscal_documents(intern_user, 1)
+
+    def test_tutor_cannot_manage_any_clinic(self, tutor_user):
+        assert not can_manage_fiscal_documents(tutor_user, 1)
