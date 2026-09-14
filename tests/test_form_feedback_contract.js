@@ -62,6 +62,10 @@ class FakeButton extends FakeElement {
     this.form = null;
   }
 
+  closest() {
+    return null;
+  }
+
   dispatchEvent() {}
 }
 
