@@ -264,11 +264,11 @@
   {% include 'partials/schedule_modal.html' %}
 
   <!-- Modal: Agendar consulta -->
-  <div class="modal fade" id="appointmentModalForm" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="appointmentModalForm" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="appointmentModalFormTitle" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Agendar Consulta</h5>
+          <h5 class="modal-title" id="appointmentModalFormTitle">Agendar Consulta</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
@@ -313,11 +313,11 @@
   </div>
 
   <!-- Modal: Detalhes da consulta (apenas leitura) -->
-  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="appointmentDetailModalTitle" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Detalhes da Consulta</h5>
+          <h5 class="modal-title" id="appointmentDetailModalTitle">Detalhes da Consulta</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
