@@ -26,3 +26,6 @@
 ## 2026-09-12 - ASCII Fast-Path and Pre-compiled Regexes in Medication Name Normalization
 **Learning:** In `services/medicamento_curadoria.py`, `normalizar_nome_prescrito` ran `unicodedata.normalize("NFKD", texto)` and character-combining filtering loops on every string, along with re-compiling regexes (`[^\w%/.,+\- ]+` and `\s*-\s*`) dynamically on every call. Adding an `isascii()` pre-condition check to short-circuit NFKD decomposition and pre-compiling regex patterns at module level yields a ~40% execution speedup.
 **Action:** Check for ASCII pre-conditions before unicodedata decomposition in string normalization helpers, and pre-compile regular expression patterns at module level.
+## Performance Learnings
+
+- When caching database entities inside the `g` context in Flask (`flask.g`), it is crucial to manually update the cache dictionaries inside that context whenever a new entity is created and committed to the database in the same request. If the cache is not explicitly updated, the subsequent cache lookups will fail to locate the new entity, often breaking deduplication and creating duplicates.

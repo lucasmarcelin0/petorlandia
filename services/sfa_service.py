@@ -38,7 +38,7 @@ from typing import Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 from extensions import db
-from flask import current_app, url_for
+from flask import g, current_app, url_for
 from sqlalchemy.exc import InternalError, NoSuchTableError, OperationalError, ProgrammingError
 
 log = logging.getLogger("sfa_service")
@@ -2544,6 +2544,50 @@ def _buscar_log_sinan_para_dados(dados: dict):
     return matches[0] if matches else None
 
 
+
+
+def _add_to_sfa_paciente_cache(paciente):
+    """Adiciona um novo paciente recém-criado ao cache atual, se existir."""
+    if hasattr(g, "_sfa_paciente_cache"):
+        n_nome = normalizar_nome_chave(paciente.nome or "")
+        n_data = str(parse_data(paciente.data_nascimento) or "")
+        key = (n_nome, n_data)
+        if key not in g._sfa_paciente_cache:
+            g._sfa_paciente_cache[key] = []
+        g._sfa_paciente_cache[key].append(paciente)
+
+        raw_data = str(paciente.data_nascimento or "")
+        raw_key = (n_nome, raw_data)
+        if raw_key not in g._sfa_paciente_cache:
+            g._sfa_paciente_cache[raw_key] = []
+        if paciente not in g._sfa_paciente_cache[raw_key]:
+            g._sfa_paciente_cache[raw_key].append(paciente)
+
+def _get_sfa_paciente_cache() -> dict[tuple[str, str], list[object]]:
+    """Constrói e retorna um cache de pacientes para otimizar buscas por nome e data."""
+    from models.sfa import SfaPaciente
+    cache = {}
+    for p in SfaPaciente.query.all():
+        n_nome = normalizar_nome_chave(p.nome or "")
+        n_data = str(parse_data(p.data_nascimento) or "")
+
+        # O original na linha 2605 fazia: `str(candidate.data_nascimento or "") == data_nascimento` (que era a string crua)
+        # Para ser seguro com o original, armazenamos em dicts baseados em parse_data que é mais uniforme
+        key = (n_nome, n_data)
+        if key not in cache:
+            cache[key] = []
+        cache[key].append(p)
+
+        # Também armazenamos a versão crua para a busca na linha 2605, que não usava parse_data no alvo
+        raw_data = str(p.data_nascimento or "")
+        raw_key = (n_nome, raw_data)
+        if raw_key not in cache:
+            cache[raw_key] = []
+        if p not in cache[raw_key]:
+            cache[raw_key].append(p)
+
+    return cache
+
 def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False) -> dict[str, object]:
     """Inclui ou complementa fichas SINAN transcritas, com auditoria e deduplicacao."""
     from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
@@ -2598,14 +2642,15 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
             if paciente is None and ficha:
                 paciente = SfaPaciente.query.filter_by(ficha_sinan=ficha).first()
             if paciente is None:
+                if not hasattr(g, "_sfa_paciente_cache"):
+                    g._sfa_paciente_cache = _get_sfa_paciente_cache()
+
                 data_nascimento = str(dados.get("data_nascimento") or "")
-                for candidate in SfaPaciente.query.all():
-                    if (
-                        normalizar_nome_chave(candidate.nome) == normalizar_nome_chave(nome)
-                        and str(candidate.data_nascimento or "") == data_nascimento
-                    ):
-                        paciente = candidate
-                        break
+                n_nome = normalizar_nome_chave(nome)
+
+                candidatos = g._sfa_paciente_cache.get((n_nome, data_nascimento), [])
+                if candidatos:
+                    paciente = candidatos[0]
 
             created = paciente is None
             resultado = _sanitize_limited_text(dados.get("resultado"), 120, "resultado")
@@ -2629,6 +2674,7 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
                 paciente.gerar_token()
                 atualizar_operacional_paciente(paciente)
                 db.session.add(paciente)
+                _add_to_sfa_paciente_cache(paciente)
                 db.session.flush()
                 summary["criados"] += 1
             else:
@@ -2857,14 +2903,16 @@ def criar_paciente_manual(dados: dict) -> tuple[bool, str, Optional[object]]:
     grupo = str(dados.get("grupo") or "PENDENTE_REVISAO").strip() or "PENDENTE_REVISAO"
     ficha_sinan = str(dados.get("ficha_sinan") or "").strip()
 
+    if not hasattr(g, "_sfa_paciente_cache"):
+        g._sfa_paciente_cache = _get_sfa_paciente_cache()
+
     nome_norm = normalizar_nome_chave(nome)
     nasc_norm = str(parse_data(data_nascimento) or "")
-    for existente in SfaPaciente.query.all():
-        if (
-            normalizar_nome_chave(existente.nome or "") == nome_norm
-            and str(parse_data(existente.data_nascimento) or "") == nasc_norm
-        ):
-            return False, f"Já existe um participante compatível: {existente.id_estudo}.", existente
+
+    existentes = g._sfa_paciente_cache.get((nome_norm, nasc_norm), [])
+    if existentes:
+        existente = existentes[0]
+        return False, f"Já existe um participante compatível: {existente.id_estudo}.", existente
 
     paciente = SfaPaciente(
         id_estudo=proximo_id_estudo(),
@@ -2881,6 +2929,7 @@ def criar_paciente_manual(dados: dict) -> tuple[bool, str, Optional[object]]:
     paciente.gerar_token()
     atualizar_operacional_paciente(paciente)
     db.session.add(paciente)
+    _add_to_sfa_paciente_cache(paciente)
     db.session.commit()
 
     registrar_auditoria(
@@ -4113,11 +4162,14 @@ def on_submit_t0(dados: dict) -> dict:
 
     # 2ª tentativa: nome + data nascimento
     if not paciente and nome and data_nasc:
+        if not hasattr(g, "_sfa_paciente_cache"):
+            g._sfa_paciente_cache = _get_sfa_paciente_cache()
+
         nome_norm = normalizar_nome_chave(nome)
         nasc_norm = str(parse_data(data_nasc) or "")
-        candidatos = [p for p in SfaPaciente.query.all()
-                      if normalizar_nome_chave(p.nome or "") == nome_norm
-                      and str(parse_data(p.data_nascimento) or "") == nasc_norm]
+
+        candidatos = g._sfa_paciente_cache.get((nome_norm, nasc_norm), [])
+
         if len(candidatos) > 1:
             return {"ok": False, "erro": "Há mais de um episódio para esta pessoa. Use o link ou identificador do episódio."}
         if candidatos:
