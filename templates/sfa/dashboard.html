@@ -92,17 +92,22 @@
 
   .symptom-matrix th {
     background: #f4f7f8;
-    min-width: 88px;
-    padding: .55rem .35rem;
+    min-width: 56px;
+    max-width: 80px;
+    padding: .45rem .2rem;
     text-align: center;
     vertical-align: bottom;
     white-space: normal;
+    font-size: .72rem;
+    line-height: 1.15;
+    word-break: break-word;
   }
 
   .symptom-matrix th:first-child,
   .symptom-matrix td:first-child {
     left: 0;
-    min-width: 165px;
+    min-width: 145px;
+    max-width: 190px;
     position: sticky;
     text-align: left;
     z-index: 2;
@@ -110,6 +115,10 @@
 
   .symptom-matrix th:first-child {
     z-index: 3;
+  }
+
+  .symptom-matrix td {
+    padding: .35rem .2rem;
   }
 
   .symptom-matrix td:first-child {
@@ -133,6 +142,66 @@
 
   .symptom-matrix__cell.is-unknown {
     color: #d69e00;
+  }
+
+  .symptom-tags-wrap {
+    max-height: 520px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    background: #fff;
+  }
+
+  .symptom-tags-table {
+    font-size: .82rem;
+  }
+
+  .symptom-tags-table th {
+    background: #f4f7f8;
+    font-size: .78rem;
+    letter-spacing: .02em;
+    padding: .6rem .75rem;
+    border-bottom: 2px solid #dde5e8;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .symptom-tags-table td {
+    padding: .6rem .75rem;
+    border-bottom: 1px solid #edf1f3;
+  }
+
+  .symptom-tag {
+    background: #eef6f8;
+    border: 1px solid #c8e4ea;
+    border-radius: 999px;
+    color: #0b4955;
+    display: inline-flex;
+    align-items: center;
+    font-size: .77rem;
+    font-weight: 500;
+    line-height: 1.25;
+    padding: .22rem .58rem;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .symptom-tag:hover {
+    background: #ddf0f4;
+    border-color: #a3ced7;
+    color: #01323c;
+  }
+
+  .symptom-tag .fa-circle-check {
+    color: var(--sfa-teal);
+    font-size: .74rem;
+  }
+
+  .symptom-view-btn.active {
+    background-color: var(--sfa-teal) !important;
+    border-color: var(--sfa-teal) !important;
+    color: #fff !important;
   }
 </style>
 {% endblock %}
@@ -234,20 +303,20 @@
 
     {% if symptom_data["items"] %}
     <div class="row g-4">
-      <div class="col-xl-5">
+      <div class="col-lg-4 col-xl-3">
         <h3 class="h6 mb-1">Quantos tiveram cada sintoma</h3>
         <p class="small text-muted mb-2">
-          Percentual sobre os {{ symptom_data.total }} pacientes do recorte. Clique em um sintoma para ver os nomes.
+          Percentual sobre os {{ symptom_data.total }} pacientes do recorte. Clique para ver os nomes.
         </p>
         <div aria-label="Ranking de sintomas">
           {% for item in symptom_data["items"] %}
           <details class="symptom-rank">
             <summary aria-label="{{ item.label }}: {{ item.count }} de {{ symptom_data.total }} pacientes, {{ item.percent }} por cento">
-              <div class="d-flex align-items-center justify-content-between gap-3 mb-1">
-                <span class="fw-semibold">{{ item.label }}</span>
-                <span class="text-nowrap">
+              <div class="d-flex align-items-center justify-content-between gap-1 mb-1">
+                <span class="fw-semibold text-truncate small" title="{{ item.label }}">{{ item.label }}</span>
+                <span class="text-nowrap small">
                   <strong style="color:var(--sfa-teal)">{{ item.count }}</strong>
-                  <span class="text-muted">de {{ symptom_data.total }} · {{ item.percent }}%</span>
+                  <span class="text-muted">/ {{ symptom_data.total }} · {{ item.percent }}%</span>
                   <i class="fas fa-chevron-down ms-1 text-muted" aria-hidden="true"></i>
                 </span>
               </div>
@@ -267,16 +336,42 @@
         </div>
       </div>
 
-      <div class="col-xl-7">
-        <h3 class="h6 mb-1">Mapa de sintomas por paciente</h3>
-        <p class="small text-muted mb-2">
-          <i class="fas fa-circle-check me-1" style="color:var(--sfa-teal)" aria-hidden="true"></i>presente
-          <span class="mx-2">·</span><span aria-hidden="true">—</span> não assinalado
-          {% if symptom_data.missing_count %}<span class="mx-2">·</span><span class="text-warning fw-bold">?</span> sem ficha estruturada{% endif %}
-        </p>
-        <div class="table-responsive symptom-matrix-wrap">
+      <div class="col-lg-8 col-xl-9">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+          <div>
+            <h3 class="h6 mb-1">Mapa de sintomas por paciente</h3>
+            <p id="symptom-legend-matrix" class="small text-muted mb-0">
+              <i class="fas fa-circle-check me-1" style="color:var(--sfa-teal)" aria-hidden="true"></i>presente
+              <span class="mx-2">·</span><span aria-hidden="true">—</span> não assinalado
+              {% if symptom_data.missing_count %}<span class="mx-2">·</span><span class="text-warning fw-bold">?</span> sem ficha estruturada{% endif %}
+            </p>
+            <p id="symptom-legend-tags" class="small text-muted mb-0" style="display: none;">
+              <span class="symptom-tag py-0 px-2 me-1" style="font-size:.7rem;"><i class="fas fa-circle-check me-1" aria-hidden="true"></i>sintoma presente</span>
+              <span class="mx-1">·</span>exibindo todos os sintomas em etiquetas
+              {% if symptom_data.missing_count %}<span class="mx-1">·</span><span class="text-warning fw-bold">?</span> sem ficha estruturada{% endif %}
+            </p>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="input-group input-group-sm" style="max-width: 190px;">
+              <span class="input-group-text bg-white text-muted border-end-0"><i class="fas fa-search" aria-hidden="true"></i></span>
+              <input type="text" id="symptom-patient-filter" class="form-control form-control-sm border-start-0" placeholder="Filtrar..." aria-label="Filtrar pacientes por nome, ID ou sintoma" oninput="filterSymptomPatients()">
+            </div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Modo de exibição dos sintomas">
+              <button type="button" id="btn-view-matrix" class="btn btn-outline-secondary symptom-view-btn active" onclick="setSymptomView('matrix')" title="Ver matriz completa em colunas">
+                <i class="fas fa-table-cells me-1" aria-hidden="true"></i>Matriz
+              </button>
+              <button type="button" id="btn-view-tags" class="btn btn-outline-secondary symptom-view-btn" onclick="setSymptomView('tags')" title="Ver sintomas em lista / tags">
+                <i class="fas fa-tags me-1" aria-hidden="true"></i>Tags
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visão 1: Matriz Cruzada (com colunas - Padrão) -->
+        <div id="symptom-view-matrix-wrap" class="table-responsive symptom-matrix-wrap">
           <table class="table table-sm table-bordered symptom-matrix mb-0">
-            <caption class="visually-hidden">Sintomas registrados para cada paciente do recorte selecionado.</caption>
+            <caption class="visually-hidden">Matriz comparativa de sintomas registrados para cada paciente.</caption>
             <thead>
               <tr>
                 <th scope="col">Paciente</th>
@@ -285,14 +380,14 @@
                 {% endfor %}
               </tr>
             </thead>
-            <tbody>
+            <tbody id="symptom-matrix-tbody">
               {% for patient in symptom_data.patients %}
-              <tr>
+              <tr class="symptom-row" data-search="{{ patient.nome|lower }} {{ patient.id_estudo|lower }} {% for s in patient.symptoms %}{{ s|lower }} {% endfor %}">
                 <td>
                   <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=patient.id_estudo) }}" class="fw-semibold text-decoration-none">
                     {{ patient.nome }}
                   </a>
-                  <div class="text-muted">{{ patient.id_estudo }} · {{ patient.symptom_count }} sintoma{% if patient.symptom_count != 1 %}s{% endif %}</div>
+                  <div class="text-muted small">{{ patient.id_estudo }} · {{ patient.symptom_count }} sintoma{% if patient.symptom_count != 1 %}s{% endif %}</div>
                 </td>
                 {% for symptom in symptom_data.symptoms %}
                   {% if not patient.structured %}
@@ -307,6 +402,68 @@
                 {% endfor %}
               </tr>
               {% endfor %}
+              <tr id="symptom-matrix-empty-filter" style="display: none;">
+                <td colspan="{{ (symptom_data.symptoms|length) + 1 }}" class="text-center text-muted py-3">
+                  Nenhum participante encontrado com este filtro.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Visão 2: Em Tags / Lista (Sem rolagem horizontal) -->
+        <div id="symptom-view-tags-wrap" class="symptom-tags-wrap" style="display: none;">
+          <table class="table table-sm table-hover align-middle mb-0 symptom-tags-table">
+            <caption class="visually-hidden">Sintomas registrados para cada paciente do recorte selecionado.</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="width: 32%; min-width: 155px;">Paciente</th>
+                <th scope="col">Sintomas apresentados</th>
+              </tr>
+            </thead>
+            <tbody id="symptom-tags-tbody">
+              {% for patient in symptom_data.patients %}
+              <tr class="symptom-row" data-search="{{ patient.nome|lower }} {{ patient.id_estudo|lower }} {% for s in patient.symptoms %}{{ s|lower }} {% endfor %}">
+                <td class="align-top py-2">
+                  <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=patient.id_estudo) }}" class="fw-semibold text-decoration-none">
+                    {{ patient.nome }}
+                  </a>
+                  <div class="text-muted small mt-1">
+                    <code>{{ patient.id_estudo }}</code>
+                    <span class="mx-1">·</span>
+                    {% if not patient.structured %}
+                      <span class="text-warning fw-semibold">Sem ficha</span>
+                    {% elif patient.symptom_count == 0 %}
+                      <span>0 sintomas</span>
+                    {% else %}
+                      <span class="fw-semibold" style="color:var(--sfa-teal)">{{ patient.symptom_count }}</span> sintoma{% if patient.symptom_count != 1 %}s{% endif %}
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="py-2">
+                  {% if not patient.structured %}
+                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle py-1 px-2">
+                      <i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>Sem ficha estruturada (?)
+                    </span>
+                  {% elif patient.symptoms %}
+                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                      {% for symptom in patient.symptoms %}
+                        <span class="symptom-tag" title="{{ patient.nome }} apresentou {{ symptom }}">
+                          <i class="fas fa-circle-check me-1" aria-hidden="true"></i>{{ symptom }}
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span class="text-muted small fst-italic">Nenhum sintoma assinalado</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+              <tr id="symptom-tags-empty-filter" style="display: none;">
+                <td colspan="2" class="text-center text-muted py-3">
+                  Nenhum participante encontrado com este filtro.
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -575,4 +732,69 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setSymptomView(mode) {
+  var tagsWrap = document.getElementById('symptom-view-tags-wrap');
+  var matrixWrap = document.getElementById('symptom-view-matrix-wrap');
+  var btnTags = document.getElementById('btn-view-tags');
+  var btnMatrix = document.getElementById('btn-view-matrix');
+  var legendTags = document.getElementById('symptom-legend-tags');
+  var legendMatrix = document.getElementById('symptom-legend-matrix');
+
+  if (mode === 'matrix') {
+    if (tagsWrap) tagsWrap.style.display = 'none';
+    if (matrixWrap) matrixWrap.style.display = '';
+    if (btnTags) btnTags.classList.remove('active');
+    if (btnMatrix) btnMatrix.classList.add('active');
+    if (legendTags) legendTags.style.display = 'none';
+    if (legendMatrix) legendMatrix.style.display = '';
+    try { localStorage.setItem('sfa_symptom_view', 'matrix'); } catch(e){}
+  } else {
+    if (tagsWrap) tagsWrap.style.display = '';
+    if (matrixWrap) matrixWrap.style.display = 'none';
+    if (btnTags) btnTags.classList.add('active');
+    if (btnMatrix) btnMatrix.classList.remove('active');
+    if (legendTags) legendTags.style.display = '';
+    if (legendMatrix) legendMatrix.style.display = 'none';
+    try { localStorage.setItem('sfa_symptom_view', 'tags'); } catch(e){}
+  }
+}
+
+function filterSymptomPatients() {
+  var filterInput = document.getElementById('symptom-patient-filter');
+  var q = (filterInput ? filterInput.value : '').toLowerCase().trim();
+  var rows = document.querySelectorAll('.symptom-row');
+  var visibleMatrix = 0;
+  var visibleTags = 0;
+
+  rows.forEach(function(row) {
+    var search = (row.getAttribute('data-search') || '').toLowerCase();
+    var match = !q || search.indexOf(q) !== -1;
+    row.style.display = match ? '' : 'none';
+    if (match) {
+      if (row.closest('#symptom-matrix-tbody')) visibleMatrix++;
+      if (row.closest('#symptom-tags-tbody')) visibleTags++;
+    }
+  });
+
+  var emptyRowMatrix = document.getElementById('symptom-matrix-empty-filter');
+  var emptyRowTags = document.getElementById('symptom-tags-empty-filter');
+  if (emptyRowMatrix) emptyRowMatrix.style.display = (q && visibleMatrix === 0) ? '' : 'none';
+  if (emptyRowTags) emptyRowTags.style.display = (q && visibleTags === 0) ? '' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var saved = localStorage.getItem('sfa_symptom_view');
+    if (saved === 'tags') {
+      setSymptomView('tags');
+    } else {
+      setSymptomView('matrix');
+    }
+  } catch(e) {}
+});
+</script>
 {% endblock %}

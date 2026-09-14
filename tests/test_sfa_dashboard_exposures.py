@@ -174,3 +174,41 @@ def test_dashboard_renderiza_visao_visual_dos_sintomas(app):
     assert "Paciente Visual" in page
     assert "1 de 1" in page
     assert "100%" in page
+    assert 'id="symptom-view-tags-wrap"' in page
+    assert 'id="symptom-view-matrix-wrap"' in page
+    assert 'id="btn-view-tags"' in page
+    assert 'id="btn-view-matrix"' in page
+    assert 'id="symptom-patient-filter"' in page
+    assert "symptom-tag" in page
+
+
+def test_dashboard_sintomas_modo_tags_e_alternador_sem_rolagem(app):
+    with app.app_context():
+        paciente = SfaPaciente(
+            id_estudo="SFA-TAGS-01",
+            nome="Paciente Com Tags",
+            grupo="A",
+            status_geral="SINAN_Notificado",
+        )
+        log = SfaSinanLog(
+            id_estudo_vinculado=paciente.id_estudo,
+            data_inicio_sintomas="15/08/2026",
+            chave_dedup="sinan-tags-01",
+            dados_json=json.dumps({"sintomas": ["Mialgia", "Cefaleia"]}),
+            revisao_status="TRANSCRITO",
+        )
+        db.session.add_all([paciente, log])
+        db.session.commit()
+
+        response = app.test_client().get("/sfa/?mes=2026-08")
+
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="symptom-view-tags-wrap"' in page
+    assert 'id="symptom-view-matrix-wrap"' in page
+    assert "symptom-tags-table" in page
+    assert "Paciente Com Tags" in page
+    assert "SFA-TAGS-01" in page
+    assert "Mialgia" in page
+    assert "Cefaleia" in page
+
