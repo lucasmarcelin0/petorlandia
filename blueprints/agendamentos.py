@@ -67,6 +67,7 @@ from app import (
     _export_veterinarian_activity_csv,
     _export_veterinarian_activity_pdf,
     _get_recent_animais,
+    RecentRecordsQuery,
     _get_recent_tutores,
     _is_bh_consulta_extra_public_profile,
     _is_public_veterinarian,
@@ -1452,9 +1453,9 @@ def appointments():
         pet_page = request.args.get('page', 1, type=int)
         pet_search = (request.args.get('animal_search', '', type=str) or '').strip()
         pet_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
-        vet_animais_adicionados, vet_animais_pagination, vet_animais_scope = _get_recent_animais(
-            pet_scope_param,
-            pet_page,
+        pet_query = RecentRecordsQuery(
+            scope=pet_scope_param,
+            page=pet_page,
             clinic_id=vet_clinic_scope,
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
@@ -1462,14 +1463,15 @@ def appointments():
             search=pet_search,
             sort_option=pet_sort,
         )
+        vet_animais_adicionados, vet_animais_pagination, vet_animais_scope = _get_recent_animais(pet_query)
 
         tutor_scope_param = request.args.get('tutor_scope', 'all')
         tutor_page = request.args.get('tutor_page', 1, type=int)
         tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
         tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
-        vet_tutores_adicionados, vet_tutores_pagination, vet_tutores_scope = _get_recent_tutores(
-            tutor_scope_param,
-            tutor_page,
+        tutor_query = RecentRecordsQuery(
+            scope=tutor_scope_param,
+            page=tutor_page,
             clinic_id=vet_clinic_scope,
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
@@ -1477,6 +1479,7 @@ def appointments():
             search=tutor_search,
             sort_option=tutor_sort,
         )
+        vet_tutores_adicionados, vet_tutores_pagination, vet_tutores_scope = _get_recent_tutores(tutor_query)
 
         # Cada aba (animais/tutores) alterna entre listagem e cadastro no
         # mesmo padrao de /tutores e /novo_animal; como as duas convivem na

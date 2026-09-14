@@ -60,6 +60,7 @@ from app import (  # noqa: E402
     _formatar_idade,
     _geocode_endereco,
     _get_recent_animais,
+    RecentRecordsQuery,
     _get_recent_tutores,
     _integration_create_exame_imagem,
     _integration_list_exame_imagem_history,
@@ -1569,9 +1570,9 @@ def tutores():
             page = request.args.get('page', 1, type=int)
             tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
             tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
-            tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
-                scope,
-                page,
+            tutor_query = RecentRecordsQuery(
+                scope=scope,
+                page=page,
                 clinic_id=clinic_scope,
                 user_id=effective_user_id,
                 require_appointments=require_appointments,
@@ -1579,6 +1580,7 @@ def tutores():
                 search=tutor_search,
                 sort_option=tutor_sort,
             )
+            tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(tutor_query)
             html = render_template(
                 'partials/tutores_adicionados.html',
                 tutores_adicionados=tutores_adicionados,
@@ -1639,9 +1641,9 @@ def tutores():
         resolved_scope = scope
         shared_access_map = {}
     else:
-        tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
-            scope,
-            page,
+        tutor_query = RecentRecordsQuery(
+            scope=scope,
+            page=page,
             clinic_id=clinic_scope,
             user_id=effective_user_id,
             require_appointments=require_appointments,
@@ -1649,6 +1651,7 @@ def tutores():
             search=tutor_search,
             sort_option=tutor_sort,
         )
+        tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(tutor_query)
         shared_access_map = {
             t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope)
             for t in tutores_adicionados
@@ -2984,9 +2987,9 @@ def novo_animal():
             page = request.args.get('page', 1, type=int)
             animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
             animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
-            animais_adicionados, pagination, scope = _get_recent_animais(
-                scope_param,
-                page,
+            animal_query = RecentRecordsQuery(
+                scope=scope_param,
+                page=page,
                 clinic_id=clinic_scope,
                 user_id=current_user_id,
                 require_appointments=require_appointments,
@@ -2994,6 +2997,7 @@ def novo_animal():
                 search=animal_search,
                 sort_option=animal_sort,
             )
+            animais_adicionados, pagination, scope = _get_recent_animais(animal_query)
             html = render_template(
                 'partials/animais_adicionados.html',
                 animais_adicionados=animais_adicionados,
@@ -3056,9 +3060,9 @@ def novo_animal():
         pagination = None
         scope = scope_param
     else:
-        animais_adicionados, pagination, scope = _get_recent_animais(
-            scope_param,
-            page,
+        animal_query = RecentRecordsQuery(
+            scope=scope_param,
+            page=page,
             clinic_id=clinic_scope,
             user_id=current_user_id,
             require_appointments=require_appointments,
@@ -3066,6 +3070,7 @@ def novo_animal():
             search=animal_search,
             sort_option=animal_sort,
         )
+        animais_adicionados, pagination, scope = _get_recent_animais(animal_query)
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
