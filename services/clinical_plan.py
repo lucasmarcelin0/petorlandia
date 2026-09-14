@@ -690,10 +690,8 @@ def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dic
     return options[0] if options else None
 
 
-def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
-    animal = getattr(consulta, "animal", None)
-    med = _resolve_medication(item, session)
-    mode = _preferred_dose_mode(item)
+
+def _init_medication_plan_drafts(item, med, mode):
     fallback_draft = {
         "medicamento_id": getattr(med, "id", None),
         "medicamento": getattr(item, "nome_exibicao", None) or "",
@@ -726,14 +724,10 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         "messages": [],
     }
 
-    # Shampoo, pomada e afins não têm dose numérica: a instrução É o
-    # procedimento. Resolver aqui, antes das checagens de bulário/peso, porque
-    # elas travavam justamente estes casos ("Sem dose estruturada" na pomada,
-    # "escolha uma apresentação" no shampoo) sem que nada disso fosse relevante.
-    instrucao_topica = _forma_topica_padronizada(item)
-    if instrucao_topica:
-        return _plano_topico_padronizado(base, fallback_draft, instrucao_topica)
+    return base, fallback_draft
 
+
+def _validate_medication_plan_preconditions(base, med, animal):
     if not med:
         status = MANUAL if base["dose_protocolo"] else BLOCKED
         base.update({
@@ -741,7 +735,7 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "status_label": "Medicamento nao vinculado ao bulario",
             "messages": ["Vincule este medicamento ao bulario para calcular automaticamente."],
         })
-        return base
+        return False, base
 
     peso = _float_or_none(getattr(animal, "peso", None))
     if not peso:
@@ -750,7 +744,7 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "status_label": "Peso necessario",
             "messages": ["Informe o peso do animal para calcular a dose automaticamente."],
         })
-        return base
+        return False, base
 
     if not (getattr(med, "doses", None) or []):
         status = MANUAL if base["dose_protocolo"] else BLOCKED
@@ -759,9 +753,12 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "status_label": "Sem dose estruturada",
             "messages": ["Este medicamento ainda nao tem regra de dose no bulario."],
         })
-        return base
+        return False, base
 
-    commercial_filter = _commercial_filter(item, med)
+    return True, peso
+
+
+def _process_medication_suggestion(base, med, animal, item, mode, commercial_filter):
     suggestion = sugerir_dose(
         med,
         animal,
@@ -775,7 +772,8 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "status_label": "Sem protocolo aplicavel",
             "messages": ["Nao encontramos dose aplicavel para especie, peso e indicacao."],
         })
-        return base
+        return False, base
+
     if suggestion.get("multiplo"):
         resolved = _resolve_multiplo_suggestion(
             med,
@@ -794,8 +792,12 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
                 "messages": ["Ha mais de uma indicacao possivel para este medicamento."],
                 "calculation": {"indicacoes": suggestion.get("indicacoes", [])},
             })
-            return base
+            return False, base
 
+    return True, suggestion
+
+
+def _assemble_medication_plan(base, fallback_draft, item, med, peso, mode, suggestion):
     protocol_dose_text = _normalize_topical_application_text(getattr(item, "dosagem_texto", None))
     practical_options = _practical_presentation_options(suggestion, mode)
     if not practical_options and protocol_dose_text:
@@ -865,6 +867,35 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         "messages": messages,
     })
     return base
+
+
+def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
+    animal = getattr(consulta, "animal", None)
+    med = _resolve_medication(item, session)
+    mode = _preferred_dose_mode(item)
+
+    base, fallback_draft = _init_medication_plan_drafts(item, med, mode)
+
+    # Shampoo, pomada e afins não têm dose numérica: a instrução É o
+    # procedimento. Resolver aqui, antes das checagens de bulário/peso, porque
+    # elas travavam justamente estes casos ("Sem dose estruturada" na pomada,
+    # "escolha uma apresentação" no shampoo) sem que nada disso fosse relevante.
+    instrucao_topica = _forma_topica_padronizada(item)
+    if instrucao_topica:
+        return _plano_topico_padronizado(base, fallback_draft, instrucao_topica)
+
+    valid, result = _validate_medication_plan_preconditions(base, med, animal)
+    if not valid:
+        return result
+    peso = result
+
+    commercial_filter = _commercial_filter(item, med)
+    valid, result = _process_medication_suggestion(base, med, animal, item, mode, commercial_filter)
+    if not valid:
+        return result
+    suggestion = result
+
+    return _assemble_medication_plan(base, fallback_draft, item, med, peso, mode, suggestion)
 
 
 def build_clinical_plan(
