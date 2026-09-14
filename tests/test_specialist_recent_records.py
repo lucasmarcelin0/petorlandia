@@ -7,7 +7,7 @@ import pytest
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app, db, _get_recent_animais, _get_recent_tutores  # noqa: E402
+from app import app as flask_app, db, _get_recent_animais, _get_recent_tutores, RecentRecordsQuery  # noqa: E402
 from models import Appointment, Animal, Clinica, User, Veterinario  # noqa: E402
 
 
@@ -107,20 +107,22 @@ def test_specialist_recent_lists_filtered_by_veterinarian(app_context):
     db.session.commit()
 
     with flask_app.test_request_context():
-        animais, _, _ = _get_recent_animais(
-            "all",
-            1,
+        query_animais = RecentRecordsQuery(
+            scope="all",
+            page=1,
             clinic_id=clinic.id,
             require_appointments=True,
             veterinario_id=vet.id,
         )
+        animais, _, _ = _get_recent_animais(query_animais)
         assert [animal.id for animal in animais] == [animal_one.id]
 
-        tutores, _, _ = _get_recent_tutores(
-            "all",
-            1,
+        query_tutores = RecentRecordsQuery(
+            scope="all",
+            page=1,
             clinic_id=clinic.id,
             require_appointments=True,
             veterinario_id=vet.id,
         )
+        tutores, _, _ = _get_recent_tutores(query_tutores)
         assert [tutor.id for tutor in tutores] == [tutor_one.id]
