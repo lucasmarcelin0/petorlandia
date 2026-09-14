@@ -52,6 +52,10 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    return null; // A simple polyfill for tests
+  }
 }
 
 class FakeButton extends FakeElement {
