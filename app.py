@@ -61,6 +61,9 @@ from authlib.jose import JsonWebKey, jwt
 import json
 import csv
 import unicodedata
+
+_RE_SPACES = re.compile(r"\s+")
+_RE_NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
 try:
     from document_utils import format_cnpj as format_cnpj_value, only_digits
 except ImportError:
@@ -2020,9 +2023,10 @@ def _normalize_public_text(value):
     normalized = (value or '').strip().lower()
     if not normalized:
         return ''
-    normalized = unicodedata.normalize('NFKD', normalized)
-    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-    return re.sub(r'\s+', ' ', normalized)
+    if not normalized.isascii():
+        normalized = unicodedata.normalize('NFKD', normalized)
+        normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return _RE_SPACES.sub(' ', normalized)
 
 
 def _vet_public_city(vet):
@@ -4941,8 +4945,11 @@ def _update_coordinates_from_request(endereco: Endereco | None):
 def _normalizar_unidade_idade(unidade):
     if not unidade:
         return 'anos'
-    texto = unicodedata.normalize('NFKD', str(unidade))
-    texto = texto.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    raw = str(unidade)
+    if raw.isascii():
+        texto = raw.strip().lower()
+    else:
+        texto = unicodedata.normalize('NFKD', raw).encode('ASCII', 'ignore').decode('ASCII').strip().lower()
     if texto.startswith('mes'):
         return 'meses'
     if texto.startswith('ano'):
@@ -5876,9 +5883,13 @@ def _integration_build_handoff(user: User, animal: Animal, consulta_id: int | No
 
 
 def _integration_normalize_lookup_token(value: str | None) -> str:
-    normalized = unicodedata.normalize('NFKD', str(value or ''))
-    without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-    return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
+    raw = str(value or '')
+    if raw.isascii():
+        without_accents = raw
+    else:
+        normalized = unicodedata.normalize('NFKD', raw)
+        without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return _RE_NON_ALPHANUMERIC.sub('', without_accents.lower())
 
 
 def _integration_parse_freeform_messages(payload: dict):
@@ -8056,8 +8067,12 @@ def _integration_list_exame_imagem_history(user: User, animal: Animal):
 
 
 def _integration_normalize_match_text(value) -> str:
-    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
-    return re.sub(r'\s+', ' ', text.lower()).strip()
+    raw = str(value or '')
+    if raw.isascii():
+        text = raw
+    else:
+        text = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+    return _RE_SPACES.sub(' ', text.lower()).strip()
 
 
 def _integration_find_existing_exam_for_laudo(payload: dict, animal: Animal | None = None):
@@ -9611,7 +9626,10 @@ def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta)
 
 
 def _normalize_protocol_medication_name(value: str | None) -> str:
-    text = unicodedata.normalize('NFKD', (value or '').strip().lower())
+    text = (value or '').strip().lower()
+    if text.isascii():
+        return text
+    text = unicodedata.normalize('NFKD', text)
     return ''.join(char for char in text if not unicodedata.combining(char))
 
 
@@ -11178,6 +11196,8 @@ from sqlalchemy.orm import joinedload
 
 def _normalize_racao_brand_key(value):
     text = " ".join((value or "").strip().lower().split())
+    if text.isascii():
+        return text
     normalized = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in normalized if not unicodedata.combining(ch))
 
@@ -12359,8 +12379,11 @@ def list_breeds():
 
     def _breed_display_key(name):
         raw = (name or "").strip()
-        normalized = unicodedata.normalize("NFKD", raw)
-        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        if raw.isascii():
+            normalized = raw
+        else:
+            normalized = unicodedata.normalize("NFKD", raw)
+            normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
         token = " ".join(normalized.lower().replace("-", " ").split())
         if token in {
             "srd",
