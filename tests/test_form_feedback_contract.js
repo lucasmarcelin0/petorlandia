@@ -52,6 +52,11 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    // Basic mock that returns null since this is just a fake DOM tree
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {
