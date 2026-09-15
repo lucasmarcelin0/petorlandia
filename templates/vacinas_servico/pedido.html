@@ -110,8 +110,10 @@
         <i class="fa-brands fa-whatsapp me-1"></i>WhatsApp
       </a>
       <button class="btn btn-sm btn-outline-secondary" type="button"
-              onclick="navigator.clipboard.writeText('{{ url_for('servicos_vacinas_pedido', token=req.public_token, _external=True) }}').then(() => this.innerHTML='<i class=\'fa-solid fa-check me-1\'></i>Copiado!')">
-        <i class="fa-solid fa-link me-1"></i>Copiar link
+              aria-label="Copiar link do pedido"
+              aria-live="polite"
+              onclick="navigator.clipboard.writeText('{{ url_for('servicos_vacinas_pedido', token=req.public_token, _external=True) }}').then(() => { const b=this,o=b.innerHTML,l=b.getAttribute('aria-label'); b.innerHTML='<i class=&quot;fa-solid fa-check me-1&quot; aria-hidden=&quot;true&quot;></i> Copiado!'; b.setAttribute('aria-label', 'Link do pedido copiado!'); setTimeout(() => { b.innerHTML=o; b.setAttribute('aria-label', l); }, 2000); });">
+        <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Copiar link
       </button>
     </div>
   </div>
