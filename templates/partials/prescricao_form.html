@@ -137,9 +137,10 @@
       <h5 class="card-title mb-0" id="med-nome-card"></h5>
       <div class="d-flex align-items-center gap-2">
         <button type="button" id="btn-favoritar" onclick="toggleFavorito()"
-                title="Marcar como favorito"
+                title="Adicionar aos favoritos"
+                aria-label="Adicionar aos favoritos"
                 style="background:none;border:none;padding:2px 4px;line-height:1;cursor:pointer;">
-          <i id="icon-favorito" class="bi bi-star" style="font-size:1.2rem;color:#ffc107;"></i>
+          <i id="icon-favorito" class="bi bi-star" aria-hidden="true" style="font-size:1.2rem;color:#ffc107;"></i>
         </button>
         <span class="badge bg-light text-success">
           <i class="bi bi-book-fill me-1"></i>Bulário clínico
@@ -792,7 +793,11 @@
     icon.className = fav ? 'bi bi-star-fill' : 'bi bi-star';
     icon.style.color = '#ffc107';
     const btn = document.getElementById('btn-favoritar');
-    if (btn) btn.title = fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
+    if (btn) {
+      const label = fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
   }
 
   function _renderizarFavoritos() {
