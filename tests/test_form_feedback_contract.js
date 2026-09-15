@@ -52,6 +52,17 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    let current = this;
+    while (current) {
+      if (current.classList && current.classList.contains) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {

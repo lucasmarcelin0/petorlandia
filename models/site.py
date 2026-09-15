@@ -8,7 +8,7 @@ except ImportError:
     from .extensions import db
 
 from flask_login import UserMixin
-from flask import url_for, request, current_app
+from flask import url_for, request, current_app, g, has_request_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
 import json
@@ -63,11 +63,24 @@ class SiteFlag(db.Model):
 
     @classmethod
     def get(cls, key: str, default: bool = False) -> bool:
+        # Optimization: Flask `g` request-scoped cache eliminates repetitive DB lookups during a request.
+        if has_request_context():
+            cache = getattr(g, "_site_flag_cache", None)
+            if cache is None:
+                cache = {}
+                g._site_flag_cache = cache
+            if key in cache:
+                return cache[key]
+
         try:
             row = cls.query.filter_by(key=key).first()
-            return row.value if row else default
+            val = row.value if row else default
         except Exception:
-            return default
+            val = default
+
+        if has_request_context():
+            g._site_flag_cache[key] = val
+        return val
 
     @classmethod
     def set(cls, key: str, value: bool, label: str | None = None) -> 'SiteFlag':
@@ -80,6 +93,10 @@ class SiteFlag(db.Model):
             if label is not None:
                 row.label = label
         db.session.commit()
+        if has_request_context():
+            cache = getattr(g, "_site_flag_cache", None)
+            if cache is not None:
+                cache[key] = value
         return row
 
 
@@ -100,11 +117,24 @@ class SiteText(db.Model):
 
     @classmethod
     def get(cls, key: str, default: str = '') -> str:
+        # Optimization: Flask `g` request-scoped cache eliminates repetitive DB lookups during a request.
+        if has_request_context():
+            cache = getattr(g, "_site_text_cache", None)
+            if cache is None:
+                cache = {}
+                g._site_text_cache = cache
+            if key in cache:
+                return cache[key]
+
         try:
             row = cls.query.filter_by(key=key).first()
-            return row.value if row and row.value else default
+            val = row.value if row and row.value else default
         except Exception:
-            return default
+            val = default
+
+        if has_request_context():
+            g._site_text_cache[key] = val
+        return val
 
     @classmethod
     def set(cls, key: str, value: str) -> 'SiteText':
@@ -115,6 +145,10 @@ class SiteText(db.Model):
         else:
             row.value = value
         db.session.commit()
+        if has_request_context():
+            cache = getattr(g, "_site_text_cache", None)
+            if cache is not None:
+                cache[key] = value
         return row
 
 

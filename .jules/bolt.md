@@ -26,3 +26,7 @@
 ## 2026-09-12 - ASCII Fast-Path and Pre-compiled Regexes in Medication Name Normalization
 **Learning:** In `services/medicamento_curadoria.py`, `normalizar_nome_prescrito` ran `unicodedata.normalize("NFKD", texto)` and character-combining filtering loops on every string, along with re-compiling regexes (`[^\w%/.,+\- ]+` and `\s*-\s*`) dynamically on every call. Adding an `isascii()` pre-condition check to short-circuit NFKD decomposition and pre-compiling regex patterns at module level yields a ~40% execution speedup.
 **Action:** Check for ASCII pre-conditions before unicodedata decomposition in string normalization helpers, and pre-compile regular expression patterns at module level.
+
+## 2026-09-15 - Request-Scoped `g` Caching for Site Flags and Site Text Lookups
+**Learning:** `SiteFlag.get` and `SiteText.get` were called repeatedly per request across `context_processors.py`, layout templates, and views (e.g. 10+ SQL queries per page load for home and navbar flags). Caching lookups in Flask `g` (`_site_flag_cache` and `_site_text_cache`) when `has_request_context()` is active eliminates redundant SQL queries within a single request lifecycle, yielding a 500x speedup for repetitive config flag reads.
+**Action:** Use request-scoped `g` dictionary caches for frequently read system/site config lookups to prevent repeated database queries during request rendering.
