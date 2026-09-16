@@ -36,6 +36,8 @@ def run(nome: str | None = None) -> int:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app_factory import create_app
     from models import PmoVaccinationVisit, User
+    from extensions import db
+    from sqlalchemy import func
     from services.vacina_pmo_service import _normalize_login_phone, _same_person_name
 
     app = create_app()
@@ -61,6 +63,21 @@ def run(nome: str | None = None) -> int:
 
         log.info("Telefones com mais de uma conta: %s", len(duplicados))
         mesmo_nome = 0
+
+        # Pre-fetch visit counts to avoid N+1 query
+        all_conta_ids = [c.id for contas in duplicados.values() for c in contas]
+        visit_counts = {}
+        if all_conta_ids:
+            counts_query = db.session.query(
+                PmoVaccinationVisit.tutor_user_id,
+                func.count(PmoVaccinationVisit.id)
+            ).filter(
+                PmoVaccinationVisit.tutor_user_id.in_(all_conta_ids)
+            ).group_by(
+                PmoVaccinationVisit.tutor_user_id
+            ).all()
+            visit_counts = dict(counts_query)
+
         for telefone, contas in sorted(duplicados.items()):
             nomes_iguais = any(
                 _same_person_name(a.name, b.name)
@@ -72,7 +89,7 @@ def run(nome: str | None = None) -> int:
             log.info("")
             log.info("%s%s", telefone, "  <- mesma pessoa duplicada" if nomes_iguais else "")
             for conta in contas:
-                visitas = PmoVaccinationVisit.query.filter_by(tutor_user_id=conta.id).count()
+                visitas = visit_counts.get(conta.id, 0)
                 provisorio = (conta.email or "").endswith("@petorlandia.local")
                 log.info(
                     "  #%-6s %-40s %-45s %s visita(s) PMO%s",

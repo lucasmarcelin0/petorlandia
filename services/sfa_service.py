@@ -2544,6 +2544,28 @@ def _buscar_log_sinan_para_dados(dados: dict):
     return matches[0] if matches else None
 
 
+def _indexar_pacientes_por_nome_nascimento() -> dict[tuple[str, str], list]:
+    """Agrupa os pacientes por (nome normalizado, data de nascimento crua).
+
+    A chave reproduz exatamente o par que a busca linear comparava, inclusive o
+    uso da data **como esta gravada** (sem `parse_data`), para que o resultado
+    seja o mesmo registro que o laco antigo encontrava. A ordem da lista segue a
+    ordem da consulta, entao "o primeiro da lista" continua sendo o primeiro que
+    o laco antigo teria achado.
+    """
+
+    from models.sfa import SfaPaciente
+
+    indice: dict[tuple[str, str], list] = {}
+    for candidato in SfaPaciente.query.all():
+        chave = (
+            normalizar_nome_chave(candidato.nome),
+            str(candidato.data_nascimento or ""),
+        )
+        indice.setdefault(chave, []).append(candidato)
+    return indice
+
+
 def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False) -> dict[str, object]:
     """Inclui ou complementa fichas SINAN transcritas, com auditoria e deduplicacao."""
     from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
@@ -2561,6 +2583,11 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
         "itens": [],
         "dry_run": bool(dry_run),
     }
+    # Construido sob demanda na primeira busca por nome+nascimento e mantido
+    # apenas durante esta chamada -- nada sobrevive a funcao, entao nao ha
+    # risco de o proximo import enxergar uma base desatualizada.
+    indice_nome_nascimento: dict[tuple[str, str], list] | None = None
+
     try:
         for position, incoming in enumerate(registros, start=1):
             if not isinstance(incoming, dict):
@@ -2599,13 +2626,16 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
                 paciente = SfaPaciente.query.filter_by(ficha_sinan=ficha).first()
             if paciente is None:
                 data_nascimento = str(dados.get("data_nascimento") or "")
-                for candidate in SfaPaciente.query.all():
-                    if (
-                        normalizar_nome_chave(candidate.nome) == normalizar_nome_chave(nome)
-                        and str(candidate.data_nascimento or "") == data_nascimento
-                    ):
-                        paciente = candidate
-                        break
+                if indice_nome_nascimento is None:
+                    # Uma varredura por chamada, nao por registro: o laco antigo
+                    # rodava `SfaPaciente.query.all()` a cada linha importada, o
+                    # que deixava a importacao quadratica no tamanho da base.
+                    indice_nome_nascimento = _indexar_pacientes_por_nome_nascimento()
+                encontrados = indice_nome_nascimento.get(
+                    (normalizar_nome_chave(nome), data_nascimento)
+                )
+                if encontrados:
+                    paciente = encontrados[0]
 
             created = paciente is None
             resultado = _sanitize_limited_text(dados.get("resultado"), 120, "resultado")
@@ -2630,6 +2660,16 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
                 atualizar_operacional_paciente(paciente)
                 db.session.add(paciente)
                 db.session.flush()
+                if indice_nome_nascimento is not None:
+                    # O laco antigo reconsultava o banco a cada registro e por
+                    # isso enxergava o que ele mesmo tinha acabado de criar.
+                    indice_nome_nascimento.setdefault(
+                        (
+                            normalizar_nome_chave(paciente.nome),
+                            str(paciente.data_nascimento or ""),
+                        ),
+                        [],
+                    ).append(paciente)
                 summary["criados"] += 1
             else:
                 fill_if_empty = {

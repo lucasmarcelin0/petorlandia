@@ -56,8 +56,10 @@
     <div class="input-group">
       <input type="text" class="form-control" id="link-indicacao" value="{{ link }}" readonly>
       <button class="btn btn-outline-primary" type="button" id="btn-copiar"
-              onclick="navigator.clipboard.writeText(document.getElementById('link-indicacao').value).then(() => { this.innerHTML = 'Copiado!'; });">
-        <i class="fa-regular fa-copy me-1"></i> Copiar
+              aria-label="Copiar link de indicação"
+              aria-live="polite"
+              onclick="navigator.clipboard.writeText(document.getElementById('link-indicacao').value).then(() => { const b=this,o=b.innerHTML,l=b.getAttribute('aria-label'); b.innerHTML='<i class=&quot;fa-solid fa-check me-1&quot; aria-hidden=&quot;true&quot;></i> Copiado!'; b.setAttribute('aria-label', 'Link de indicação copiado!'); setTimeout(() => { b.innerHTML=o; b.setAttribute('aria-label', l); }, 2000); });">
+        <i class="fa-regular fa-copy me-1" aria-hidden="true"></i> Copiar
       </button>
     </div>
     <p class="text-muted small mt-2 mb-3">Código: <strong>{{ referral.code }}</strong></p>

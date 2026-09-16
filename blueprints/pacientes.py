@@ -1750,7 +1750,8 @@ def deletar_tutor(tutor_id):
 
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir tutor: {str(e)}', 'danger')
+        current_app.logger.exception('Erro ao excluir tutor %s', tutor_id)
+        flash('Não foi possível excluir o tutor. Tente novamente mais tarde.', 'danger')
 
     return redirect(url_for('tutores'))
 
@@ -3134,9 +3135,11 @@ def marcar_como_falecido(animal_id):
                 redirect=url_for('ficha_animal', animal_id=animal.id)
             )
     except Exception as e:
-        flash(f'Erro ao marcar como falecido: {str(e)}', 'danger')
+        db.session.rollback()
+        current_app.logger.exception('Erro ao marcar animal %s como falecido', animal_id)
+        flash('Não foi possível marcar como falecido. Tente novamente.', 'danger')
         if 'application/json' in request.headers.get('Accept', ''):
-            return jsonify(message=f'Erro ao marcar como falecido: {str(e)}', category='danger'), 400
+            return jsonify(message='Não foi possível marcar como falecido.', category='danger'), 400
 
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -3182,9 +3185,10 @@ def arquivar_animal(animal_id):
             )
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir: {str(e)}', 'danger')
+        current_app.logger.exception('Erro ao arquivar animal %s', animal_id)
+        flash('Não foi possível excluir o animal. Tente novamente.', 'danger')
         if 'application/json' in request.headers.get('Accept', ''):
-            return jsonify(message=f'Erro ao excluir: {str(e)}', category='danger'), 400
+            return jsonify(message='Não foi possível excluir o animal.', category='danger'), 400
 
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
