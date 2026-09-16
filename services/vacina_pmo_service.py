@@ -1937,6 +1937,132 @@ def _clear_pmo_animal_links(animal: PmoVaccinationAnimal) -> None:
     animal.vaccinated_at = None
 
 
+def _pmo_animal_has_field_record(animal: PmoVaccinationAnimal) -> bool:
+    """Este animal carrega trabalho feito na porta do morador?
+
+    Versão por animal de ``_pmo_visit_has_field_record``. Dose aplicada ou
+    dispensa por imunidade são fatos do campo: nenhuma releitura da planilha
+    pode transferi-los para outro bicho nem apagá-los.
+    """
+    return (animal.status or "") in PMO_DONE_STATUSES
+
+
+def _reconcile_visit_animals(
+    visit: PmoVaccinationVisit, parsed_animals: list[dict[str, Any]]
+) -> None:
+    """Casa a lista da planilha com os animais já gravados SEM trocar desfecho de lugar.
+
+    O casamento era feito pela POSIÇÃO: o animal da posição 3 no banco recebia o
+    terceiro nome lido da célula J. Só que a ordem da célula não é estável — o
+    parser distribui por espécie (cães primeiro), a IA de nomes pode devolver os
+    nomes em outra ordem e o vacinador inclui bichos em campo. Quando a ordem
+    mudava, o nome andava e o ``status`` ficava parado na posição: na tela do dia
+    16/09 os animais apareceram embaralhados, com "vacinado" em quem ainda não
+    tinha sido vacinado e "pendente" em quem já estava.
+
+    Agora quem manda é o NOME: cada nome da planilha reencontra o registro que já
+    existia, levando junto status, foto, carteirinha e vínculo com o cadastro
+    real. A posição vira só a ordem de exibição, e sobrou para o caso em que o
+    nome de fato mudou (correção de digitação) — aí só reaproveita registro que
+    ainda não tem desfecho de campo. Quem tem desfecho e sumiu da célula fica
+    guardado no fim da lista em vez de ser apagado.
+    """
+    existing = sorted(
+        list(visit.animals),
+        key=lambda animal: (animal.position or 0, animal.id or 0),
+    )
+    wanted = [
+        {
+            "name": (item.get("name") or f"Animal {index}")[:PMO_ANIMAL_NAME_MAX],
+            "species": item.get("species") or "cao",
+            "status": item.get("status") or "pendente",
+        }
+        for index, item in enumerate(parsed_animals, start=1)
+    ]
+
+    matched: list[PmoVaccinationAnimal | None] = [None] * len(wanted)
+    available = list(existing)
+
+    def _claim(predicate) -> PmoVaccinationAnimal | None:
+        for candidate in available:
+            if predicate(candidate):
+                available.remove(candidate)
+                return candidate
+        return None
+
+    # 1ª passada: mesmo nome e mesma espécie — o casamento seguro.
+    for index, item in enumerate(wanted):
+        slug = _pmo_animal_slug(item["name"])
+        if not slug:
+            continue
+        species = item["species"]
+        matched[index] = _claim(
+            lambda candidate: _pmo_animal_slug(candidate.name) == slug
+            and candidate.species == species
+        )
+
+    # 2ª passada: mesmo nome, espécie corrigida na planilha (cão que era gato).
+    for index, item in enumerate(wanted):
+        if matched[index] is not None:
+            continue
+        slug = _pmo_animal_slug(item["name"])
+        if not slug:
+            continue
+        matched[index] = _claim(
+            lambda candidate: _pmo_animal_slug(candidate.name) == slug
+        )
+
+    # 3ª passada: nome novo de verdade (correção de digitação, nome que chegou no
+    # lugar de um genérico). Só pode ocupar registro ainda sem desfecho de campo.
+    for index in range(len(wanted)):
+        if matched[index] is not None:
+            continue
+        matched[index] = _claim(
+            lambda candidate: not _pmo_animal_has_field_record(candidate)
+        )
+
+    # Ordem anterior de cada registro: é ela que a tela vai continuar mostrando.
+    ordem_anterior = {
+        animal.id: posicao
+        for posicao, animal in enumerate(existing)
+        if animal.id is not None
+    }
+    final: list[tuple[int, PmoVaccinationAnimal]] = []
+
+    for index, item in enumerate(wanted):
+        animal = matched[index]
+        if animal is None:
+            animal = PmoVaccinationAnimal(
+                visit=visit,
+                position=index + 1,
+                status=item["status"],
+            )
+            db.session.add(animal)
+        elif _pmo_animal_identity_changed(
+            animal, name=item["name"], species=item["species"]
+        ):
+            _clear_pmo_animal_links(animal)
+        animal.name = item["name"]
+        animal.species = item["species"]
+        final.append((ordem_anterior.get(animal.id, len(existing) + index), animal))
+
+    # Sobras: quem tem desfecho de campo continua na visita — apagar levaria
+    # junto a dose registrada, a foto e a carteirinha do tutor.
+    for index, animal in enumerate(available):
+        if _pmo_animal_has_field_record(animal):
+            final.append((ordem_anterior.get(animal.id, len(existing) + index), animal))
+        else:
+            db.session.delete(animal)
+
+    # A lista na tela não pode dançar no meio da rota: quem já estava fica onde
+    # estava e quem chegou vai para o fim. Cães antes de gatos fecha o ciclo —
+    # é a mesma ordem que ``_build_animals`` reconstrói a partir da planilha, e
+    # é o que faz a coluna J escrita agora voltar idêntica no próximo sync.
+    final.sort(key=lambda par: (par[1].species != "cao", par[0]))
+    for posicao, (_, animal) in enumerate(final, start=1):
+        animal.position = posicao
+
+
 def parse_vacina_pmo_rows(
     values: list[list[Any]], *, force_ai: bool = False
 ) -> list[dict[str, Any]]:
@@ -3058,29 +3184,7 @@ def persist_vacina_pmo_rows(
         visit.synced_at = now
         _ensure_visit_public_token(visit)
 
-        existing_by_position = {animal.position: animal for animal in visit.animals}
-        parsed_animals = row.get("animals") or []
-        keep_positions = set()
-        for position, animal_data in enumerate(parsed_animals, start=1):
-            animal = existing_by_position.get(position)
-            name = (animal_data.get("name") or f"Animal {position}")[:PMO_ANIMAL_NAME_MAX]
-            species = animal_data.get("species") or "cao"
-            if not animal:
-                animal = PmoVaccinationAnimal(
-                    visit=visit,
-                    position=position,
-                    status=animal_data.get("status") or "pendente",
-                )
-                db.session.add(animal)
-            elif _pmo_animal_identity_changed(animal, name=name, species=species):
-                _clear_pmo_animal_links(animal)
-            animal.name = name
-            animal.species = species
-            keep_positions.add(position)
-
-        for position, animal in list(existing_by_position.items()):
-            if position not in keep_positions:
-                db.session.delete(animal)
+        _reconcile_visit_animals(visit, row.get("animals") or [])
 
         _ensure_visit_records(visit)
 

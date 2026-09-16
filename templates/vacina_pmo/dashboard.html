@@ -2177,6 +2177,17 @@
   </div>
 </div>
 
+{# Os dois campos de arquivo da foto moram FORA da lista de propósito. A lista
+   inteira é reescrita (innerHTML) a cada render — e um render dispara sozinho a
+   cada 3s pela sincronização em tempo real. Quando o campo ficava dentro dela, o
+   app da câmera voltava e escrevia o arquivo num <input> que já tinha sido
+   descartado do documento: o evento `change` não subia mais até a lista e a foto
+   simplesmente não aparecia. Era o "tenho que adicionar a foto duas vezes". #}
+<div class="pmo-photo-inputs" aria-hidden="true">
+  <input type="file" accept="image/*" capture="environment" id="pmo-photo-input-camera" hidden>
+  <input type="file" accept="image/*" id="pmo-photo-input-gallery" hidden>
+</div>
+
 <div class="pmo-photo-sheet" id="pmo-photo-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="pmo-photo-sheet-title">
   <div class="pmo-photo-sheet__backdrop" data-action="photo-sheet-close"></div>
   <div class="pmo-photo-sheet__panel">
@@ -2529,26 +2540,19 @@
   let photoSheetTarget = null;
   let photoSheetLastFocus = null;
 
-  function cssEscape(value) {
-    const text = String(value ?? '');
-    return (window.CSS && typeof window.CSS.escape === 'function')
-      ? window.CSS.escape(text)
-      : text.replace(/["\\]/g, '\\$&');
-  }
-
-  function findAnimalPhotoInput(target, source) {
-    if (!target) return null;
-    const selector = `[data-id="${cssEscape(target.rowId)}"] .pmo-animal-photo-input`
-      + `[data-animal-index="${cssEscape(target.index)}"][data-photo-source="${cssEscape(source)}"]`;
-    const inputs = Array.from(listPanel.querySelectorAll(selector));
-    // Tabela e cards renderizam o mesmo animal; usa o container visivel quando houver.
-    return inputs.find((input) => input.closest('.pmo-visit-card, tr')?.offsetParent !== null) || inputs[0] || null;
+  // O alvo da foto viaja pelo ID do animal, nunca pela posicao na lista. A
+  // ordem muda sozinha (inclusao de animal em campo reordena caes e gatos, e a
+  // releitura da planilha pode devolver outra ordem); guardar o indice fazia a
+  // foto cair no bicho errado quando isso acontecia entre o toque na camera e a
+  // volta do aparelho.
+  function animalPhotoTarget(animal) {
+    if (!animal) return null;
+    return { animalId: Number(animal.id) || null, name: animal.name || '' };
   }
 
   function findAnimalByTarget(target) {
-    if (!target) return null;
-    const row = state.rows.find((item) => item.id === target.rowId);
-    return row?.animals?.[Number(target.index)] || null;
+    if (!target || !target.animalId) return null;
+    return findAnimalById(target.animalId);
   }
 
   function animalTargetName(target) {
@@ -2566,6 +2570,33 @@
     return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
 
+  const photoInputs = {
+    camera: document.getElementById('pmo-photo-input-camera'),
+    gallery: document.getElementById('pmo-photo-input-gallery'),
+  };
+  const PHOTO_TARGET_KEY = 'pmo_photo_target_animal';
+  let photoInputAnimalId = null;
+
+  // O celular pode descartar a pagina enquanto o app da camera esta aberto e
+  // restaura-la do zero na volta; o sessionStorage devolve para qual animal a
+  // foto estava sendo tirada quando a variavel nao sobrevive.
+  function rememberPhotoTarget(animalId) {
+    photoInputAnimalId = Number(animalId) || null;
+    try {
+      if (photoInputAnimalId) sessionStorage.setItem(PHOTO_TARGET_KEY, String(photoInputAnimalId));
+      else sessionStorage.removeItem(PHOTO_TARGET_KEY);
+    } catch (_error) { /* modo privativo: segue so com a variavel */ }
+  }
+
+  function recallPhotoTarget() {
+    if (photoInputAnimalId) return photoInputAnimalId;
+    try {
+      return Number(sessionStorage.getItem(PHOTO_TARGET_KEY)) || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function requestAnimalPhoto(target, source) {
     if (!target) return;
     if (!source) {
@@ -2576,9 +2607,50 @@
       openCameraModal(target);
       return;
     }
-    const input = findAnimalPhotoInput(target, source);
-    if (input) input.click();
+    const input = photoInputs[source];
+    if (!input || !target.animalId) return;
+    rememberPhotoTarget(target.animalId);
+    // Zerar antes do clique garante `change` mesmo quando a mesma foto e
+    // escolhida duas vezes seguidas.
+    input.value = '';
+    input.click();
   }
+
+  // O aparelho pode ter recarregado a pagina enquanto a camera estava aberta:
+  // a foto volta antes das visitas terminarem de carregar. Espera o animal
+  // aparecer no estado em vez de descartar a foto que o vacinador acabou de
+  // tirar.
+  async function waitForAnimal(animalId, timeoutMs = 8000) {
+    const deadline = Date.now() + timeoutMs;
+    let animal = findAnimalById(animalId);
+    while (!animal && Date.now() < deadline) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      animal = findAnimalById(animalId);
+    }
+    return animal;
+  }
+
+  Object.values(photoInputs).forEach((input) => {
+    if (!input) return;
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      const animalId = recallPhotoTarget();
+      input.value = '';
+      rememberPhotoTarget(null);
+      if (!file) return;
+      const animal = animalId ? await waitForAnimal(animalId) : null;
+      if (!animal) {
+        const aviso = 'Nao foi possivel identificar o animal desta foto. Toque na camera do animal e tente de novo.';
+        window.showAppToast ? window.showAppToast(aviso, 'warning') : alert(aviso);
+        return;
+      }
+      try {
+        await queueAnimalPhotoUpload(animal, file);
+      } catch (error) {
+        window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+      }
+    });
+  });
 
   function openPhotoSheet(target) {
     if (!photoSheet || !target) return;
@@ -5422,6 +5494,13 @@
     return deferred;
   }
 
+  // A lista de uma casa pode reordenar (inclusao em campo, releitura da
+  // planilha). Procurar pelo id evita que um clique caia no animal vizinho.
+  function findRowAnimalById(row, animalId) {
+    if (!row || !animalId) return null;
+    return row.animals.find((item) => String(item.id) === String(animalId)) || null;
+  }
+
   function findAnimalById(animalId) {
     const id = Number(animalId);
     for (const row of state.rows) {
@@ -5474,12 +5553,52 @@
     return animal;
   }
 
-  function clearAnimalQueuedPhoto(animalId) {
+  // Descarta a copia local da foto. So depois disso a miniatura passa a
+  // depender da internet.
+  function releaseLocalPhotoPreview(animalId) {
     const id = Number(animalId);
     const objectUrl = photoQueue.objectUrls.get(id);
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     photoQueue.objectUrls.delete(id);
     const animal = findAnimalById(id);
+    if (animal) delete animal.localImageUrl;
+  }
+
+  // Terminado o envio, a miniatura apontaria para o S3 -- uma imagem que ainda
+  // precisa ser baixada no 4G da rua. Era nessa janela que a foto "sumia" e so
+  // voltava quando o vacinador tocava em outro ponto da tela. A copia local
+  // segura a imagem ate a remota estar realmente pronta; se ela nunca carregar,
+  // a local fica (melhor uma foto na tela do que um quadro vazio).
+  function swapToRemotePhotoWhenReady(animalId, remoteUrl) {
+    const id = Number(animalId);
+    if (!remoteUrl) {
+      releaseLocalPhotoPreview(id);
+      return;
+    }
+    const probe = new Image();
+    probe.decoding = 'async';
+    probe.onload = () => {
+      releaseLocalPhotoPreview(id);
+      if (!isUserTyping()) render();
+    };
+    probe.src = remoteUrl;
+    if (probe.complete && probe.naturalWidth) {
+      releaseLocalPhotoPreview(id);
+    }
+  }
+
+  function clearAnimalQueuedPhoto(animalId, { keepPreview = false } = {}) {
+    const id = Number(animalId);
+    const animal = findAnimalById(id);
+    const objectUrl = photoQueue.objectUrls.get(id);
+    if (keepPreview && objectUrl && animal) {
+      // A copia local sai da fila mas continua na tela, sem selo de pendencia.
+      animal.localImageUrl = objectUrl;
+    } else {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      photoQueue.objectUrls.delete(id);
+      if (animal) delete animal.localImageUrl;
+    }
     if (animal) {
       delete animal.pendingImageUrl;
       delete animal.photoUploadState;
@@ -5759,6 +5878,7 @@
       // depois de uma foto falhar apagava o motivo da falha do cartao novo.
       [
         'pendingImageUrl',
+        'localImageUrl',
         'photoUploadState',
         'photoUploadError',
         'photoUploadAttempts',
@@ -5776,7 +5896,7 @@
         });
       }
     });
-    ['addingAnimal', 'editingNote', 'editingAttendedBy', 'editingAnimalNameIndex']
+    ['addingAnimal', 'editingNote', 'editingAttendedBy', 'editingAnimalNameId']
       .forEach((key) => {
         if (previous[key] !== undefined) updated[key] = previous[key];
       });
@@ -6206,7 +6326,8 @@
       const currentAnimal = findAnimalById(animalId);
       if (currentAnimal && payload.image_url) currentAnimal.imageUrl = payload.image_url;
       if (removed) {
-        clearAnimalQueuedPhoto(animalId);
+        clearAnimalQueuedPhoto(animalId, { keepPreview: true });
+        swapToRemotePhotoWhenReady(animalId, currentAnimal?.imageUrl || payload.image_url);
         const msg = 'Foto do animal salva com sucesso!';
         window.showAppToast ? window.showAppToast(msg, 'success') : null;
       }
@@ -6853,9 +6974,12 @@
     `;
   }
 
-  function renderAnimalPhotoControl(animal, index) {
+  function renderAnimalPhotoControl(animal) {
     const stateName = animal.photoUploadState || '';
-    const imageUrl = animal.pendingImageUrl || animal.imageUrl || '';
+    // `localImageUrl` e a copia que ficou no aparelho depois de um envio bem
+    // sucedido: ela segura a miniatura ate a versao do servidor terminar de
+    // baixar, para a foto nunca sumir da tela no meio da rua.
+    const imageUrl = animal.pendingImageUrl || animal.localImageUrl || animal.imageUrl || '';
     const isPending = ['uploading', 'pending', 'error', 'failed'].includes(stateName);
     const badgeIcon = stateName === 'uploading'
       ? '<span class="spinner-border spinner-border-sm" aria-hidden="true" style="width:10px;height:10px;border-width:1px;"></span>'
@@ -6877,14 +7001,18 @@
 
     if (imageUrl) {
       return `
-        <button type="button" class="pmo-animal-photo-thumb ${isPending ? `is-${stateName}` : ''}" data-action="animal-photo-view" data-animal-index="${index}" title="${escapeHtml(title)}">
-          <img src="${escapeHtml(imageUrl)}" alt="Foto de ${escapeHtml(animal.name)}" loading="lazy">
+        <button type="button" class="pmo-animal-photo-thumb ${isPending ? `is-${stateName}` : ''}" data-action="animal-photo-view" data-animal-id="${animal.id || ''}" title="${escapeHtml(title)}">
+          {# A miniatura carrega de imediato, de proposito: a versao preguicosa
+             adiava a busca da imagem e fazia a foto recem-tirada so aparecer
+             quando o vacinador tocava em outro ponto da tela -- o toque era o
+             que destravava o carregamento. #}
+          <img src="${escapeHtml(imageUrl)}" alt="Foto de ${escapeHtml(animal.name)}" decoding="async">
           ${isPending ? `<span class="pmo-animal-photo-badge" data-state="${escapeHtml(stateName)}">${badgeIcon}</span>` : ''}
         </button>
       `;
     }
 
-    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera"></i></button>`;
+    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-id="${animal.id || ''}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera"></i></button>`;
   }
 
   const STATUS_LABELS = {
@@ -6902,7 +7030,7 @@
     return ['pendente', 'vacinado', 'imunizado', 'ausente', 'remarcar', 'recusou'];
   }
 
-  function renderAnimalStatusControl(animal, index) {
+  function renderAnimalStatusControl(animal) {
     const syncState = animal.statusSaveState || '';
     const syncTitle = syncState === 'uploading'
       ? 'Alteração salva no aparelho e sincronizando'
@@ -6914,7 +7042,7 @@
       : '<i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>';
     return `
       <div class="pmo-status-control" ${syncState ? `data-sync-state="${escapeHtml(syncState)}"` : ''}>
-        <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${escapeHtml(animal.status)}" ${syncState === 'uploading' ? 'aria-busy="true"' : ''}>
+        <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-id="${animal.id || ''}" data-status="${escapeHtml(animal.status)}" ${syncState === 'uploading' ? 'aria-busy="true"' : ''}>
           ${statusOptionsFor(animal).map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${STATUS_LABELS[status] || status}</option>`).join('')}
         </select>
         ${syncState ? `<span class="pmo-status-sync" data-state="${escapeHtml(syncState)}" title="${escapeHtml(syncTitle)}">${syncIcon}</span>` : ''}
@@ -7010,24 +7138,22 @@
     if (!row.animals.length) {
       return '<span class="text-muted">Nomes não informados</span>';
     }
-    return row.animals.map((animal, index) => `
+    return row.animals.map((animal) => `
       <div class="pmo-animal-item" data-animal-id="${animal.id || ''}">
         <div>
-          ${row.editingAnimalNameIndex === index ? `
-            <form class="pmo-animal-name-form" data-action="animal-name-form" data-animal-index="${index}">
+          ${String(row.editingAnimalNameId || '') === String(animal.id || '') && animal.id ? `
+            <form class="pmo-animal-name-form" data-action="animal-name-form" data-animal-id="${animal.id || ''}">
               <input type="text" class="form-control form-control-sm" data-action="animal-name-input" maxlength="100" value="${escapeHtml(animal.name)}" aria-label="Nome do animal">
             </form>
           ` : `
-            <button type="button" class="pmo-animal-name pmo-animal-name--editable" data-action="animal-name-edit" data-animal-index="${index}" title="Clique para corrigir o nome">${escapeHtml(animal.name)} <i class="fas fa-pen pmo-animal-name__icon" aria-hidden="true"></i></button>
+            <button type="button" class="pmo-animal-name pmo-animal-name--editable" data-action="animal-name-edit" data-animal-id="${animal.id || ''}" title="Clique para corrigir o nome">${escapeHtml(animal.name)} <i class="fas fa-pen pmo-animal-name__icon" aria-hidden="true"></i></button>
           `}
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
           ${renderPreviousVaccination(animal)}
         </div>
         <div class="pmo-animal-status">
-          ${renderAnimalStatusControl(animal, index)}
-          ${renderAnimalPhotoControl(animal, index)}
-          <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="camera" data-animal-index="${index}" hidden>
-          <input type="file" accept="image/*" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="gallery" data-animal-index="${index}" hidden>
+          ${renderAnimalStatusControl(animal)}
+          ${renderAnimalPhotoControl(animal)}
         </div>
       </div>
     `).join('');
@@ -7655,7 +7781,15 @@
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
     if (event.target.dataset.action === 'animal-status') {
-      const animal = row.animals[Number(event.target.dataset.animalIndex)];
+      const animal = findRowAnimalById(row, event.target.dataset.animalId);
+      if (!animal) {
+        // Animal ainda sem id: a aba foi carregada de um estado antigo. Avisa em
+        // vez de engolir a alteracao que o vacinador acabou de fazer.
+        const aviso = 'Sincronize a aba antes de alterar o status.';
+        window.showAppToast ? window.showAppToast(aviso, 'warning') : alert(aviso);
+        render();
+        return;
+      }
       if (animal) {
         const anterior = animal.status;
         const novo = event.target.value;
@@ -7683,18 +7817,6 @@
       }
       row.status = inferVisitStatus(row.animals);
       render();
-    } else if (event.target.dataset.action === 'animal-photo-input') {
-      const input = event.target;
-      const animal = row.animals[Number(input.dataset.animalIndex)];
-      const file = input.files && input.files[0];
-      if (!animal || !file) return;
-      try {
-        await queueAnimalPhotoUpload(animal, file);
-      } catch (error) {
-        window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
-      } finally {
-        input.value = '';
-      }
     }
   });
 
@@ -7718,9 +7840,9 @@
     }
   }
 
-  async function commitAnimalNameEdit(row, index, value, { silentNoChange = false } = {}) {
-    const animal = row.animals[index];
-    row.editingAnimalNameIndex = undefined;
+  async function commitAnimalNameEdit(row, animalId, value, { silentNoChange = false } = {}) {
+    const animal = findRowAnimalById(row, animalId);
+    row.editingAnimalNameId = undefined;
     const trimmed = (value || '').trim();
     if (!animal || trimmed === (animal.name || '') || !trimmed) {
       if (silentNoChange) return;
@@ -7753,21 +7875,19 @@
     const actionEl = event.target.closest('[data-action]');
     const action = actionEl?.dataset.action;
     if (action === 'animal-photo') {
-      const index = Number(actionEl.dataset.animalIndex);
-      const animal = row.animals[index];
-      openPhotoSheet({ rowId: row.id, index, name: animal?.name || '' });
+      const animal = findRowAnimalById(row, actionEl.dataset.animalId);
+      if (animal) openPhotoSheet(animalPhotoTarget(animal));
       return;
     }
     if (action === 'animal-photo-view') {
-      const index = Number(actionEl.dataset.animalIndex);
-      const animal = row.animals[index];
-      const imageUrl = animal?.pendingImageUrl || animal?.imageUrl || '';
-      if (imageUrl) openPhotoModal(imageUrl, { rowId: row.id, index, name: animal?.name || '' });
+      const animal = findRowAnimalById(row, actionEl.dataset.animalId);
+      const imageUrl = animal?.pendingImageUrl || animal?.localImageUrl || animal?.imageUrl || '';
+      if (imageUrl) openPhotoModal(imageUrl, animalPhotoTarget(animal));
       return;
     }
     if (action === 'animal-name-edit') {
-      state.rows.forEach((other) => { if (other !== row) other.editingAnimalNameIndex = undefined; });
-      row.editingAnimalNameIndex = Number(actionEl.dataset.animalIndex);
+      state.rows.forEach((other) => { if (other !== row) other.editingAnimalNameId = undefined; });
+      row.editingAnimalNameId = actionEl.dataset.animalId || undefined;
       render();
       const freshRow = rowEl.classList.contains('pmo-visit-card')
         ? cardsEl.querySelector(`[data-id="${row.id}"]`)
@@ -7867,7 +7987,7 @@
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       const input = event.target.querySelector('[data-action="animal-name-input"]');
-      if (row && input) commitAnimalNameEdit(row, Number(event.target.dataset.animalIndex), input.value);
+      if (row && input) commitAnimalNameEdit(row, event.target.dataset.animalId, input.value);
     } else if (event.target.dataset.action === 'attended-form') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
@@ -7913,7 +8033,7 @@
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       if (row) {
-        row.editingAnimalNameIndex = undefined;
+        row.editingAnimalNameId = undefined;
         render();
       }
     } else if (event.target.dataset.action === 'attended-input' && event.key === 'Escape') {
@@ -7939,11 +8059,11 @@
     if (event.target.dataset.action === 'animal-name-input') {
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
-      if (!row || row.editingAnimalNameIndex === undefined) return;
-      const index = row.editingAnimalNameIndex;
+      if (!row || row.editingAnimalNameId === undefined) return;
+      const animalId = row.editingAnimalNameId;
       setTimeout(() => {
         if (rowEl.contains(document.activeElement)) return;
-        commitAnimalNameEdit(row, index, event.target.value, { silentNoChange: true });
+        commitAnimalNameEdit(row, animalId, event.target.value, { silentNoChange: true });
       }, 0);
       return;
     }
@@ -8058,9 +8178,8 @@
         const statusDiv = itemEl.querySelector('.pmo-animal-status');
         const oldBtn = statusDiv?.querySelector('.pmo-animal-photo-btn, .pmo-animal-photo-thumb');
         if (oldBtn && animal) {
-          const index = oldBtn.dataset.animalIndex;
           const temp = document.createElement('div');
-          temp.innerHTML = renderAnimalPhotoControl(animal, index);
+          temp.innerHTML = renderAnimalPhotoControl(animal);
           const newBtn = temp.firstElementChild;
           if (newBtn) {
             newBtn.classList.add('pmo-photo-fresh-update');
