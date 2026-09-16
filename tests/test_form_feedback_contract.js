@@ -52,6 +52,32 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  // O elemento de verdade tem `closest`; o dublê nao tinha, e `ensureStatus`
+  // quebrava com "button.closest is not a function" assim que o form_feedback
+  // passou a procurar a coluna que embrulha o botao. Sobe pela cadeia de pais
+  // igual ao DOM: aqui o unico pai e o form, que nao tem classe de coluna.
+  closest(selector) {
+    const classes = String(selector)
+      .split(',')
+      .map((part) => part.trim())
+      .map((part) => {
+        const attr = part.match(/^\[class\*=["']?([^"'\]]+)["']?\]$/);
+        return attr ? { prefixo: attr[1] } : { exata: part.replace(/^\./, '') };
+      });
+    let node = this;
+    while (node) {
+      const nomes = node.classList ? [...node.classList.values] : [];
+      const bate = classes.some((alvo) => (
+        alvo.exata !== undefined
+          ? nomes.includes(alvo.exata)
+          : nomes.some((nome) => nome.includes(alvo.prefixo))
+      ));
+      if (bate) return node;
+      node = node.parentNode || null;
+    }
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {
