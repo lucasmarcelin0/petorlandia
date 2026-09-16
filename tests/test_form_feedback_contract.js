@@ -52,6 +52,21 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    let current = this;
+    while (current) {
+      if (typeof current.className === 'string') {
+        const classes = current.className.split(/\s+/);
+        const selectors = selector.split(',').map((s) => s.trim().replace('.', ''));
+        if (classes.some((cls) => selectors.includes(cls) || selectors.some((sel) => cls.startsWith(sel)))) {
+          return current;
+        }
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {
