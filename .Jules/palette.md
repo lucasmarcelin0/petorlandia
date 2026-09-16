@@ -29,3 +29,7 @@
 ## 2026-09-12 - Dynamic Copy Button Feedback for Screen Readers
 **Learning:** Copy-to-clipboard buttons that change visual inner text on copy (e.g. from "Copiar" to "Copiado") leave screen reader users unaware of the copy operation status unless the element has `aria-live="polite"` and dynamically updates its `aria-label` during the success feedback state.
 **Action:** Always add `aria-live="polite"` and update `aria-label` dynamically during copy feedback state on copy-to-clipboard elements, restoring the original label after timeout.
+
+## 2026-09-16 - Dynamic Cart Quantity ARIA Label Synchronization
+**Learning:** Updating an element's `textContent` via JavaScript without updating its static `aria-label` attribute leaves screen reader users hearing outdated information, as screen readers prioritize `aria-label` over text content.
+**Action:** Always complement dynamic `textContent` updates in JS with `setAttribute('aria-label', ...)` and `aria-live="polite"` on quantity counter elements.
