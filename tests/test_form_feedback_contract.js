@@ -52,6 +52,30 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  closest(selector) {
+    let el = this;
+    while (el) {
+      if (el.matches && el.matches(selector)) {
+        return el;
+      }
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  matches(selector) {
+    if (!selector) return false;
+    const parts = selector.split(',').map((s) => s.trim());
+    return parts.some((p) => {
+      if (p.startsWith('.')) return this.classList.contains(p.slice(1));
+      if (p.startsWith('[class*="') && p.endsWith('"]')) {
+        const val = p.slice(10, -2);
+        return this.className.includes(val);
+      }
+      return false;
+    });
+  }
 }
 
 class FakeButton extends FakeElement {
