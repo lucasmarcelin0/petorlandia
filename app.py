@@ -790,7 +790,18 @@ AWS_ID, AWS_SECRET = os.getenv("AWS_ACCESS_KEY_ID"), os.getenv("AWS_SECRET_ACCES
 BUCKET = os.getenv("S3_BUCKET_NAME")
 
 def _s3():
-    return boto3.client("s3", aws_access_key_id=AWS_ID, aws_secret_access_key=AWS_SECRET)
+    # Os limites de tempo vem de s3_utils para os dois clientes falharem no
+    # mesmo prazo -- e dentro dos 30s do roteador do Heroku. Sem isso, o padrao
+    # do boto3 (60s + ate 5 tentativas) estoura a janela e o usuario recebe a
+    # pagina "Application error" no lugar da mensagem que a tela sabe mostrar.
+    from s3_utils import s3_client_config
+
+    return boto3.client(
+        "s3",
+        aws_access_key_id=AWS_ID,
+        aws_secret_access_key=AWS_SECRET,
+        config=s3_client_config(),
+    )
 
 
 def _runtime_module_attr(name, default):
