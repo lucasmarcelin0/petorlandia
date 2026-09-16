@@ -26,3 +26,7 @@
 ## 2026-09-12 - ASCII Fast-Path and Pre-compiled Regexes in Medication Name Normalization
 **Learning:** In `services/medicamento_curadoria.py`, `normalizar_nome_prescrito` ran `unicodedata.normalize("NFKD", texto)` and character-combining filtering loops on every string, along with re-compiling regexes (`[^\w%/.,+\- ]+` and `\s*-\s*`) dynamically on every call. Adding an `isascii()` pre-condition check to short-circuit NFKD decomposition and pre-compiling regex patterns at module level yields a ~40% execution speedup.
 **Action:** Check for ASCII pre-conditions before unicodedata decomposition in string normalization helpers, and pre-compile regular expression patterns at module level.
+
+## 2026-09-13 - Pre-compiling Regex Patterns in Bulario Text Extraction
+**Learning:** In PetOrlandia, several text parsing functions in `services/bulario.py` (`_dose_texto_tem_forca_explicita`, `_dose_texto_tem_concentracao_explicita`, `_concentracao_principal_apresentacao`, etc.) were dynamically compiling the same regular expressions on every single call using `re.search()`. Given these are hot paths called repeatedly (e.g. during large catalog matches or parsing scraped structured content), this caused unnecessary regex parsing overhead.
+**Action:** Always extract and pre-compile invariant regular expressions to module-level `re.compile()` objects, especially in text-heavy processing or parsing modules, replacing inline `re.search`/`re.sub` calls with their compiled equivalents (`_RE_PATTERN.search()`).
