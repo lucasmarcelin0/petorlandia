@@ -61,6 +61,9 @@ from authlib.jose import JsonWebKey, jwt
 import json
 import csv
 import unicodedata
+
+_RE_SPACES = re.compile(r"\s+")
+_RE_NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
 try:
     from document_utils import format_cnpj as format_cnpj_value, only_digits
 except ImportError:
@@ -2020,9 +2023,10 @@ def _normalize_public_text(value):
     normalized = (value or '').strip().lower()
     if not normalized:
         return ''
-    normalized = unicodedata.normalize('NFKD', normalized)
-    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-    return re.sub(r'\s+', ' ', normalized)
+    if not normalized.isascii():
+        normalized = unicodedata.normalize('NFKD', normalized)
+        normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return _RE_SPACES.sub(' ', normalized)
 
 
 def _vet_public_city(vet):
@@ -4941,8 +4945,11 @@ def _update_coordinates_from_request(endereco: Endereco | None):
 def _normalizar_unidade_idade(unidade):
     if not unidade:
         return 'anos'
-    texto = unicodedata.normalize('NFKD', str(unidade))
-    texto = texto.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    raw = str(unidade)
+    if raw.isascii():
+        texto = raw.strip().lower()
+    else:
+        texto = unicodedata.normalize('NFKD', raw).encode('ASCII', 'ignore').decode('ASCII').strip().lower()
     if texto.startswith('mes'):
         return 'meses'
     if texto.startswith('ano'):
@@ -5876,9 +5883,13 @@ def _integration_build_handoff(user: User, animal: Animal, consulta_id: int | No
 
 
 def _integration_normalize_lookup_token(value: str | None) -> str:
-    normalized = unicodedata.normalize('NFKD', str(value or ''))
-    without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-    return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
+    raw = str(value or '')
+    if raw.isascii():
+        without_accents = raw
+    else:
+        normalized = unicodedata.normalize('NFKD', raw)
+        without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return _RE_NON_ALPHANUMERIC.sub('', without_accents.lower())
 
 
 def _integration_parse_freeform_messages(payload: dict):
@@ -5937,11 +5948,8 @@ def _integration_parse_freeform_messages(payload: dict):
     return parsed_messages
 
 
-def _integration_extract_freeform_intake(payload: dict):
-    messages = _integration_parse_freeform_messages(payload)
-    if not messages:
-        raise ValueError('Informe texto livre ou uma lista de mensagens para interpretação.')
 
+def _extract_intake_entities(messages):
     url_pattern = re.compile(r'https?://\S+')
     phone_pattern = re.compile(r'(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9?\d{4})[-\s]?\d{4}')
     date_pattern = re.compile(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b')
@@ -5992,6 +6000,11 @@ def _integration_extract_freeform_intake(payload: dict):
             if candidate not in name_candidates:
                 name_candidates.append(candidate)
 
+    return map_links, other_links, phones, dates_found, times_found, name_candidates, empty_messages
+
+
+
+def _build_intake_drafts(name_candidates, phones, map_links, dates_found, times_found):
     tutor_name = name_candidates[0] if name_candidates else None
     phone = phones[0] if phones else None
     suggested_action = 'cadastrar_tutor_e_pets'
@@ -6011,6 +6024,9 @@ def _integration_extract_freeform_intake(payload: dict):
             'hora_candidata': times_found[0] if times_found else None,
         }
 
+    return tutor_draft, agendamento_draft, suggested_action
+
+def _determine_intake_missing_fields(tutor_draft, agendamento_draft):
     missing_fields = []
     if not tutor_draft['nome']:
         missing_fields.append('nome_do_tutor')
@@ -6027,7 +6043,9 @@ def _integration_extract_freeform_intake(payload: dict):
         missing_fields.append('data_do_agendamento')
     if agendamento_draft and not agendamento_draft['hora_candidata']:
         missing_fields.append('hora_do_agendamento')
+    return missing_fields
 
+def _generate_intake_summary(tutor_draft, empty_messages):
     summary_parts = []
     if tutor_draft['nome']:
         summary_parts.append(f"Possível tutor identificado: {tutor_draft['nome']}.")
@@ -6038,6 +6056,20 @@ def _integration_extract_freeform_intake(payload: dict):
     summary_parts.append(
         'Ainda faltam dados clínicos e do pet para converter a conversa em cadastro ou atendimento operacional.'
     )
+    return ' '.join(summary_parts)
+
+def _integration_extract_freeform_intake(payload: dict):
+    messages = _integration_parse_freeform_messages(payload)
+    if not messages:
+        raise ValueError('Informe texto livre ou uma lista de mensagens para interpretação.')
+
+    map_links, other_links, phones, dates_found, times_found, name_candidates, empty_messages = _extract_intake_entities(messages)
+
+    tutor_draft, agendamento_draft, suggested_action = _build_intake_drafts(
+        name_candidates, phones, map_links, dates_found, times_found
+    )
+    missing_fields = _determine_intake_missing_fields(tutor_draft, agendamento_draft)
+    summary_text = _generate_intake_summary(tutor_draft, empty_messages)
 
     return {
         'mensagens_processadas': len(messages),
@@ -6058,7 +6090,7 @@ def _integration_extract_freeform_intake(payload: dict):
         },
         'acao_sugerida': suggested_action,
         'campos_a_confirmar': list(dict.fromkeys(missing_fields)),
-        'resumo_interpretado': ' '.join(summary_parts),
+        'resumo_interpretado': summary_text,
     }
 
 
@@ -8056,8 +8088,12 @@ def _integration_list_exame_imagem_history(user: User, animal: Animal):
 
 
 def _integration_normalize_match_text(value) -> str:
-    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
-    return re.sub(r'\s+', ' ', text.lower()).strip()
+    raw = str(value or '')
+    if raw.isascii():
+        text = raw
+    else:
+        text = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+    return _RE_SPACES.sub(' ', text.lower()).strip()
 
 
 def _integration_find_existing_exam_for_laudo(payload: dict, animal: Animal | None = None):
@@ -9611,7 +9647,10 @@ def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta)
 
 
 def _normalize_protocol_medication_name(value: str | None) -> str:
-    text = unicodedata.normalize('NFKD', (value or '').strip().lower())
+    text = (value or '').strip().lower()
+    if text.isascii():
+        return text
+    text = unicodedata.normalize('NFKD', text)
     return ''.join(char for char in text if not unicodedata.combining(char))
 
 
@@ -11178,6 +11217,8 @@ from sqlalchemy.orm import joinedload
 
 def _normalize_racao_brand_key(value):
     text = " ".join((value or "").strip().lower().split())
+    if text.isascii():
+        return text
     normalized = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in normalized if not unicodedata.combining(ch))
 
@@ -12359,8 +12400,11 @@ def list_breeds():
 
     def _breed_display_key(name):
         raw = (name or "").strip()
-        normalized = unicodedata.normalize("NFKD", raw)
-        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        if raw.isascii():
+            normalized = raw
+        else:
+            normalized = unicodedata.normalize("NFKD", raw)
+            normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
         token = " ".join(normalized.lower().replace("-", " ").split())
         if token in {
             "srd",

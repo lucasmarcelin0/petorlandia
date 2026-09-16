@@ -123,3 +123,16 @@ def test_home_editor_icon_button_a11y_labels():
     assert 'aria-label="{% if flag_map[\'home_section_pets\'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco de pets"' in content
     assert 'aria-hidden="true"' in content
 
+
+def test_copy_buttons_a11y_attributes():
+    template_files = [
+        ("templates/indicacao.html", 'aria-label="Copiar link de indicação"'),
+        ("templates/animais/ficha_animal.html", 'aria-label="Copiar link da carteirinha digital"'),
+        ("templates/vacinas_servico/pedido.html", 'aria-label="Copiar link do pedido"'),
+        ("templates/admin/parcerias.html", 'aria-label="Copiar link do convite"'),
+    ]
+    for filepath, expected_label in template_files:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert 'aria-live="polite"' in content, f"Missing aria-live='polite' in {filepath}"
+        assert expected_label in content, f"Missing expected aria-label in {filepath}"

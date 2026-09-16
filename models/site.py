@@ -8,7 +8,7 @@ except ImportError:
     from .extensions import db
 
 from flask_login import UserMixin
-from flask import url_for, request, current_app
+from flask import url_for, request, current_app, g, has_request_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
 import json
@@ -41,6 +41,31 @@ from security.crypto import (
 
 
 
+class _Missing:
+    """Marca 'linha ausente' no cache, distinta de qualquer valor real."""
+
+    __slots__ = ()
+
+
+_MISSING = _Missing()
+
+
+def _request_cache(attr: str) -> dict | None:
+    """Dicionario preso ao `g` da requisicao, ou None fora de requisicao.
+
+    Fora de um request context (CLI, scripts, scheduler) devolvemos None e o
+    chamador vai ao banco, como antes -- nada de estado global de longa vida.
+    """
+
+    if not has_request_context():
+        return None
+    cache = getattr(g, attr, None)
+    if cache is None:
+        cache = {}
+        setattr(g, attr, cache)
+    return cache
+
+
 class SiteFlag(db.Model):
     """Chave-valor booleano para flags de funcionamento do site.
 
@@ -63,11 +88,26 @@ class SiteFlag(db.Model):
 
     @classmethod
     def get(cls, key: str, default: bool = False) -> bool:
+        # Cache por requisicao: a mesma flag e lida varias vezes por render
+        # (context processors, layout, navegacao). Guardamos o valor **da
+        # linha** -- e `_MISSING` quando ela nao existe -- em vez do valor ja
+        # resolvido, para que dois `get` da mesma chave com `default`
+        # diferentes continuem devolvendo respostas diferentes.
+        cache = _request_cache('_site_flag_cache')
+        if cache is not None and key in cache:
+            stored = cache[key]
+            return default if stored is _MISSING else stored
+
         try:
             row = cls.query.filter_by(key=key).first()
-            return row.value if row else default
         except Exception:
+            # Falha de banco nao entra no cache: a proxima leitura tenta de novo.
             return default
+
+        stored = row.value if row else _MISSING
+        if cache is not None:
+            cache[key] = stored
+        return default if stored is _MISSING else stored
 
     @classmethod
     def set(cls, key: str, value: bool, label: str | None = None) -> 'SiteFlag':
@@ -80,6 +120,9 @@ class SiteFlag(db.Model):
             if label is not None:
                 row.label = label
         db.session.commit()
+        cache = _request_cache('_site_flag_cache')
+        if cache is not None:
+            cache[key] = value
         return row
 
 
@@ -100,11 +143,22 @@ class SiteText(db.Model):
 
     @classmethod
     def get(cls, key: str, default: str = '') -> str:
+        # Mesma estrategia de SiteFlag.get: cacheamos o valor da linha (ou
+        # `_MISSING`), nunca o `default` ja aplicado.
+        cache = _request_cache('_site_text_cache')
+        if cache is not None and key in cache:
+            stored = cache[key]
+            return default if stored is _MISSING else stored
+
         try:
             row = cls.query.filter_by(key=key).first()
-            return row.value if row and row.value else default
         except Exception:
             return default
+
+        stored = row.value if row and row.value else _MISSING
+        if cache is not None:
+            cache[key] = stored
+        return default if stored is _MISSING else stored
 
     @classmethod
     def set(cls, key: str, value: str) -> 'SiteText':
@@ -115,6 +169,9 @@ class SiteText(db.Model):
         else:
             row.value = value
         db.session.commit()
+        cache = _request_cache('_site_text_cache')
+        if cache is not None:
+            cache[key] = value
         return row
 
 

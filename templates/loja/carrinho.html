@@ -26,7 +26,7 @@
           {{ form.csrf_token }}
           <button type="submit" class="btn btn-outline-secondary btn-sm js-cart-btn" data-action="decrease" aria-label="Diminuir quantidade de {{ item.item_name }}" title="Diminuir quantidade">-</button>
         </form>
-        <span class="mx-1 js-cart-qty" aria-label="Quantidade atual: {{ item.quantity }}">{{ item.quantity }}</span>
+        <span class="mx-1 js-cart-qty" aria-label="Quantidade atual: {{ item.quantity }}" aria-live="polite" aria-atomic="true">{{ item.quantity }}</span>
         <form action="{{ url_for('aumentar_item_carrinho', item_id=item.id) }}" method="post" class="ms-2 js-cart-form" data-skip-global-handler="true">
           {{ form.csrf_token }}
           <button type="submit" class="btn btn-outline-secondary btn-sm js-cart-btn" data-action="increase" aria-label="Aumentar quantidade de {{ item.item_name }}" title="Aumentar quantidade">+</button>
@@ -89,7 +89,7 @@
     {{ form.hidden_tag() }}
 
     <div class="mb-3 text-start">
-      <label class="form-label">Endereço de entrega</label>
+      <label for="addressSelect" class="form-label">Endereço de entrega</label>
 
       <select name="address_id" id="addressSelect" class="form-select mb-2">
         {% if default_address %}
@@ -354,6 +354,7 @@
         listItem?.remove();
       } else {
         quantitySpan.textContent = data.item_quantity;
+        quantitySpan.setAttribute('aria-label', `Quantidade atual: ${data.item_quantity}`);
       }
     }
 
@@ -363,6 +364,9 @@
   function revertOptimisticState({ quantitySpan, previousQty, previousTotal }) {
     if (quantitySpan) {
       quantitySpan.textContent = previousQty;
+      if (previousQty !== undefined && previousQty !== null) {
+        quantitySpan.setAttribute('aria-label', `Quantidade atual: ${previousQty}`);
+      }
     }
     if (cartTotal && previousTotal) {
       cartTotal.textContent = previousTotal.text;
@@ -434,6 +438,7 @@
     const optimisticQty = Math.max(0, currentQty + delta);
     if (quantitySpan) {
       quantitySpan.textContent = optimisticQty;
+      quantitySpan.setAttribute('aria-label', `Quantidade atual: ${optimisticQty}`);
     }
     if (cartTotal && !Number.isNaN(unitPrice)) {
       const currentTotal = parseFloat(cartTotal.dataset.totalValue || '0');

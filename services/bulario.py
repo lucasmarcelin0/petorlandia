@@ -285,7 +285,19 @@ _RE_NORM_SLASH = re.compile(r"\s*/\s*")
 _RE_NORM_CONC_1 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(\d+(?:[.,]\d+)?)\s*(ml|mL|l)\b", re.IGNORECASE)
 _RE_NORM_CONC_2 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(ml|mL|l)\b", re.IGNORECASE)
 _RE_NORM_CONC_3 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b", re.IGNORECASE)
+
 _RE_NORM_PERCENT = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE)
+_RE_DOSE_FORCA = re.compile(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b')
+_RE_DOSE_CONC = re.compile(r'\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ui)\s*/\s*(?:ml|l)\b')
+_RE_CONC_PRINCIPAL_1 = re.compile(r'\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:m\s*l|ml)\b', re.IGNORECASE)
+_RE_CONC_PRINCIPAL_2 = re.compile(r'\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(?:m\s*l|ml)\b', re.IGNORECASE)
+_RE_VOL_APRESENTACAO = re.compile(r'\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)', re.IGNORECASE)
+_RE_FAIXA_PESO_1 = re.compile(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg')
+_RE_FAIXA_PESO_2 = re.compile(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg')
+_RE_FAIXA_PESO_3 = re.compile(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg')
+_RE_ESPECIE_CAO = re.compile(r'\bcae?s?\b|\bcaes\b|\bcachorr')
+_RE_ESPECIE_GATO = re.compile(r'\bgat[oa]s?\b|\bfelin')
+_RE_CONC_ALVO = re.compile(r'(\d+(?:[.,]\d+)?)\s*mg\b')
 
 
 def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
@@ -918,7 +930,7 @@ def _dose_texto_tem_forca_explicita(dose) -> bool:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b', norm):
+        if _RE_DOSE_FORCA.search(norm):
             return True
     return False
 
@@ -942,7 +954,7 @@ def _dose_texto_tem_concentracao_explicita(dose) -> bool:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ui)\s*/\s*(?:ml|l)\b', norm):
+        if _RE_DOSE_CONC.search(norm):
             return True
     return False
 
@@ -1509,22 +1521,16 @@ def _concentracao_principal_apresentacao(ap) -> str:
     ]
     combinado = ' '.join(str(t) for t in textos if t)
     if combinado:
-        m = re.search(
-            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:m\s*l|ml)\b',
-            combinado,
-        )
+        m = _RE_CONC_PRINCIPAL_1.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}/{m.group(3)} mL"
-        m = re.search(
-            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(?:m\s*l|ml)\b',
-            combinado,
-        )
+        m = _RE_CONC_PRINCIPAL_2.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2) + '/ml')}"
-        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%', combinado)
+        m = _RE_NORM_PERCENT.search(combinado)
         if m:
             return f"{m.group(1)}%"
-        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b', combinado)
+        m = _RE_NORM_CONC_3.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
 
@@ -1595,7 +1601,7 @@ def _volume_apresentacao_label(ap) -> str:
     if valor is not None and unidade and unidade.lower() not in {'un', 'unidade'}:
         return f"{_fmt_apresentacao_label(float(valor))} {unidade}"
     texto = getattr(ap, 'concentracao', None) or ''
-    m = re.search(r'(?i)\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)', texto)
+    m = _RE_VOL_APRESENTACAO.search(texto)
     if m:
         return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
     return ''
@@ -1666,15 +1672,15 @@ def _extrair_faixa_peso_apresentacao(ap) -> Optional[str]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        m = re.search(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_FAIXA_PESO_1.search(norm)
         if m:
             return f'até {m.group(1).replace(".", ",")} kg'
-        m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_FAIXA_PESO_2.search(norm)
         if m:
             ini = m.group(1).replace('.', ',')
             fim = m.group(2).replace('.', ',')
             return f'{ini} a {fim} kg'
-        m = re.search(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_FAIXA_PESO_3.search(norm)
         if m:
             return f'acima de {m.group(1).replace(".", ",")} kg'
     return None
@@ -1690,9 +1696,9 @@ def _extrair_especie_apresentacao(ap) -> Optional[str]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\bcae?s?\b|\bcaes\b|\bcachorr', norm):
+        if _RE_ESPECIE_CAO.search(norm):
             return 'Caes'
-        if re.search(r'\bgat[oa]s?\b|\bfelin', norm):
+        if _RE_ESPECIE_GATO.search(norm):
             return 'Gatos'
     return None
 
@@ -1964,7 +1970,7 @@ def _extrair_concentracao_alvo_mg(proto) -> Optional[float]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        match = re.search(r'(\d+(?:[.,]\d+)?)\s*mg\b', norm)
+        match = _RE_CONC_ALVO.search(norm)
         if not match:
             continue
         try:

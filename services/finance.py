@@ -1082,27 +1082,9 @@ def calculate_clinic_taxes(
     return taxes
 
 
-def generate_clinic_notifications(
-    clinic_id: int,
-    month: Optional[date | datetime | str] = None,
-) -> List[ClinicNotification]:
-    """Build or refresh accounting alerts for the requested clinic/month."""
-
-    month_start = _normalize_month(month)
-    clinic = Clinica.query.get(clinic_id)
-    if clinic is None:
-        raise ValueError(f"Clinic {clinic_id} not found")
-
-    month_label = month_start.strftime("%m/%Y")
-    month_end = month_start + relativedelta(months=1)
-    taxes = ClinicTaxes.query.filter_by(clinic_id=clinic_id, month=month_start).one_or_none()
-    revenue_12m = _classified_sum_for_range(clinic_id, month_start, REVENUE_CATEGORIES)
-
-    alerts: list[dict[str, str]] = []
-
-    def _add_alert(title: str, message: str, type_: str) -> None:
-        alerts.append({"title": title, "message": message, "type": type_})
-
+def _check_tax_notifications(
+    taxes: ClinicTaxes | None, revenue_12m: Decimal, month_label: str, _add_alert: Callable[[str, str, str], None]
+) -> None:
     if taxes and taxes.faixa_simples:
         faixa_index = max(1, min(int(taxes.faixa_simples), len(SIMPLIES_ANEXO_III_BRACKETS))) - 1
         faixa_limit = SIMPLIES_ANEXO_III_BRACKETS[faixa_index][0]
@@ -1148,6 +1130,10 @@ def generate_clinic_notifications(
                 "info",
             )
 
+
+def _check_pj_payment_notifications(
+    clinic_id: int, month_start: date, month_end: date, month_label: str, _add_alert: Callable[[str, str, str], None]
+) -> None:
     pj_payments_ready = pj_payments_schema_is_ready()
     payments_current: list[PJPayment] = []
     recent_payments: list[PJPayment] = []
@@ -1220,6 +1206,10 @@ def generate_clinic_notifications(
             "warning",
         )
 
+
+def _check_revenue_notifications(
+    clinic_id: int, month_start: date, _add_alert: Callable[[str, str, str], None]
+) -> None:
     negative_revenues = (
         db.session.query(func.count(ClassifiedTransaction.id))
         .filter(ClassifiedTransaction.clinic_id == clinic_id)
@@ -1234,6 +1224,32 @@ def generate_clinic_notifications(
             "Foram detectados lançamentos de receita com valores negativos para o mês.",
             "warning",
         )
+
+
+def generate_clinic_notifications(
+    clinic_id: int,
+    month: Optional[date | datetime | str] = None,
+) -> List[ClinicNotification]:
+    """Build or refresh accounting alerts for the requested clinic/month."""
+
+    month_start = _normalize_month(month)
+    clinic = Clinica.query.get(clinic_id)
+    if clinic is None:
+        raise ValueError(f"Clinic {clinic_id} not found")
+
+    month_label = month_start.strftime("%m/%Y")
+    month_end = month_start + relativedelta(months=1)
+    taxes = ClinicTaxes.query.filter_by(clinic_id=clinic_id, month=month_start).one_or_none()
+    revenue_12m = _classified_sum_for_range(clinic_id, month_start, REVENUE_CATEGORIES)
+
+    alerts: list[dict[str, str]] = []
+
+    def _add_alert(title: str, message: str, type_: str) -> None:
+        alerts.append({"title": title, "message": message, "type": type_})
+
+    _check_tax_notifications(taxes, revenue_12m, month_label, _add_alert)
+    _check_pj_payment_notifications(clinic_id, month_start, month_end, month_label, _add_alert)
+    _check_revenue_notifications(clinic_id, month_start, _add_alert)
 
     existing = ClinicNotification.query.filter_by(clinic_id=clinic_id, month=month_start).all()
     existing_map = {
