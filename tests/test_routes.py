@@ -1204,9 +1204,13 @@ def test_vacina_pmo_dashboard_offers_camera_and_gallery_photo_sources(app):
     assert 'id="pmo-photo-sheet"' in body
     assert 'data-action="photo-source-camera"' in body
     assert 'data-action="photo-source-gallery"' in body
-    # Um input dedicado por origem: camera nativa e galeria/arquivos.
-    assert 'data-photo-source="camera"' in body
-    assert 'data-photo-source="gallery"' in body
+    # Um input dedicado por origem: camera nativa e galeria/arquivos. Eles ficam
+    # fora da lista, que e reescrita inteira a cada render -- dentro dela, o
+    # <input> era descartado enquanto o app da camera estava aberto e a foto que
+    # voltava nao chegava a nenhum listener.
+    assert 'id="pmo-photo-input-camera"' in body
+    assert 'id="pmo-photo-input-gallery"' in body
+    assert 'capture="environment" id="pmo-photo-input-camera"' in body
     # Camera embutida para aparelhos sem app de camera (desktop).
     assert 'id="pmo-camera-modal"' in body
     assert 'id="pmo-camera-shutter"' in body

@@ -15,6 +15,7 @@ from models.sfa import (SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT1
                         SfaContextoEpisodio, SfaSinanLog, SfaAcao, SfaAuditoria, SfaContato)
 from services import sfa_service as service
 from services import sfa_workflow as flow
+from services import sfa_workflow_ops as ops
 from services.sfa_workflow_ops import registrar_operacao
 from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 
@@ -23,6 +24,12 @@ from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 def hoje(monkeypatch):
     dia = [date(2026, 9, 13)]
     monkeypatch.setattr(flow, 'hoje_local', lambda: dia[0])
+    # `sfa_workflow_ops` importa `hoje_local` no topo do modulo, entao guarda uma
+    # referencia propria: sem congelar tambem a dele, `registrar_operacao`
+    # continuava lendo o relogio de verdade. O teste passava por acidente ate a
+    # data escolhida virar passado -- e ai quebrava sozinho, sem ninguem mexer
+    # em nada (foi o que aconteceu em 16/09/2026).
+    monkeypatch.setattr(ops, 'hoje_local', lambda: dia[0])
     return dia
 
 
