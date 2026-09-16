@@ -23,6 +23,7 @@ from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 def hoje(monkeypatch):
     dia = [date(2026, 9, 13)]
     monkeypatch.setattr(flow, 'hoje_local', lambda: dia[0])
+    monkeypatch.setattr('services.sfa_workflow_ops.hoje_local', lambda: dia[0])
     return dia
 
 
