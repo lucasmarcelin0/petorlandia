@@ -26,12 +26,15 @@ class FakeClassList {
 
 class FakeElement {
   constructor() {
+    this.parentElement = null;
     this.dataset = {};
     this.attributes = new Map();
     this.classList = new FakeClassList(this);
     this.parentNode = null;
     this.textContent = '';
   }
+
+  closest(selector) { return this.parentElement; }
 
   set className(value) {
     this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean));
