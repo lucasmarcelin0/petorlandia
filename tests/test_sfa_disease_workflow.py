@@ -15,6 +15,7 @@ from models.sfa import (SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT1
                         SfaContextoEpisodio, SfaSinanLog, SfaAcao, SfaAuditoria, SfaContato)
 from services import sfa_service as service
 from services import sfa_workflow as flow
+from services import sfa_workflow_ops as flow_ops
 from services.sfa_workflow_ops import registrar_operacao
 from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 
@@ -23,6 +24,12 @@ from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 def hoje(monkeypatch):
     dia = [date(2026, 9, 13)]
     monkeypatch.setattr(flow, 'hoje_local', lambda: dia[0])
+    # `sfa_workflow_ops` faz `from ... import hoje_local` no topo do modulo, ou
+    # seja, guarda a funcao original. Congelar so em `flow` deixava a validacao
+    # de data comparando contra o dia real enquanto o resto do fluxo usava o dia
+    # congelado -- o teste do contato reagendado passou em 13/09 por coincidencia
+    # e virou vermelho sozinho no dia 14, sem ninguem mexer no codigo.
+    monkeypatch.setattr(flow_ops, 'hoje_local', lambda: dia[0])
     return dia
 
 
@@ -231,6 +238,17 @@ def test_contato_reagendado_preserva_resultado_e_data(app,hoje):
     assert p.retorno_contato=='REAGENDADO'
     assert service.calcular_acao_operacional(p)['data_alvo']=='15/09/2026'
     assert service.calcular_acao_operacional(p)['acao']=='Aguardar contato combinado'
+
+
+def test_contato_reagendado_recusa_data_no_passado(app,hoje):
+    # Guarda a validacao em si: com o dia congelado em 13/09, uma data anterior
+    # tem que continuar sendo recusada. Sem isto, alguem poderia apagar o
+    # vermelho deste arquivo afrouxando a regra em vez de congelar o dia.
+    p=paciente(app)
+    service.on_submit_t0(t0_payload(p,'01/09/2026'))
+    with pytest.raises(ValueError,match='não pode estar no passado'):
+        registrar_operacao(dict(operacao='contato',id_estudo=p.id_estudo,responsavel='Agente',
+            etapa='T7',canal='TELEFONE',resultado='REAGENDADO',motivo='Horário combinado',proximo_contato='2026-09-12'),'user:1')
 
 
 def test_sinan_reimporta_atualizacoes_sem_duplicar(app,hoje,monkeypatch):
