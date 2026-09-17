@@ -2299,6 +2299,20 @@ def _pmo_close_slugs(left: str, right: str) -> bool:
     return False
 
 
+def _pmo_species_match(left: Any, right: Any) -> str:
+    """Compara a especie de dois registros: igual, desconhecida ou conflito.
+
+    Casa com um cao "Mia" vacinado na campanha passada e uma gata "Mia" na
+    lista de hoje nao e o mesmo animal. Sem esta checagem o nome sozinho
+    apagaria a dose da gata.
+    """
+    esquerda = _pmo_animal_slug(left)
+    direita = _pmo_animal_slug(right)
+    if not esquerda or not direita:
+        return "desconhecida"
+    return "igual" if esquerda == direita else "conflito"
+
+
 def _pmo_visit_reference_date(visit: PmoVaccinationVisit) -> date | None:
     if visit.vaccine_date:
         return visit.vaccine_date
@@ -2394,9 +2408,10 @@ def build_previous_immunity_index(
     """``{visit_id: {animal_id: dados da dose anterior}}``.
 
     A comparação é feita em três níveis, do mais forte para o mais fraco:
-    mesmo cadastro de animal, mesmo nome, e nome com uma letra de diferença.
-    Só o terceiro nível é marcado como aproximado, para que a tela possa pedir
-    conferência em vez de afirmar.
+    mesmo cadastro de animal, mesmo nome e espécie, e nome com uma letra de
+    diferença. Espécies declaradas e diferentes nunca se juntam; quando uma
+    delas não foi informada, o nome igual vale apenas como aproximado, para
+    que a tela peça conferência em vez de afirmar.
     """
     doses = _pmo_previous_doses(visits)
     if not doses:
@@ -2421,8 +2436,14 @@ def build_previous_immunity_index(
                 if animal.animal_id and dose["animal_id"] == animal.animal_id:
                     escolhida, grau = dose, "cadastro"
                     break
+                # Nome igual so vale como identidade quando a especie tambem
+                # bate. Se a especie de um dos lados nao foi informada, o nome
+                # vira palpite: a tela pede conferencia em vez de afirmar.
+                especie = _pmo_species_match(animal.species, dose["species"])
+                if especie == "conflito":
+                    continue
                 if slug and dose["slug"] == slug:
-                    escolhida, grau = dose, "exato"
+                    escolhida, grau = dose, "exato" if especie == "igual" else "aproximado"
                     break
                 if not escolhida and _pmo_close_slugs(slug, dose["slug"]):
                     escolhida, grau = dose, "aproximado"
