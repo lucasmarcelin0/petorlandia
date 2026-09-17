@@ -426,11 +426,23 @@
     gap: 8px;
   }
 
+  /* Cada animal vira um bloco proprio, com uma variacao sutil de cor entre um
+     e outro, para o vacinador nao confundir a linha do animal com a do vizinho
+     quando o cartao tem muitos pets. */
   .pmo-animal-item {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 154px;
     gap: 8px;
     align-items: center;
+    padding: 8px 10px;
+    border: 1px solid #e6ebf2;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .pmo-animal-item:nth-child(even) {
+    background: #f5f7fb;
+    border-color: #dfe6f0;
   }
 
   .pmo-animal-item > div {
@@ -1195,6 +1207,7 @@
     .pmo-animal-item {
       grid-template-columns: minmax(0, 1fr) 158px;
       gap: 8px;
+      padding: 7px 8px;
     }
 
     .pmo-note-box {
@@ -1233,6 +1246,7 @@
     .pmo-animal-item {
       grid-template-columns: minmax(0, 1fr);
       align-items: stretch;
+      padding: 7px 7px;
     }
 
     .pmo-animal-status {
