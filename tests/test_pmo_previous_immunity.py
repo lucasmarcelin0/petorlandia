@@ -293,8 +293,17 @@ def test_folha_impressa_marca_o_animal_ja_protegido(app):
     linhas = _build_pmo_print_rows([hoje], "25/08/2026")
     protegidos = linhas[0]["protegidos"]
     por_nome = {a.name: protegidos.get(a.id) for a in hoje.animals}
+    status = {a.name: a.status for a in hoje.animals}
 
-    assert por_nome["Mia"]["dateLabel"] == "20/01/2026"
+    # "Mia" é a mesma cadela da lista anterior: o papel não pode pedir uma
+    # segunda dose no mesmo ano, então ela sai da fila já resolvida.
+    assert status["Mia"] == PMO_STATUS_ALREADY_IMMUNE
+    assert hoje.animals[1].immune_since == date(2026, 1, 20)
+    assert por_nome["Mia"] is None
+    assert "Mia" not in [a.name for a in linhas[0]["pendentes"]]
+    # "Lupe" é só um nome parecido com "Lipe": continua pendente, com o aviso
+    # de conferência, porque quem decide isso é o vacinador na porta.
+    assert status["Lupe"] == "pendente"
     assert por_nome["Lupe"]["match"] == "aproximado"
     assert por_nome["Chico"] is None
 
@@ -310,8 +319,10 @@ def test_folha_impressa_marca_o_animal_ja_protegido(app):
             date_str="25-08-2026", other_turno="tarde",
         )
 
-    assert "já vacinado em 20/01/2026" in html
     assert "conferir" in html, "o nome aproximado precisa pedir conferência no papel"
+    assert "protegido desde 20/01/2026" in html, (
+        "o papel precisa dizer por que a Mia não recebe dose hoje"
+    )
 
 
 # --------------------------------------------------------------------------
