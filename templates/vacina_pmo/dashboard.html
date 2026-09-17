@@ -428,9 +428,13 @@
 
   .pmo-animal-item {
     display: grid;
-    grid-template-columns: minmax(90px, 1fr) 154px;
+    grid-template-columns: minmax(0, 1fr) 154px;
     gap: 8px;
     align-items: center;
+  }
+
+  .pmo-animal-item > div {
+    min-width: 0;
   }
 
   .pmo-animal-status {
@@ -979,12 +983,16 @@
     font-size: 0.76rem;
   }
 
+  /* O aviso fica dentro da coluna do animal: o texto quebra em linhas em vez de
+     vazar por cima do seletor de status no celular. */
   .pmo-animal-immunity {
+    box-sizing: border-box;
     margin-top: 0.25rem;
     display: flex;
     align-items: flex-start;
     gap: 0.35rem;
     max-width: 22rem;
+    width: 100%;
     padding: 0.28rem 0.5rem;
     border-radius: 0.4rem;
     border: 1px solid transparent;
@@ -995,6 +1003,12 @@
   .pmo-animal-immunity i {
     margin-top: 0.15rem;
     flex: 0 0 auto;
+  }
+
+  .pmo-animal-immunity__text {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
   }
 
   .pmo-animal-immunity--ok {
@@ -5700,11 +5714,28 @@
     return STATUS_META[status] || { label: status || '-', icon: 'fa-circle' };
   }
 
+  // Um animal com dose valida do ano nao entra na fila de hoje: a casa pode ser
+  // reinscrita na planilha, mas a antirrabica nao se repete. Ele so volta a
+  // contar se o vacinador de fato aplicar a dose agora.
+  function animalAwaitsDose(animal) {
+    if (!animal) return false;
+    if (animal.status === 'imunizado') return false;
+    const previous = animal.previousVaccination;
+    // "aproximado" e so um palpite por nome parecido: segue na fila ate o
+    // vacinador confirmar que e o mesmo animal.
+    if (previous && previous.immune && previous.match !== 'aproximado') return false;
+    return true;
+  }
+
   function vaccinationProgress(row) {
-    const total = row.animals.length;
-    const done = row.animals.filter((animal) => animal.status === 'vacinado').length;
+    const animals = row.animals || [];
+    const done = animals.filter((animal) => animal.status === 'vacinado').length;
+    // Total = quem ainda precisa de dose hoje + quem ja recebeu nesta visita.
+    const total = animals.filter((animal) => (
+      animal.status === 'vacinado' || animalAwaitsDose(animal)
+    )).length;
     const pct = total ? Math.round((done / total) * 100) : 0;
-    return { total, done, pct };
+    return { total, done, pct, protected: animals.length - total };
   }
 
   function buildOnTheWayMessage(row, phone) {
@@ -6981,7 +7012,7 @@
       const desde = animal.immuneSinceLabel || (animal.previousVaccination || {}).dateLabel || '';
       return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
         <i class="fas fa-check" aria-hidden="true"></i>
-        Não precisou de dose${desde ? ` — protegido pela vacina de <strong>${escapeHtml(desde)}</strong>` : ''}
+        <span class="pmo-animal-immunity__text">Não precisou de dose${desde ? ` — protegido pela vacina de <strong>${escapeHtml(desde)}</strong>` : ''}</span>
       </div>`;
     }
     const previous = animal && animal.previousVaccination;
@@ -6992,19 +7023,17 @@
       if (previous.match === 'aproximado') {
         return `<div class="pmo-animal-immunity pmo-animal-immunity--check">
           <i class="fas fa-circle-question" aria-hidden="true"></i>
-          Confira: <strong>${escapeHtml(previous.matchedName)}</strong> foi vacinado em
-          ${escapeHtml(previous.dateLabel)}. É o mesmo animal?
+          <span class="pmo-animal-immunity__text">Confira: <strong>${escapeHtml(previous.matchedName)}</strong> foi vacinado em ${escapeHtml(previous.dateLabel)}. É o mesmo animal?</span>
         </div>`;
       }
       return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
         <i class="fas fa-shield-halved" aria-hidden="true"></i>
-        Já vacinado em <strong>${escapeHtml(previous.dateLabel)}</strong> ·
-        protegido até ${escapeHtml(previous.protectedUntilLabel)}
+        <span class="pmo-animal-immunity__text">Já vacinado em <strong>${escapeHtml(previous.dateLabel)}</strong> · protegido até ${escapeHtml(previous.protectedUntilLabel)}</span>
       </div>`;
     }
     return `<div class="pmo-animal-immunity pmo-animal-immunity--due">
       <i class="fas fa-rotate-right" aria-hidden="true"></i>
-      Última dose em ${escapeHtml(previous.dateLabel)} — vencida, aplicar
+      <span class="pmo-animal-immunity__text">Última dose em ${escapeHtml(previous.dateLabel)} — vencida, aplicar</span>
     </div>`;
   }
 
@@ -7016,6 +7045,7 @@
     return (row.animals || []).filter((animal) => (
       animal.previousVaccination
       && animal.previousVaccination.immune
+      && !animalAwaitsDose(animal)
       && !PMO_DONE_STATUSES.includes(animal.status)
     ));
   }
@@ -7063,6 +7093,21 @@
     `).join('');
   }
 
+  // O chip de doses mostra so o que falta hoje. Quem ja estava protegido aparece
+  // no titulo para o vacinador entender a diferenca entre cachorros/gatos da
+  // casa e doses previstas.
+  function renderProgressChip(progress) {
+    const protegidos = progress.protected || 0;
+    const sufixo = protegidos
+      ? ` (${protegidos} ja protegido${protegidos > 1 ? 's' : ''} pela dose do ano)`
+      : '';
+    if (!progress.total) {
+      if (!protegidos) return '';
+      return `<span class="pmo-meta-chip pmo-meta-chip--progress" title="Nenhuma dose prevista${sufixo}"><i class="fas fa-syringe"></i>0/0</span>`;
+    }
+    return `<span class="pmo-meta-chip pmo-meta-chip--progress" title="Doses previstas para hoje${sufixo}"><i class="fas fa-syringe"></i>${progress.done}/${progress.total}</span>`;
+  }
+
   function renderMobileCard(row) {
     const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
     const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
@@ -7083,7 +7128,7 @@
           <span class="pmo-meta-chip"><i class="fas fa-clock"></i>${escapeHtml(row.shift || '-')}</span>
           <span class="pmo-meta-chip"><i class="fas fa-dog"></i>${row.dogs}</span>
           <span class="pmo-meta-chip"><i class="fas fa-cat"></i>${row.cats}</span>
-          ${progress.total ? `<span class="pmo-meta-chip pmo-meta-chip--progress"><i class="fas fa-syringe"></i>${progress.done}/${progress.total}</span>` : ''}
+          ${renderProgressChip(progress)}
         </div>
         ${progress.total ? `<div class="pmo-progress" role="progressbar" aria-valuenow="${progress.done}" aria-valuemin="0" aria-valuemax="${progress.total}" aria-label="Animais vacinados nesta visita"><div class="pmo-progress__bar" data-status="${row.status}" style="width:${progress.pct}%"></div></div>` : ''}
         <div class="pmo-animal-list">
