@@ -52,6 +52,28 @@ class FakeElement {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+
+  // O feedback global procura o wrapper de coluna do botao com closest(). Sem
+  // isto o dublê nao cumpre o contrato do elemento do navegador e o teste
+  // quebra por falta da funcao, nao por regressao do codigo.
+  matches(selector) {
+    return String(selector).split(',').map((part) => part.trim()).filter(Boolean).some((part) => {
+      const classe = part.match(/^\.([\w-]+)$/);
+      if (classe) return this.classList.contains(classe[1]);
+      const contem = part.match(/^\[class\*=["']([^"']+)["']\]$/);
+      if (contem) return this.className.includes(contem[1]);
+      return false;
+    });
+  }
+
+  closest(selector) {
+    let node = this;
+    while (node) {
+      if (typeof node.matches === 'function' && node.matches(selector)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
 }
 
 class FakeButton extends FakeElement {

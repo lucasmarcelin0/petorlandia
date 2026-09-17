@@ -611,3 +611,86 @@ def test_dose_antiga_nao_empurra_o_reforco_do_imunizado(app, client, monkeypatch
         "a visita sem dose não pode empurrar o vencimento um ano para frente"
     )
     assert "Vacinação pendente" not in html
+
+
+# --------------------------------------------------------------------------
+# Espécie diferente não é o mesmo animal
+# --------------------------------------------------------------------------
+
+def _visita_com_especies(sheet_title, *, animais, row=2, vaccine_date=None):
+    """Igual a ``_visita``, mas com a espécie de cada animal declarada."""
+    visita = PmoVaccinationVisit(
+        spreadsheet_id="plan-1",
+        sheet_gid="0",
+        sheet_title=sheet_title,
+        source_row=row,
+        tutor_name="Isabela da Silva Franks",
+        address="Avenida 16, 1934, Jardim Cidade Alta",
+        phone1="5516981817686",
+        dogs=sum(1 for item in animais if item[2] == "cao"),
+        cats=sum(1 for item in animais if item[2] == "gato"),
+        vaccine_date=vaccine_date,
+        password="PMOTESTE",
+    )
+    db.session.add(visita)
+    db.session.flush()
+    for posicao, (nome, status, especie) in enumerate(animais, start=1):
+        db.session.add(PmoVaccinationAnimal(
+            visit=visita, position=posicao, name=nome, species=especie, status=status,
+        ))
+    db.session.flush()
+    return visita
+
+
+def test_nome_igual_em_especie_diferente_nao_herda_a_dose(app):
+    with app.app_context():
+        _visita_com_especies(
+            "16/09/2026",
+            animais=[("Mia", "vacinado", "cao")],
+            vaccine_date=date(2026, 9, 16),
+        )
+        hoje = _visita_com_especies(
+            "17/09/2026",
+            animais=[("Mia", "pendente", "gato")],
+            row=3,
+            vaccine_date=date(2026, 9, 17),
+        )
+        indice = build_previous_immunity_index([hoje]).get(hoje.id, {})
+        assert indice == {}, "gata Mia nao pode herdar a dose do cao Mia"
+
+
+def test_nome_e_especie_iguais_continuam_sendo_o_mesmo_animal(app):
+    with app.app_context():
+        _visita_com_especies(
+            "16/09/2026",
+            animais=[("Mia", "vacinado", "gato")],
+            vaccine_date=date(2026, 9, 16),
+        )
+        hoje = _visita_com_especies(
+            "17/09/2026",
+            animais=[("Mia", "pendente", "gato")],
+            row=3,
+            vaccine_date=date(2026, 9, 17),
+        )
+        animal = hoje.animals[0]
+        dados = build_previous_immunity_index([hoje])[hoje.id][animal.id]
+        assert dados["match"] == "exato"
+        assert dados["immune"] is True
+
+
+def test_especie_nao_informada_pede_conferencia(app):
+    with app.app_context():
+        _visita_com_especies(
+            "16/09/2026",
+            animais=[("Mia", "vacinado", "")],
+            vaccine_date=date(2026, 9, 16),
+        )
+        hoje = _visita_com_especies(
+            "17/09/2026",
+            animais=[("Mia", "pendente", "gato")],
+            row=3,
+            vaccine_date=date(2026, 9, 17),
+        )
+        animal = hoje.animals[0]
+        dados = build_previous_immunity_index([hoje])[hoje.id][animal.id]
+        assert dados["match"] == "aproximado"
