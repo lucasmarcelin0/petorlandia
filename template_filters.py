@@ -14,6 +14,7 @@ import re
 import unicodedata
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from functools import lru_cache
 from urllib.parse import quote_plus
 
 from document_utils import format_cnpj as format_cnpj_value
@@ -226,10 +227,9 @@ def species_display(species) -> str:
 _RE_NON_ALPHANUMERIC = re.compile(r"[^a-zA-Z0-9]+")
 
 
-def _normalize_species_token(species: str | None) -> str | None:
-    name = _resolve_species_name(species)
-    if not name:
-        return None
+@lru_cache(maxsize=256)
+def _normalize_species_token_cached(name: str) -> str | None:
+    """Cache normalized string tokens to avoid repetitive NFKD decomposition and regex execution."""
     if name.isascii():
         without_accents = name
     else:
@@ -239,6 +239,13 @@ def _normalize_species_token(species: str | None) -> str | None:
     cleaned = _RE_NON_ALPHANUMERIC.sub("-", without_accents).strip("-")
     token = cleaned.lower()
     return token or None
+
+
+def _normalize_species_token(species: str | None) -> str | None:
+    name = _resolve_species_name(species)
+    if not name:
+        return None
+    return _normalize_species_token_cached(name)
 
 
 _SPECIES_VISUAL_TOKENS = {

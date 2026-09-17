@@ -8,6 +8,7 @@
 {% set animal_photo = appt.animal.image if appt.animal and appt.animal.image else none %}
 {% set tutor_photo = tutor.profile_photo if tutor and tutor.profile_photo else none %}
 {% set vet_photo = vet_user.profile_photo if vet_user and vet_user.profile_photo else none %}
+{% set animal_label = appt.animal.name if appt.animal and appt.animal.name else 'o animal' %}
 {# Rótulo vem de services.appointment_status via o modelo — mesma fonte do
    calendário e das listas da agenda. #}
 {% set status_label = appt.status_label %}
@@ -57,11 +58,12 @@
       </div>
       <div class="appointment-card__status-actions">
         <span class="status-badge status-{{ appt.status }}">{{ status_label }}</span>
-        <div class="appointment-card__primary-actions" aria-label="Ações principais">
+        <div class="appointment-card__primary-actions" aria-label="Ações principais do agendamento">
           <a
             href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
             class="btn btn-sm btn-primary"
             title="Ficha do Animal"
+            aria-label="Ficha do animal {{ animal_label }}"
           >
             <i class="fa-solid fa-file-medical me-1" aria-hidden="true"></i>
             Ficha do Animal
@@ -71,6 +73,7 @@
               href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
               class="btn btn-sm btn-outline-success"
               title="Iniciar Consulta"
+              aria-label="Iniciar consulta para {{ animal_label }}"
             >
               <i class="fa-solid fa-stethoscope me-1" aria-hidden="true"></i>
               Iniciar Consulta
@@ -80,6 +83,7 @@
               href="{{ url_for('edit_appointment', appointment_id=appt.id) }}"
               class="btn btn-sm btn-outline-info"
               title="Propor novo horário"
+              aria-label="Propor novo horário para {{ animal_label }}"
             >
               <i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>
               Propor novo horário
@@ -91,7 +95,7 @@
               type="button"
               data-bs-toggle="dropdown"
               aria-expanded="false"
-              aria-label="Mais ações"
+              aria-label="Mais ações para o agendamento de {{ animal_label }}"
             >
               <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
             </button>
@@ -100,7 +104,7 @@
               <li>
                 <form method="POST" action="{{ url_for('appointment_emit_nfse', appointment_id=appt.id) }}">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Emitir NFS-e">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Emitir NFS-e" aria-label="Emitir NFS-e para o agendamento de {{ animal_label }}">
                     <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
                     Emitir NFS-e
                   </button>
@@ -109,20 +113,20 @@
               <li><hr class="dropdown-divider"></li>
               {% endif %}
               <li>
-                <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}">
+                <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" aria-label="Ficha do tutor {{ tutor_name }}">
                   <i class="fa-solid fa-user" aria-hidden="true"></i>
                   Ficha do Tutor
                 </a>
               </li>
               <li>
-                <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('appointment_close', appointment_id=appt.id) }}">
+                <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('appointment_close', appointment_id=appt.id) }}" aria-label="Fechar atendimento de {{ animal_label }}">
                   <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
                   Fechar atendimento
                 </a>
               </li>
               {% if may_start_consultation %}
                 <li>
-                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('edit_appointment', appointment_id=appt.id) }}">
+                  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" aria-label="Propor novo horário para {{ animal_label }}">
                     <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
                     Propor novo horário
                   </a>
@@ -134,7 +138,7 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="completed">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como finalizada">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como finalizada" aria-label="Marcar agendamento de {{ animal_label }} como finalizado">
                     <i class="fa-solid fa-clipboard-check text-success" aria-hidden="true"></i>
                     Finalizada
                   </button>
@@ -144,7 +148,7 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="canceled">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Cancelar">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Cancelar" aria-label="Cancelar agendamento de {{ animal_label }}">
                     <i class="fa-solid fa-xmark text-warning" aria-hidden="true"></i>
                     Cancelar
                   </button>
@@ -154,7 +158,7 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="scheduled">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Voltar para a confirmar">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Voltar para a confirmar" aria-label="Mudar status de {{ animal_label }} para a confirmar">
                     <i class="fa-solid fa-hourglass-half text-info" aria-hidden="true"></i>
                     A confirmar
                   </button>
@@ -164,7 +168,7 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="no_show">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Registrar falta do paciente">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Registrar falta do paciente" aria-label="Registrar falta do paciente {{ animal_label }}">
                     <i class="fa-solid fa-user-slash text-danger" aria-hidden="true"></i>
                     Não compareceu
                   </button>
@@ -179,7 +183,7 @@
                   data-confirm="Excluir este agendamento?"
                 >
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <button class="dropdown-item d-flex align-items-center gap-2 text-danger" title="Excluir">
+                  <button class="dropdown-item d-flex align-items-center gap-2 text-danger" title="Excluir" aria-label="Excluir agendamento de {{ animal_label }}">
                     <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     Excluir agendamento
                   </button>

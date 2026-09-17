@@ -264,11 +264,11 @@
   {% include 'partials/schedule_modal.html' %}
 
   <!-- Modal: Agendar consulta -->
-  <div class="modal fade" id="appointmentModalForm" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="appointmentModalForm" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="appointmentModalFormTitle" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Agendar Consulta</h5>
+          <h5 class="modal-title" id="appointmentModalFormTitle">Agendar Consulta</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
@@ -313,11 +313,11 @@
   </div>
 
   <!-- Modal: Detalhes da consulta (apenas leitura) -->
-  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="appointmentDetailModalTitle" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Detalhes da Consulta</h5>
+          <h5 class="modal-title" id="appointmentDetailModalTitle">Detalhes da Consulta</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
@@ -327,14 +327,14 @@
             <div class="appointment-modal-top">
               <div class="appointment-modal-schedule">
                 <div class="appointment-modal-time-block">
-                  <span class="appointment-modal-icon is-time"><i class="fa-regular fa-clock"></i></span>
+                  <span class="appointment-modal-icon is-time"><i class="fa-regular fa-clock" aria-hidden="true"></i></span>
                   <div>
                     <span class="appointment-modal-subtitle">Horário</span>
                     <span class="appointment-modal-value" id="modal-time-display">--:--</span>
                   </div>
                 </div>
                 <div class="appointment-modal-time-block">
-                  <span class="appointment-modal-icon is-date"><i class="fa-regular fa-calendar"></i></span>
+                  <span class="appointment-modal-icon is-date"><i class="fa-regular fa-calendar" aria-hidden="true"></i></span>
                   <div>
                     <span class="appointment-modal-subtitle">Data</span>
                     <span class="appointment-modal-value" id="modal-date-display">--/--/----</span>
@@ -349,21 +349,21 @@
 
             <div class="appointment-modal-people">
               <div class="appointment-modal-person">
-                <span class="appointment-modal-icon is-pet"><i class="fa-solid fa-paw"></i></span>
+                <span class="appointment-modal-icon is-pet"><i class="fa-solid fa-paw" aria-hidden="true"></i></span>
                 <div class="appointment-modal-person-info">
                   <span class="appointment-modal-person-label">Paciente</span>
                   <span class="appointment-modal-person-value" id="modal-animal-name">—</span>
                 </div>
               </div>
               <div class="appointment-modal-person">
-                <span class="appointment-modal-icon is-tutor"><i class="fa-solid fa-user"></i></span>
+                <span class="appointment-modal-icon is-tutor"><i class="fa-solid fa-user" aria-hidden="true"></i></span>
                 <div class="appointment-modal-person-info">
                   <span class="appointment-modal-person-label">Tutor</span>
                   <span class="appointment-modal-person-value" id="modal-tutor-name">—</span>
                 </div>
               </div>
               <div class="appointment-modal-person">
-                <span class="appointment-modal-icon is-vet"><i class="fa-solid fa-user-doctor"></i></span>
+                <span class="appointment-modal-icon is-vet"><i class="fa-solid fa-user-doctor" aria-hidden="true"></i></span>
                 <div class="appointment-modal-person-info">
                   <span class="appointment-modal-person-label">Veterinário</span>
                   <span class="appointment-modal-person-value" id="modal-vet-name">—</span>
