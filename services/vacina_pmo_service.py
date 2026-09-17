@@ -17,6 +17,7 @@ from typing import Any
 import requests
 from extensions import db
 from flask import current_app, has_request_context, url_for
+from security.url_safe import is_url_ssrf_safe
 from models import (
     Animal,
     Endereco,
@@ -526,6 +527,26 @@ def _pmo_geocode_google(address: str) -> tuple[float, float] | None:
     return precise or fallback
 
 
+_PMO_VERIFIED_EXACT_COORDS: list[tuple[re.Pattern, tuple[float, float]]] = [
+    (re.compile(r"\b(?:av\.?|avenida)\s+r\b[^\d]*549\b", re.IGNORECASE), (-20.7183381, -47.8633316)),
+    (re.compile(r"\b(?:av\.?|avenida)\s+u\b[^\d]*640\b", re.IGNORECASE), (-20.7170402, -47.8600922)),
+    (re.compile(r"\b(?:av\.?|avenida)\s+n\b[^\d]*1501\b", re.IGNORECASE), (-20.7100378, -47.8680143)),
+    (re.compile(r"\b(?:av\.?|avenida)\s+e\b[^\d]*1373\b", re.IGNORECASE), (-20.7116906, -47.8765231)),
+    (re.compile(r"\b(?:av\.?|avenida)\s+e\b[^\d]*1319\b", re.IGNORECASE), (-20.7119000, -47.8768000)),
+    (re.compile(r"\b(?:av\.?|avenida)\s+c\b[^\d]*757\b", re.IGNORECASE), (-20.7175076, -47.8779453)),
+]
+
+
+def _pmo_lookup_verified_coords(address: str) -> tuple[float, float] | None:
+    norm = _strip_accents(_normalize_text(address or "")).lower()
+    if not norm:
+        return None
+    for pattern, coords in _PMO_VERIFIED_EXACT_COORDS:
+        if pattern.search(norm):
+            return coords
+    return None
+
+
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     """Geocode a free-text PMO address.
 
@@ -538,6 +559,12 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     cache_key = _pmo_geocode_cache_key(normalized)
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
+
+    # 0. Coordenadas verificadas de alta precisão (exatas de rota / Google Maps)
+    verified = _pmo_lookup_verified_coords(normalized)
+    if verified:
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = verified
+        return verified
 
     # 1. Google (preciso). Já filtra por Orlândia internamente.
     coords = _pmo_geocode_google(normalized)
@@ -2064,10 +2091,11 @@ def _resolve_sheet_target(
     if not spreadsheet_id:
         raise RuntimeError("URL/ID da planilha PMO inválido.")
 
-    gid = sheet_gid or os.getenv("PMO_VACCINE_SHEET_GID", "") or _extract_gid(sheet_url)
     title = sheet_title or os.getenv("PMO_VACCINE_SHEET_TITLE", "")
     if title:
+        gid = sheet_gid or ""
         return spreadsheet_id, f"{_quote_sheet_title(title)}!{range_value}", gid, title
+    gid = sheet_gid or os.getenv("PMO_VACCINE_SHEET_GID", "") or _extract_gid(sheet_url)
     if gid:
         resolved = _resolve_sheet_title_by_gid(service, spreadsheet_id, gid)
         return spreadsheet_id, f"{_quote_sheet_title(resolved)}!{range_value}", gid, resolved
@@ -3046,6 +3074,12 @@ def persist_vacina_pmo_rows(
             visit.geocode_lng = None
             visit.geocode_address_key = None
         visit.address = new_address
+        if visit.geocode_lat is None or visit.geocode_lng is None:
+            coords = _pmo_geocode_address(new_address)
+            if coords:
+                visit.geocode_lat = coords[0]
+                visit.geocode_lng = coords[1]
+                visit.geocode_address_key = _pmo_geocode_cache_key(new_address)
         visit.phone1 = phone1
         visit.phone2 = phone2
         visit.dogs = int(row.get("dogs") or 0)

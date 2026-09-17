@@ -785,23 +785,80 @@ def vacina_pmo_cobertura_ativa():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+def _pmo_resolve_sheet_gid(date_str, sheet_title):
+    """gid da aba viva daquele dia, ou "" se a planilha nao puder ser lida."""
+    try:
+        alvo = datetime.strptime(date_str, "%d-%m-%Y").date().isoformat()
+    except ValueError:
+        alvo = ""
+    try:
+        from services.vacina_pmo_service import list_vacina_pmo_sheets
+
+        abas = list_vacina_pmo_sheets()
+    except Exception:
+        current_app.logger.warning(
+            "PMO imprimir: nao foi possivel listar as abas; filtrando so pelo titulo",
+            exc_info=True,
+        )
+        return ""
+    for aba in abas:
+        if (aba.get("title") or "") == sheet_title:
+            return str(aba.get("gid") or "")
+    if alvo:
+        for aba in abas:
+            data = aba.get("date")
+            data = data.isoformat() if hasattr(data, "isoformat") else str(data or "")
+            if data == alvo:
+                return str(aba.get("gid") or "")
+    return ""
+
+
+def _pmo_print_visits(date_str, sheet_title, shift_key):
+    """Visitas do dia/turno presas a aba viva da planilha.
+
+    O titulo ("16/09/2026") sozinho nao identifica a aba: quando a aba e
+    recriada ou trocada de gid, as visitas da geracao antiga ficam no banco
+    com o mesmo titulo e saiam no papel junto com as de hoje (a folha da
+    manha de 16/09/2026 listava 16 residencias onde a aba tinha 9). O painel
+    sempre filtrou por gid; a impressao passa a usar o mesmo escopo.
+    """
+    from models import PmoVaccinationVisit
+
+    base = PmoVaccinationVisit.query.filter_by(sheet_title=sheet_title, shift=shift_key)
+
+    gid = _pmo_resolve_sheet_gid(date_str, sheet_title)
+    escopo = base.filter(PmoVaccinationVisit.sheet_gid == gid).all() if gid else []
+    if not escopo:
+        # Sem gid (falha na API do Google, ou registros antigos gravados sem
+        # gid): volta ao filtro por titulo em vez de imprimir folha vazia.
+        escopo = base.all()
+
+    # Cada linha da aba e um tutor. Havendo mais de um registro para a mesma
+    # linha, o mais recente e o que reflete a planilha de hoje.
+    por_linha = {}
+    for visita in escopo:
+        linha = visita.source_row or 0
+        if linha <= 0:
+            # source_row negativo = linha que saiu da aba e so ficou guardada
+            # pelo historico de campo; nao entra na folha do dia.
+            continue
+        atual = por_linha.get(linha)
+        if atual is None or (visita.id or 0) > (atual.id or 0):
+            por_linha[linha] = visita
+    return [por_linha[linha] for linha in sorted(por_linha)]
+
+
 @bp.route('/vacina-pmo/imprimir/<date_str>/<turno>')
 @login_required
 def vacina_pmo_imprimir(date_str, turno):
     if current_user.role not in ('admin', 'vacinador'):
         abort(403)
-    from models import PmoVaccinationVisit
     sheet_title = date_str.replace('-', '/')
     shift_key = "Manha" if turno.lower().startswith("man") else "Tarde"
     shift_label = "Manhã" if shift_key == "Manha" else "Tarde"
     other_turno = "tarde" if shift_key == "Manha" else "manha"
 
-    visits = (
-        PmoVaccinationVisit.query
-        .filter_by(sheet_title=sheet_title, shift=shift_key)
-        .order_by(PmoVaccinationVisit.source_row.asc())
-        .all()
-    )
+    visits = _pmo_print_visits(date_str, sheet_title, shift_key)
     rows = _build_pmo_print_rows(visits, sheet_title)
     return render_template(
         'vacina_pmo/imprimir.html',
