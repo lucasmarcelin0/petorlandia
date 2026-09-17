@@ -173,13 +173,20 @@ def _pmo_vacinados_anteriores(visits, sheet_title):
 
 
 def _build_pmo_print_rows(visits, sheet_title):
-    from services.vacina_pmo_service import build_previous_immunity_index, _pmo_same_household
+    from services.vacina_pmo_service import (
+        build_previous_immunity_index,
+        resolve_animals_already_immune,
+        _pmo_same_household,
+    )
 
     historico = _pmo_vacinados_anteriores(visits, sheet_title)
     # Dose anterior dos animais que ESTAO na lista de hoje. O historico acima
     # cobre so os que ficaram de fora dela, entao sem isto o animal reinscrito
     # sai no papel como se nunca tivesse tomado a vacina.
     imunidade = build_previous_immunity_index(visits)
+    # A folha impressa sai da mesma verdade da tela: quem ja tem dose valida do
+    # ano nao pode aparecer no papel como pendente.
+    resolve_animals_already_immune(visits, imunidade)
     rows = []
 
     for visita in visits:

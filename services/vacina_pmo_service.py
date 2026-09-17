@@ -2454,6 +2454,54 @@ def build_previous_immunity_index(
     return indice
 
 
+# Graus de semelhanca que afirmam ser o mesmo animal. "aproximado" fica de
+# fora de proposito: ali o sistema so achou um nome parecido e quem decide e o
+# vacinador, na porta.
+PMO_IMMUNITY_CERTAIN_MATCHES = ("cadastro", "exato")
+
+
+def animal_is_already_immune(
+    animal: PmoVaccinationAnimal, previous: dict[str, Any] | None
+) -> bool:
+    """O animal chega nesta visita protegido por uma dose que ja existe?"""
+    if animal.status != "pendente" or animal.vaccinated_at:
+        return False
+    if not previous or not previous.get("immune"):
+        return False
+    return previous.get("match") in PMO_IMMUNITY_CERTAIN_MATCHES
+
+
+def resolve_animals_already_immune(
+    visits: list[PmoVaccinationVisit],
+    immunity: dict[int, dict[int, dict[str, Any]]],
+) -> bool:
+    """Fecha como "ja imunizado" quem chega com dose valida do ano.
+
+    Sem isto o animal reinscrito abria a lista como "pendente" — aparecia na
+    fila do dia, na soma de doses previstas e na planilha como se nunca
+    tivesse tomado a vacina. O desfecho gravado e ``imunizado``, nunca
+    ``vacinado``: nenhuma dose saiu do frasco, entao consumo e cobertura
+    seguem intocados. O vacinador continua no comando — se optar por aplicar
+    a dose assim mesmo, basta marcar ``vacinado`` na propria linha.
+    """
+    mudou = False
+    for visit in visits:
+        doses = immunity.get(visit.id) or {}
+        if not doses:
+            continue
+        for animal in visit.animals:
+            anterior = doses.get(animal.id)
+            if not animal_is_already_immune(animal, anterior):
+                continue
+            animal.status = PMO_STATUS_ALREADY_IMMUNE
+            animal.immune_since = date.fromisoformat(anterior["date"])
+            _append_visit_note(visit, _status_note_line(animal, animal.status))
+            mudou = True
+    if mudou:
+        db.session.commit()
+    return mudou
+
+
 def _serialize_visit(
     visit: PmoVaccinationVisit,
     immunity: dict[int, dict[str, Any]] | None = None,
@@ -2489,6 +2537,14 @@ def _serialize_visit(
             "immuneSince": animal.immune_since.isoformat() if animal.immune_since else "",
             "immuneSinceLabel": (
                 animal.immune_since.strftime("%d/%m/%Y") if animal.immune_since else ""
+            ),
+            # Ate quando a dose antiga protege. A tela mostra as duas datas na
+            # mesma linha: sem isto o vacinador via so o dia da aplicacao e
+            # ficava sem saber quando o reforco vence.
+            "immuneUntilLabel": (
+                (animal.immune_since + timedelta(days=PMO_IMMUNITY_DAYS)).strftime("%d/%m/%Y")
+                if animal.immune_since
+                else ""
             ),
         }
         for animal in visit.animals
@@ -2564,6 +2620,7 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
     if visits:
         db.session.commit()
     imunidade = build_previous_immunity_index(visits)
+    resolve_animals_already_immune(visits, imunidade)
     return {
         "rows": [
             _serialize_visit(visit, imunidade.get(visit.id))
@@ -3137,6 +3194,7 @@ def persist_vacina_pmo_rows(
 
     db.session.commit()
     imunidade = build_previous_immunity_index(saved)
+    resolve_animals_already_immune(saved, imunidade)
     return [_serialize_visit(visit, imunidade.get(visit.id, {})) for visit in saved]
 
 

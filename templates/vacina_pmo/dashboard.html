@@ -432,7 +432,7 @@
   .pmo-animal-item {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 154px;
-    gap: 8px;
+    gap: 6px 8px;
     align-items: center;
     padding: 8px 10px;
     border: 1px solid #e6ebf2;
@@ -447,6 +447,13 @@
 
   .pmo-animal-item > div {
     min-width: 0;
+  }
+
+  /* O aviso de dose anterior ocupa a largura inteira da linha do animal, por
+     baixo do nome e do seletor. Preso na coluna do nome ele era espremido
+     contra o seletor e o texto saia por cima da tarja verde. */
+  .pmo-animal-item > .pmo-animal-immunity {
+    grid-column: 1 / -1;
   }
 
   .pmo-animal-status {
@@ -995,17 +1002,17 @@
     font-size: 0.76rem;
   }
 
-  /* O aviso fica dentro da coluna do animal: o texto quebra em linhas em vez de
+  /* Linha propria, largura toda: o texto quebra dentro da tarja em vez de
      vazar por cima do seletor de status no celular. */
   .pmo-animal-immunity {
     box-sizing: border-box;
-    margin-top: 0.25rem;
+    margin-top: 0;
     display: flex;
     align-items: flex-start;
     gap: 0.35rem;
-    max-width: 22rem;
     width: 100%;
-    padding: 0.28rem 0.5rem;
+    max-width: 100%;
+    padding: 0.3rem 0.55rem;
     border-radius: 0.4rem;
     border: 1px solid transparent;
     font-size: 0.74rem;
@@ -1021,6 +1028,12 @@
     min-width: 0;
     flex: 1 1 auto;
     overflow-wrap: anywhere;
+  }
+
+  /* A data e uma unidade: quebrar "16/09/" numa linha e "2026" na seguinte era
+     metade da feiura do aviso. */
+  .pmo-animal-immunity__date {
+    white-space: nowrap;
   }
 
   .pmo-animal-immunity--ok {
@@ -6993,10 +7006,18 @@
   // não repetir. O aviso informa; quem decide o status continua sendo ele.
   function renderPreviousVaccination(animal) {
     if (animal && animal.status === 'imunizado') {
-      const desde = animal.immuneSinceLabel || (animal.previousVaccination || {}).dateLabel || '';
+      const anterior = animal.previousVaccination || {};
+      const desde = animal.immuneSinceLabel || anterior.dateLabel || '';
+      const ate = animal.immuneUntilLabel || anterior.protectedUntilLabel || '';
+      if (!desde) {
+        return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
+          <i class="fas fa-shield-halved" aria-hidden="true"></i>
+          <span class="pmo-animal-immunity__text">Não precisou de dose hoje</span>
+        </div>`;
+      }
       return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
-        <i class="fas fa-check" aria-hidden="true"></i>
-        <span class="pmo-animal-immunity__text">Não precisou de dose${desde ? ` — protegido pela vacina de <strong>${escapeHtml(desde)}</strong>` : ''}</span>
+        <i class="fas fa-shield-halved" aria-hidden="true"></i>
+        <span class="pmo-animal-immunity__text">Vacinado em <strong class="pmo-animal-immunity__date">${escapeHtml(desde)}</strong>${ate ? ` · protegido até <strong class="pmo-animal-immunity__date">${escapeHtml(ate)}</strong>` : ''}</span>
       </div>`;
     }
     const previous = animal && animal.previousVaccination;
@@ -7007,17 +7028,17 @@
       if (previous.match === 'aproximado') {
         return `<div class="pmo-animal-immunity pmo-animal-immunity--check">
           <i class="fas fa-circle-question" aria-hidden="true"></i>
-          <span class="pmo-animal-immunity__text">Confira: <strong>${escapeHtml(previous.matchedName)}</strong> foi vacinado em ${escapeHtml(previous.dateLabel)}. É o mesmo animal?</span>
+          <span class="pmo-animal-immunity__text">Confira: <strong>${escapeHtml(previous.matchedName)}</strong> foi vacinado em <strong class="pmo-animal-immunity__date">${escapeHtml(previous.dateLabel)}</strong>. É o mesmo animal?</span>
         </div>`;
       }
       return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
         <i class="fas fa-shield-halved" aria-hidden="true"></i>
-        <span class="pmo-animal-immunity__text">Já vacinado em <strong>${escapeHtml(previous.dateLabel)}</strong> · protegido até ${escapeHtml(previous.protectedUntilLabel)}</span>
+        <span class="pmo-animal-immunity__text">Vacinado em <strong class="pmo-animal-immunity__date">${escapeHtml(previous.dateLabel)}</strong> · protegido até <strong class="pmo-animal-immunity__date">${escapeHtml(previous.protectedUntilLabel)}</strong></span>
       </div>`;
     }
     return `<div class="pmo-animal-immunity pmo-animal-immunity--due">
       <i class="fas fa-rotate-right" aria-hidden="true"></i>
-      <span class="pmo-animal-immunity__text">Última dose em ${escapeHtml(previous.dateLabel)} — vencida, aplicar</span>
+      <span class="pmo-animal-immunity__text">Última dose em <strong class="pmo-animal-immunity__date">${escapeHtml(previous.dateLabel)}</strong> — vencida, aplicar</span>
     </div>`;
   }
 
@@ -7056,7 +7077,7 @@
     }
     return row.animals.map((animal, index) => `
       <div class="pmo-animal-item" data-animal-id="${animal.id || ''}">
-        <div>
+        <div class="pmo-animal-ident">
           ${row.editingAnimalNameIndex === index ? `
             <form class="pmo-animal-name-form" data-action="animal-name-form" data-animal-index="${index}">
               <input type="text" class="form-control form-control-sm" data-action="animal-name-input" maxlength="100" value="${escapeHtml(animal.name)}" aria-label="Nome do animal">
@@ -7065,7 +7086,6 @@
             <button type="button" class="pmo-animal-name pmo-animal-name--editable" data-action="animal-name-edit" data-animal-index="${index}" title="Clique para corrigir o nome">${escapeHtml(animal.name)} <i class="fas fa-pen pmo-animal-name__icon" aria-hidden="true"></i></button>
           `}
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
-          ${renderPreviousVaccination(animal)}
         </div>
         <div class="pmo-animal-status">
           ${renderAnimalStatusControl(animal, index)}
@@ -7073,6 +7093,7 @@
           <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="camera" data-animal-index="${index}" hidden>
           <input type="file" accept="image/*" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="gallery" data-animal-index="${index}" hidden>
         </div>
+        ${renderPreviousVaccination(animal)}
       </div>
     `).join('');
   }
