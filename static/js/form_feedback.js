@@ -255,9 +255,7 @@
 
     const button = getButton(form);
     if (button) {
-      const buttonWrapper = typeof button.closest === 'function'
-        ? button.closest('.col-12, .col, [class*="col-"]')
-        : null;
+      const buttonWrapper = button.closest('.col-12, .col, [class*="col-"]');
       if (buttonWrapper && buttonWrapper.parentNode === form) {
         form.insertBefore(status, buttonWrapper);
       } else if (button.parentNode === form) {

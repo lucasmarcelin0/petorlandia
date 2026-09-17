@@ -15,7 +15,7 @@ from models.sfa import (SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT1
                         SfaContextoEpisodio, SfaSinanLog, SfaAcao, SfaAuditoria, SfaContato)
 from services import sfa_service as service
 from services import sfa_workflow as flow
-from services import sfa_workflow_ops as flow_ops
+from services import sfa_workflow_ops as ops
 from services.sfa_workflow_ops import registrar_operacao
 from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 
@@ -24,12 +24,10 @@ from services.sfa_source_reconciliation import reconciliar, grupo_resultado
 def hoje(monkeypatch):
     dia = [date(2026, 9, 13)]
     monkeypatch.setattr(flow, 'hoje_local', lambda: dia[0])
-    # `sfa_workflow_ops` faz `from ... import hoje_local` no topo do modulo, ou
-    # seja, guarda a funcao original. Congelar so em `flow` deixava a validacao
-    # de data comparando contra o dia real enquanto o resto do fluxo usava o dia
-    # congelado -- o teste do contato reagendado passou em 13/09 por coincidencia
-    # e virou vermelho sozinho no dia 14, sem ninguem mexer no codigo.
-    monkeypatch.setattr(flow_ops, 'hoje_local', lambda: dia[0])
+    # sfa_workflow_ops importa hoje_local por valor: sem congelar tambem la, as
+    # validacoes de data futura passam a usar o relogio real e o teste quebra
+    # sozinho quando a data escrita no caso fica no passado.
+    monkeypatch.setattr(ops, 'hoje_local', lambda: dia[0])
     return dia
 
 
