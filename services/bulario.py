@@ -4,6 +4,7 @@ Usado pelo endpoint /api/bulario/sugerir-dose e por qualquer outro caller
 que precise propor uma dose para um animal específico.
 """
 from __future__ import annotations
+import functools
 import os
 import re
 import importlib.util
@@ -193,8 +194,12 @@ MACRO_GRUPOS: List[Dict[str, Any]] = [
 ]
 
 
+@functools.lru_cache(maxsize=512)
 def classificar_em_macro_grupo(classificacao: Optional[str]) -> str:
     """Retorna a `key` do macro-grupo que a classificação pertence.
+
+    Bolt performance optimization: cache results using LRU cache since there are only ~170 distinct
+    classifications in the database. Bypasses repetitive regex searches and string normalizations.
 
     Se nenhum match específico acontecer, cai em "outros" (catch-all).
     Case e acentuação insensíveis: a string é normalizada (sem acentos e
