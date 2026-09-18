@@ -40,7 +40,7 @@ def _normalize(value: str | None) -> str:
     # Fast-path for pure ASCII strings to avoid unicodedata normalization overhead
     if not text.isascii():
         nfkd = unicodedata.normalize("NFKD", text)
-        text = "".join(char for char in nfkd if not unicodedata.combining(char))
+        text = "".join([char for char in nfkd if not unicodedata.combining(char)])
     text = _RE_NON_ALPHANUMERIC.sub(" ", text)
     return _RE_SPACES.sub(" ", text).strip()
 

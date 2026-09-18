@@ -27,7 +27,7 @@ def _strip_accents(value: str | None) -> str:
     if value.isascii():
         return value
     normalized = unicodedata.normalize("NFKD", value)
-    return "".join(char for char in normalized if not unicodedata.combining(char))
+    return "".join([char for char in normalized if not unicodedata.combining(char)])
 
 
 def _normalize_token(value: str | None) -> str:
