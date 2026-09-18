@@ -3929,6 +3929,55 @@ def test_vacinados_deduplica_animais_em_multiplas_visitas(app):
         assert pet["sheet_title"] == "17/09/2026"
 
 
+def test_vacinados_prioriza_nome_real_sobre_nome_provisorio_e_une_por_animal_id(app):
+    """Quando o animal tinha nome provisório 'Cao 1' em Agendadas mas tem nome real 'Mayla' via animal_id."""
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+    from models import Animal, Species
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(name="Mariuza", email="mariuza@example.com", phone="16999990000")
+        user.set_password("PMOA0001")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        real_pet = Animal(name="Mayla", species=species, user_id=user.id, status="ativo")
+        db.session.add(real_pet)
+        db.session.commit()
+
+        # Visita 1: 16/09/2026, onde foi vacinado como Mayla
+        v1 = _pmo_visit_with_animals(
+            "16/09/2026",
+            "Mariuza Alves",
+            [("Mayla", "cao", "vacinado")],
+            vaccine_date=date(2026, 9, 16),
+            source_row=2,
+        )
+        v1.animals[0].animal_id = real_pet.id
+
+        # Visita 2: Agendadas, onde ficou como 'Cao 1' (provisório) e imunizado
+        v2 = _pmo_visit_with_animals(
+            "Agendadas",
+            "Mariuza Alves",
+            [("Cao 1", "cao", "imunizado")],
+            vaccine_date=None,
+            source_row=10,
+        )
+        v2.animals[0].animal_id = real_pet.id
+        db.session.commit()
+
+        payload = get_vacina_pmo_vacinados()
+        assert payload["counts"]["todos"] == 1
+        assert payload["counts"]["aplicadas"] == 1
+        assert len(payload["animals"]) == 1
+
+        pet = payload["animals"][0]
+        assert pet["animal_name"] == "Mayla"
+        assert pet["applied_here"] is True
+
+
 def test_vacinados_nao_mescla_animais_diferentes_da_mesma_casa(app):
     """Pets diferentes do mesmo tutor (ex: Mia e Luna) NÃO podem ser agrupados juntos."""
     from services.vacina_pmo_service import get_vacina_pmo_vacinados

@@ -6955,13 +6955,24 @@ def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
         days_since = (today - dose_date).days if dose_date else None
         applied_here = animal.status == "vacinado"
 
+        official_name = (
+            animal.animal.name.strip() if animal.animal and animal.animal.name else ""
+        )
+        pmo_name = (animal.name or "").strip()
+        if _is_pmo_placeholder_name(pmo_name) and official_name:
+            animal_name = official_name
+        elif _is_pmo_placeholder_name(official_name) and pmo_name:
+            animal_name = pmo_name
+        else:
+            animal_name = official_name or pmo_name or "Animal"
+
         phone_raw = visit.phone1 or visit.phone2
         dose_label = _pmo_br_date(dose_date) if dose_date else ""
         expiry_label = _pmo_br_date(expiry) if expiry else ""
         if dose_date:
             wa_msg = (
                 f"Olá, {visit.tutor_name}! "
-                f"A vacina antirrábica de *{animal.name}* foi aplicada em "
+                f"A vacina antirrábica de *{animal_name}* foi aplicada em "
                 f"{dose_label} pela Prefeitura de Orlândia. "
                 f"A proteção é válida por 1 ano e vence em *{expiry_label}*. "
                 "Lembre-se de revacinar para manter seu pet protegido. 🐾"
@@ -6969,7 +6980,7 @@ def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
         else:
             wa_msg = (
                 f"Olá, {visit.tutor_name}! Sobre a vacina antirrábica de "
-                f"*{animal.name}*: precisamos confirmar a data em que ela foi "
+                f"*{animal_name}*: precisamos confirmar a data em que ela foi "
                 "aplicada. Você lembra?"
             )
 
@@ -6977,7 +6988,7 @@ def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
             {
                 "pmo_id": animal.id,
                 "animal_id": animal.animal_id,
-                "animal_name": animal.name,
+                "animal_name": animal_name,
                 "species": animal.species,
                 "tutor": visit.tutor_name,
                 "address": visit.address or "",
@@ -7017,24 +7028,29 @@ def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
     return _deduplicate_vacinados_dataset(rows)
 
 
+def _is_pmo_placeholder_name(name: Any) -> bool:
+    """Verifica se um nome é provisório/genérico gerado pela planilha (ex: 'Cao 1', 'Gato 2')."""
+    if not name:
+        return True
+    text = _strip_accents(_normalize_text(name)).lower()
+    return bool(re.match(r"^(c[aã]o|gato|pet|animal)(\s*\d+)?$", text))
+
+
 def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplica animais vacinados/imunizados que aparecem em múltiplas visitas ou abas.
 
     Na campanha PMO, quando o tutor é agendado (aba 'Agendadas') e depois atendido
     em um dia específico (ex: '17/09/2026') ou em 'Encaixes', múltiplos registros
-    são criados para o mesmo animal físico. Sem deduplicação, o painel exibe o mesmo
-    pet repetidas vezes (uma como 'vacinado' e outra como 'imunizado').
+    são criados para o mesmo animal físico.
 
-    Esta função agrupa animais pelo mesmo (espécie, nome normalizado) que compartilhem:
-    - mesmo animal_id
-    - OU mesmo telefone do tutor
-    - OU mesmo nome do tutor
-    - OU mesmo endereço
-
-    Dessa forma, animais diferentes da mesma casa (ex: cães 'Mia' e 'Luna') NÃO são
-    mesclados (pois têm nomes distintos), enquanto o mesmo pet duplicado em abas
-    distintas é colapsado em um registro canônico único, preservando foto, data da dose
-    mais precisa e marcando applied_here=True se foi vacinado durante a campanha.
+    Regras de união:
+    1. União Primária: registros que compartilham o mesmo animal_id (não nulo)
+       são imediatamente unidos, mesmo que em uma aba estivessem com nome provisório
+       ('Cao 1') e na outra com o nome definitivo ('Mayla').
+    2. União Secundária: para registros sem animal_id (ou para cruzar visitas),
+       agrupa por (espécie, nome normalizado) e une se pertencerem ao mesmo domicílio
+       (mesmo telefone, tutor ou endereço). Animais de nomes diferentes no mesmo
+       domicílio (ex: 'Mia' e 'Luna') NÃO são unidos.
     """
     if len(raw_rows) <= 1:
         return raw_rows
@@ -7053,28 +7069,32 @@ def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[
         if root_i != root_j:
             parent[root_i] = root_j
 
-    # Agrupa primeiro por espécie e slug do nome do animal
+    # 1. União Primária: mesmo animal_id pertence inequivocamente ao mesmo animal
+    by_aid: dict[int, list[int]] = {}
+    for idx, r in enumerate(raw_rows):
+        aid = r.get("animal_id")
+        if aid:
+            by_aid.setdefault(aid, []).append(idx)
+    for group in by_aid.values():
+        for i in range(1, len(group)):
+            union(group[0], group[i])
+
+    # 2. União Secundária: agrupa por espécie e slug do nome do animal para unir por tutor/casa
     by_sp_slug: dict[tuple[str, str], list[int]] = {}
     for idx, r in enumerate(raw_rows):
         sp = r.get("species") or ""
         name_slug = _pmo_animal_slug(r.get("animal_name")) or f"__raw_{idx}__"
         by_sp_slug.setdefault((sp, name_slug), []).append(idx)
 
-    # Dentro de cada balde (espécie, nome), une se pertencerem à mesma casa/tutor/animal_id
     for (sp, name_slug), indices in by_sp_slug.items():
         if len(indices) <= 1:
             continue
-        by_aid: dict[int, list[int]] = {}
         by_phone: dict[str, list[int]] = {}
         by_tutor: dict[str, list[int]] = {}
         by_addr: dict[str, list[int]] = {}
 
         for idx in indices:
             r = raw_rows[idx]
-            aid = r.get("animal_id")
-            if aid:
-                by_aid.setdefault(aid, []).append(idx)
-
             phone = _normalize_phone(r.get("phone"))
             if phone:
                 by_phone.setdefault(phone, []).append(idx)
@@ -7087,9 +7107,6 @@ def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[
             if addr_slug and len(addr_slug) > 5:
                 by_addr.setdefault(addr_slug, []).append(idx)
 
-        for group in by_aid.values():
-            for i in range(1, len(group)):
-                union(group[0], group[i])
         for group in by_phone.values():
             for i in range(1, len(group)):
                 union(group[0], group[i])
@@ -7106,6 +7123,7 @@ def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[
         clusters.setdefault(root, []).append(r)
 
     def _cluster_score(item: dict[str, Any]) -> tuple[Any, ...]:
+        not_placeholder = 0 if _is_pmo_placeholder_name(item.get("animal_name")) else 1
         has_date = 1 if item.get("dose_date") else 0
         date_str = item.get("dose_date") or ""
         applied = 1 if item.get("applied_here") else 0
@@ -7114,11 +7132,19 @@ def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[
         has_photo = 1 if item.get("image_url") else 0
         has_phone = 1 if item.get("phone") else 0
         pmo_id = item.get("pmo_id") or 0
-        return (has_date, date_str, applied, is_date_sheet, has_photo, has_phone, pmo_id)
+        return (not_placeholder, has_date, date_str, applied, is_date_sheet, has_photo, has_phone, pmo_id)
 
     deduped: list[dict[str, Any]] = []
     for root, items in clusters.items():
         best = dict(max(items, key=_cluster_score))
+
+        # Se o registro escolhido estiver com nome provisório (ex: 'Cao 1') mas houver
+        # outro item no grupo com nome real (ex: 'Mayla'), adota o nome real!
+        if _is_pmo_placeholder_name(best.get("animal_name")):
+            for it in items:
+                if not _is_pmo_placeholder_name(it.get("animal_name")):
+                    best["animal_name"] = it["animal_name"]
+                    break
 
         # Se em qualquer visita o animal foi vacinado na campanha, ele é considerado vacinado
         if any(it.get("applied_here") for it in items):
