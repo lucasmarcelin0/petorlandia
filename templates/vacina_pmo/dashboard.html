@@ -2203,17 +2203,17 @@
   </div>
 </div>
 
-<div class="pmo-photo-modal" id="pmo-photo-modal" hidden>
+<div class="pmo-photo-modal" id="pmo-photo-modal" hidden role="dialog" aria-modal="true" aria-label="Visualização da foto do animal">
   <div class="pmo-photo-modal__backdrop" data-action="photo-modal-close"></div>
   <div class="pmo-photo-modal__content">
     <img class="pmo-photo-modal__img" id="pmo-photo-modal-img" src="" alt="Foto do animal">
     <p class="pmo-photo-modal__error" id="pmo-photo-modal-error" hidden></p>
     <div class="pmo-photo-modal__actions">
-      <button type="button" class="btn btn-warning" id="pmo-photo-retry" hidden><i class="fas fa-rotate-right me-1"></i> Tentar enviar de novo</button>
-      <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra</button>
-      <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1"></i> Da galeria</button>
+      <button type="button" class="btn btn-warning" id="pmo-photo-retry" hidden><i class="fas fa-rotate-right me-1" aria-hidden="true"></i> Tentar enviar de novo</button>
+      <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1" aria-hidden="true"></i> Tirar outra</button>
+      <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1" aria-hidden="true"></i> Da galeria</button>
       <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
-      <button type="button" class="btn btn-link btn-sm pmo-photo-modal__copy" id="pmo-photo-copy-error" hidden><i class="fas fa-copy me-1"></i> Copiar o erro</button>
+      <button type="button" class="btn btn-link btn-sm pmo-photo-modal__copy" id="pmo-photo-copy-error" hidden><i class="fas fa-copy me-1" aria-hidden="true"></i> Copiar o erro</button>
     </div>
   </div>
 </div>
@@ -2268,12 +2268,12 @@
   </div>
 </div>
 
-<div class="pmo-video-modal" id="pmo-video-modal" hidden>
+<div class="pmo-video-modal" id="pmo-video-modal" hidden role="dialog" aria-modal="true" aria-labelledby="pmo-video-modal-title">
   <div class="pmo-video-modal__backdrop" data-action="video-modal-close"></div>
   <div class="pmo-video-modal__content">
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
-        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Compilado dos vacinados</h5>
+        <h5 class="mb-1" id="pmo-video-modal-title"><i class="fas fa-video me-1" aria-hidden="true"></i> Compilado dos vacinados</h5>
         <div class="text-muted small">Escolha o período e o estilo. Todos são verticais (9:16), curtos e pensados para redes sociais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
