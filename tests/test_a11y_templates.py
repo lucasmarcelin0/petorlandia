@@ -9,6 +9,12 @@ def test_vet_detail_template_a11y_labels():
     assert 'aria-label="Excluir horário"' in content
     assert 'i class="fas fa-edit" aria-hidden="true"' in content
     assert 'i class="fas fa-trash" aria-hidden="true"' in content
+    assert 'id="appointmentModalForm"' in content
+    assert 'id="appointmentDetailModal"' in content
+    assert 'role="dialog"' in content
+    assert 'aria-modal="true"' in content
+    assert 'aria-labelledby="appointmentModalFormTitle"' in content
+    assert 'aria-labelledby="appointmentDetailModalTitle"' in content
 
 def test_tutores_adicionados_template_a11y_labels():
     with open("templates/partials/tutores_adicionados.html", "r", encoding="utf-8") as f:
