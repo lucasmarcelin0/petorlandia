@@ -78,8 +78,11 @@ def _pmo_split_tutor(raw):
 
 
 def _pmo_slug(value):
-    texto = unicodedata.normalize('NFKD', str(value or '').lower())
-    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    texto = str(value or '').lower()
+    # Bolt: Fast-path pure ASCII strings to bypass unicodedata.normalize overhead
+    if not texto.isascii():
+        texto = unicodedata.normalize('NFKD', texto)
+        texto = ''.join(c for c in texto if not unicodedata.combining(c))
     return re.sub(r'[^a-z0-9]+', '', texto)
 
 

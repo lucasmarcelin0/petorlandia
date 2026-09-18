@@ -2603,7 +2603,11 @@ def servicos_vacinas_cidade_por_local():
 
     def _norm(value):
         import unicodedata
-        text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode()
+        text = str(value or '')
+        # Bolt: Fast-path pure ASCII strings to bypass unicodedata.normalize overhead
+        if text.isascii():
+            return text.strip().lower()
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode()
         return text.strip().lower()
 
     cidade_detectada = None

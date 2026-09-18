@@ -1700,12 +1700,19 @@ def buscar_medicamentos():
         return jsonify([])
 
     q_lower = q.lower()
-    q_norm = unicodedata.normalize("NFKD", q_lower)
-    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
+    # Bolt: Fast-path pure ASCII strings to bypass unicodedata.normalize overhead
+    if q_lower.isascii():
+        q_norm = q_lower
+    else:
+        q_norm = unicodedata.normalize("NFKD", q_lower)
+        q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
 
     def _norm_busca(valor):
-        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
-        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        texto = str(valor or "").lower()
+        # Bolt: Fast-path pure ASCII strings to bypass unicodedata.normalize overhead
+        if not texto.isascii():
+            texto = unicodedata.normalize("NFKD", texto)
+            texto = "".join(c for c in texto if not unicodedata.combining(c))
         texto = _RE_NORM_NEOMICINA.sub("neomicina", texto)
         return texto
 
