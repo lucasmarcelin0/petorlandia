@@ -111,4 +111,17 @@ def test_dose_vencida_continua_na_fila(source):
 def test_aviso_de_imunidade_quebra_linha_dentro_da_coluna(source):
     assert 'class="pmo-animal-immunity__text"' in source
     assert ".pmo-animal-immunity__text {" in source
-    assert source.count('class="pmo-animal-immunity__text"') == 4
+    # Um texto por caso previsto: ja imunizado sem data, ja imunizado com data,
+    # conferencia por nome parecido, dose valida e dose vencida.
+    assert source.count('class="pmo-animal-immunity__text"') == 5
+
+
+def test_aviso_de_imunidade_ocupa_a_linha_inteira(source):
+    """Preso na coluna do nome, o texto saia por cima do seletor de status."""
+    assert ".pmo-animal-item > .pmo-animal-immunity {" in source
+    assert "grid-column: 1 / -1;" in source
+
+
+def test_data_do_aviso_nao_quebra_no_meio(source):
+    assert ".pmo-animal-immunity__date {" in source
+    assert 'class="pmo-animal-immunity__date"' in source
