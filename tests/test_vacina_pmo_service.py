@@ -3891,6 +3891,101 @@ def test_cobertura_summary_bate_com_a_lista_de_vacinados(app):
         assert resumo["sem_data"] == 1
 
 
+def test_vacinados_deduplica_animais_em_multiplas_visitas(app):
+    """O mesmo animal presente em Agendadas (imunizado) e num dia (vacinado) aparece uma só vez."""
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        # Visita 1: aba do dia 17/09/2026, onde Toni tomou a vacina
+        _pmo_visit_with_animals(
+            "17/09/2026",
+            "Lucas Silva",
+            [("Toni", "cao", "vacinado")],
+            vaccine_date=date(2026, 9, 17),
+            source_row=2,
+        )
+        # Visita 2: aba Agendadas, onde Toni ficou como 'imunizado' pelo sistema
+        _pmo_visit_with_animals(
+            "Agendadas",
+            "Lucas Silva",
+            [("Toni", "cao", "imunizado")],
+            vaccine_date=None,
+            source_row=5,
+        )
+
+        payload = get_vacina_pmo_vacinados()
+        assert payload["counts"]["todos"] == 1
+        assert payload["counts"]["aplicadas"] == 1
+        assert payload["counts"]["imunizados"] == 0
+        assert len(payload["animals"]) == 1
+
+        pet = payload["animals"][0]
+        assert pet["animal_name"] == "Toni"
+        assert pet["vaccine_date"] == "17/09/2026"
+        assert pet["applied_here"] is True
+        assert pet["sheet_title"] == "17/09/2026"
+
+
+def test_vacinados_nao_mescla_animais_diferentes_da_mesma_casa(app):
+    """Pets diferentes do mesmo tutor (ex: Mia e Luna) NÃO podem ser agrupados juntos."""
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        _pmo_visit_with_animals(
+            "17/09/2026",
+            "Joice Caroline",
+            [("Mia", "cao", "vacinado"), ("Luna", "cao", "vacinado")],
+            vaccine_date=date(2026, 9, 17),
+        )
+
+        payload = get_vacina_pmo_vacinados()
+        assert payload["counts"]["todos"] == 2
+        assert payload["counts"]["caes"] == 2
+        names = {a["animal_name"] for a in payload["animals"]}
+        assert names == {"Mia", "Luna"}
+
+
+def test_vacinados_nao_mescla_animais_homonimos_de_casas_diferentes(app):
+    """Animais com o mesmo nome em tutores/endereços diferentes permanecem separados."""
+    from services.vacina_pmo_service import get_vacina_pmo_vacinados
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        v1 = _pmo_visit_with_animals(
+            "17/09/2026",
+            "Carlos Drummond",
+            [("Thor", "cao", "vacinado")],
+            vaccine_date=date(2026, 9, 17),
+            source_row=2,
+        )
+        v1.address = "Rua das Flores, 10, Centro"
+        v1.phone1 = "16999991111"
+
+        v2 = _pmo_visit_with_animals(
+            "17/09/2026",
+            "Machado de Assis",
+            [("Thor", "cao", "vacinado")],
+            vaccine_date=date(2026, 9, 17),
+            source_row=3,
+        )
+        v2.address = "Avenida Principal, 900, Jardim Primavera"
+        v2.phone1 = "16988882222"
+        db.session.commit()
+
+        payload = get_vacina_pmo_vacinados()
+        assert payload["counts"]["todos"] == 2
+        assert payload["counts"]["caes"] == 2
+        assert len(payload["animals"]) == 2
+
+
 def test_painel_le_a_aba_de_doses_uma_vez_para_resumo_e_frascos(app, monkeypatch):
     """Resumo e frascos saem do mesmo snapshot — uma leitura, não quatro."""
     from datetime import datetime

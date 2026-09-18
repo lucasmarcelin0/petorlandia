@@ -7014,7 +7014,163 @@ def _pmo_vacinados_dataset() -> list[dict[str, Any]]:
                 "wa_msg": wa_msg,
             }
         )
-    return rows
+    return _deduplicate_vacinados_dataset(rows)
+
+
+def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplica animais vacinados/imunizados que aparecem em múltiplas visitas ou abas.
+
+    Na campanha PMO, quando o tutor é agendado (aba 'Agendadas') e depois atendido
+    em um dia específico (ex: '17/09/2026') ou em 'Encaixes', múltiplos registros
+    são criados para o mesmo animal físico. Sem deduplicação, o painel exibe o mesmo
+    pet repetidas vezes (uma como 'vacinado' e outra como 'imunizado').
+
+    Esta função agrupa animais pelo mesmo (espécie, nome normalizado) que compartilhem:
+    - mesmo animal_id
+    - OU mesmo telefone do tutor
+    - OU mesmo nome do tutor
+    - OU mesmo endereço
+
+    Dessa forma, animais diferentes da mesma casa (ex: cães 'Mia' e 'Luna') NÃO são
+    mesclados (pois têm nomes distintos), enquanto o mesmo pet duplicado em abas
+    distintas é colapsado em um registro canônico único, preservando foto, data da dose
+    mais precisa e marcando applied_here=True se foi vacinado durante a campanha.
+    """
+    if len(raw_rows) <= 1:
+        return raw_rows
+
+    parent = list(range(len(raw_rows)))
+
+    def find(i: int) -> int:
+        if parent[i] == i:
+            return i
+        parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i: int, j: int) -> None:
+        root_i = find(i)
+        root_j = find(j)
+        if root_i != root_j:
+            parent[root_i] = root_j
+
+    # Agrupa primeiro por espécie e slug do nome do animal
+    by_sp_slug: dict[tuple[str, str], list[int]] = {}
+    for idx, r in enumerate(raw_rows):
+        sp = r.get("species") or ""
+        name_slug = _pmo_animal_slug(r.get("animal_name")) or f"__raw_{idx}__"
+        by_sp_slug.setdefault((sp, name_slug), []).append(idx)
+
+    # Dentro de cada balde (espécie, nome), une se pertencerem à mesma casa/tutor/animal_id
+    for (sp, name_slug), indices in by_sp_slug.items():
+        if len(indices) <= 1:
+            continue
+        by_aid: dict[int, list[int]] = {}
+        by_phone: dict[str, list[int]] = {}
+        by_tutor: dict[str, list[int]] = {}
+        by_addr: dict[str, list[int]] = {}
+
+        for idx in indices:
+            r = raw_rows[idx]
+            aid = r.get("animal_id")
+            if aid:
+                by_aid.setdefault(aid, []).append(idx)
+
+            phone = _normalize_phone(r.get("phone"))
+            if phone:
+                by_phone.setdefault(phone, []).append(idx)
+
+            tutor_slug = _pmo_animal_slug(r.get("tutor"))
+            if tutor_slug:
+                by_tutor.setdefault(tutor_slug, []).append(idx)
+
+            addr_slug = _pmo_address_slug(r.get("address"))
+            if addr_slug and len(addr_slug) > 5:
+                by_addr.setdefault(addr_slug, []).append(idx)
+
+        for group in by_aid.values():
+            for i in range(1, len(group)):
+                union(group[0], group[i])
+        for group in by_phone.values():
+            for i in range(1, len(group)):
+                union(group[0], group[i])
+        for group in by_tutor.values():
+            for i in range(1, len(group)):
+                union(group[0], group[i])
+        for group in by_addr.values():
+            for i in range(1, len(group)):
+                union(group[0], group[i])
+
+    clusters: dict[int, list[dict[str, Any]]] = {}
+    for idx, r in enumerate(raw_rows):
+        root = find(idx)
+        clusters.setdefault(root, []).append(r)
+
+    def _cluster_score(item: dict[str, Any]) -> tuple[Any, ...]:
+        has_date = 1 if item.get("dose_date") else 0
+        date_str = item.get("dose_date") or ""
+        applied = 1 if item.get("applied_here") else 0
+        sheet = item.get("sheet_title") or ""
+        is_date_sheet = 1 if any(ch.isdigit() for ch in sheet) and "/" in sheet else 0
+        has_photo = 1 if item.get("image_url") else 0
+        has_phone = 1 if item.get("phone") else 0
+        pmo_id = item.get("pmo_id") or 0
+        return (has_date, date_str, applied, is_date_sheet, has_photo, has_phone, pmo_id)
+
+    deduped: list[dict[str, Any]] = []
+    for root, items in clusters.items():
+        best = dict(max(items, key=_cluster_score))
+
+        # Se em qualquer visita o animal foi vacinado na campanha, ele é considerado vacinado
+        if any(it.get("applied_here") for it in items):
+            best["applied_here"] = True
+            best["status"] = "vacinado"
+
+        # Enriquece com foto se a linha campeã não tiver
+        if not best.get("image_url"):
+            for it in items:
+                if it.get("image_url"):
+                    best["image_url"] = it["image_url"]
+                    break
+
+        # Enriquece com telefone se a linha campeã não tiver
+        if not best.get("phone"):
+            for it in items:
+                if it.get("phone"):
+                    best["phone"] = it["phone"]
+                    best["phone_wa"] = it.get("phone_wa") or ""
+                    break
+
+        # Enriquece com animal_id / ficha se a linha campeã não tiver
+        if not best.get("animal_id"):
+            for it in items:
+                if it.get("animal_id"):
+                    best["animal_id"] = it["animal_id"]
+                    best["profile_url"] = it.get("profile_url") or ""
+                    break
+
+        # Enriquece com card_url se a linha campeã não tiver
+        if not best.get("card_url"):
+            for it in items:
+                if it.get("card_url"):
+                    best["card_url"] = it["card_url"]
+                    break
+
+        # Enriquece com dose_date se a linha campeã não tiver
+        if not best.get("dose_date"):
+            for it in items:
+                if it.get("dose_date"):
+                    best["dose_date"] = it["dose_date"]
+                    best["vaccine_date"] = it.get("vaccine_date") or ""
+                    best["expiry_date"] = it.get("expiry_date") or ""
+                    best["days_left"] = it.get("days_left")
+                    best["days_since"] = it.get("days_since")
+                    best["status_key"] = it.get("status_key") or "sem_data"
+                    best["wa_msg"] = it.get("wa_msg") or ""
+                    break
+
+        deduped.append(best)
+
+    return deduped
 
 
 def _pmo_vacinados_sort(rows: list[dict[str, Any]], order: str) -> list[dict[str, Any]]:
