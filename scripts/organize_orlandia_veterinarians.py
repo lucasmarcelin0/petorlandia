@@ -30,8 +30,9 @@ ORLANDIA = "Orlândia"
 
 def normalize(value):
     normalized = (value or "").strip().lower()
-    normalized = unicodedata.normalize("NFKD", normalized)
-    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    if not normalized.isascii():
+        normalized = unicodedata.normalize("NFKD", normalized)
+        normalized = "".join([ch for ch in normalized if not unicodedata.combining(ch)])
     return re.sub(r"\s+", " ", normalized)
 
 

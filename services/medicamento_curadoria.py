@@ -47,7 +47,7 @@ def normalizar_nome_prescrito(nome: str | None) -> str:
     else:
         texto = _DASH_RE.sub(" - ", texto)
         nfkd = unicodedata.normalize("NFKD", texto)
-        texto = "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
+        texto = "".join([c for c in nfkd if not unicodedata.combining(c)]).lower()
 
     texto = _CLEAN_RE.sub(" ", texto)
     texto = _DASH_SPACE_RE.sub(" - ", texto)

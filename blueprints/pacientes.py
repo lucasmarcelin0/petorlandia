@@ -2722,10 +2722,13 @@ def alterar_vacina(vacina_id):
             proxima_data = base_date + timedelta(days=vacina.intervalo_dias)
         elif vacina.frequencia:
             def _norm(txt):
-                return ''.join(
-                    c for c in unicodedata.normalize('NFD', txt.lower())
+                txt_lower = txt.lower()
+                if txt_lower.isascii():
+                    return txt_lower
+                return ''.join([
+                    c for c in unicodedata.normalize('NFD', txt_lower)
                     if unicodedata.category(c) != 'Mn'
-                )
+                ])
 
             freq_map = {
                 'diario': 1,
@@ -3294,10 +3297,13 @@ def carteirinha_publica(token):
     # Rabisin/Raiva PM dose, for example, supersedes an older Canigen R dose.
     def grupo_clinico(vacina):
         raw = f'{vacina.nome or ""} {vacina.tipo or ""}'.casefold()
-        normalized = ''.join(
-            char for char in unicodedata.normalize('NFD', raw)
-            if unicodedata.category(char) != 'Mn'
-        )
+        if raw.isascii():
+            normalized = raw
+        else:
+            normalized = ''.join([
+                char for char in unicodedata.normalize('NFD', raw)
+                if unicodedata.category(char) != 'Mn'
+            ])
         if any(token in normalized for token in ('antirrab', 'raiva', 'rabisin', 'defensor', 'hertaliq', 'canigen r')):
             return 'antirrabica'
         if 'leish' in normalized:

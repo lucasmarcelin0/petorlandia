@@ -38,7 +38,7 @@ def _strip_accents(s: str) -> str:
     if s.isascii():
         return s
     nfkd = unicodedata.normalize("NFKD", s)
-    return "".join(c for c in nfkd if not unicodedata.combining(c))
+    return "".join([c for c in nfkd if not unicodedata.combining(c)])
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -286,6 +286,24 @@ _RE_NORM_CONC_1 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(\d+(?:[.,
 _RE_NORM_CONC_2 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(ml|mL|l)\b", re.IGNORECASE)
 _RE_NORM_CONC_3 = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b", re.IGNORECASE)
 _RE_NORM_PERCENT = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE)
+
+# Pre-compiled regex patterns for interactions, concentrations, dose strengths, species, weight ranges, and tokenization
+_RE_SPLIT_FRASES = re.compile(r"(?<=[\.;])\s+|\n+")
+_RE_MATCH_AGENTE = re.compile(r"^(.*?)(?:\s*[-:]\s*|\s+)(aumenta|reduz|potencializa|pode|deve|evitar|contraindicado)", re.IGNORECASE)
+_RE_DOSE_FORCA = re.compile(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b')
+_RE_DOSE_CONCENTRACAO = re.compile(r'\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ui)\s*/\s*(?:ml|l)\b')
+_RE_CONC_DOSE_1 = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:m\s*l|ml)\b')
+_RE_CONC_DOSE_2 = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(?:m\s*l|ml)\b')
+_RE_CONC_PERCENT = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%')
+_RE_CONC_DOSE_3 = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b')
+_RE_VOL_EXTRACT = re.compile(r'(?i)\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)')
+_RE_WEIGHT_ATE = re.compile(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg')
+_RE_WEIGHT_FAIXA = re.compile(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg')
+_RE_WEIGHT_ACIMA = re.compile(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg')
+_RE_SPECIES_CAES = re.compile(r'\bcae?s?\b|\bcaes\b|\bcachorr')
+_RE_SPECIES_GATOS = re.compile(r'\bgat[oa]s?\b|\bfelin')
+_RE_TOKEN_ALPHANUM = re.compile(r'[a-z0-9]+')
+_RE_MG_MATCH = re.compile(r'(\d+(?:[.,]\d+)?)\s*mg\b')
 
 
 def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
@@ -626,7 +644,7 @@ def _extrair_frases_por_palavra_chave(texto: Optional[str], palavras: List[str])
     bruto = _texto_multilinha_limpo(texto)
     if not bruto:
         return []
-    frases = re.split(r"(?<=[\.;])\s+|\n+", bruto)
+    frases = _RE_SPLIT_FRASES.split(bruto)
     saida = []
     for frase in frases:
         frase_limpa = _texto_limpo(frase)
@@ -667,7 +685,7 @@ def _parsear_interacoes_estruturadas(texto: Optional[str]) -> List[Dict[str, str
     resultado: List[Dict[str, str]] = []
     for item in itens:
         agente = item
-        match = re.match(r"^(.*?)(?:\s*[-:]\s*|\s+)(aumenta|reduz|potencializa|pode|deve|evitar|contraindicado)", item, re.IGNORECASE)
+        match = _RE_MATCH_AGENTE.match(item)
         if match:
             agente = match.group(1).strip(" -:")
         elif ":" in item:
@@ -918,7 +936,7 @@ def _dose_texto_tem_forca_explicita(dose) -> bool:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b', norm):
+        if _RE_DOSE_FORCA.search(norm):
             return True
     return False
 
@@ -942,7 +960,7 @@ def _dose_texto_tem_concentracao_explicita(dose) -> bool:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ui)\s*/\s*(?:ml|l)\b', norm):
+        if _RE_DOSE_CONCENTRACAO.search(norm):
             return True
     return False
 
@@ -1509,22 +1527,16 @@ def _concentracao_principal_apresentacao(ap) -> str:
     ]
     combinado = ' '.join(str(t) for t in textos if t)
     if combinado:
-        m = re.search(
-            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:m\s*l|ml)\b',
-            combinado,
-        )
+        m = _RE_CONC_DOSE_1.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}/{m.group(3)} mL"
-        m = re.search(
-            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(?:m\s*l|ml)\b',
-            combinado,
-        )
+        m = _RE_CONC_DOSE_2.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2) + '/ml')}"
-        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%', combinado)
+        m = _RE_CONC_PERCENT.search(combinado)
         if m:
             return f"{m.group(1)}%"
-        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b', combinado)
+        m = _RE_CONC_DOSE_3.search(combinado)
         if m:
             return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
 
@@ -1595,7 +1607,7 @@ def _volume_apresentacao_label(ap) -> str:
     if valor is not None and unidade and unidade.lower() not in {'un', 'unidade'}:
         return f"{_fmt_apresentacao_label(float(valor))} {unidade}"
     texto = getattr(ap, 'concentracao', None) or ''
-    m = re.search(r'(?i)\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)', texto)
+    m = _RE_VOL_EXTRACT.search(texto)
     if m:
         return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
     return ''
@@ -1666,15 +1678,15 @@ def _extrair_faixa_peso_apresentacao(ap) -> Optional[str]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        m = re.search(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_WEIGHT_ATE.search(norm)
         if m:
             return f'até {m.group(1).replace(".", ",")} kg'
-        m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_WEIGHT_FAIXA.search(norm)
         if m:
             ini = m.group(1).replace('.', ',')
             fim = m.group(2).replace('.', ',')
             return f'{ini} a {fim} kg'
-        m = re.search(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        m = _RE_WEIGHT_ACIMA.search(norm)
         if m:
             return f'acima de {m.group(1).replace(".", ",")} kg'
     return None
@@ -1690,9 +1702,9 @@ def _extrair_especie_apresentacao(ap) -> Optional[str]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        if re.search(r'\bcae?s?\b|\bcaes\b|\bcachorr', norm):
+        if _RE_SPECIES_CAES.search(norm):
             return 'Caes'
-        if re.search(r'\bgat[oa]s?\b|\bfelin', norm):
+        if _RE_SPECIES_GATOS.search(norm):
             return 'Gatos'
     return None
 
@@ -1882,7 +1894,7 @@ def _tokens_indicacao(texto: Optional[str]) -> set[str]:
     if not norm:
         return set()
     tokens = {
-        token for token in re.findall(r'[a-z0-9]+', norm)
+        token for token in _RE_TOKEN_ALPHANUM.findall(norm)
         if len(token) >= 3 and token not in _INDICACAO_STOPWORDS
     }
     expandidos = set(tokens)
@@ -1964,7 +1976,7 @@ def _extrair_concentracao_alvo_mg(proto) -> Optional[float]:
         norm = _texto_norm(texto)
         if not norm:
             continue
-        match = re.search(r'(\d+(?:[.,]\d+)?)\s*mg\b', norm)
+        match = _RE_MG_MATCH.search(norm)
         if not match:
             continue
         try:
@@ -1979,7 +1991,7 @@ def _categoria_via_texto(texto: Optional[str]) -> Optional[str]:
     t = _texto_norm(texto)
     if not t:
         return None
-    tokens = set(re.findall(r'[a-z0-9]+', t))
+    tokens = set(_RE_TOKEN_ALPHANUM.findall(t))
     if any(k in t for k in ('colirio', 'oftalm', 'olho', 'conjuntiv')):
         return 'OFTALMICA'
     if any(k in t for k in ('otologic', 'otolog', 'auric', 'ouvido', 'conduto auditivo', 'canal auditivo')):

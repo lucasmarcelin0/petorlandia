@@ -70,9 +70,12 @@ def _normaliza_unidade(un: str) -> str:
 def _chave_pa(nome: str) -> str:
     """Remove acentos + lowercase + strip — pra comparar princípio ativo
     sem depender de acentuação no banco."""
-    s = unicodedata.normalize('NFKD', nome or '')
-    s = ''.join(c for c in s if not unicodedata.combining(c))
-    return s.strip().lower()
+    raw = (nome or "").strip()
+    if raw.isascii():
+        return raw.lower()
+    s = unicodedata.normalize('NFKD', raw)
+    s = ''.join([c for c in s if not unicodedata.combining(c)])
+    return s.lower()
 
 
 def parse_nome_legado(nome: str) -> Optional[Tuple[str, float, str, str]]:

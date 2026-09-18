@@ -2602,8 +2602,11 @@ def servicos_vacinas_cidade_por_local():
         return jsonify({'success': False, 'message': 'Coordenadas inválidas.'}), 400
 
     def _norm(value):
+        text = str(value or '')
+        if text.isascii():
+            return text.strip().lower()
         import unicodedata
-        text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode()
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode()
         return text.strip().lower()
 
     cidade_detectada = None

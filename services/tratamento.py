@@ -35,7 +35,7 @@ def _normalizar(texto: str | None) -> str:
     if texto.isascii():
         return texto.lower().strip()
     texto = unicodedata.normalize('NFKD', texto)
-    texto = ''.join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = ''.join([ch for ch in texto if not unicodedata.combining(ch)])
     return texto.lower().strip()
 
 
