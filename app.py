@@ -5876,8 +5876,13 @@ def _integration_build_handoff(user: User, animal: Animal, consulta_id: int | No
 
 
 def _integration_normalize_lookup_token(value: str | None) -> str:
-    normalized = unicodedata.normalize('NFKD', str(value or ''))
-    without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    s = str(value or '')
+    # Performance optimization: fast-path for pure ASCII strings and list comprehension join
+    if s.isascii():
+        without_accents = s
+    else:
+        normalized = unicodedata.normalize('NFKD', s)
+        without_accents = ''.join([ch for ch in normalized if not unicodedata.combining(ch)])
     return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
 
 
@@ -8056,7 +8061,12 @@ def _integration_list_exame_imagem_history(user: User, animal: Animal):
 
 
 def _integration_normalize_match_text(value) -> str:
-    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
+    s = str(value or '')
+    # Performance optimization: fast-path for pure ASCII strings to avoid encode/decode overhead
+    if s.isascii():
+        text = s
+    else:
+        text = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'\s+', ' ', text.lower()).strip()
 
 
@@ -9611,8 +9621,12 @@ def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta)
 
 
 def _normalize_protocol_medication_name(value: str | None) -> str:
-    text = unicodedata.normalize('NFKD', (value or '').strip().lower())
-    return ''.join(char for char in text if not unicodedata.combining(char))
+    text = (value or '').strip().lower()
+    # Performance optimization: fast-path for pure ASCII strings and list comprehension join
+    if text.isascii():
+        return text
+    text = unicodedata.normalize('NFKD', text)
+    return ''.join([char for char in text if not unicodedata.combining(char)])
 
 
 def _protocol_prefers_weight_based_dose(item) -> bool:
@@ -11178,8 +11192,11 @@ from sqlalchemy.orm import joinedload
 
 def _normalize_racao_brand_key(value):
     text = " ".join((value or "").strip().lower().split())
+    # Performance optimization: fast-path for pure ASCII strings and list comprehension join
+    if text.isascii():
+        return text
     normalized = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return "".join([ch for ch in normalized if not unicodedata.combining(ch)])
 
 
 def _canonicalize_racao_brand(value):
