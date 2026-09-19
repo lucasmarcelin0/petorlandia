@@ -12,7 +12,9 @@
     <div class="input-group mb-2">
       <input type="text" class="form-control" id="novo-convite-link" value="{{ novo_convite_link }}" readonly>
       <button class="btn btn-outline-secondary" type="button"
-              onclick="navigator.clipboard.writeText(document.getElementById('novo-convite-link').value); this.innerText='Copiado!';">
+              aria-label="Copiar link do convite"
+              aria-live="polite"
+              onclick="navigator.clipboard.writeText(document.getElementById('novo-convite-link').value).then(() => { const b=this,o=b.innerText,l=b.getAttribute('aria-label'); b.innerText='Copiado!'; b.setAttribute('aria-label', 'Link do convite copiado!'); setTimeout(() => { b.innerText=o; b.setAttribute('aria-label', l); }, 2000); });">
         Copiar
       </button>
     </div>

@@ -135,7 +135,9 @@
             </a>
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     data-cta="health_card_copy"
-                    onclick="navigator.clipboard.writeText('{{ url_for('carteirinha_publica', token=animal.public_token, _external=True) }}').then(() => this.innerText='Link copiado!')">
+                    aria-label="Copiar link da carteirinha digital"
+                    aria-live="polite"
+                    onclick="navigator.clipboard.writeText('{{ url_for('carteirinha_publica', token=animal.public_token, _external=True) }}').then(() => { const b=this,o=b.innerText,l=b.getAttribute('aria-label'); b.innerText='Link copiado!'; b.setAttribute('aria-label', 'Link da carteirinha copiado!'); setTimeout(() => { b.innerText=o; b.setAttribute('aria-label', l); }, 2000); });">
               Copiar link
             </button>
             {% if health_card_whatsapp_url %}
