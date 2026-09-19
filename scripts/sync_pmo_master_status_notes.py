@@ -106,9 +106,12 @@ LEGEND_SWATCH_COLORS = [
 
 
 def _strip_accents(value: str) -> str:
+    val_str = str(value or "")
+    if val_str.isascii():
+        return val_str
     return "".join(
         char
-        for char in unicodedata.normalize("NFKD", value or "")
+        for char in unicodedata.normalize("NFKD", val_str)
         if not unicodedata.combining(char)
     )
 

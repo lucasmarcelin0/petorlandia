@@ -349,8 +349,12 @@ class Favorite(db.Model):
 def _normalize_age_unit(value):
     if not value:
         return None
-    text = unicodedata.normalize('NFKD', str(value))
-    text = text.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    text = str(value)
+    if text.isascii():
+        text = text.strip().lower()
+    else:
+        text = unicodedata.normalize('NFKD', text)
+        text = text.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
     if text.startswith('mes'):
         return 'meses'
     if text.startswith('ano'):

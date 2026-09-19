@@ -557,7 +557,8 @@ def _service_defaults_for_emitter(emitter: FiscalEmitter | None) -> dict[str, st
 
 def _normalize_provider_text(value: Any) -> str:
     text = str(value or "").strip().lower()
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    if not text.isascii():
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
 

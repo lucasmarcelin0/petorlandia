@@ -320,6 +320,8 @@ def parse_data(valor) -> Optional[date]:
 def normalizar_nome_chave(valor: str) -> str:
     """Normaliza nome para comparação: minúsculas, sem acentos, sem espaços duplos."""
     s = str(valor or "").strip().lower()
+    if s.isascii():
+        return re.sub(r"\s+", " ", s)
     s = unicodedata.normalize("NFD", s)
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
     return re.sub(r"\s+", " ", s)

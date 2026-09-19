@@ -800,8 +800,11 @@ def get_or_create_species(db, Species, name: str) -> int:
 def _normalize_breed_key(name: str) -> str:
     """Remove acentos, lowercase, colapsa espaços — evita duplicar raças por
     causa de variação de maiúscula/acento (ex.: 'labrador' vs 'Labrador')."""
-    nfkd = unicodedata.normalize("NFKD", name)
-    ascii_str = nfkd.encode("ascii", "ignore").decode("ascii")
+    if name.isascii():
+        ascii_str = name
+    else:
+        nfkd = unicodedata.normalize("NFKD", name)
+        ascii_str = nfkd.encode("ascii", "ignore").decode("ascii")
     return re.sub(r"\s+", " ", ascii_str).strip().lower()
 
 
