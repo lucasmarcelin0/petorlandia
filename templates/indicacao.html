@@ -56,8 +56,8 @@
     <div class="input-group">
       <input type="text" class="form-control" id="link-indicacao" value="{{ link }}" readonly>
       <button class="btn btn-outline-primary" type="button" id="btn-copiar"
-              onclick="navigator.clipboard.writeText(document.getElementById('link-indicacao').value).then(() => { this.innerHTML = 'Copiado!'; });">
-        <i class="fa-regular fa-copy me-1"></i> Copiar
+              aria-label="Copiar link de indicação" aria-live="polite">
+        <i class="fa-regular fa-copy me-1" aria-hidden="true"></i> Copiar
       </button>
     </div>
     <p class="text-muted small mt-2 mb-3">Código: <strong>{{ referral.code }}</strong></p>
@@ -85,4 +85,32 @@
   </p>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const btnCopiar = document.getElementById('btn-copiar');
+  const inputLink = document.getElementById('link-indicacao');
+  if (!btnCopiar || !inputLink) return;
+
+  let timeoutId = null;
+  const originalHtml = btnCopiar.innerHTML;
+  const originalLabel = btnCopiar.getAttribute('aria-label') || 'Copiar link de indicação';
+
+  btnCopiar.addEventListener('click', function() {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(inputLink.value).then(function() {
+      btnCopiar.innerHTML = '<i class="fa-solid fa-check me-1" aria-hidden="true"></i> Copiado!';
+      btnCopiar.setAttribute('aria-label', 'Link de indicação copiado!');
+
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(function() {
+        btnCopiar.innerHTML = originalHtml;
+        btnCopiar.setAttribute('aria-label', originalLabel);
+      }, 2000);
+    });
+  });
+});
+</script>
 {% endblock %}
