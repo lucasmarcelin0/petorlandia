@@ -29,3 +29,7 @@
 ## 2026-09-12 - Dynamic Copy Button Feedback for Screen Readers
 **Learning:** Copy-to-clipboard buttons that change visual inner text on copy (e.g. from "Copiar" to "Copiado") leave screen reader users unaware of the copy operation status unless the element has `aria-live="polite"` and dynamically updates its `aria-label` during the success feedback state.
 **Action:** Always add `aria-live="polite"` and update `aria-label` dynamically during copy feedback state on copy-to-clipboard elements, restoring the original label after timeout.
+
+## 2026-10-15 - Aria Labels on Icon-only Action Buttons
+**Learning:** Icon-only action buttons (e.g., `<button><i class="fas fa-times"></i></button>`) and links styled as buttons (`<a class="btn"><i class="fas fa-chevron-left"></i></a>`) that lack visible text fail to provide context to screen readers, violating WCAG 4.1.2.
+**Action:** Always add explicit `aria-label` attributes to icon-only buttons and links describing their action, and apply `aria-hidden="true"` to the child icon to prevent redundant or confusing screen reader announcements.
