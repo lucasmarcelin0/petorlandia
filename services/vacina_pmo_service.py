@@ -40,6 +40,45 @@ from services.sfa_service import (
 from time_utils import now_in_brazil, utcnow
 
 
+# Optimization (Bolt): Pre-compiled module-level regex patterns to avoid redundant compilation in hot paths
+_NORM_SPACE_RE = re.compile(r"\s+")
+_DIGITS_RE = re.compile(r"\D+")
+_FULL_DIGITS_2_RE = re.compile(r"^\d{1,2}$")
+_NON_ALPHANUM_RE = re.compile(r"[^a-z0-9]+")
+_PAREN_RE = re.compile(r"\([^)]*\)")
+_ANTIGO_RE = re.compile(r"\b(antigo|nova|novo)\b", re.IGNORECASE)
+_RUIDOS_RE = re.compile(
+    r"\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|"
+    r"bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|"
+    r"casa\s+\d+|casa\s+[a-zA-Z]\b)\b",
+    re.IGNORECASE,
+)
+_HYPHEN_RE = re.compile(r"\s+-\s+")
+_RUA_ABBREV_RE = re.compile(r"\bR\.\s*", re.IGNORECASE)
+_AV_ABBREV_RE = re.compile(r"\bAv\.\s*", re.IGNORECASE)
+_AL_ABBREV_RE = re.compile(r"\bAl\.\s*", re.IGNORECASE)
+_PRACA_ABBREV_RE = re.compile(r"\bP[çc][a\.]\s*", re.IGNORECASE)
+_TV_ABBREV_RE = re.compile(r"\bTv\.\s*", re.IGNORECASE)
+_JD_ABBREV_RE = re.compile(r"\bJd\.\s*", re.IGNORECASE)
+_PQ_ABBREV_RE = re.compile(r"\bPq\.\s*", re.IGNORECASE)
+_ZERO_PAD_RE = re.compile(r"\b(Rua|Avenida|Alameda|Travessa)\s+0+(\d+)\b", re.IGNORECASE)
+_MARGINAL_DI_RE = re.compile(r"\bAv\.?\s*marginal\s+di\.?\b", re.IGNORECASE)
+_MARGINAL_ES_RE = re.compile(r"\bAv\.?\s*marginal\s+es\.?\b", re.IGNORECASE)
+_COMMA_MULT_RE = re.compile(r",\s*,+")
+_COMMA_END_RE = re.compile(r",\s*$")
+_RUA_NUM_RE = re.compile(r"\brua\s+(\d+)\b")
+_AV_NUM_RE = re.compile(r"\b(?:avenida|av\.?)\s+(\d+)\b")
+_HOUSE_NUM_RE = re.compile(r",\s*(\d+)")
+_WORD_BOUNDARY_NUM_RE = re.compile(r"\b(\d{1,4})\b")
+_NEIGHBORHOOD_MARKER_RE = re.compile(
+    r"\b(jardim|jd\.?|centro|vila|pq\.?|parque|alto|alto da|bela|boa vista|siena|cidade alta|ouro verde)\b[^\n,]*",
+    re.IGNORECASE,
+)
+_CONDO_NAME_RE = re.compile(r"condom[ií]nios?\s+([0-9A-Za-zÀ-ú.\-]+)", re.IGNORECASE)
+_READABLE_DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}")
+_PLACEHOLDER_ANIMAL_NAME_RE = re.compile(r"^(c[aã]o|gato|pet|animal)(\s*\d+)?$")
+
+
 DEFAULT_SHEET_URL = (
     "https://docs.google.com/spreadsheets/d/"
     "1oN74lysYpQOIYgS9nlyrQUgxa0w1FHS7yGVftpzbqAk/edit?gid=2076484491#gid=2076484491"
@@ -189,11 +228,11 @@ class PmoSyncResult:
 
 
 def _normalize_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return _NORM_SPACE_RE.sub(" ", str(value or "").strip())
 
 
 def _normalize_note_line(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return _NORM_SPACE_RE.sub(" ", str(value or "").strip())
 
 
 def _append_visit_note(visit: PmoVaccinationVisit, line: str) -> None:
@@ -259,12 +298,12 @@ def _strip_accents(value: str) -> str:
 
 
 def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+    return _DIGITS_RE.sub("", str(value or ""))
 
 
 def _parse_count(value: Any) -> int:
     text = _normalize_text(value)
-    if not re.fullmatch(r"\d{1,2}", text):
+    if not _FULL_DIGITS_2_RE.fullmatch(text):
         return 0
     parsed = int(text)
     return parsed if 0 <= parsed <= 30 else 0
@@ -337,7 +376,7 @@ def _normalize_shift(value: Any) -> str:
 def _pmo_is_master_sheet(title: Any) -> bool:
     """True quando o título é a aba mestre de status — o app não deve escrever nela."""
     def _norm(value: Any) -> str:
-        return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+        return _NORM_SPACE_RE.sub(" ", _strip_accents(_normalize_text(value)).lower()).strip()
 
     return bool(_normalize_text(title)) and _norm(title) == _norm(PMO_MASTER_SHEET_TITLE)
 
@@ -365,38 +404,31 @@ _ORLANDIA_NUMBER_WORDS = {
 
 def _pmo_clean_address_fragment(value: str) -> str:
     text = _normalize_text(value)
-    text = re.sub(r"\([^)]*\)", " ", text)
-    text = re.sub(r"\b(antigo|nova|novo)\b", " ", text, flags=re.IGNORECASE)
+    text = _PAREN_RE.sub(" ", text)
+    text = _ANTIGO_RE.sub(" ", text)
     # Remove ruídos comuns de complementos que atrapalham o geocoder
-    text = re.sub(
-        r"\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|"
-        r"bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|"
-        r"casa\s+\d+|casa\s+[a-zA-Z]\b)\b",
-        " ",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(r"\s+-\s+", " ", text)
-    text = re.sub(r"\bR\.\s*", "Rua ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAv\.\s*", "Avenida ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAl\.\s*", "Alameda ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bP[çc][a\.]\s*", "Praça ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bTv\.\s*", "Travessa ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bJd\.\s*", "Jardim ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bPq\.\s*", "Parque ", text, flags=re.IGNORECASE)
+    text = _RUIDOS_RE.sub(" ", text)
+    text = _HYPHEN_RE.sub(" ", text)
+    text = _RUA_ABBREV_RE.sub("Rua ", text)
+    text = _AV_ABBREV_RE.sub("Avenida ", text)
+    text = _AL_ABBREV_RE.sub("Alameda ", text)
+    text = _PRACA_ABBREV_RE.sub("Praça ", text)
+    text = _TV_ABBREV_RE.sub("Travessa ", text)
+    text = _JD_ABBREV_RE.sub("Jardim ", text)
+    text = _PQ_ABBREV_RE.sub("Parque ", text)
 
     # Padroniza zeros à esquerda em ruas/avenidas de Orlândia (ex: Avenida 02 -> Avenida 2, Rua 09 -> Rua 9)
-    text = re.sub(r"\b(Rua|Avenida|Alameda|Travessa)\s+0+(\d+)\b", r"\1 \2", text, flags=re.IGNORECASE)
+    text = _ZERO_PAD_RE.sub(r"\1 \2", text)
     # Padroniza abreviações de Marginal
-    text = re.sub(r"\bAv\.?\s*marginal\s+di\.?\b", "Avenida Marginal Direita", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAv\.?\s*marginal\s+es\.?\b", "Avenida Marginal Esquerda", text, flags=re.IGNORECASE)
+    text = _MARGINAL_DI_RE.sub("Avenida Marginal Direita", text)
+    text = _MARGINAL_ES_RE.sub("Avenida Marginal Esquerda", text)
 
     # Padroniza nomes de ruas com números por extenso em Orlândia (ex: Rua Vinte e Quatro -> Rua 24)
     for word, num in sorted(_ORLANDIA_NUMBER_WORDS.items(), key=lambda item: -len(item[0])):
         text = re.sub(rf"\b(Rua|Avenida|Alameda|Praça|Travessa)\s+{word}\b", rf"\1 {num}", text, flags=re.IGNORECASE)
 
-    text = re.sub(r",\s*,+", ",", text)
-    text = re.sub(r",\s*$", "", text).strip(", ")
+    text = _COMMA_MULT_RE.sub(",", text)
+    text = _COMMA_END_RE.sub("", text).strip(", ")
     return _normalize_text(text)
 
 
@@ -648,9 +680,9 @@ def _pmo_orlandia_local_geocode(address: str) -> tuple[float, float] | None:
     if not norm:
         return None
 
-    rua_match = re.search(r"\brua\s+(\d+)\b", norm)
-    av_match = re.search(r"\b(?:avenida|av\.?)\s+(\d+)\b", norm)
-    num_match = re.search(r",\s*(\d+)", norm) or re.search(r"\b(\d{1,4})\b", norm)
+    rua_match = _RUA_NUM_RE.search(norm)
+    av_match = _AV_NUM_RE.search(norm)
+    num_match = _HOUSE_NUM_RE.search(norm) or _WORD_BOUNDARY_NUM_RE.search(norm)
 
     r_num = int(rua_match.group(1)) if rua_match else None
     av_num = int(av_match.group(1)) if av_match else None
@@ -811,11 +843,7 @@ def _pmo_extract_bairro_key(address: str) -> str:
     parts = _pmo_address_parts(address)
     bairro = _pmo_clean_address_fragment(parts.get("bairro") or "")
     if not bairro:
-        m = re.search(
-            r"\b(jardim|jd\.?|centro|vila|pq\.?|parque|alto|alto da|bela|boa vista|siena|cidade alta|ouro verde)\b[^\n,]*",
-            address,
-            flags=re.IGNORECASE,
-        )
+        m = _NEIGHBORHOOD_MARKER_RE.search(address)
         if m:
             bairro = m.group(0)
     return _strip_accents(_normalize_text(bairro)).lower()
@@ -1045,7 +1073,7 @@ def _split_on_whitespace_if_matches(
         return None
     # Remove anotações entre parênteses antes de tokenizar.
     cleaned = _normalize_text(_ANNOTATION_RE.sub(" ", str(value or "")))
-    tokens = [t for t in re.split(r"\s+", cleaned) if t]
+    tokens = [t for t in _NORM_SPACE_RE.split(cleaned) if t]
     if len(tokens) != total:
         return None
     return [{"name": t, "species": _species_hint(t)} for t in tokens]
@@ -1205,7 +1233,7 @@ def _provisional_email(phone: str, visit_id: int | None = None) -> str:
 
 
 def _normalize_person_name(value: Any) -> str:
-    return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+    return _NORM_SPACE_RE.sub(" ", _strip_accents(_normalize_text(value)).lower()).strip()
 
 
 _NAME_PARTICLES = {"da", "das", "de", "do", "dos", "e", "d"}
@@ -2267,12 +2295,12 @@ def _pmo_visit_has_field_record(visit: PmoVaccinationVisit) -> bool:
 
 def _pmo_animal_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return _NON_ALPHANUM_RE.sub("", text)
 
 
 def _pmo_address_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return _NON_ALPHANUM_RE.sub("", text)
 
 
 def _pmo_visit_phones(visit: PmoVaccinationVisit) -> set[str]:
@@ -4341,7 +4369,7 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
 def _pmo_normalize_title(value: Any) -> str:
     """Normaliza um título de aba: sem acento, minúsculo, espaços colapsados."""
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"\s+", " ", text).strip()
+    return _NORM_SPACE_RE.sub(" ", text).strip()
 
 
 def _pmo_match_sheet_title(titles: list[str], wanted: str) -> str:
@@ -4471,7 +4499,7 @@ def _pmo_condo_label(house: dict[str, Any]) -> str:
     """Nome amigável do condomínio (ex.: 'Torino') extraído do complemento."""
     cells = house.get("cells") or []
     complement = _normalize_text(cells[3] if len(cells) > 3 else "")
-    match = re.search(r"condom[ií]nios?\s+([0-9A-Za-zÀ-ú.\-]+)", complement, re.IGNORECASE)
+    match = _CONDO_NAME_RE.search(complement)
     if match:
         return match.group(1).strip(" .-")
     return complement
@@ -6483,7 +6511,7 @@ _PMO_RESUBMISSION_RE = re.compile(
 
 def _pmo_request_timestamp_is_readable(value: str) -> bool:
     """O Sheets às vezes converte o carimbo em número de série; ignore esses."""
-    return bool(re.match(r"^\d{2}/\d{2}/\d{4}", _normalize_text(value)))
+    return bool(_READABLE_DATE_RE.match(_normalize_text(value)))
 
 
 def _request_note_submission_info(note: Any) -> tuple[str, int]:
@@ -6544,7 +6572,7 @@ def _request_row_key(row: list[str]) -> tuple[str, str, str]:
 
     def cell(index: int) -> str:
         value = row[index] if index < len(row) else ""
-        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+        return _NORM_SPACE_RE.sub(" ", str(value or "")).strip().lower()
 
     return (
         cell(PMO_REQUEST_TIMESTAMP_INDEX),
@@ -7033,7 +7061,7 @@ def _is_pmo_placeholder_name(name: Any) -> bool:
     if not name:
         return True
     text = _strip_accents(_normalize_text(name)).lower()
-    return bool(re.match(r"^(c[aã]o|gato|pet|animal)(\s*\d+)?$", text))
+    return bool(_PLACEHOLDER_ANIMAL_NAME_RE.match(text))
 
 
 def _deduplicate_vacinados_dataset(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
