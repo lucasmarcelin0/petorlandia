@@ -191,7 +191,11 @@ def _tem_conteudo_util(conteudo: Dict[str, Any]) -> bool:
 
 def _norm_simples(texto: str) -> str:
     import unicodedata
-    s = unicodedata.normalize("NFKD", texto or "").encode("ASCII", "ignore").decode().lower()
+    val_str = str(texto or "")
+    if val_str.isascii():
+        s = val_str.lower()
+    else:
+        s = unicodedata.normalize("NFKD", val_str).encode("ASCII", "ignore").decode().lower()
     return s.strip()
 
 

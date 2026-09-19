@@ -2038,7 +2038,10 @@ _RE_NOME_NUM_FINAL = re.compile(r'\b(\d+(?:[,\.]\d+)?)\s*$')  # "Rilexine palatÃ
 def _norm_ascii_lower(texto: str) -> str:
     import unicodedata
 
-    nfkd = unicodedata.normalize("NFKD", texto or "")
+    val_str = str(texto or "")
+    if val_str.isascii():
+        return val_str.lower()
+    nfkd = unicodedata.normalize("NFKD", val_str)
     return nfkd.encode("ASCII", "ignore").decode().lower()
 
 
