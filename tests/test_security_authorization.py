@@ -194,6 +194,14 @@ class TestUrlSanitization:
         assert response.headers['Location'] != 'https://attacker.com'
         assert 'attacker.com' not in response.headers['Location']
 
+    def test_first_access_open_redirect_sanitization(self, client):
+        """Test that /primeiro-acesso sanitizes the next parameter against open redirect payloads."""
+        response = client.get('/primeiro-acesso?next=https://attacker.com')
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert 'https://attacker.com' not in html
+        assert 'attacker.com' not in html
+
 
 class TestAuthentication:
     """Test authentication mechanisms."""

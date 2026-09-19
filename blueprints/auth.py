@@ -206,6 +206,9 @@ def first_access():
     if token and not invite and not token_user:
         flash('Este link de primeiro acesso expirou ou é inválido.', 'warning')
 
+    raw_next = request.values.get('next')
+    next_url = _sanitize_login_next_url(raw_next) if raw_next else ''
+
     if form.validate_on_submit():
         matches = find_users_by_phone(form.phone.data)
         # O link assinado da carteirinha já diz qual conta é a dessa pessoa. Sem
@@ -215,11 +218,11 @@ def first_access():
             matches = [token_user]
         if len(matches) > 1:
             flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
         user = matches[0] if matches else None
         if not user or not _first_access_user_allowed(user, invite, token_user):
             flash('Não encontramos um primeiro acesso ativo para este celular.', 'danger')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
 
         session['first_access_user_id'] = user.id
         session['first_access_invite_token'] = token if invite else ''
@@ -230,7 +233,7 @@ def first_access():
         session['first_access_next'] = _first_access_next_url(invite)
         return redirect(url_for('first_access_password'))
 
-    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '', welcome=_first_access_welcome(invite, token_user))
+    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
 
 
 @bp.route("/primeiro-acesso/senha", methods=['GET', 'POST'])
