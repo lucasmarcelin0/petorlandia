@@ -338,8 +338,8 @@
                 <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}">
                   {{ form.csrf_token }}
                   <button type="submit" class="btn btn-sm btn-link text-danger p-0"
-                          onclick="return confirm('Excluir este horário?');" title="Excluir horário">
-                    <i class="fas fa-trash-alt"></i>
+                          onclick="return confirm('Excluir este horário?');" title="Excluir horário" aria-label="Excluir horário">
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
                   </button>
                 </form>
               </div>

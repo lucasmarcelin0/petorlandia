@@ -109,8 +109,8 @@
                       <form method="post" action="{{ url_for('clinic_grooming_plano_toggle', clinica_id=minha_clinica.id, plan_id=p.id) if minha_clinica else url_for('casa_de_racao_grooming_plano_toggle', casa_id=minha_casa_de_racao.id, plan_id=p.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm {% if p.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
-                                title="{{ 'Desativar' if p.active else 'Ativar' }}">
-                          <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                                title="{{ 'Desativar' if p.active else 'Ativar' }}" aria-label="{{ 'Desativar plano' if p.active else 'Ativar plano' }}">
+                          <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %}" aria-hidden="true"></i>
                         </button>
                       </form>
                     </div>
