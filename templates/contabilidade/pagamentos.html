@@ -378,8 +378,8 @@
               <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
             </div>
             <div class="btn-group" role="group">
-              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
-              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value) }}" title="Mês anterior" aria-label="Mês anterior"><i class="fas fa-chevron-left" aria-hidden="true"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value) }}" title="Próximo mês" aria-label="Próximo mês"><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
             </div>
           </div>
           <div class="table-responsive">
@@ -601,8 +601,8 @@
               <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
             </div>
             <div class="btn-group" role="group">
-              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value, aba='plantonistas') }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
-              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value, aba='plantonistas') }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value, aba='plantonistas') }}" title="Mês anterior" aria-label="Mês anterior"><i class="fas fa-chevron-left" aria-hidden="true"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value, aba='plantonistas') }}" title="Próximo mês" aria-label="Próximo mês"><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
             </div>
           </div>
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
