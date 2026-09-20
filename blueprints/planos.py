@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from extensions import db
 from forms import ConsultaPlanAuthorizationForm, SubscribePlanForm
 from models import Animal
+from security.redact import redact_sensitive_text
 from services.health_plan import evaluate_consulta_coverages
 from time_utils import utcnow
 
@@ -257,16 +258,18 @@ def contratar_plano(animal_id):
     preapproval_data["external_reference"] = f"health-onboarding-{onboarding.id}"
 
     try:
-        current_app.logger.info(f"Creating Mercado Pago preapproval with data: {preapproval_data}")
+        current_app.logger.info("Creating Mercado Pago preapproval for onboarding %s", onboarding.id)
         resp = mp_sdk().preapproval().create(preapproval_data)
-        current_app.logger.info(f"Mercado Pago response: {resp}")
+        status_code = resp.get("status")
+        current_app.logger.info("Mercado Pago response status: %s", status_code)
     except Exception as e:  # pragma: no cover - network failures
-        current_app.logger.exception(f"Erro de conexão com Mercado Pago: {e}")
+        current_app.logger.exception("Erro de conexão com Mercado Pago: %s", redact_sensitive_text(str(e)))
         flash("Falha ao conectar com Mercado Pago.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     if resp.get("status") not in {200, 201}:
-        current_app.logger.error(f"MP error (HTTP {resp.get('status')}): {resp}")
+        message = (resp.get("response") or {}).get("message") or resp.get("status")
+        current_app.logger.error("MP error (HTTP %s): %s", resp.get("status"), redact_sensitive_text(str(message)))
         flash("Erro ao iniciar assinatura.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
