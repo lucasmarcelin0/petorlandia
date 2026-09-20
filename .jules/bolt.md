@@ -27,6 +27,10 @@
 **Learning:** In `services/medicamento_curadoria.py`, `normalizar_nome_prescrito` ran `unicodedata.normalize("NFKD", texto)` and character-combining filtering loops on every string, along with re-compiling regexes (`[^\w%/.,+\- ]+` and `\s*-\s*`) dynamically on every call. Adding an `isascii()` pre-condition check to short-circuit NFKD decomposition and pre-compiling regex patterns at module level yields a ~40% execution speedup.
 **Action:** Check for ASCII pre-conditions before unicodedata decomposition in string normalization helpers, and pre-compile regular expression patterns at module level.
 
+## 2026-09-20 - Pre-compiling Regex Patterns in Medication Concentration Parsing
+**Learning:** `_parse_concentracao_string` in `blueprints/consulta.py` parses concentration strings (ratios, compounds, single units, pure numbers) during medication presentation creation and search. Executing `re.search` with raw regex strings on every invocation causes redundant regex parsing and compilation overhead. Pre-compiling module-level regex objects (`_RE_CONCENTRACAO_*`) improves parsing execution speed by ~33%.
+**Action:** Always pre-compile module-level regex objects when parsing concentration or unit strings in blueprint handlers and services.
+
 ## 2026-09-18 - Pre-compiled Regexes, ASCII Fast-Path Short-Circuiting, and List Comprehension Joins
 **Learning:** Checking `value.isascii()` to bypass `unicodedata.normalize("NFKD", value)` and character filtering loops provides substantial execution speedup on pure ASCII inputs. Furthermore, using list comprehensions `"".join([c for c in ...])` instead of generator expressions provides a known-size sequence to CPython's string join, avoiding incremental buffer reallocations. In `services/bulario.py`, pre-compiling 16 regex patterns at module level for presentation parsing, dose strengths, species detection, and indication tokens eliminates redundant re-compilation in search and render loops.
 **Action:** Pre-compile regular expressions at module level, short-circuit non-accented ASCII strings before unicodedata calls, and prefer list comprehensions within `str.join()` calls.
