@@ -2020,8 +2020,10 @@ def _normalize_public_text(value):
     normalized = (value or '').strip().lower()
     if not normalized:
         return ''
+    if normalized.isascii():
+        return re.sub(r'\s+', ' ', normalized)
     normalized = unicodedata.normalize('NFKD', normalized)
-    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = ''.join([ch for ch in normalized if not unicodedata.combining(ch)])
     return re.sub(r'\s+', ' ', normalized)
 
 
@@ -4941,8 +4943,10 @@ def _update_coordinates_from_request(endereco: Endereco | None):
 def _normalizar_unidade_idade(unidade):
     if not unidade:
         return 'anos'
-    texto = unicodedata.normalize('NFKD', str(unidade))
-    texto = texto.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    texto = str(unidade)
+    if not texto.isascii():
+        texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
+    texto = texto.strip().lower()
     if texto.startswith('mes'):
         return 'meses'
     if texto.startswith('ano'):
@@ -5876,8 +5880,12 @@ def _integration_build_handoff(user: User, animal: Animal, consulta_id: int | No
 
 
 def _integration_normalize_lookup_token(value: str | None) -> str:
-    normalized = unicodedata.normalize('NFKD', str(value or ''))
-    without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = str(value or '')
+    if not normalized.isascii():
+        normalized = unicodedata.normalize('NFKD', normalized)
+        without_accents = ''.join([ch for ch in normalized if not unicodedata.combining(ch)])
+    else:
+        without_accents = normalized
     return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
 
 
@@ -8056,7 +8064,9 @@ def _integration_list_exame_imagem_history(user: User, animal: Animal):
 
 
 def _integration_normalize_match_text(value) -> str:
-    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
+    text = str(value or '')
+    if not text.isascii():
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'\s+', ' ', text.lower()).strip()
 
 
@@ -9611,8 +9621,11 @@ def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta)
 
 
 def _normalize_protocol_medication_name(value: str | None) -> str:
-    text = unicodedata.normalize('NFKD', (value or '').strip().lower())
-    return ''.join(char for char in text if not unicodedata.combining(char))
+    text = (value or '').strip().lower()
+    if text.isascii():
+        return text
+    text = unicodedata.normalize('NFKD', text)
+    return ''.join([char for char in text if not unicodedata.combining(char)])
 
 
 def _protocol_prefers_weight_based_dose(item) -> bool:
@@ -10522,8 +10535,10 @@ def _appointment_request_within_vet_schedule(veterinario_id, scheduled_date, sch
     allowed_names = weekday_names.get(scheduled_date.weekday(), set())
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
     for horario in horarios:
-        dia = unicodedata.normalize("NFKD", (horario.dia_semana or "").lower())
-        dia = "".join(ch for ch in dia if not unicodedata.combining(ch))
+        dia = (horario.dia_semana or "").lower()
+        if not dia.isascii():
+            dia = unicodedata.normalize("NFKD", dia)
+            dia = "".join([ch for ch in dia if not unicodedata.combining(ch)])
         dia = re.sub(r"[^a-z]+", " ", dia).strip()
         if dia not in allowed_names:
             continue
@@ -11178,8 +11193,10 @@ from sqlalchemy.orm import joinedload
 
 def _normalize_racao_brand_key(value):
     text = " ".join((value or "").strip().lower().split())
+    if text.isascii():
+        return text
     normalized = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return "".join([ch for ch in normalized if not unicodedata.combining(ch)])
 
 
 def _canonicalize_racao_brand(value):
@@ -12359,8 +12376,11 @@ def list_breeds():
 
     def _breed_display_key(name):
         raw = (name or "").strip()
-        normalized = unicodedata.normalize("NFKD", raw)
-        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        if not raw.isascii():
+            normalized = unicodedata.normalize("NFKD", raw)
+            normalized = "".join([ch for ch in normalized if not unicodedata.combining(ch)])
+        else:
+            normalized = raw
         token = " ".join(normalized.lower().replace("-", " ").split())
         if token in {
             "srd",
