@@ -149,6 +149,15 @@ class TestUrlSanitization:
             assert _sanitize_login_next_url('') == default_url
             assert _sanitize_login_next_url('   ') == default_url
 
+            # Custom fallback
+            custom_fallback = '/custom/fallback'
+            assert _sanitize_login_next_url(None, fallback=custom_fallback) == custom_fallback
+            assert _sanitize_login_next_url('https://attacker.com', fallback=custom_fallback) == custom_fallback
+
+            # Same-origin full URLs vs external URLs
+            assert _sanitize_login_next_url('http://localhost/dashboard') == '/dashboard'
+            assert _sanitize_login_next_url('http://localhost/profile?tab=1') == '/profile?tab=1'
+
             # Open Redirect payloads
             assert _sanitize_login_next_url('//attacker.com') == default_url
             assert _sanitize_login_next_url('///attacker.com') == default_url
