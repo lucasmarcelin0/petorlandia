@@ -155,3 +155,15 @@ def test_icon_buttons_a11y_attributes():
     assert 'aria-label="Alternar cronômetro"' in consulta_content
 
 
+def test_management_icon_buttons_a11y_attributes():
+    with open("templates/grooming/planos_publicos.html", "r", encoding="utf-8") as f:
+        grooming_content = f.read()
+    assert 'aria-label="{{ \'Desativar plano \' ~ p.name if p.active else \'Ativar plano \' ~ p.name }}"' in grooming_content
+
+    with open("templates/bulario/form.html", "r", encoding="utf-8") as f:
+        bulario_content = f.read()
+    assert 'aria-label="Remover apresentação"' in bulario_content
+
+    with open("templates/partials/clinic_info.html", "r", encoding="utf-8") as f:
+        clinic_content = f.read()
+    assert 'aria-label="Excluir horário de {{ h.dia_semana }}"' in clinic_content
