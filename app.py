@@ -5015,24 +5015,45 @@ def _preencher_idade_form(form, animal=None):
 
 
 
-def _sanitize_login_next_url(next_url):
-    """Sanitizes user-supplied post-login redirect URL to prevent Open Redirect vulnerabilities.
+def _sanitize_login_next_url(next_url, fallback=None):
+    """Sanitizes user-supplied post-login or referrer redirect URL to prevent Open Redirect vulnerabilities.
 
-    Ensures the target is strictly a local relative path, disallowing schema, netloc,
-    protocol-relative URLs (// or /\\), and backslash-based domain tricks.
+    Ensures the target is strictly a local relative path or same-origin URL matching request.host,
+    disallowing schema, external netloc, protocol-relative URLs (// or /\\), and backslash-based domain tricks.
     """
+    default_url = fallback or url_for('index')
     next_url = (next_url or '').strip()
     if not next_url:
-        return url_for('index')
+        return default_url
+
+    if next_url.startswith('http://') or next_url.startswith('https://'):
+        try:
+            parsed = urlparse(next_url)
+            if parsed.netloc and has_request_context() and parsed.netloc.lower() == request.host.lower():
+                path = parsed.path or '/'
+                if parsed.query:
+                    path += '?' + parsed.query
+                if parsed.fragment:
+                    path += '#' + parsed.fragment
+                next_url = path
+            else:
+                return default_url
+        except Exception:
+            return default_url
+
     if not next_url.startswith('/') or next_url.startswith('//') or next_url.startswith('/\\'):
-        return url_for('index')
+        return default_url
     if '\\' in next_url:
-        return url_for('index')
-    parsed_next = urlparse(next_url)
-    if parsed_next.netloc or parsed_next.scheme:
-        return url_for('index')
-    if re.fullmatch(r'/vacina-pmo/c/[^/]+/pet/\d+/?', parsed_next.path or ''):
-        return url_for('index')
+        return default_url
+    try:
+        parsed_next = urlparse(next_url)
+        if parsed_next.netloc or parsed_next.scheme:
+            return default_url
+        if re.fullmatch(r'/vacina-pmo/c/[^/]+/pet/\d+/?', parsed_next.path or ''):
+            return default_url
+    except Exception:
+        return default_url
+
     return next_url
 
 

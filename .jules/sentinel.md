@@ -18,3 +18,9 @@
 **Learning:** `security.url_safe` provides `is_url_ssrf_safe` to validate schemes, hostnames, and IP resolution against loopback, private networks, and link-local cloud metadata addresses.
 **Prevention:** Always validate all outbound URLs against `is_url_ssrf_safe` prior to dispatching HTTP requests with `requests.get` or other network clients.
 
+## 2026-09-21 - Open Redirect in Next Param and PII in Subscription Logs
+**Vulnerability:** `first_access` route permitted unvalidated `next` parameter pass-through to template forms, and `_sanitize_login_next_url` rejected absolute same-origin URLs matching `request.host`. Additionally, Mercado Pago subscription logs logged raw preapproval payload including customer emails and documents.
+**Learning:** `_sanitize_login_next_url` should safely accept same-origin full URLs matching `request.host` while converting them to local paths, and log statements for external gateway payloads must redact customer PII (`redact_sensitive_text`).
+**Prevention:** Always sanitize redirect parameters with `_sanitize_login_next_url(..., fallback=...)` before rendering or redirecting, and never log raw customer payload objects in payment gateway flows.
+
+

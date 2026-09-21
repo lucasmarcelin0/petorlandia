@@ -38,3 +38,7 @@
 **Learning:** Updating an element's `textContent` via JavaScript without updating its static `aria-label` attribute leaves screen reader users hearing outdated information, as screen readers prioritize `aria-label` over text content.
 **Action:** Always complement dynamic `textContent` updates in JS with `setAttribute('aria-label', ...)` and `aria-live="polite"` on quantity counter elements.
 
+## 2026-09-21 - ARIA labels and hidden icons for icon-only action buttons and cropper toolbar
+**Learning:** Icon-only action buttons (e.g. edit, delete, photo cropper controls) rely solely on the `title` attribute for accessibility. However, `title` attributes are not reliably announced by all screen readers and do not provide robust accessible names. Additionally, nested icon elements can create redundant or confusing announcements if not hidden.
+**Action:** Always provide an explicit `aria-label` attribute on icon-only interactive elements (like buttons and links), wrap toolbar action groups with `role="group"` and `aria-label`, and always add `aria-hidden="true"` to decorative child icon elements to ensure clear and reliable announcements for screen reader users.
+

@@ -149,6 +149,15 @@ class TestUrlSanitization:
             assert _sanitize_login_next_url('') == default_url
             assert _sanitize_login_next_url('   ') == default_url
 
+            # Custom fallback
+            custom_fallback = '/custom/fallback'
+            assert _sanitize_login_next_url(None, fallback=custom_fallback) == custom_fallback
+            assert _sanitize_login_next_url('https://attacker.com', fallback=custom_fallback) == custom_fallback
+
+            # Same-origin full URLs vs external URLs
+            assert _sanitize_login_next_url('http://localhost/dashboard') == '/dashboard'
+            assert _sanitize_login_next_url('http://localhost/profile?tab=1') == '/profile?tab=1'
+
             # Open Redirect payloads
             assert _sanitize_login_next_url('//attacker.com') == default_url
             assert _sanitize_login_next_url('///attacker.com') == default_url
@@ -193,6 +202,14 @@ class TestUrlSanitization:
         assert response.status_code == 302
         assert response.headers['Location'] != 'https://attacker.com'
         assert 'attacker.com' not in response.headers['Location']
+
+    def test_first_access_open_redirect_sanitization(self, client):
+        """Test that /primeiro-acesso sanitizes the next parameter against open redirect payloads."""
+        response = client.get('/primeiro-acesso?next=https://attacker.com')
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert 'https://attacker.com' not in html
+        assert 'attacker.com' not in html
 
 
 class TestAuthentication:
