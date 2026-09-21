@@ -363,41 +363,69 @@ _ORLANDIA_NUMBER_WORDS = {
 }
 
 
+
+_PMO_RE_PARENTHESES = re.compile(r"\([^)]*\)")
+_PMO_RE_ANTIGO_NOVA = re.compile(r"\b(antigo|nova|novo)\b", flags=re.IGNORECASE)
+_PMO_RE_COMPLEMENTOS = re.compile(
+    r"\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|"
+    r"bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|"
+    r"casa\s+\d+|casa\s+[a-zA-Z]\b)\b",
+    flags=re.IGNORECASE,
+)
+_PMO_RE_DASH = re.compile(r"\s+-\s+")
+_PMO_RE_RUA = re.compile(r"\bR\.\s*", flags=re.IGNORECASE)
+_PMO_RE_AVENIDA = re.compile(r"\bAv\.\s*", flags=re.IGNORECASE)
+_PMO_RE_ALAMEDA = re.compile(r"\bAl\.\s*", flags=re.IGNORECASE)
+_PMO_RE_PRACA = re.compile(r"\bP[çc][a\.]\s*", flags=re.IGNORECASE)
+_PMO_RE_TRAVESSA = re.compile(r"\bTv\.\s*", flags=re.IGNORECASE)
+_PMO_RE_JARDIM = re.compile(r"\bJd\.\s*", flags=re.IGNORECASE)
+_PMO_RE_PARQUE = re.compile(r"\bPq\.\s*", flags=re.IGNORECASE)
+_PMO_RE_ZEROS_ESQUERDA = re.compile(r"\b(Rua|Avenida|Alameda|Travessa)\s+0+(\d+)\b", flags=re.IGNORECASE)
+_PMO_RE_MARGINAL_DIREITA = re.compile(r"\bAv\.?\s*marginal\s+di\.?\b", flags=re.IGNORECASE)
+_PMO_RE_MARGINAL_ESQUERDA = re.compile(r"\bAv\.?\s*marginal\s+es\.?\b", flags=re.IGNORECASE)
+
+_PMO_NUMBER_WORDS_SORTED = sorted(_ORLANDIA_NUMBER_WORDS.items(), key=lambda item: -len(item[0]))
+_PMO_NUMBER_WORDS_PATTERN = "|".join([word for word, _ in _PMO_NUMBER_WORDS_SORTED])
+_PMO_RE_NUMBER_WORDS = re.compile(rf"\b(Rua|Avenida|Alameda|Praça|Travessa)\s+({_PMO_NUMBER_WORDS_PATTERN})\b", flags=re.IGNORECASE)
+
+_PMO_RE_MULTIPLE_COMMAS = re.compile(r",\s*,+")
+_PMO_RE_TRAILING_COMMA = re.compile(r",\s*$")
+
+
+def _pmo_replace_num(match):
+    prefix = match.group(1)
+    word = match.group(2).lower()
+    num = _ORLANDIA_NUMBER_WORDS.get(word, word)
+    return f"{prefix} {num}"
+
 def _pmo_clean_address_fragment(value: str) -> str:
     text = _normalize_text(value)
-    text = re.sub(r"\([^)]*\)", " ", text)
-    text = re.sub(r"\b(antigo|nova|novo)\b", " ", text, flags=re.IGNORECASE)
+    text = _PMO_RE_PARENTHESES.sub(" ", text)
+    text = _PMO_RE_ANTIGO_NOVA.sub(" ", text)
     # Remove ruídos comuns de complementos que atrapalham o geocoder
-    text = re.sub(
-        r"\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|"
-        r"bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|"
-        r"casa\s+\d+|casa\s+[a-zA-Z]\b)\b",
-        " ",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(r"\s+-\s+", " ", text)
-    text = re.sub(r"\bR\.\s*", "Rua ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAv\.\s*", "Avenida ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAl\.\s*", "Alameda ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bP[çc][a\.]\s*", "Praça ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bTv\.\s*", "Travessa ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bJd\.\s*", "Jardim ", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bPq\.\s*", "Parque ", text, flags=re.IGNORECASE)
+    text = _PMO_RE_COMPLEMENTOS.sub(" ", text)
+    text = _PMO_RE_DASH.sub(" ", text)
+    text = _PMO_RE_RUA.sub("Rua ", text)
+    text = _PMO_RE_AVENIDA.sub("Avenida ", text)
+    text = _PMO_RE_ALAMEDA.sub("Alameda ", text)
+    text = _PMO_RE_PRACA.sub("Praça ", text)
+    text = _PMO_RE_TRAVESSA.sub("Travessa ", text)
+    text = _PMO_RE_JARDIM.sub("Jardim ", text)
+    text = _PMO_RE_PARQUE.sub("Parque ", text)
 
     # Padroniza zeros à esquerda em ruas/avenidas de Orlândia (ex: Avenida 02 -> Avenida 2, Rua 09 -> Rua 9)
-    text = re.sub(r"\b(Rua|Avenida|Alameda|Travessa)\s+0+(\d+)\b", r"\1 \2", text, flags=re.IGNORECASE)
+    text = _PMO_RE_ZEROS_ESQUERDA.sub(r"\g<1> \g<2>", text)
     # Padroniza abreviações de Marginal
-    text = re.sub(r"\bAv\.?\s*marginal\s+di\.?\b", "Avenida Marginal Direita", text, flags=re.IGNORECASE)
-    text = re.sub(r"\bAv\.?\s*marginal\s+es\.?\b", "Avenida Marginal Esquerda", text, flags=re.IGNORECASE)
+    text = _PMO_RE_MARGINAL_DIREITA.sub("Avenida Marginal Direita", text)
+    text = _PMO_RE_MARGINAL_ESQUERDA.sub("Avenida Marginal Esquerda", text)
 
     # Padroniza nomes de ruas com números por extenso em Orlândia (ex: Rua Vinte e Quatro -> Rua 24)
-    for word, num in sorted(_ORLANDIA_NUMBER_WORDS.items(), key=lambda item: -len(item[0])):
-        text = re.sub(rf"\b(Rua|Avenida|Alameda|Praça|Travessa)\s+{word}\b", rf"\1 {num}", text, flags=re.IGNORECASE)
+    text = _PMO_RE_NUMBER_WORDS.sub(_pmo_replace_num, text)
 
-    text = re.sub(r",\s*,+", ",", text)
-    text = re.sub(r",\s*$", "", text).strip(", ")
+    text = _PMO_RE_MULTIPLE_COMMAS.sub(",", text)
+    text = _PMO_RE_TRAILING_COMMA.sub("", text).strip(", ")
     return _normalize_text(text)
+
 
 
 def _pmo_unique_queries(queries: list[str]) -> list[str]:
