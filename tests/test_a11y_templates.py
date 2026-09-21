@@ -155,3 +155,14 @@ def test_icon_buttons_a11y_attributes():
     assert 'aria-label="Alternar cronômetro"' in consulta_content
 
 
+def test_photo_cropper_macro_a11y_attributes():
+    with open("templates/components/photo_cropper.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'role="group"' in content
+    assert 'aria-label="Controles de edição da imagem"' in content
+    assert '<i class="fas fa-undo" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-redo" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-search-minus" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-search-plus" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-sync-alt" aria-hidden="true"></i>' in content

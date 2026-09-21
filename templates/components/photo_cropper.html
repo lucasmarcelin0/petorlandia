@@ -34,21 +34,21 @@
     <p class="text-muted small mb-1 pc-hint-desktop">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
     <p class="text-muted small mb-1 pc-hint-touch">Arraste para reposicionar e use dois dedos (pinça) para ajustar o zoom.</p>
 
-    <div id="{{ id }}-controls" class="pc-controls d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
+    <div id="{{ id }}-controls" class="pc-controls d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}" role="group" aria-label="Controles de edição da imagem">
       <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda" aria-label="Girar 90° à esquerda">
-        <i class="fas fa-undo"></i>
+        <i class="fas fa-undo" aria-hidden="true"></i>
       </button>
       <button type="button" id="{{ id }}-rotate-right" class="btn btn-light btn-sm border" title="Girar 90° à direita" aria-label="Girar 90° à direita">
-        <i class="fas fa-redo"></i>
+        <i class="fas fa-redo" aria-hidden="true"></i>
       </button>
       <button type="button" id="{{ id }}-zoom-out" class="btn btn-light btn-sm border" title="Diminuir zoom" aria-label="Diminuir zoom">
-        <i class="fas fa-search-minus"></i>
+        <i class="fas fa-search-minus" aria-hidden="true"></i>
       </button>
       <button type="button" id="{{ id }}-zoom-in" class="btn btn-light btn-sm border" title="Aumentar zoom" aria-label="Aumentar zoom">
-        <i class="fas fa-search-plus"></i>
+        <i class="fas fa-search-plus" aria-hidden="true"></i>
       </button>
       <button type="button" id="{{ id }}-reset" class="btn btn-light btn-sm border" title="Redefinir" aria-label="Redefinir">
-        <i class="fas fa-sync-alt"></i>
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
       </button>
     </div>
 
