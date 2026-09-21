@@ -375,8 +375,8 @@
                   value="{% if origin_param == 'orcamento_id' %}{{ origin_id }}{% endif %}"
                   data-nfse-field="orcamento_id"
                 >
-                <button class="btn btn-outline-secondary" type="button" data-nfse-load-btn title="Carregar dados do orçamento">
-                  <i class="fas fa-sync-alt"></i>
+                <button class="btn btn-outline-secondary" type="button" data-nfse-load-btn title="Carregar dados do orçamento" aria-label="Carregar dados do orçamento">
+                  <i class="fas fa-sync-alt" aria-hidden="true"></i>
                 </button>
               </div>
               <div class="form-text" data-nfse-load-status></div>
@@ -640,8 +640,8 @@
                   {% endif %}
 
                   {# Expand details button #}
-                  <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-detail-{{ issue.id }}" title="Detalhes">
-                    <i class="fas fa-ellipsis-h"></i>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-detail-{{ issue.id }}" title="Detalhes" aria-label="Expandir detalhes">
+                    <i class="fas fa-ellipsis-h" aria-hidden="true"></i>
                   </button>
                 </div>
 

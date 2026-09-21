@@ -51,3 +51,29 @@ def test_password_toggle_on_reset_password_page(client, app):
         assert toggle.get("aria-label") == "Mostrar senha"
         assert toggle.get("aria-pressed") == "false"
         assert toggle.get("aria-controls") in ["password", "confirm_password"]
+
+
+def test_password_toggle_on_first_access_password_page(client, app):
+    """Garante que a página de senha do primeiro acesso contém botões acessíveis de visibilidade de senha."""
+    with app.app_context():
+        user = User(name="First Access Test", phone="+5516999990001", email="first-access@cadastro.petorlandia.local")
+        user.set_password("temp123")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as session:
+        session["first_access_user_id"] = user_id
+
+    response = client.get("/primeiro-acesso/senha")
+    assert response.status_code == 200
+    soup = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+
+    toggles = soup.select("[data-password-toggle]")
+    assert len(toggles) == 2, "Esperado 2 alternadores de senha na página de senha do primeiro acesso"
+
+    for toggle in toggles:
+        assert toggle.get("aria-label") == "Mostrar senha"
+        assert toggle.get("aria-pressed") == "false"
+        assert toggle.get("aria-controls") in ["password", "confirm_password"]
+

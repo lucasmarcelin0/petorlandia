@@ -30,3 +30,8 @@
 ## 2026-09-18 - Pre-compiled Regexes, ASCII Fast-Path Short-Circuiting, and List Comprehension Joins
 **Learning:** Checking `value.isascii()` to bypass `unicodedata.normalize("NFKD", value)` and character filtering loops provides substantial execution speedup on pure ASCII inputs. Furthermore, using list comprehensions `"".join([c for c in ...])` instead of generator expressions provides a known-size sequence to CPython's string join, avoiding incremental buffer reallocations. In `services/bulario.py`, pre-compiling 16 regex patterns at module level for presentation parsing, dose strengths, species detection, and indication tokens eliminates redundant re-compilation in search and render loops.
 **Action:** Pre-compile regular expressions at module level, short-circuit non-accented ASCII strings before unicodedata calls, and prefer list comprehensions within `str.join()` calls.
+
+## 2026-09-19 - Request-Scoped `g` Caching for Site Flags and Site Text Lookups
+**Learning:** `SiteFlag.get` and `SiteText.get` were called repeatedly per request across `context_processors.py`, layout templates, and views (10-20 duplicate SQL queries per page load for home and navbar flags). Caching lookups in Flask `g` (`_site_flag_cache` and `_site_text_cache`) when `has_request_context()` is active eliminates redundant SQL queries within a single request lifecycle, yielding an instant response for repetitive config reads.
+**Action:** Use request-scoped `g` dictionary caches for frequently read system/site config lookups to prevent repeated database queries during request rendering.
+

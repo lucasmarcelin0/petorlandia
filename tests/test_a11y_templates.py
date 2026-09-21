@@ -9,6 +9,12 @@ def test_vet_detail_template_a11y_labels():
     assert 'aria-label="Excluir horário"' in content
     assert 'i class="fas fa-edit" aria-hidden="true"' in content
     assert 'i class="fas fa-trash" aria-hidden="true"' in content
+    assert 'id="appointmentModalForm"' in content
+    assert 'id="appointmentDetailModal"' in content
+    assert 'role="dialog"' in content
+    assert 'aria-modal="true"' in content
+    assert 'aria-labelledby="appointmentModalFormTitle"' in content
+    assert 'aria-labelledby="appointmentDetailModalTitle"' in content
 
 def test_tutores_adicionados_template_a11y_labels():
     with open("templates/partials/tutores_adicionados.html", "r", encoding="utf-8") as f:
@@ -122,4 +128,30 @@ def test_home_editor_icon_button_a11y_labels():
     assert 'aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco {{ flag.label }}"' in content
     assert 'aria-label="{% if flag_map[\'home_section_pets\'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco de pets"' in content
     assert 'aria-hidden="true"' in content
+
+
+def test_copy_buttons_a11y_attributes():
+    template_files = [
+        ("templates/indicacao.html", 'aria-label="Copiar link de indicação"'),
+        ("templates/animais/ficha_animal.html", 'aria-label="Copiar link da carteirinha digital"'),
+        ("templates/vacinas_servico/pedido.html", 'aria-label="Copiar link do pedido"'),
+        ("templates/admin/parcerias.html", 'aria-label="Copiar link do convite"'),
+    ]
+    for filepath, expected_label in template_files:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert 'aria-live="polite"' in content, f"Missing aria-live='polite' in {filepath}"
+        assert expected_label in content, f"Missing expected aria-label in {filepath}"
+
+
+def test_icon_buttons_a11y_attributes():
+    with open("templates/contabilidade/nfse.html", "r", encoding="utf-8") as f:
+        nfse_content = f.read()
+    assert 'aria-label="Carregar dados do orçamento"' in nfse_content
+    assert 'aria-label="Expandir detalhes"' in nfse_content
+
+    with open("templates/partials/consulta_form.html", "r", encoding="utf-8") as f:
+        consulta_content = f.read()
+    assert 'aria-label="Alternar cronômetro"' in consulta_content
+
 
