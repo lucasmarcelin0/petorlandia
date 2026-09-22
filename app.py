@@ -3649,11 +3649,16 @@ def _export_vacina_pmo_pet_certificate_pdf(
     campaign_vaccine,
     effective_status,
     next_booster_date,
+    dose_date=None,
 ):
     vaccine_name = campaign_vaccine.nome if campaign_vaccine else 'Vacina Antirrabica'
     vaccine_lot = campaign_vaccine.lote if campaign_vaccine and campaign_vaccine.lote else 'Registro municipal'
     vaccine_maker = campaign_vaccine.fabricante if campaign_vaccine and campaign_vaccine.fabricante else 'Campanha PMO'
-    applied_at = campaign_vaccine.aplicada_em if campaign_vaccine and campaign_vaccine.aplicada_em else visit.vaccine_date
+    # Mesma data que a carteirinha na tela mostra, para o PDF impresso nao
+    # discordar do link que o morador guardou no celular.
+    applied_at = dose_date or (
+        campaign_vaccine.aplicada_em if campaign_vaccine and campaign_vaccine.aplicada_em else visit.vaccine_date
+    )
     species = 'Cao' if pmo_animal.species == 'cao' else 'Gato'
     statement = (
         f'Certificamos que o animal {pmo_animal.name}, sob responsabilidade de {visit.tutor_name}, '

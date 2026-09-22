@@ -396,7 +396,10 @@ def vacina_pmo_public(token):
 
 @bp.route('/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>')
 def vacina_pmo_public_pet(token, pmo_animal_id):
-    from services.vacina_pmo_service import get_vacina_pmo_public_visit
+    from services.vacina_pmo_service import (
+        get_vacina_pmo_public_visit,
+        pmo_visit_reference_date,
+    )
 
     visit = get_vacina_pmo_public_visit(token)
     if not visit:
@@ -439,16 +442,36 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     status_context = _pmo_status_context(effective_status)
     protegido = effective_status in _pmo_protected_statuses()
 
-    next_booster_date = None
-    if ja_imunizado and pmo_animal.immune_since:
+    # Dia da visita: a planilha nem sempre preenche a coluna de data, e nesses
+    # casos o dia continua escrito no titulo da aba. Antes so olhavamos
+    # ``visit.vaccine_date`` para contar o reforco, entao a carteirinha
+    # mostrava a aplicacao do dia e o reforco ficava "A confirmar".
+    visit_reference_date = pmo_visit_reference_date(visit)
+
+    # Dia da dose que protege este animal. So existe quando houve dose: e ele
+    # que a carteirinha mostra e de onde o reforco conta, para os dois nunca
+    # discordarem.
+    dose_date = None
+    if ja_imunizado:
         # Nao houve dose nesta visita: o relogio do reforco continua correndo a
         # partir da vacina antiga, senao a carteirinha prometeria protecao que
         # o animal nao tem.
-        next_booster_date = pmo_animal.immune_since + relativedelta(years=1)
+        dose_date = pmo_animal.immune_since
+    elif campaign_vaccine and campaign_vaccine.aplicada and campaign_vaccine.aplicada_em:
+        dose_date = campaign_vaccine.aplicada_em
+    elif effective_status == "vacinado":
+        dose_date = visit_reference_date
+
+    next_booster_date = None
+    if ja_imunizado and dose_date:
+        next_booster_date = dose_date + relativedelta(years=1)
     elif campaign_vaccine and campaign_vaccine.proxima_dose:
         next_booster_date = campaign_vaccine.proxima_dose
-    elif visit.vaccine_date and effective_status == "vacinado":
-        next_booster_date = visit.vaccine_date + relativedelta(years=1)
+    elif dose_date:
+        # Antes esta linha olhava so ``visit.vaccine_date``: com a coluna de
+        # data vazia na planilha o reforco virava "A confirmar" no mesmo dia em
+        # que a carteirinha ja mostrava a aplicacao.
+        next_booster_date = dose_date + relativedelta(years=1)
     booster_days_remaining = None
     booster_countdown_label = ""
     if next_booster_date:
@@ -462,6 +485,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
             campaign_vaccine=campaign_vaccine,
             effective_status=effective_status,
             next_booster_date=next_booster_date,
+            dose_date=dose_date,
         )
 
     # Mesma porta de entrada do certificado da campanha: quando a visita ja
@@ -487,6 +511,8 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         status_context=status_context,
         protegido=protegido,
         next_booster_date=next_booster_date,
+        dose_date=dose_date,
+        visit_reference_date=visit_reference_date,
         booster_days_remaining=booster_days_remaining,
         booster_countdown_label=booster_countdown_label,
         educational_video={"url": "", "embed_url": ""},

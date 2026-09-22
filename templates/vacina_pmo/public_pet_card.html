@@ -488,20 +488,26 @@
         </div>
 
         <div class="details">
-          <div class="detail-card" aria-label="Proximo reforco">
-            {% if effective_status == 'imunizado' and pmo_animal.immune_since %}
+          <div class="detail-card" aria-label="Data da dose">
+            {# A data mostrada aqui e a mesma de onde o reforco conta: sem isso
+               a carteirinha exibia "Aplicacao 22/09/2026" com o reforco em "A
+               confirmar". #}
+            {% if effective_status == 'imunizado' and dose_date %}
               <span class="label">Vacina anterior</span>
-              <span class="value">{{ pmo_animal.immune_since.strftime('%d/%m/%Y') }}</span>
-            {% else %}
+              <span class="value">{{ dose_date.strftime('%d/%m/%Y') }}</span>
+            {% elif dose_date %}
               <span class="label">Aplicação</span>
-              <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
+              <span class="value">{{ dose_date.strftime('%d/%m/%Y') }}</span>
+            {% else %}
+              <span class="label">Visita</span>
+              <span class="value">{{ visit_reference_date.strftime('%d/%m/%Y') if visit_reference_date else visit.sheet_title }}</span>
             {% endif %}
           </div>
           <div class="detail-card">
             <span class="label">Vacina</span>
             <span class="value">{{ campaign_vaccine.nome if campaign_vaccine else 'Vacina Antirrábica' }}</span>
           </div>
-          <div class="detail-card">
+          <div class="detail-card" aria-label="Proximo reforco">
             <span class="label">Próximo reforço</span>
             <span class="value">{{ next_booster_date.strftime('%d/%m/%Y') if next_booster_date else 'A confirmar' }}</span>
           </div>

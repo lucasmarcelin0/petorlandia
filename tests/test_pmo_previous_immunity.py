@@ -562,6 +562,107 @@ def test_carteirinha_do_vacinado_normal_nao_muda(app, client, monkeypatch):
     assert "25/08/2027" in html, "reforço um ano depois da dose desta visita"
 
 
+def _marcar_vacinado(app, monkeypatch, animal_id):
+    """Aplica o status "vacinado" pela função real, com a planilha desligada."""
+    from services import vacina_pmo_service as servico
+
+    for nome in ("write_vaccinated_counts_to_sheet", "write_note_to_sheet",
+                 "write_tutor_name_color_to_sheet", "write_attended_by_to_sheet"):
+        monkeypatch.setattr(servico, nome, lambda *a, **k: False)
+    with app.test_request_context():
+        return update_vacina_pmo_animal_status(animal_id, "vacinado")
+
+
+def test_carteirinha_conta_o_reforco_quando_a_planilha_nao_tem_data(app, client):
+    """Bug em produção: reforço saiu como "A confirmar" no dia da aplicação.
+
+    A coluna de data da planilha veio vazia, então ``visit.vaccine_date`` ficou
+    nulo. A carteirinha mostrava a aplicação (que vem do título da aba) e, para
+    contar o reforço, olhava só ``vaccine_date`` — o tutor via a dose do dia com
+    o reforço indefinido.
+    """
+    from services import vacina_pmo_service as servico
+
+    hoje = _visita("22/09/2026", vaccine_date=None, animais=[("Bidu", "vacinado")])
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    html = client.get(
+        f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}"
+    ).get_data(as_text=True)
+
+    assert "22/09/2026" in html, "a aplicação continua saindo do título da aba"
+    assert "22/09/2027" in html, "o reforço é um ano depois da dose"
+    assert "A confirmar" not in html
+
+
+def test_carteirinha_sem_dose_nao_chama_o_dia_de_aplicacao(app, client):
+    """Sem dose não há aplicação: o card mostra a visita, não uma aplicação.
+
+    Era esse par incoerente — "Aplicação" com data e "Próximo reforço: A
+    confirmar" — que fazia a carteirinha parecer quebrada.
+    """
+    from services import vacina_pmo_service as servico
+
+    hoje = _visita("22/09/2026", vaccine_date=date(2026, 9, 22),
+                   animais=[("Bidu", "pendente")])
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    html = client.get(
+        f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}"
+    ).get_data(as_text=True)
+
+    assert "Aplicação" not in html, "nada foi aplicado nesta visita"
+    assert "22/09/2026" in html, "o dia da visita continua visível"
+    assert "A confirmar" in html
+
+
+def test_dose_registrada_sem_data_na_planilha_usa_o_dia_da_aba(app, monkeypatch):
+    """A ``Vacina`` gravada tem de nascer no dia da campanha, não no dia do clique."""
+    from models import Vacina
+
+    hoje = _visita("22/09/2026", vaccine_date=None, animais=[("Bidu", "pendente")])
+    db.session.commit()
+
+    _marcar_vacinado(app, monkeypatch, hoje.animals[0].id)
+    db.session.refresh(hoje)
+
+    vacina = db.session.get(Vacina, hoje.animals[0].vaccine_id)
+    assert vacina is not None
+    assert vacina.aplicada_em == date(2026, 9, 22)
+    assert vacina.proxima_dose == date(2027, 9, 22)
+
+
+def test_dose_do_dia_vira_carteirinha_na_hora(app, client, monkeypatch):
+    """Bug em produção: a carteirinha só ganhava reforço na sincronização seguinte.
+
+    Na primeira dose da casa o cadastro do animal nasce no mesmo clique. Sem
+    flush o ``animal_id`` ainda era nulo, a ``Vacina`` não era gravada e o tutor
+    abria o link com "Próximo reforço: A confirmar".
+    """
+    from models import Vacina
+    from services import vacina_pmo_service as servico
+
+    hoje = _visita("22/09/2026", vaccine_date=date(2026, 9, 22),
+                   animais=[("Bidu", "pendente")])
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    _marcar_vacinado(app, monkeypatch, hoje.animals[0].id)
+    db.session.refresh(hoje)
+
+    vacina = db.session.get(Vacina, hoje.animals[0].vaccine_id)
+    assert vacina is not None, "a dose tem de virar registro no mesmo clique"
+    assert vacina.aplicada_em == date(2026, 9, 22)
+
+    html = client.get(
+        f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}"
+    ).get_data(as_text=True)
+    assert "22/09/2027" in html
+    assert "A confirmar" not in html
+
+
 def test_certificado_da_casa_nao_marca_imunizado_como_pendente(app, client, monkeypatch):
     from services import vacina_pmo_service as servico
 
