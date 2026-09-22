@@ -211,6 +211,34 @@ class TestUrlSanitization:
         assert 'https://attacker.com' not in html
         assert 'attacker.com' not in html
 
+    def test_update_appointment_status_open_redirect_sanitization(self, client, multi_user_setup, app):
+        """Test that update_appointment_status sanitizes request.referrer to prevent open redirects."""
+        app.config['WTF_CSRF_ENABLED'] = False
+        login(client, multi_user_setup['tutor1_id'])
+        with app.app_context():
+            from models import Appointment
+            from time_utils import utcnow
+            appt = Appointment(
+                animal_id=multi_user_setup['animal1_id'],
+                tutor_id=multi_user_setup['tutor1_id'],
+                veterinario_id=multi_user_setup['vet1_id'],
+                scheduled_at=utcnow() + timedelta(days=1),
+                status='scheduled',
+                created_by=multi_user_setup['tutor1_id'],
+            )
+            db.session.add(appt)
+            db.session.commit()
+            appt_id = appt.id
+
+        response = client.post(
+            f'/appointments/{appt_id}/status',
+            data={'status': 'canceled'},
+            headers={'Referer': 'https://attacker.com'},
+        )
+        assert response.status_code == 302
+        assert response.headers['Location'] != 'https://attacker.com'
+        assert 'attacker.com' not in response.headers['Location']
+
 
 class TestAuthentication:
     """Test authentication mechanisms."""
