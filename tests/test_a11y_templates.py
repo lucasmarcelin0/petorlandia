@@ -77,6 +77,17 @@ def test_global_modal_dialog_accessibility_attributes():
     assert 'aria-modal="true"' in schedule_content
     assert 'aria-labelledby="scheduleModalTitle"' in schedule_content
 
+    with open("templates/partials/falecimento_modal.html", "r", encoding="utf-8") as f:
+        falecimento_content = f.read()
+    assert 'id="falecimentoModal"' in falecimento_content
+    assert 'role="dialog"' in falecimento_content
+    assert 'aria-modal="true"' in falecimento_content
+    assert 'aria-labelledby="falecimentoModalLabel"' in falecimento_content
+    assert 'aria-label="Marcar {{ animal.name }} como falecido agora"' in falecimento_content
+    assert 'aria-label="Confirmar data de falecimento de {{ animal.name }}"' in falecimento_content
+    assert '<i class="fa-solid fa-check me-1" aria-hidden="true"></i>' in falecimento_content
+    assert '<i class="fa-solid fa-calendar-check me-1" aria-hidden="true"></i>' in falecimento_content
+
 
 def test_appointment_card_template_a11y_icons():
     with open("templates/partials/_appointment_card.html", "r", encoding="utf-8") as f:
