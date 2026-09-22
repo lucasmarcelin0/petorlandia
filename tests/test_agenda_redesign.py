@@ -430,3 +430,38 @@ def test_running_late_minutes_only_for_unstarted(client):
 
         assert appointment.running_late_minutes == 0
         assert appointment.delay_minutes >= 44
+
+
+def test_vet_schedule_tabs_order(client, monkeypatch):
+    """Verifica que 'Novo agendamento' fica na barra de abas à direita de 'Visão Geral', seguido por Consultas, Animais, Tutores e Configurações."""
+    from bs4 import BeautifulSoup
+
+    with flask_app.app_context():
+        clinic, vet_user, vet, tutor, animal = _build_clinic()
+        ids = (vet_user.id, vet.id, clinic.id)
+
+    login(monkeypatch, _fake_vet(*ids))
+    res = client.get(f'/appointments?view_as=veterinario&veterinario_id={ids[1]}')
+    assert res.status_code == 200
+    soup = BeautifulSoup(res.data.decode(), 'html.parser')
+
+    tabs_nav = soup.find('ul', id='vetScheduleSectionTabs')
+    assert tabs_nav is not None
+
+    tab_buttons = tabs_nav.find_all('button')
+    tab_texts = [' '.join(btn.get_text().split()) for btn in tab_buttons]
+
+    expected_labels = ['Visão Geral', 'Novo agendamento', 'Consultas', 'Animais', 'Tutores', 'Configurações']
+    found = []
+    for text in tab_texts:
+        for exp in expected_labels:
+            if exp in text:
+                found.append(exp)
+                break
+    assert found == expected_labels
+
+    # Verifica também que o botão de novo agendamento tem o atributo data-agenda-new-toggle
+    new_btn = tabs_nav.find('button', attrs={'data-agenda-new-toggle': True})
+    assert new_btn is not None
+    assert new_btn.get('data-bs-target') == '#newAppointmentPanel'
+
