@@ -458,6 +458,23 @@
       box-shadow: 0 6px 18px rgba(16, 185, 129, 0.38) !important;
       color: #ffffff !important;
     }
+    #clinical-suggestions-panel .clinical-btn-review {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 4px;
+      padding: .5rem 1rem !important;
+      font-size: .85rem !important;
+      font-weight: 600 !important;
+      border-radius: 999px !important;
+      border: 1px solid #10b981 !important;
+      color: #047857 !important;
+      background: #ecfdf5 !important;
+      white-space: nowrap;
+    }
+    #clinical-suggestions-panel .clinical-btn-review:hover {
+      background: #d1fae5 !important;
+      color: #065f46 !important;
+    }
     #clinical-suggestions-panel .clinical-btn-icon {
       width: 34px;
       height: 34px;
@@ -2065,23 +2082,28 @@
                 <i class="bi bi-calculator me-1"></i>
                 <span>Calcular plano</span>
               </button>
+              <button type="button" class="btn btn-sm clinical-btn-review js-go-prescription-review"
+                title="Ir para a revisão da receita (aba Medicamentos)">
+                <i class="bi bi-clipboard2-check me-1"></i>
+                <span>Revisar receita</span>
+              </button>
               <div class="d-flex gap-1">
                 ${protocol.editable ? `
                   <button type="button" class="btn btn-sm btn-outline-primary clinical-btn-icon js-edit-protocol"
-                    data-protocol-id="${protocol.id}" title="Editar protocolo da clínica">
+                    data-protocol-id="${protocol.id}" title="Editar protocolo da clínica" aria-label="Editar protocolo da clínica">
                     <i class="bi bi-pencil"></i>
                   </button>
                 ` : `
                   <button type="button" class="btn btn-sm btn-outline-primary clinical-btn-icon js-edit-protocol"
-                    data-protocol-id="${protocol.id}" title="Usar como base para novo protocolo da clínica">
-                    <i class="bi bi-copy"></i>
+                    data-protocol-id="${protocol.id}" title="Usar como base para novo protocolo da clínica" aria-label="Usar como base para novo protocolo da clínica">
+                    <i class="bi bi-files"></i>
                   </button>
                 `}
                 <button type="button" class="btn btn-sm btn-outline-secondary clinical-btn-icon js-dismiss-suggestion"
                   data-item-type="protocolo"
                   data-protocol-id="${protocol.id}"
                   data-title="${escapeHtml(protocol.nome)}"
-                  title="Dispensar protocolo">
+                  title="Dispensar protocolo" aria-label="Dispensar protocolo">
                   <i class="bi bi-eye-slash"></i>
                 </button>
               </div>
@@ -2443,9 +2465,14 @@
       const protocolId = button.dataset.protocolId;
       if (!protocolId || !panel.dataset.planUrl) return;
       const slot = panel.querySelector(`[data-plan-slot="${protocolId}"]`);
-      button.disabled = true;
-      const originalText = button.textContent;
-      button.textContent = 'Calculando...';
+      const triggers = Array.from(panel.querySelectorAll(`.js-load-clinical-plan[data-protocol-id="${protocolId}"]`));
+      if (triggers.some(btn => btn.disabled)) return;
+      const headerButton = triggers.find(btn => btn.classList.contains('clinical-btn-calculate'));
+      triggers.forEach(btn => { btn.disabled = true; });
+      if (headerButton) {
+        headerButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span>Calculando...</span>';
+      }
+      let calculated = false;
       if (slot) {
         slot.innerHTML = '<div class="clinical-card-block small text-muted">Calculando plano para este paciente...</div>';
       }
@@ -2454,6 +2481,7 @@
         const plan = data.plan || {};
         calculatedClinicalPlans.set(String(protocolId), plan);
         if (slot) slot.innerHTML = renderClinicalPlan(plan);
+        calculated = true;
         setStatus(data.message || 'Plano clínico calculado. Revise os itens antes de aplicar.', 'success');
       } catch (error) {
         if (slot) {
@@ -2461,9 +2489,33 @@
         }
         setStatus(error.message || 'Erro ao calcular plano clínico.', 'danger');
       } finally {
-        button.disabled = false;
-        button.textContent = originalText;
+        triggers.forEach(btn => { btn.disabled = false; });
+        if (headerButton) {
+          headerButton.innerHTML = calculated
+            ? '<i class="bi bi-arrow-repeat me-1"></i><span>Recalcular</span>'
+            : '<i class="bi bi-calculator me-1"></i><span>Calcular plano</span>';
+        }
       }
+    }
+
+    function goToPrescriptionReview() {
+      const tabButton = document.getElementById('medicamentos-tab');
+      if (tabButton) {
+        if (window.bootstrap?.Tab) {
+          window.bootstrap.Tab.getOrCreateInstance(tabButton).show();
+        } else {
+          tabButton.click();
+        }
+      }
+      if (typeof window.mostrarEtapaPrescricao === 'function') {
+        window.mostrarEtapaPrescricao('revisao');
+      }
+      const target = document.getElementById('prescription-panel-revisao') || document.getElementById('medicamentos');
+      if (!target) {
+        setStatus('Seção de revisão da receita não encontrada nesta página.', 'warning');
+        return;
+      }
+      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 180);
     }
 
     function applyPresentationOption(item, optionIndex) {
@@ -2568,7 +2620,7 @@
         button.textContent = 'Medicamentos enviados';
         button.classList.remove('btn-success');
         button.classList.add('btn-outline-success');
-        setStatus(`${count} medicamento(s) enviado(s) para o rascunho de Medicamentos.`, 'success');
+        setStatus(`${count} medicamento(s) enviado(s) para o rascunho. Use "Revisar receita" para conferir e finalizar.`, 'success');
       } catch (error) {
         button.textContent = originalText;
         button.disabled = false;
@@ -2894,6 +2946,12 @@
       if (removeButton) {
         event.preventDefault();
         removeButton.closest('.clinical-repeater-item')?.remove();
+        return;
+      }
+      const reviewButton = event.target.closest('.js-go-prescription-review');
+      if (reviewButton) {
+        event.preventDefault();
+        goToPrescriptionReview();
         return;
       }
       const loadPlanButton = event.target.closest('.js-load-clinical-plan');
