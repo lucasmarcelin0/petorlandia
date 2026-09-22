@@ -150,25 +150,67 @@
       gap: 12px;
       align-items: end;
     }
+    #clinical-suggestions-panel .clinical-search-container {
+      background: #ffffff;
+      border: 1px solid #e1e8ed;
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+    }
     #clinical-suggestions-panel .clinical-field-label {
       display: block;
       margin-bottom: 8px;
       font-size: .92rem;
       font-weight: 700;
-      color: #21353d;
+      color: #1e293b;
+    }
+    #clinical-suggestions-panel .clinical-label-badge {
+      font-size: .74rem;
+      font-weight: 700;
+      color: #0f766e;
+      background: #ccfbf1;
+      padding: .2rem .55rem;
+      border-radius: 999px;
+      letter-spacing: 0;
+    }
+    #clinical-suggestions-panel .clinical-search-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    #clinical-suggestions-panel .clinical-search-input-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+    }
+    #clinical-suggestions-panel .clinical-search-icon {
+      position: absolute;
+      left: 14px;
+      color: #94a3b8;
+      font-size: 1rem;
+      pointer-events: none;
+      z-index: 2;
     }
     #clinical-suggestions-panel .clinical-search-input,
     #clinical-suggestions-panel .clinical-form input,
     #clinical-suggestions-panel .clinical-form textarea,
     #clinical-suggestions-panel .clinical-form select {
-      border-radius: 16px;
-      border: 1px solid #d9e1e6;
+      border-radius: 14px;
+      border: 1.5px solid #d1dbe2;
       background: #ffffff;
-      min-height: 52px;
-      padding: .88rem 1rem;
-      font-size: 1rem;
+      min-height: 48px;
+      padding: .75rem 1rem;
+      font-size: .95rem;
       color: #18313a;
       box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+      transition: all .2s ease;
+    }
+    #clinical-suggestions-panel .clinical-search-input {
+      width: 100%;
+      padding-left: 42px !important;
+      padding-right: 36px !important;
+      height: 48px;
     }
     #clinical-suggestions-panel .clinical-form textarea {
       min-height: 112px;
@@ -177,61 +219,565 @@
     #clinical-suggestions-panel .clinical-search-input::placeholder,
     #clinical-suggestions-panel .clinical-form input::placeholder,
     #clinical-suggestions-panel .clinical-form textarea::placeholder {
-      color: #92a2ab;
+      color: #94a3b8;
     }
     #clinical-suggestions-panel .clinical-search-input:focus,
     #clinical-suggestions-panel .clinical-form input:focus,
     #clinical-suggestions-panel .clinical-form textarea:focus,
     #clinical-suggestions-panel .clinical-form select:focus {
-      border-color: #67a488;
-      box-shadow: 0 0 0 4px rgba(103, 164, 136, 0.14);
+      border-color: #10b981;
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
       outline: 0;
     }
+    #clinical-suggestions-panel .clinical-search-clear {
+      position: absolute;
+      right: 10px;
+      background: transparent;
+      border: 0;
+      color: #94a3b8;
+      font-size: 1.05rem;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color .15s ease;
+      z-index: 2;
+    }
+    #clinical-suggestions-panel .clinical-search-clear:hover {
+      color: #475569;
+    }
     #clinical-suggestions-panel .clinical-search-trigger {
-      min-height: 52px;
-      padding-inline: 1.15rem;
+      height: 48px;
+      min-height: 48px;
+      border-radius: 12px;
+      padding: 0 1.25rem;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff;
+      border: 0;
+      font-weight: 700;
+      font-size: .92rem;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all .2s ease;
+    }
+    #clinical-suggestions-panel .clinical-search-trigger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+      color: #ffffff;
+    }
+    #clinical-suggestions-panel .clinical-quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed #e7edf0;
+    }
+    #clinical-suggestions-panel .clinical-chips-label {
+      font-size: .76rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      display: inline-flex;
+      align-items: center;
+    }
+    #clinical-suggestions-panel .clinical-chip {
+      border: 1px solid #dce4e8;
+      background: #f8fafc;
+      color: #334155;
+      font-size: .8rem;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: .25rem .7rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      transition: all .15s ease;
+      line-height: 1.3;
+    }
+    #clinical-suggestions-panel .clinical-chip:hover {
+      background: #effaf4;
+      border-color: #86efac;
+      color: #166534;
+      transform: translateY(-1px);
     }
     #clinical-suggestions-panel .clinical-subtle-copy {
       margin-top: 10px;
-      color: #667982;
-      font-size: .92rem;
+      color: #64748b;
+      font-size: .85rem;
     }
     #clinical-suggestions-panel .clinical-status {
-      border-radius: 16px;
+      border-radius: 12px;
       border: 1px solid #e1e8ec;
       background: #f8fafb;
-      color: #576973;
-      padding: 12px 14px;
-      font-size: .92rem;
+      color: #475569;
+      padding: 10px 14px;
+      font-size: .88rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      transition: all .2s ease;
+    }
+    @keyframes clinical-spin { 100% { transform: rotate(360deg); } }
+    #clinical-suggestions-panel .clinical-spin {
+      display: inline-block;
+      animation: clinical-spin 1s linear infinite;
     }
     #clinical-suggestions-panel .clinical-results {
       display: grid;
-      gap: 14px;
+      gap: 16px;
       margin-top: 16px;
     }
     #clinical-suggestions-panel .clinical-protocol-card {
       border: 1px solid #e2e8ec;
+      border-top: 3px solid #10b981;
       border-radius: 18px;
       background: #ffffff;
-      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+      overflow: hidden;
+      transition: all .2s ease;
     }
-    #clinical-suggestions-panel .clinical-protocol-card .card-body {
-      padding: 18px;
+    #clinical-suggestions-panel .clinical-protocol-card:hover {
+      box-shadow: 0 8px 26px rgba(15, 23, 42, 0.08);
+      border-color: #cbd5e1;
+      border-top-color: #059669;
+    }
+    #clinical-suggestions-panel .clinical-card-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+    }
+    #clinical-suggestions-panel .clinical-card-header-info {
+      flex: 1 1 280px;
+      min-width: 0;
+    }
+    #clinical-suggestions-panel .clinical-tags-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    #clinical-suggestions-panel .clinical-badge-tag {
+      display: inline-flex;
+      align-items: center;
+      font-size: .75rem;
+      font-weight: 700;
+      padding: .22rem .65rem;
+      border-radius: 999px;
+      line-height: 1.2;
+    }
+    #clinical-suggestions-panel .clinical-tag-cat {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+    #clinical-suggestions-panel .clinical-tag-dog {
+      background: #fdf2f8;
+      color: #be185d;
+      border: 1px solid #fbcfe8;
+    }
+    #clinical-suggestions-panel .clinical-tag-all {
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    #clinical-suggestions-panel .clinical-tag-clinic {
+      background: #f0fdf4;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+    }
+    #clinical-suggestions-panel .clinical-tag-standard {
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    #clinical-suggestions-panel .clinical-tag-match {
+      background: #fefce8;
+      color: #854d0e;
+      border: 1px solid #fef08a;
+    }
+    #clinical-suggestions-panel .clinical-protocol-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #clinical-suggestions-panel .clinical-protocol-subtitle {
+      font-size: .86rem;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    #clinical-suggestions-panel .clinical-protocol-subtitle strong {
+      color: #1e293b;
+    }
+    #clinical-suggestions-panel .clinical-card-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #clinical-suggestions-panel .clinical-btn-calculate {
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: .55rem 1.15rem !important;
+      font-size: .88rem !important;
+      font-weight: 700 !important;
+      border-radius: 999px !important;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+      color: #ffffff !important;
+      border: 0 !important;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.28) !important;
+      transition: all .2s ease;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #clinical-suggestions-panel .clinical-btn-calculate:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.38) !important;
+      color: #ffffff !important;
+    }
+    #clinical-suggestions-panel .clinical-btn-icon {
+      width: 34px;
+      height: 34px;
+      padding: 0 !important;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px !important;
+      border: 1px solid #d1dbe2 !important;
+      color: #64748b !important;
+      background: #ffffff !important;
+      font-size: .9rem !important;
+      transition: all .15s ease;
+    }
+    #clinical-suggestions-panel .clinical-btn-icon:hover {
+      border-color: #94a3b8 !important;
+      color: #0f172a !important;
+      background: #f8fafc !important;
+    }
+    #clinical-suggestions-panel .clinical-card-body {
+      padding: 18px 20px 20px;
     }
     #clinical-suggestions-panel .clinical-card-block {
       border: 1px solid #e8eef2;
-      border-radius: 16px;
+      border-radius: 14px;
       background: #fbfcfd;
       padding: 14px;
     }
     #clinical-suggestions-panel .clinical-plan-slot {
       margin: 12px 0 16px;
     }
+    #clinical-suggestions-panel .clinical-plan-teaser {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+      border: 1px solid #bbf7d0;
+      border-radius: 14px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    #clinical-suggestions-panel .clinical-teaser-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: #dcfce7;
+      color: #16a34a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      flex-shrink: 0;
+    }
+    #clinical-suggestions-panel .clinical-teaser-text {
+      flex: 1 1 200px;
+      min-width: 0;
+    }
+    #clinical-suggestions-panel .clinical-teaser-title {
+      font-size: .88rem;
+      font-weight: 700;
+      color: #15803d;
+      display: block;
+    }
+    #clinical-suggestions-panel .clinical-teaser-copy {
+      font-size: .8rem;
+      color: #4b5563;
+    }
+    #clinical-suggestions-panel .clinical-callout {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: .85rem;
+      line-height: 1.45;
+    }
+    #clinical-suggestions-panel .clinical-callout-icon {
+      font-size: 1.15rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    #clinical-suggestions-panel .clinical-callout-warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #854d0e;
+    }
+    #clinical-suggestions-panel .clinical-callout-warning .clinical-callout-icon {
+      color: #d97706;
+    }
+    #clinical-suggestions-panel .clinical-callout-info {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      color: #0369a1;
+    }
+    #clinical-suggestions-panel .clinical-callout-info .clinical-callout-icon {
+      color: #0284c7;
+    }
+    #clinical-suggestions-panel .clinical-section {
+      margin-bottom: 16px;
+    }
+    #clinical-suggestions-panel .clinical-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    #clinical-suggestions-panel .clinical-section-title h6 {
+      margin: 0;
+      font-size: .9rem;
+      font-weight: 800;
+      color: #1e293b;
+      letter-spacing: -.01em;
+    }
+    #clinical-suggestions-panel .clinical-section-count {
+      font-size: .72rem;
+      font-weight: 700;
+      background: #f1f5f9;
+      color: #475569;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+    }
+    #clinical-suggestions-panel .clinical-items-grid {
+      display: grid;
+      gap: 8px;
+    }
+    #clinical-suggestions-panel .clinical-item-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      transition: all .15s ease;
+    }
+    #clinical-suggestions-panel .clinical-item-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    #clinical-suggestions-panel .clinical-item-card-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      flex: 1 1 240px;
+      min-width: 0;
+    }
+    #clinical-suggestions-panel .clinical-item-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    #clinical-suggestions-panel .clinical-icon-med {
+      background: #ecfdf5;
+      color: #059669;
+    }
+    #clinical-suggestions-panel .clinical-icon-exam {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    #clinical-suggestions-panel .clinical-icon-return {
+      background: #fffbeb;
+      color: #d97706;
+    }
+    #clinical-suggestions-panel .clinical-item-details {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #clinical-suggestions-panel .clinical-item-name {
+      font-weight: 700;
+      color: #0f172a;
+      font-size: .9rem;
+      display: block;
+    }
+    #clinical-suggestions-panel .clinical-item-sub {
+      font-size: .78rem;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    #clinical-suggestions-panel .clinical-dose-pills-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 4px;
+    }
+    #clinical-suggestions-panel .clinical-dose-pill {
+      display: inline-flex;
+      align-items: center;
+      font-size: .74rem;
+      font-weight: 600;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      padding: .15rem .45rem;
+      border-radius: 6px;
+      line-height: 1.2;
+    }
+    #clinical-suggestions-panel .clinical-indication-badge {
+      font-size: .72rem;
+      font-weight: 700;
+      background: #ecfdf5;
+      color: #065f46;
+      padding: .15rem .45rem;
+      border-radius: 6px;
+    }
+    #clinical-suggestions-panel .clinical-conduct-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #10b981;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    #clinical-suggestions-panel .clinical-conduct-header {
+      font-size: .88rem;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    #clinical-suggestions-panel .clinical-conduct-text {
+      font-size: .86rem;
+      color: #334155;
+      line-height: 1.5;
+    }
+    #clinical-suggestions-panel .clinical-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #clinical-suggestions-panel .clinical-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    #clinical-suggestions-panel .clinical-inline-actions .btn {
+      font-size: .8rem !important;
+      padding: .35rem .75rem !important;
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #clinical-suggestions-panel .clinical-inline-actions .btn-success {
+      background: #10b981 !important;
+      border-color: #10b981 !important;
+      color: #ffffff !important;
+    }
+    #clinical-suggestions-panel .clinical-inline-actions .btn-success:hover {
+      background: #059669 !important;
+      border-color: #059669 !important;
+    }
+    #clinical-suggestions-panel .clinical-empty-state {
+      text-align: center;
+      padding: 32px 20px;
+      background: #ffffff;
+      border: 1px dashed #d1dbe2;
+      border-radius: 16px;
+    }
+    #clinical-suggestions-panel .clinical-empty-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      color: #64748b;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      margin-bottom: 12px;
+    }
+    #clinical-suggestions-panel .clinical-empty-state h6 {
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+    #clinical-suggestions-panel .clinical-reasons-details summary {
+      cursor: pointer;
+      user-select: none;
+      font-weight: 600;
+    }
     #clinical-suggestions-panel .clinical-plan-preview {
-      border: 1px solid #d7e7de;
-      border-radius: 18px;
-      background: #f7fbf8;
-      padding: 14px;
+      border: 1.5px solid #a7f3d0;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+      padding: 16px;
+    }
+    #clinical-suggestions-panel .clinical-plan-head-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #10b981;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    #clinical-suggestions-panel .clinical-btn-bulk {
+      background: #10b981 !important;
+      border-color: #10b981 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      border-radius: 999px !important;
+      padding: .45rem 1rem !important;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
     }
     #clinical-suggestions-panel .clinical-plan-head {
       display: flex;
@@ -544,6 +1090,35 @@
       #clinical-suggestions-panel .clinical-plan-metrics {
         grid-template-columns: 1fr;
       }
+      #clinical-suggestions-panel .clinical-search-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #clinical-suggestions-panel .clinical-search-trigger {
+        width: 100%;
+      }
+      #clinical-suggestions-panel .clinical-card-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #clinical-suggestions-panel .clinical-card-header-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+      #clinical-suggestions-panel .clinical-btn-calculate {
+        flex: 1 1 auto;
+      }
+      #clinical-suggestions-panel .clinical-item-card {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #clinical-suggestions-panel .clinical-item-actions {
+        justify-content: flex-end;
+      }
+      #clinical-suggestions-panel .clinical-plan-teaser {
+        flex-direction: column;
+        align-items: stretch;
+      }
     }
   </style>
 
@@ -580,26 +1155,59 @@
         </div>
 
         <div class="clinical-pane-mode" data-clinical-pane="suggestions">
-          <div class="clinical-search-grid">
-            <div>
-              <label for="suspeita-clinica" class="clinical-field-label">Suspeita clínica / hipótese diagnóstica</label>
-              <div id="clinical-suspicion-input-slot"></div>
-              <datalist id="clinical-suspicion-options">
-                {% for item in clinical_suspicion_options or [] %}
-                <option value="{{ item }}">
-                {% endfor %}
-              </datalist>
+          <div class="clinical-search-container">
+            <label for="suspeita-clinica" class="clinical-field-label d-flex align-items-center justify-content-between">
+              <span><i class="bi bi-search-heart text-success me-1"></i> Suspeita clínica / hipótese diagnóstica</span>
+              <span class="clinical-label-badge"><i class="bi bi-shield-check me-1"></i> Apoio à decisão</span>
+            </label>
+            <div class="clinical-search-bar">
+              <div class="clinical-search-input-wrap">
+                <i class="bi bi-search clinical-search-icon"></i>
+                <div id="clinical-suspicion-input-slot" class="w-100"></div>
+                <button type="button" class="clinical-search-clear d-none" id="clear-clinical-suspicion" title="Limpar pesquisa">
+                  <i class="bi bi-x-circle-fill"></i>
+                </button>
+                <datalist id="clinical-suspicion-options">
+                  {% for item in clinical_suspicion_options or [] %}
+                  <option value="{{ item }}">
+                  {% endfor %}
+                </datalist>
+              </div>
+              <button type="button" class="clinical-btn clinical-search-trigger" id="load-clinical-suggestions">
+                <i class="bi bi-search me-1"></i><span>Buscar</span>
+              </button>
             </div>
-            <button type="button" class="clinical-btn clinical-search-trigger" id="load-clinical-suggestions">
-              <i class="bi bi-search me-1"></i>Buscar
-            </button>
+
+            <div class="clinical-quick-chips">
+              <span class="clinical-chips-label"><i class="bi bi-lightning-charge-fill me-1 text-warning"></i>Sugestões frequentes:</span>
+              <button type="button" class="clinical-chip" data-chip="Obstrução urinária felina">
+                <i class="fa-solid fa-cat me-1 text-primary"></i>Obstrução urinária
+              </button>
+              <button type="button" class="clinical-chip" data-chip="Gastroenterite">
+                <i class="bi bi-activity me-1 text-danger"></i>Gastroenterite
+              </button>
+              <button type="button" class="clinical-chip" data-chip="Dermatite alérgica">
+                <i class="bi bi-bandaid me-1 text-warning"></i>Dermatite
+              </button>
+              <button type="button" class="clinical-chip" data-chip="Otite externa">
+                <i class="bi bi-soundwave me-1 text-info"></i>Otite
+              </button>
+              <button type="button" class="clinical-chip" data-chip="Insuficiência renal">
+                <i class="bi bi-heart-pulse me-1 text-danger"></i>Renal
+              </button>
+            </div>
           </div>
-          <div class="clinical-subtle-copy">
-            Sugestões explícitas e justificadas. Nada é gravado sem aprovação do veterinário.
+
+          <div class="clinical-subtle-copy d-flex align-items-center gap-1 mt-2">
+            <i class="bi bi-shield-lock text-success me-1"></i>
+            <span>Sugestões explícitas e justificadas. Nada é gravado sem aprovação do veterinário.</span>
           </div>
+
           <div id="clinical-suggestions-status" class="clinical-status mt-3">
+            <i class="bi bi-info-circle me-1"></i>
             Pesquise pela suspeita diagnóstica para ver protocolos compatíveis.
           </div>
+
           <div id="clinical-suggestions-results" class="clinical-results"></div>
         </div>
 
@@ -1059,10 +1667,29 @@
     }
 
     function renderEmpty(message) {
-      resultsEl.innerHTML = `<div class="clinical-card-block">${escapeHtml(message)}</div>`;
+      resultsEl.innerHTML = `
+        <div class="clinical-empty-state">
+          <div class="clinical-empty-icon"><i class="bi bi-search"></i></div>
+          <h6>Nenhum protocolo compatível encontrado</h6>
+          <p class="text-muted small mb-3">${escapeHtml(message)}</p>
+          <div class="d-flex justify-content-center gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-success" data-switch-mode="proposal">
+              <i class="bi bi-lightbulb me-1"></i>Sugerir novo protocolo
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-switch-mode="protocol">
+              <i class="bi bi-plus-circle me-1"></i>Cadastrar protocolo
+            </button>
+          </div>
+        </div>
+      `;
     }
 
     function buildItemActions(itemType, protocolId, itemId, title) {
+      const isExam = itemType === 'exame';
+      const isReturn = itemType === 'retorno';
+      const isConduct = itemType === 'conduta';
+      const applyIcon = isExam ? 'bi-clipboard-plus' : (isReturn ? 'bi-calendar-plus' : (isConduct ? 'bi-check-lg' : 'bi-check2'));
+      const applyLabel = isExam ? 'Solicitar' : (isReturn ? 'Agendar' : (isConduct ? 'Adotar conduta' : 'Aplicar'));
       return `
         <div class="clinical-inline-actions">
           <button type="button" class="btn btn-sm btn-success js-apply-suggestion"
@@ -1070,14 +1697,15 @@
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}"
             data-title="${escapeHtml(title || '')}">
-            Aplicar
+            <i class="bi ${applyIcon} me-1"></i>${applyLabel}
           </button>
           <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
             data-item-type="${escapeHtml(itemType)}"
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}"
-            data-title="${escapeHtml(title || '')}">
-            Dispensar
+            data-title="${escapeHtml(title || '')}"
+            title="Dispensar item">
+            <i class="bi bi-x"></i>
           </button>
         </div>
       `;
@@ -1169,14 +1797,15 @@
           <button type="button" class="btn btn-sm btn-success js-load-clinical-plan"
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}">
-            Calcular dose
+            <i class="bi bi-calculator me-1"></i>Calcular dose
           </button>
           <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
             data-item-type="medicamento"
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}"
-            data-title="${escapeHtml(title || '')}">
-            Dispensar
+            data-title="${escapeHtml(title || '')}"
+            title="Dispensar medicamento">
+            <i class="bi bi-x"></i>
           </button>
         </div>
       `;
@@ -1196,11 +1825,11 @@
         <button type="button" class="btn btn-sm btn-success js-apply-plan-medication"
           data-protocol-id="${protocolId}"
           data-item-id="${item.protocol_item_id || item.id}">
-          Enviar para Medicamentos
+          <i class="bi bi-send-check me-1"></i>Enviar para Medicamentos
         </button>
       ` : `
         <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
-          Ajustar antes de enviar
+          <i class="bi bi-sliders me-1"></i>Ajustar antes de enviar
         </button>
       `;
       return `
@@ -1275,17 +1904,20 @@
       return `
         <div class="clinical-plan-preview">
           <div class="clinical-plan-head">
-            <div>
-              <p class="clinical-plan-title">Plano clínico calculado</p>
-              <p class="clinical-plan-copy">
-                ${escapeHtml(plan?.animal?.nome || 'Paciente')} ${plan?.animal?.peso_kg ? `· ${escapeHtml(String(plan.animal.peso_kg).replace('.', ','))} kg` : '· peso pendente'}
-              </p>
+            <div class="d-flex align-items-center gap-3">
+              <div class="clinical-plan-head-icon"><i class="bi bi-calculator-fill"></i></div>
+              <div>
+                <p class="clinical-plan-title mb-0">Plano clínico calculado</p>
+                <p class="clinical-plan-copy mb-0">
+                  <i class="fa-solid fa-paw text-success me-1"></i>${escapeHtml(plan?.animal?.nome || 'Paciente')} ${plan?.animal?.peso_kg ? `· <strong>${escapeHtml(String(plan.animal.peso_kg).replace('.', ','))} kg</strong>` : '· peso pendente'}
+                </p>
+              </div>
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
               ${sendableMeds ? `
-                <button type="button" class="btn btn-sm btn-success js-apply-plan-medications"
+                <button type="button" class="btn btn-sm btn-success clinical-btn-bulk js-apply-plan-medications"
                   data-protocol-id="${protocolId}">
-                  Enviar medicamentos ao rascunho
+                  <i class="bi bi-prescription2 me-1"></i>Enviar medicamentos ao rascunho (${sendableMeds})
                 </button>
               ` : ''}
             </div>
@@ -1295,20 +1927,20 @@
             ${summary.review ? renderStatusBadge('review', `${summary.review} revisar`) : ''}
             ${summary.manual ? renderStatusBadge('manual', `${summary.manual} manual`) : ''}
             ${summary.blocked ? renderStatusBadge('blocked', `${summary.blocked} bloqueado(s)`) : ''}
-            ${summary.exams_total ? `<span class="clinical-pill">${summary.exams_total} exame(s)</span>` : ''}
-            ${summary.returns_total ? `<span class="clinical-pill">${summary.returns_total} retorno(s)</span>` : ''}
+            ${summary.exams_total ? `<span class="clinical-pill"><i class="bi bi-clipboard2-pulse me-1"></i>${summary.exams_total} exame(s)</span>` : ''}
+            ${summary.returns_total ? `<span class="clinical-pill"><i class="bi bi-calendar-event me-1"></i>${summary.returns_total} retorno(s)</span>` : ''}
           </div>
 
-          <div class="clinical-plan-section-title">Medicamentos</div>
+          <div class="clinical-plan-section-title"><i class="bi bi-capsule me-1 text-success"></i>Medicamentos calculados por peso</div>
           <div class="clinical-plan-grid">${medicationList}</div>
 
           ${exams.length ? `
-            <div class="clinical-plan-section-title">Exames</div>
+            <div class="clinical-plan-section-title"><i class="bi bi-clipboard2-pulse me-1 text-primary"></i>Exames sugeridos</div>
             <div class="clinical-plan-grid">${examList}</div>
           ` : ''}
 
           ${conductText ? `
-            <div class="clinical-plan-section-title">Conduta</div>
+            <div class="clinical-plan-section-title"><i class="bi bi-journal-medical me-1 text-info"></i>Conduta sugerida</div>
             <div class="clinical-plan-item">
               <div class="small">${escapeHtml(conductText)}</div>
               ${buildItemActions('conduta', protocolId, '', plan?.protocol?.nome || '')}
@@ -1316,7 +1948,7 @@
           ` : ''}
 
           ${returns.length ? `
-            <div class="clinical-plan-section-title">Retorno</div>
+            <div class="clinical-plan-section-title"><i class="bi bi-calendar-check me-1 text-warning"></i>Retorno sugerido</div>
             <div class="clinical-plan-grid">${returnList}</div>
           ` : ''}
         </div>
@@ -1324,95 +1956,228 @@
     }
 
     function renderSuggestionCard(protocol) {
+      const isCat = (protocol.especie || '').toLowerCase() === 'gato';
+      const isDog = (protocol.especie || '').toLowerCase() === 'cao';
+      const speciesBadge = isCat
+        ? '<span class="clinical-badge-tag clinical-tag-cat"><i class="fa-solid fa-cat me-1"></i>Felino</span>'
+        : (isDog
+          ? '<span class="clinical-badge-tag clinical-tag-dog"><i class="fa-solid fa-dog me-1"></i>Canino</span>'
+          : '<span class="clinical-badge-tag clinical-tag-all"><i class="fa-solid fa-paw me-1"></i>Cão e Gato</span>');
+
+      const originBadge = protocol.editable
+        ? '<span class="clinical-badge-tag clinical-tag-clinic"><i class="bi bi-hospital me-1"></i>Protocolo da clínica</span>'
+        : '<span class="clinical-badge-tag clinical-tag-standard"><i class="bi bi-shield-check me-1"></i>Protocolo de referência</span>';
+
       const reasons = (protocol.motivos || []).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
-      const exames = (protocol.exames || []).map(item => `
-        <div class="clinical-card-block">
-          <div class="fw-semibold">${escapeHtml(item.nome)}</div>
-          <div class="small text-muted mt-1">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
-          ${buildItemActions('exame', protocol.id, item.id, item.nome)}
-        </div>
-      `).join('');
-      const medicamentos = (protocol.medicamentos || []).map(item => `
-        <div class="clinical-card-block">
-          <div class="fw-semibold">${escapeHtml(item.nome)}</div>
-          <div class="small text-muted mt-1">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
-          <div class="small mt-2">
-            ${item.dosagem ? `<div><strong>Dosagem:</strong> ${escapeHtml(item.dosagem)}</div>` : ''}
-            ${item.frequencia ? `<div><strong>Frequência:</strong> ${escapeHtml(item.frequencia)}</div>` : ''}
-            ${item.duracao ? `<div><strong>Duração:</strong> ${escapeHtml(item.duracao)}</div>` : ''}
+
+      const examesList = (protocol.exames || []).map(item => `
+        <div class="clinical-item-card">
+          <div class="clinical-item-card-main">
+            <div class="clinical-item-icon clinical-icon-exam"><i class="bi bi-clipboard2-pulse"></i></div>
+            <div class="clinical-item-details">
+              <span class="clinical-item-name">${escapeHtml(item.nome)}</span>
+              ${item.justificativa ? `<div class="clinical-item-sub">${escapeHtml(item.justificativa)}</div>` : ''}
+            </div>
           </div>
-          ${buildMedicationPlanActions(protocol.id, item.id, item.nome)}
+          <div class="clinical-item-actions">
+            ${buildItemActions('exame', protocol.id, item.id, item.nome)}
+          </div>
         </div>
       `).join('');
-      const retornos = (protocol.retornos || []).map(item => `
-        <div class="clinical-card-block">
-          <div class="fw-semibold">${escapeHtml(item.label)}</div>
-          <div class="small text-muted mt-1">${escapeHtml(item.reason || 'Reavaliação sugerida pelo protocolo.')}</div>
-          ${buildItemActions('retorno', protocol.id, item.id, item.label)}
+
+      const medicamentosList = (protocol.medicamentos || []).map(item => {
+        const pills = [];
+        if (item.dosagem) pills.push(`<span class="clinical-dose-pill"><i class="bi bi-speedometer2 me-1"></i>${escapeHtml(item.dosagem)}</span>`);
+        if (item.frequencia) pills.push(`<span class="clinical-dose-pill"><i class="bi bi-clock me-1"></i>${escapeHtml(item.frequencia)}</span>`);
+        if (item.duracao) pills.push(`<span class="clinical-dose-pill"><i class="bi bi-calendar3 me-1"></i>${escapeHtml(item.duracao)}</span>`);
+        return `
+          <div class="clinical-item-card">
+            <div class="clinical-item-card-main">
+              <div class="clinical-item-icon clinical-icon-med"><i class="bi bi-capsule"></i></div>
+              <div class="clinical-item-details">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                  <span class="clinical-item-name">${escapeHtml(item.nome)}</span>
+                  ${item.indicacao ? `<span class="clinical-indication-badge">${escapeHtml(item.indicacao)}</span>` : ''}
+                </div>
+                ${pills.length ? `<div class="clinical-dose-pills-row">${pills.join('')}</div>` : ''}
+                ${item.justificativa ? `<div class="clinical-item-sub mt-1">${escapeHtml(item.justificativa)}</div>` : ''}
+              </div>
+            </div>
+            <div class="clinical-item-actions">
+              ${buildMedicationPlanActions(protocol.id, item.id, item.nome)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const retornosList = (protocol.retornos || []).map(item => `
+        <div class="clinical-item-card">
+          <div class="clinical-item-card-main">
+            <div class="clinical-item-icon clinical-icon-return"><i class="bi bi-calendar-check"></i></div>
+            <div class="clinical-item-details">
+              <span class="clinical-item-name">${escapeHtml(item.label)}</span>
+              ${item.reason ? `<div class="clinical-item-sub">${escapeHtml(item.reason)}</div>` : ''}
+            </div>
+          </div>
+          <div class="clinical-item-actions">
+            ${buildItemActions('retorno', protocol.id, item.id, item.label)}
+          </div>
         </div>
       `).join('');
-      const conduta = protocol.conduta_sugerida ? `
-        <div class="clinical-card-block">
-          <div class="small">${escapeHtml(protocol.conduta_sugerida)}</div>
-          ${buildItemActions('conduta', protocol.id, '', protocol.nome)}
+
+      const condutaBlock = protocol.conduta_sugerida ? `
+        <div class="clinical-conduct-card">
+          <div class="clinical-conduct-header">
+            <i class="bi bi-journal-medical text-success me-2"></i>
+            <span>Conduta clínica recomendada</span>
+          </div>
+          <div class="clinical-conduct-text">${escapeHtml(protocol.conduta_sugerida)}</div>
+          <div class="mt-2">
+            ${buildItemActions('conduta', protocol.id, '', protocol.nome)}
+          </div>
         </div>
       ` : '';
 
       return `
         <div class="clinical-protocol-card">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-              <div>
-                <h6 class="mb-1">${escapeHtml(protocol.nome)}</h6>
-                <div class="small text-muted">
-                  Hipótese principal: ${escapeHtml(protocol.suspeita_principal || '-')}
-                  ${protocol.especie ? ` · Espécie: ${escapeHtml(protocol.especie)}` : ''}
-                </div>
+          <div class="clinical-card-header">
+            <div class="clinical-card-header-info">
+              <div class="clinical-tags-row">
+                ${speciesBadge}
+                ${originBadge}
+                ${protocol.score ? `<span class="clinical-badge-tag clinical-tag-match"><i class="bi bi-stars me-1"></i>Correspondência alta</span>` : ''}
               </div>
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button type="button" class="btn btn-sm btn-success js-load-clinical-plan"
-                  data-protocol-id="${protocol.id}">
-                  Calcular plano
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-primary js-edit-protocol"
-                  data-protocol-id="${protocol.id}">
-                  Editar protocolo
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
+              <h5 class="clinical-protocol-title">
+                <i class="bi bi-shield-check text-success"></i>
+                ${escapeHtml(protocol.nome)}
+              </h5>
+              <div class="clinical-protocol-subtitle">
+                <i class="bi bi-activity text-muted"></i>
+                <span>Hipótese principal:</span>
+                <strong>${escapeHtml(protocol.suspeita_principal || '-')}</strong>
+                ${protocol.especie ? `<span class="text-muted">· Espécie: ${escapeHtml(protocol.especie)}</span>` : ''}
+              </div>
+            </div>
+
+            <div class="clinical-card-header-actions">
+              <button type="button" class="btn btn-sm btn-success clinical-btn-calculate js-load-clinical-plan"
+                data-protocol-id="${protocol.id}">
+                <i class="bi bi-calculator me-1"></i>
+                <span>Calcular plano</span>
+              </button>
+              <div class="d-flex gap-1">
+                ${protocol.editable ? `
+                  <button type="button" class="btn btn-sm btn-outline-primary clinical-btn-icon js-edit-protocol"
+                    data-protocol-id="${protocol.id}" title="Editar protocolo da clínica">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                ` : `
+                  <button type="button" class="btn btn-sm btn-outline-primary clinical-btn-icon js-edit-protocol"
+                    data-protocol-id="${protocol.id}" title="Usar como base para novo protocolo da clínica">
+                    <i class="bi bi-copy"></i>
+                  </button>
+                `}
+                <button type="button" class="btn btn-sm btn-outline-secondary clinical-btn-icon js-dismiss-suggestion"
                   data-item-type="protocolo"
                   data-protocol-id="${protocol.id}"
-                  data-title="${escapeHtml(protocol.nome)}">
-                  Dispensar protocolo
+                  data-title="${escapeHtml(protocol.nome)}"
+                  title="Dispensar protocolo">
+                  <i class="bi bi-eye-slash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="clinical-card-body">
+            <!-- Slot para plano calculado -->
+            <div class="clinical-plan-slot" data-plan-slot="${protocol.id}">
+              <div class="clinical-plan-teaser">
+                <div class="clinical-teaser-icon"><i class="bi bi-calculator"></i></div>
+                <div class="clinical-teaser-text">
+                  <span class="clinical-teaser-title">Cálculo de dose pelo peso do paciente</span>
+                  <p class="clinical-teaser-copy mb-0">Calcule o plano para converter doses por peso em comprimidos, mL ou gotas antes de enviar para Medicamentos.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-success js-load-clinical-plan"
+                  data-protocol-id="${protocol.id}">
+                  Calcular agora
                 </button>
               </div>
             </div>
 
-            <div class="clinical-plan-slot" data-plan-slot="${protocol.id}">
-              <div class="clinical-card-block small text-muted">
-                Calcule o plano para converter doses por peso em comprimidos, mL ou gotas antes de enviar para Medicamentos.
+            ${protocol.alertas ? `
+              <div class="clinical-callout clinical-callout-warning mb-3">
+                <i class="bi bi-exclamation-triangle-fill clinical-callout-icon"></i>
+                <div class="clinical-callout-content">
+                  <strong>Atenção e alertas:</strong>
+                  <div>${escapeHtml(protocol.alertas)}</div>
+                </div>
               </div>
-            </div>
+            ` : ''}
+
+            ${protocol.orientacoes_tutor ? `
+              <div class="clinical-callout clinical-callout-info mb-3">
+                <i class="bi bi-info-circle-fill clinical-callout-icon"></i>
+                <div class="clinical-callout-content">
+                  <strong>Orientações ao tutor:</strong>
+                  <div>${escapeHtml(protocol.orientacoes_tutor)}</div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${condutaBlock ? `<div class="mb-3">${condutaBlock}</div>` : ''}
+
+            ${medicamentosList ? `
+              <div class="clinical-section mb-3">
+                <div class="clinical-section-title">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-capsule text-success"></i>
+                    <h6>Medicamentos sugeridos</h6>
+                    <span class="clinical-section-count">${(protocol.medicamentos || []).length}</span>
+                  </div>
+                  <details class="clinical-technical-details">
+                    <summary class="small text-muted">Medicamentos do protocolo (base técnica)</summary>
+                    <div class="small text-muted mt-1">Doses base cadastradas no protocolo para referência clínica.</div>
+                  </details>
+                </div>
+                <div class="clinical-items-grid">${medicamentosList}</div>
+              </div>
+            ` : ''}
+
+            ${examesList ? `
+              <div class="clinical-section mb-3">
+                <div class="clinical-section-title">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-clipboard2-pulse text-primary"></i>
+                    <h6>Exames sugeridos</h6>
+                    <span class="clinical-section-count">${(protocol.exames || []).length}</span>
+                  </div>
+                </div>
+                <div class="clinical-items-grid">${examesList}</div>
+              </div>
+            ` : ''}
+
+            ${retornosList ? `
+              <div class="clinical-section mb-3">
+                <div class="clinical-section-title">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-calendar-check text-warning"></i>
+                    <h6>Retorno sugerido</h6>
+                    <span class="clinical-section-count">${(protocol.retornos || []).length}</span>
+                  </div>
+                </div>
+                <div class="clinical-items-grid">${retornosList}</div>
+              </div>
+            ` : ''}
 
             ${reasons ? `
-              <details class="mb-3">
-                <summary class="small text-muted" style="cursor:pointer;list-style:none;user-select:none;">
-                  <i class="bi bi-chevron-right" style="font-size:.72rem;transition:transform .2s;"></i>
-                  <span style="margin-left:4px;">Ver correspondência</span>
+              <details class="clinical-reasons-details mt-2">
+                <summary class="small text-muted">
+                  <i class="bi bi-chevron-right me-1"></i>
+                  <span>Ver critérios de correspondência (${(protocol.motivos || []).length})</span>
                 </summary>
                 <ul class="small text-muted ps-3 mt-2 mb-0">${reasons}</ul>
-              </details>` : ''}
-            ${protocol.alertas ? `<div class="alert alert-warning py-2 small">${escapeHtml(protocol.alertas)}</div>` : ''}
-            ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientações ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
-
-            ${exames ? `<div class="mb-3"><div class="fw-semibold mb-2">Exames sugeridos</div><div class="d-grid gap-2">${exames}</div></div>` : ''}
-            ${medicamentos ? `
-              <details class="mb-3 clinical-technical-details">
-                <summary>Medicamentos do protocolo (base técnica)</summary>
-                <div class="d-grid gap-2 mt-2">${medicamentos}</div>
               </details>
             ` : ''}
-            ${conduta ? `<div class="mb-3"><div class="fw-semibold mb-2">Conduta sugerida</div>${conduta}</div>` : ''}
-            ${retornos ? `<div><div class="fw-semibold mb-2">Retorno sugerido</div><div class="d-grid gap-2">${retornos}</div></div>` : ''}
           </div>
         </div>
       `;
@@ -2101,6 +2866,24 @@
     });
 
     panel.addEventListener('click', function (event) {
+      const chip = event.target.closest('.clinical-chip');
+      if (chip) {
+        event.preventDefault();
+        const suspicionInput = document.getElementById('suspeita-clinica');
+        if (suspicionInput) {
+          suspicionInput.value = chip.dataset.chip || chip.textContent.trim();
+          const clearBtn = document.getElementById('clear-clinical-suspicion');
+          if (clearBtn) clearBtn.classList.remove('d-none');
+          loadSuggestions();
+        }
+        return;
+      }
+      const switchModeBtn = event.target.closest('[data-switch-mode]');
+      if (switchModeBtn) {
+        event.preventDefault();
+        setMode(switchModeBtn.dataset.switchMode);
+        return;
+      }
       const addButton = event.target.closest('[data-add-row]');
       if (addButton) {
         event.preventDefault();
@@ -2170,6 +2953,35 @@
     });
 
     loadButton?.addEventListener('click', loadSuggestions);
+    const searchInput = document.getElementById('suspeita-clinica');
+    const clearButton = document.getElementById('clear-clinical-suspicion');
+    const updateClearButton = () => {
+      const currentInput = document.getElementById('suspeita-clinica');
+      if (clearButton && currentInput) {
+        if (currentInput.value.trim().length > 0) {
+          clearButton.classList.remove('d-none');
+        } else {
+          clearButton.classList.add('d-none');
+        }
+      }
+    };
+    searchInput?.addEventListener('input', updateClearButton);
+    searchInput?.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadSuggestions();
+      }
+    });
+    clearButton?.addEventListener('click', function () {
+      const currentInput = document.getElementById('suspeita-clinica');
+      if (currentInput) {
+        currentInput.value = '';
+        currentInput.focus();
+      }
+      updateClearButton();
+      loadSuggestions();
+    });
+    updateClearButton();
     proposalForm?.addEventListener('submit', submitProtocolProposal);
     proposalContentField?.addEventListener('input', updateProposalCharacterCount);
     proposalReloadButton?.addEventListener('click', loadProtocolProposals);

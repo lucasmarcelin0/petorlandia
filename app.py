@@ -9487,6 +9487,7 @@ def _build_clinical_suggestion_context(consulta, payload: dict | None = None) ->
         'peso': getattr(animal, 'peso', None),
         'sexo': getattr(animal, 'sex', None),
         'data_base': date.today(),
+        'clinica_id': getattr(consulta, 'clinica_id', None),
     }
 
 
@@ -10649,20 +10650,37 @@ def _consulta_activity_timestamp(consulta):
 
 
 def _clinical_suspicion_options(clinic_id: int | None = None) -> list[str]:
-    query = (
+    query_suspeita = (
         db.session.query(ProtocoloClinico.suspeita_principal)
         .filter(ProtocoloClinico.ativo.is_(True))
         .filter(ProtocoloClinico.suspeita_principal.isnot(None))
     )
+    query_nome = (
+        db.session.query(ProtocoloClinico.nome)
+        .filter(ProtocoloClinico.ativo.is_(True))
+        .filter(ProtocoloClinico.nome.isnot(None))
+    )
     if clinic_id:
-        query = query.filter(
+        query_suspeita = query_suspeita.filter(
+            or_(ProtocoloClinico.clinica_id.is_(None), ProtocoloClinico.clinica_id == clinic_id)
+        )
+        query_nome = query_nome.filter(
             or_(ProtocoloClinico.clinica_id.is_(None), ProtocoloClinico.clinica_id == clinic_id)
         )
     else:
-        query = query.filter(ProtocoloClinico.clinica_id.is_(None))
+        query_suspeita = query_suspeita.filter(ProtocoloClinico.clinica_id.is_(None))
+        query_nome = query_nome.filter(ProtocoloClinico.clinica_id.is_(None))
 
-    rows = query.distinct().order_by(ProtocoloClinico.suspeita_principal.asc()).all()
-    return [value.strip() for (value,) in rows if (value or '').strip()]
+    from services.clinical_suggestions import _strip_accents
+
+    options = set()
+    for (value,) in query_suspeita.distinct().all():
+        if value and value.strip():
+            options.add(value.strip())
+    for (value,) in query_nome.distinct().all():
+        if value and value.strip():
+            options.add(value.strip())
+    return sorted(options, key=lambda s: _strip_accents(s).lower())
 
 
 def _can_view_veterinarian_activity_report(veterinario):

@@ -20,6 +20,21 @@ _RE_NON_ALPHANUMERIC_SPACES = re.compile(r"[^a-z0-9\s]+")
 _RE_SPACES = re.compile(r"\s+")
 
 
+_STOP_WORDS = {
+    "de", "da", "do", "das", "dos",
+    "em", "na", "no", "nas", "nos",
+    "para", "por", "com", "sem", "sob", "sobre",
+    "que", "uma", "umas", "um", "uns",
+    "como", "mais", "menos",
+    "protocolo", "protocolos",
+    "inicial", "iniciais",
+    "essencial", "essenciais",
+    "caso", "casos",
+    "quadro", "quadros",
+    "grau", "tipo",
+}
+
+
 def _strip_accents(value: str | None) -> str:
     if not value:
         return ""
@@ -42,7 +57,7 @@ def _tokenize(value: str | None) -> list[str]:
     normalized = _normalize_token(value)
     if not normalized:
         return []
-    return [token for token in normalized.split(" ") if len(token) >= 3]
+    return [token for token in normalized.split(" ") if len(token) >= 3 and token not in _STOP_WORDS]
 
 
 def _species_matches(protocol_species: str | None, animal_species: str | None) -> bool:
@@ -64,47 +79,89 @@ def _species_matches(protocol_species: str | None, animal_species: str | None) -
 
 
 def _score_protocol(protocol: ProtocoloClinico, context: dict[str, Any]) -> tuple[int, list[str]]:
-    reasons: list[str] = []
-    score = 0
-
-    suspicion = _normalize_token(context.get("suspeita_clinica"))
-    protocol_suspicion = _normalize_token(protocol.suspeita_principal)
-    if suspicion and protocol_suspicion:
-        if suspicion == protocol_suspicion:
-            score += 80
-            reasons.append("Suspeita clínica coincide com o protocolo.")
-        elif suspicion in protocol_suspicion or protocol_suspicion in suspicion:
-            score += 55
-            reasons.append("Suspeita clínica muito próxima da hipótese principal do protocolo.")
-
+    # 1. Espécie: filtro eliminatório imediato
     animal_species = context.get("especie")
-    if _species_matches(protocol.especie, animal_species):
-        score += 20
-        if protocol.especie:
-            reasons.append(f"Compatível com a espécie registrada ({animal_species}).")
-    else:
+    if not _species_matches(protocol.especie, animal_species):
         return (-1, ["Espécie incompatível com o protocolo."])
 
-    source_text = " ".join(
+    reasons: list[str] = []
+    suspicion = _normalize_token(context.get("suspeita_clinica"))
+    protocol_suspicion = _normalize_token(protocol.suspeita_principal)
+    protocol_name = _normalize_token(protocol.nome)
+    protocol_triggers = _normalize_token(protocol.sinais_gatilho)
+
+    suspicion_score = 0
+    search_matched = False
+
+    if suspicion:
+        if protocol_suspicion and suspicion == protocol_suspicion:
+            search_matched = True
+            suspicion_score += 80
+            reasons.append("Suspeita clínica coincide com o protocolo.")
+        elif protocol_name and suspicion == protocol_name:
+            search_matched = True
+            suspicion_score += 80
+            reasons.append("Nome do protocolo coincide com o termo pesquisado.")
+        elif protocol_suspicion and (suspicion in protocol_suspicion or protocol_suspicion in suspicion):
+            search_matched = True
+            suspicion_score += 55
+            reasons.append("Suspeita clínica muito próxima da hipótese principal do protocolo.")
+        elif protocol_name and (suspicion in protocol_name or protocol_name in suspicion):
+            search_matched = True
+            suspicion_score += 50
+            reasons.append("Termo pesquisado coincide com o nome do protocolo.")
+        elif protocol_triggers and suspicion in protocol_triggers:
+            search_matched = True
+            suspicion_score += 45
+            reasons.append("Termo pesquisado coincide com sinais gatilho do protocolo.")
+        else:
+            suspicion_tokens = set(_tokenize(suspicion))
+            protocol_all_tokens = set(
+                _tokenize(" ".join(filter(None, [protocol.nome, protocol.suspeita_principal, protocol.sinais_gatilho])))
+            )
+            overlap_search = [t for t in suspicion_tokens if t in protocol_all_tokens]
+            if overlap_search:
+                search_matched = True
+                suspicion_score += min(40, len(overlap_search) * 10)
+                reasons.append("Encontrados termos pesquisados no protocolo: " + ", ".join(sorted(overlap_search)[:5]) + ".")
+
+        # Quando uma busca/suspeita for informada, apenas protocolos que correspondam à busca devem aparecer
+        if not search_matched:
+            return (0, [])
+
+    clinical_text = " ".join(
         filter(
             None,
             [
-                context.get("suspeita_clinica"),
                 context.get("queixa_principal"),
                 context.get("historico_clinico"),
                 context.get("exame_fisico"),
             ],
         )
     )
-    source_tokens = Counter(_tokenize(source_text))
+    clinical_tokens = Counter(_tokenize(clinical_text))
     protocol_tokens = set(
         _tokenize(" ".join(filter(None, [protocol.nome, protocol.suspeita_principal, protocol.sinais_gatilho])))
     )
-    overlap = [token for token in protocol_tokens if source_tokens.get(token)]
+    overlap = [token for token in protocol_tokens if clinical_tokens.get(token)]
+    overlap_score = 0
     if overlap:
-        score += min(30, len(overlap) * 6)
+        overlap_score += min(30, len(overlap) * 6)
         reasons.append("Encontrados sinais/termos relacionados: " + ", ".join(sorted(overlap)[:5]) + ".")
 
+    # Se não houve correspondência com a busca nem sobreposição clínica, o protocolo não tem indicação clínica
+    if not search_matched and not overlap:
+        return (0, [])
+
+    score = suspicion_score + overlap_score
+
+    # Bonificação por espécie (somente se já houver correspondência clínica)
+    if _species_matches(protocol.especie, animal_species):
+        score += 20
+        if protocol.especie:
+            reasons.append(f"Compatível com a espécie registrada ({animal_species}).")
+
+    # Bonificação por prioridade clínica
     if protocol.prioridade:
         score += max(0, 20 - min(protocol.prioridade, 20))
 
@@ -215,6 +272,10 @@ def recommend_protocols(context: dict[str, Any], clinic_id: int | None = None, l
         ranked.append((score, protocol, reasons))
 
     ranked.sort(key=lambda entry: entry[0], reverse=True)
+    if context.get("suspeita_clinica"):
+        strong_matches = [entry for entry in ranked if entry[0] >= 50]
+        if strong_matches:
+            ranked = strong_matches
     return [serialize_protocol(protocol, context, reasons, score) for score, protocol, reasons in ranked[:limit]]
 
 

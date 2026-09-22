@@ -1091,3 +1091,47 @@ def test_seed_protocolos_notas_idempotente_e_recomendavel(client):
         assert all(item["nome"] != "Obstrução urinária felina" for item in feline)
         feline_ok = recommend_protocols({"suspeita_clinica": "obstrucao uretral", "especie": "gato"})
         assert feline_ok and feline_ok[0]["nome"] == "Obstrução urinária felina"
+
+
+def test_search_protocol_returns_only_matching_protocols_and_excludes_others(client):
+    from scripts.seed_protocolos_notas import seed
+    from services.clinical_suggestions import recommend_protocols
+
+    with flask_app.app_context():
+        seed(db.session, apply=True)
+
+        # Adiciona também o protocolo de bicheira
+        if not ProtocoloClinico.query.filter_by(nome='Protocolo Inicial para Bicheira').first():
+            bicheira_proto = ProtocoloClinico(
+                nome='Protocolo Inicial para Bicheira',
+                suspeita_principal='bicheira',
+                especie=None,
+                prioridade=5,
+                conduta_sugerida='Realizar retirada manual das larvas de moscas e limpeza.',
+            )
+            db.session.add(bicheira_proto)
+            db.session.commit()
+
+        # Pesquisando "bicheira" para um gato (mesmo cenário da foto do usuário):
+        # Apenas o protocolo de bicheira deve aparecer. "Obstrução urinária felina" NÃO deve aparecer.
+        bicheira_results = recommend_protocols({"suspeita_clinica": "bicheira", "especie": "gato"})
+        assert len(bicheira_results) == 1
+        assert bicheira_results[0]["nome"] == "Protocolo Inicial para Bicheira"
+        assert all(item["nome"] != "Obstrução urinária felina" for item in bicheira_results)
+
+        # Pesquisando pelo nome do protocolo diretamente
+        by_name = recommend_protocols({"suspeita_clinica": "Protocolo Inicial para Bicheira", "especie": "gato"})
+        assert len(by_name) == 1
+        assert by_name[0]["nome"] == "Protocolo Inicial para Bicheira"
+
+        # Pesquisando "obstrucao uretral" para um gato:
+        # Apenas "Obstrução urinária felina" deve aparecer, e "Bicheira" NÃO deve aparecer.
+        obstrucao_results = recommend_protocols({"suspeita_clinica": "obstrucao uretral", "especie": "gato"})
+        assert len(obstrucao_results) == 1
+        assert obstrucao_results[0]["nome"] == "Obstrução urinária felina"
+        assert all(item["nome"] != "Protocolo Inicial para Bicheira" for item in obstrucao_results)
+
+        # Pesquisando por suspeita inexistente: nenhum protocolo deve ser sugerido
+        empty_results = recommend_protocols({"suspeita_clinica": "termo inexistente xpto", "especie": "gato"})
+        assert len(empty_results) == 0
+
