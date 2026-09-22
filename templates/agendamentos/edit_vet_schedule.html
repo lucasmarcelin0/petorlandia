@@ -93,10 +93,7 @@
     </li>
     {% if appointment_form %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="section-new-toggle" type="button"
-              data-bs-toggle="collapse" data-bs-target="#newAppointmentPanel"
-              aria-controls="newAppointmentPanel" aria-expanded="false"
-              data-agenda-new-toggle>
+      <button class="nav-link d-flex align-items-center gap-2" id="section-new-tab" data-bs-toggle="tab" data-bs-target="#section-new" type="button" role="tab" aria-controls="section-new" aria-selected="false" data-agenda-new-toggle>
         <span class="icon-circle bg-success text-white"><i class="fa-solid fa-plus" aria-hidden="true"></i></span>
         <span class="fw-semibold">Novo agendamento</span>
       </button>
@@ -131,13 +128,19 @@
     </li>
   </ul>
 
+  <div class="tab-content" id="vetScheduleSectionContent">
+
+  <!-- ===== Tab: Visão Geral ===== -->
+  <div class="tab-pane fade show active" id="section-overview" role="tabpanel" aria-labelledby="section-overview-tab" tabindex="0">
+    <div class="collapse show" id="{{ vet_calendar_collapse_id }}" data-calendar-collapse>
+      {% include 'partials/calendar_layout.html' %}
+    </div>
+  </div><!-- /tab-pane section-overview -->
+
   {% if appointment_form %}
-  {#
-    Agendar continua fora das abas, mas o painel abre NO LUGAR (empurrando o
-    conteúdo para baixo) em vez de sobrepor a agenda.
-  #}
-  <div class="collapse agenda-new-panel mb-4" id="newAppointmentPanel" data-agenda-panel>
-    <div class="card shadow-sm border-0 rounded-4">
+  <!-- ===== Tab: Novo Agendamento ===== -->
+  <div class="tab-pane fade agenda-new-panel" id="section-new" role="tabpanel" aria-labelledby="section-new-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
       <div class="card-body p-4">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
           <div class="consultation-section-heading consultation-section-heading--consulta mb-0">
@@ -147,8 +150,7 @@
               <p class="mb-0 text-muted">Selecione tutor, animal, profissional e o melhor horário disponível.</p>
             </div>
           </div>
-          <button type="button" class="btn-close" data-bs-toggle="collapse"
-                  data-bs-target="#newAppointmentPanel" aria-label="Fechar painel de agendamento"></button>
+          <button type="button" class="btn-close" data-agenda-new-close aria-label="Fechar e voltar para a Visão Geral"></button>
         </div>
 
         <div class="collapse show" id="newAppointmentForm">
@@ -322,8 +324,7 @@
                   </div>
                 </div>
               </div>
-              {# Grade de disponibilidade começa recolhida: aberta, ela sozinha
-                 empurrava a página em ~2.600px agora que o painel é inline. #}
+              {# Grade de disponibilidade começa recolhida #}
               <div class="collapse" id="scheduleOverviewCollapse">
                 <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
               </div>
@@ -332,17 +333,8 @@
         </div><!-- /#newAppointmentForm -->
       </div><!-- /card-body -->
     </div><!-- /card -->
-  </div><!-- /#newAppointmentPanel -->
+  </div><!-- /#section-new -->
   {% endif %}
-
-  <div class="tab-content" id="vetScheduleSectionContent">
-
-  <!-- ===== Tab: Visão Geral ===== -->
-  <div class="tab-pane fade show active" id="section-overview" role="tabpanel" aria-labelledby="section-overview-tab" tabindex="0">
-    <div class="collapse show" id="{{ vet_calendar_collapse_id }}" data-calendar-collapse>
-      {% include 'partials/calendar_layout.html' %}
-    </div>
-  </div><!-- /tab-pane section-overview -->
 
 
   <!-- ===== Tab: Consultas ===== -->
@@ -900,51 +892,23 @@
 
   <script>
     // Escolher um horário no calendário abre o painel de novo agendamento.
-    // O painel abre no lugar (logo abaixo das abas) e rola até ele, em vez de
-    // sobrepor a agenda.
+    // Navegação exclusiva entre seções da agenda:
+    // Apenas uma seção permanece visível por vez. Ao abrir Novo Agendamento
+    // (ou qualquer outra aba), a seção anterior é finalizada/fechada, garantindo
+    // que haja sempre apenas um div aberto por vez.
     (function () {
       var tabs = document.getElementById('vetScheduleSectionTabs');
-      var panel = document.getElementById('newAppointmentPanel');
       if (!tabs) return;
-
-      var newToggle = tabs.querySelector('[data-agenda-new-toggle]');
-
-      if (panel) {
-        panel.addEventListener('show.bs.collapse', function () {
-          if (newToggle) {
-            newToggle.classList.add('active');
-            newToggle.setAttribute('aria-expanded', 'true');
-          }
-        });
-        panel.addEventListener('shown.bs.collapse', function () {
-          panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-        panel.addEventListener('hide.bs.collapse', function () {
-          if (newToggle) {
-            newToggle.classList.remove('active');
-            newToggle.setAttribute('aria-expanded', 'false');
-          }
-        });
-      }
 
       tabs.addEventListener('click', function (event) {
         var button = event.target.closest('[data-bs-target]');
         if (!button || !tabs.contains(button)) return;
 
-        // Se for o botão de novo agendamento, deixa o Bootstrap Collapse cuidar do painel
-        if (button.matches('[data-agenda-new-toggle]') || button.getAttribute('data-bs-toggle') === 'collapse') {
-          return;
-        }
-
         var target = document.querySelector(button.getAttribute('data-bs-target'));
         if (!target) return;
-        if (panel && window.bootstrap && bootstrap.Collapse) {
-          bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false }).hide();
-        } else if (panel) {
-          panel.classList.remove('show');
-        }
+
         window.setTimeout(function () {
-          tabs.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tab) {
+          tabs.querySelectorAll('[data-bs-target]').forEach(function (tab) {
             var active = tab === button;
             tab.classList.toggle('active', active);
             tab.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -957,23 +921,37 @@
           });
         }, 0);
       });
+
+      // Fechar no card de Novo Agendamento volta para a Visão Geral
+      var closeBtn = document.querySelector('[data-agenda-new-close]');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+          var overviewTab = document.getElementById('section-overview-tab');
+          if (overviewTab) {
+            overviewTab.click();
+          }
+        });
+      }
     })();
 
+    // Escolher um horário no calendário ativa a aba de Novo Agendamento
     document.addEventListener('calendarSlotChosen', function () {
-      var panel = document.getElementById('newAppointmentPanel');
-      if (!panel || !window.bootstrap || !bootstrap.Collapse) return;
-      bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false }).show();
-      panel.addEventListener('shown.bs.collapse', function onShown() {
-        panel.removeEventListener('shown.bs.collapse', onShown);
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      var newTab = document.getElementById('section-new-tab');
+      if (!newTab) return;
+      newTab.click();
+      window.setTimeout(function () {
+        var target = document.getElementById('section-new');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
     }, true);
 
     // Ao voltar para a Visão Geral, garante o calendário visível
     (function () {
       var overviewTab = document.getElementById('section-overview-tab');
       if (!overviewTab) return;
-      overviewTab.addEventListener('shown.bs.tab', function () {
+      overviewTab.addEventListener('click', function () {
         var calEl = document.getElementById('{{ vet_calendar_collapse_id }}');
         if (calEl && window.bootstrap && bootstrap.Collapse) {
           bootstrap.Collapse.getOrCreateInstance(calEl, { toggle: false }).show();

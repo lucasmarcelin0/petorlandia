@@ -460,8 +460,24 @@ def test_vet_schedule_tabs_order(client, monkeypatch):
                 break
     assert found == expected_labels
 
-    # Verifica também que o botão de novo agendamento tem o atributo data-agenda-new-toggle
+    # Verifica que o botão de novo agendamento tem o atributo data-agenda-new-toggle e aponta para #section-new
     new_btn = tabs_nav.find('button', attrs={'data-agenda-new-toggle': True})
     assert new_btn is not None
-    assert new_btn.get('data-bs-target') == '#newAppointmentPanel'
+    assert new_btn.get('data-bs-target') == '#section-new'
+
+    # Verifica que o painel de novo agendamento está dentro de #vetScheduleSectionContent como tab-pane exclusivo
+    content_container = soup.find('div', id='vetScheduleSectionContent')
+    assert content_container is not None
+    new_pane = content_container.find('div', id='section-new')
+    assert new_pane is not None
+    assert 'tab-pane' in new_pane.get('class', [])
+
+    # Inicialmente apenas uma aba está ativa
+    active_panes = [
+        pane for pane in content_container.find_all('div', class_='tab-pane', recursive=False)
+        if 'active' in pane.get('class', [])
+    ]
+    assert len(active_panes) == 1
+    assert active_panes[0].get('id') == 'section-overview'
+
 
