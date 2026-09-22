@@ -76,6 +76,7 @@ from app import (
     _public_veterinarians_query,
     _render_vet_public_profile,
     _resolve_record_panel,
+    _sanitize_login_next_url,
     _user_is_clinic_professional,
     _vet_all_public_cities,
     _vet_matches_public_city,
@@ -91,6 +92,11 @@ from app import (
 )
 
 bp = Blueprint("agendamentos_routes", __name__)
+
+
+def _safe_referrer(fallback_endpoint="appointments"):
+    fallback = url_for(fallback_endpoint)
+    return _sanitize_login_next_url(request.referrer, fallback=fallback)
 
 
 def get_blueprint():
@@ -2112,7 +2118,7 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=400, message=message)
         flash(message, 'warning')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(_safe_referrer('appointments'))
 
     schedule_ids = []
     for raw_id in raw_ids:
@@ -2127,7 +2133,7 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=400, message=message)
         flash(message, 'warning')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(_safe_referrer('appointments'))
 
     schedules = (
         VetSchedule.query.filter(
@@ -2143,7 +2149,7 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=400, message=message)
         flash(message, 'warning')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(_safe_referrer('appointments'))
 
     try:
         for schedule in schedules:
@@ -2155,7 +2161,7 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=500, message=message)
         flash(message, 'danger')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(_safe_referrer('appointments'))
 
     total = len(schedules)
     removed_ids = [schedule.id for schedule in schedules]
@@ -2168,7 +2174,7 @@ def bulk_delete_vet_schedule(veterinario_id):
         return json_response(True, message=message, extra={'removed_ids': removed_ids})
 
     flash(message, 'success')
-    return redirect(request.referrer or url_for('appointments'))
+    return redirect(_safe_referrer('appointments'))
 
 
 @bp.route("/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete", methods=["POST"])
@@ -2294,7 +2300,7 @@ def edit_appointment(appointment_id):
             if wants_json:
                 return jsonify({'success': False, 'message': msg, 'category': 'danger'}), 400
             flash(msg, 'danger')
-            return redirect(request.referrer or url_for('appointments'))
+            return redirect(_safe_referrer('appointments'))
         try:
             scheduled_at_local = datetime.combine(
                 datetime.strptime(date_str, '%Y-%m-%d').date(),
@@ -2306,7 +2312,7 @@ def edit_appointment(appointment_id):
             if wants_json:
                 return jsonify({'success': False, 'message': msg, 'category': 'danger'}), 400
             flash(msg, 'danger')
-            return redirect(request.referrer or url_for('appointments'))
+            return redirect(_safe_referrer('appointments'))
         if not is_slot_available(
             vet_id,
             scheduled_at_local,
@@ -2328,7 +2334,7 @@ def edit_appointment(appointment_id):
                     'category': 'danger'
                 }), 400
             flash(msg, 'danger')
-            return redirect(request.referrer or url_for('appointments'))
+            return redirect(_safe_referrer('appointments'))
         appointment.veterinario_id = vet_id
         appointment.scheduled_at = normalize_to_utc(scheduled_at_local)
         if notes is not None:
@@ -2345,7 +2351,7 @@ def edit_appointment(appointment_id):
                 'appointment_id': appointment.id,
             })
         flash('Agendamento atualizado com sucesso.', 'success')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(_safe_referrer('appointments'))
 
     veterinarios = Veterinario.query.all()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2407,7 +2413,7 @@ def update_appointment_status(appointment_id):
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         or (accept_json > 0 and accept_json > accept_html)
     )
-    redirect_url = request.referrer or url_for('appointments')
+    redirect_url = _safe_referrer('appointments')
 
     status_value = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
     status = (status_value or '').strip().lower()
@@ -2498,7 +2504,7 @@ def update_appointment_status(appointment_id):
     flash('Status atualizado.', 'success')
     # Sempre redireciona de volta à página anterior para evitar exibir apenas
     # o JSON "{\"success\": true}".
-    return redirect(request.referrer or url_for('appointments'))
+    return redirect(_safe_referrer('appointments'))
 
 
 @bp.route("/appointments/<int:appointment_id>/delete", methods=["POST"])
@@ -2536,14 +2542,14 @@ def delete_appointment(appointment_id):
         if wants_json:
             return jsonify({'success': False, 'message': message}), 500
         flash(message, 'danger')
-        return redirect(request.referrer or url_for('manage_appointments'))
+        return redirect(_safe_referrer('manage_appointments'))
 
     message = 'Agendamento removido.'
     if wants_json:
         return jsonify({'success': True, 'message': message, 'appointment_id': appointment_id})
 
     flash(message, 'success')
-    return redirect(request.referrer or url_for('manage_appointments'))
+    return redirect(_safe_referrer('manage_appointments'))
 
 
 @bp.route("/animal/<int:animal_id>/schedule_exam", methods=["POST"])
