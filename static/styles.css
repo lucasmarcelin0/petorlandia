@@ -2820,7 +2820,7 @@ body {
   border: 0;
   border-radius: 1.35rem;
   box-shadow: 0 26px 56px -42px rgba(15, 23, 42, 0.55);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .consultation-workspace .tab-pane > .card > .card-body {
