@@ -69,6 +69,7 @@ from app import (  # noqa: E402
     _clear_medication_search_cache,
     _clinic_orcamento_blocks,
     _clinic_prescricao_blocks,
+    _clinical_suspicion_catalog,
     _clinical_suspicion_options,
     _coerce_int,
     _current_user_owns_animal,
@@ -527,6 +528,7 @@ def criar_protocolo_clinico_inline(consulta_id):
         'message': 'Novo protocolo criado com sucesso.',
         'protocol': _serialize_clinical_protocol(protocolo),
         'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
+        'clinical_suspicion_catalog': _clinical_suspicion_catalog(consulta.clinica_id),
     })
 
 
@@ -811,6 +813,7 @@ def atualizar_protocolo_clinico_inline(consulta_id, protocol_id):
         'message': 'Protocolo atualizado com sucesso.',
         'protocol': _serialize_clinical_protocol(protocolo),
         'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
+        'clinical_suspicion_catalog': _clinical_suspicion_catalog(consulta.clinica_id),
     })
 
 
@@ -1056,6 +1059,7 @@ def consulta_direct(animal_id):
 
     worker_role = 'veterinario' if is_veterinarian(current_user) else current_user.worker
     clinical_suspicion_options = _clinical_suspicion_options(clinica_id)
+    clinical_suspicion_catalog = _clinical_suspicion_catalog(clinica_id)
 
     return render_template(
         'consulta_qr.html',
@@ -1080,6 +1084,7 @@ def consulta_direct(animal_id):
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
         clinical_suspicion_options=clinical_suspicion_options,
+        clinical_suspicion_catalog=clinical_suspicion_catalog,
     )
 
 

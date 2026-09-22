@@ -10688,6 +10688,66 @@ def _clinical_suspicion_options(clinic_id: int | None = None) -> list[str]:
     return sorted(options, key=lambda s: _strip_accents(s).lower())
 
 
+def _clinical_suspicion_catalog(clinic_id: int | None = None) -> list[dict]:
+    query = (
+        db.session.query(ProtocoloClinico)
+        .filter(ProtocoloClinico.ativo.is_(True))
+    )
+    if clinic_id:
+        query = query.filter(
+            or_(ProtocoloClinico.clinica_id.is_(None), ProtocoloClinico.clinica_id == clinic_id)
+        )
+    else:
+        query = query.filter(ProtocoloClinico.clinica_id.is_(None))
+
+    protocols = query.all()
+    from services.clinical_suggestions import _strip_accents
+
+    catalog = []
+    seen_keys = set()
+    for proto in protocols:
+        name = (proto.nome or '').strip()
+        suspeita = (proto.suspeita_principal or '').strip()
+        if not name and not suspeita:
+            continue
+        key = (name.lower(), suspeita.lower())
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        meds_count = len(proto.medicamentos_sugeridos) if proto.medicamentos_sugeridos else 0
+        exams_count = len(proto.exames_sugeridos) if proto.exames_sugeridos else 0
+
+        catalog.append({
+            'id': proto.id,
+            'nome': name,
+            'suspeita': suspeita,
+            'especie': proto.especie,
+            'gatilhos': (proto.sinais_gatilho or '').strip(),
+            'medicamentos_count': meds_count,
+            'exames_count': exams_count,
+            'is_clinic_custom': bool(proto.clinica_id),
+        })
+
+    existing_terms = {c['suspeita'].lower() for c in catalog} | {c['nome'].lower() for c in catalog}
+    for opt in _clinical_suspicion_options(clinic_id):
+        if opt.lower() not in existing_terms:
+            catalog.append({
+                'id': None,
+                'nome': opt,
+                'suspeita': opt,
+                'especie': None,
+                'gatilhos': '',
+                'medicamentos_count': 0,
+                'exames_count': 0,
+                'is_clinic_custom': False,
+            })
+            existing_terms.add(opt.lower())
+
+    catalog.sort(key=lambda item: _strip_accents(item['nome'] or item['suspeita']).lower())
+    return catalog
+
+
 def _can_view_veterinarian_activity_report(veterinario):
     if not current_user.is_authenticated:
         return False

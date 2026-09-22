@@ -17,7 +17,7 @@
       border: 1px solid #e4eaee;
       border-radius: 22px;
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-      overflow: hidden;
+      overflow: visible;
     }
     #clinical-suggestions-panel .clinical-toolbar {
       display: flex;
@@ -28,6 +28,7 @@
       padding: 18px 22px;
       background: rgba(255, 255, 255, 0.82);
       backdrop-filter: blur(8px);
+      border-radius: 22px 22px 0 0;
     }
     #clinical-suggestions-panel .clinical-heading {
       min-width: 220px;
@@ -137,6 +138,7 @@
       padding: 0 22px 22px;
       border-top: 1px solid #edf2f4;
       background: rgba(255, 255, 255, 0.64);
+      border-radius: 0 0 22px 22px;
     }
     #clinical-suggestions-panel .clinical-pane {
       padding-top: 18px;
@@ -247,6 +249,273 @@
     }
     #clinical-suggestions-panel .clinical-search-clear:hover {
       color: #475569;
+    }
+    /* Autocomplete Profissional de Suspeita Clínica */
+    #clinical-suggestions-panel .clinical-autocomplete-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      width: 100%;
+      background: #ffffff;
+      border: 1.5px solid #d1dbe2;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px -6px rgba(15, 23, 42, 0.16), 0 8px 18px rgba(0, 0, 0, 0.06);
+      z-index: 1060;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: clinicalAutocompleteSlide 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes clinicalAutocompleteSlide {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: .82rem;
+      font-weight: 600;
+      color: #475569;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-header-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-badge-count {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #065f46;
+      font-size: .75rem;
+      font-weight: 700;
+      border: 1px solid #a7f3d0;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-kbd-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: .75rem;
+      color: #94a3b8;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-kbd-hint kbd {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #475569;
+      font-size: .72rem;
+      font-family: inherit;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-list {
+      max-height: 330px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 6px 0;
+      margin: 0;
+      list-style: none;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-list::-webkit-scrollbar {
+      width: 7px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-list::-webkit-scrollbar-track {
+      background: #f8fafc;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-list::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-list::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      border-bottom: 1px solid #f8fafc;
+      transition: background 0.12s ease, border-color 0.12s ease;
+      user-select: none;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item:hover,
+    #clinical-suggestions-panel .clinical-autocomplete-item.active {
+      background: #f0fdf4;
+      border-left-color: #10b981;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-icon {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .95rem;
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-icon.species-dog {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-icon.species-cat {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-icon.species-all {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-body {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-title {
+      font-size: .93rem;
+      font-weight: 600;
+      color: #1e293b;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-badges {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 3px;
+      font-size: .76rem;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 600;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-pill.pill-suspicion {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-pill.pill-clinic {
+      background: #fef9c3;
+      color: #854d0e;
+      border-color: #fef08a;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-triggers-preview {
+      color: #64748b;
+      font-size: .75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 320px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item-side {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-action-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 9px;
+      border-radius: 8px;
+      font-size: .75rem;
+      font-weight: 700;
+      background: #f8fafc;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+      transition: all 0.12s ease;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-item:hover .clinical-autocomplete-action-badge,
+    #clinical-suggestions-panel .clinical-autocomplete-item.active .clinical-autocomplete-action-badge {
+      background: #10b981;
+      color: #ffffff;
+      border-color: #10b981;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-highlight {
+      background: #bbf7d0;
+      color: #064e3b;
+      font-weight: 700;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-empty {
+      padding: 24px 18px;
+      text-align: center;
+      background: #ffffff;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-empty-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      color: #64748b;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      margin-bottom: 10px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-empty-title {
+      font-size: .9rem;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-empty-desc {
+      font-size: .8rem;
+      color: #64748b;
+      margin-bottom: 12px;
+      max-width: 380px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #clinical-suggestions-panel .clinical-autocomplete-footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      font-size: .76rem;
+      color: #64748b;
     }
     #clinical-suggestions-panel .clinical-search-trigger {
       height: 48px;
@@ -1189,6 +1458,10 @@
                   <option value="{{ item }}">
                   {% endfor %}
                 </datalist>
+                <script type="application/json" id="clinical-suspicion-catalog-data">
+                  {{ (clinical_suspicion_catalog or []) | tojson }}
+                </script>
+                <div id="clinical-suspicion-dropdown" class="clinical-autocomplete-menu d-none" role="listbox" aria-label="Sugestões de protocolos clínicos"></div>
               </div>
               <button type="button" class="clinical-btn clinical-search-trigger" id="load-clinical-suggestions">
                 <i class="bi bi-search me-1"></i><span>Buscar</span>
@@ -1564,14 +1837,14 @@
     if (suspicionSlot) {
       if (suspicionField) {
         suspicionField.classList.add('clinical-search-input');
-        suspicionField.setAttribute('list', 'clinical-suspicion-options');
+        suspicionField.removeAttribute('list');
         suspicionField.setAttribute('autocomplete', 'off');
         suspicionField.setAttribute('placeholder', 'Pesquisar suspeita clínica');
         suspicionSlot.appendChild(suspicionField);
       } else {
         suspicionSlot.innerHTML = `
           <input id="suspeita-clinica" name="suspeita_clinica" class="clinical-search-input" form="consulta-form"
-            list="clinical-suspicion-options" autocomplete="off" placeholder="Pesquisar suspeita clínica">
+            autocomplete="off" placeholder="Pesquisar suspeita clínica">
         `;
       }
     }
@@ -2819,13 +3092,17 @@
       );
     }
 
-    function updateSuspicionOptions(options) {
+    function updateSuspicionOptions(options, newCatalog) {
       const datalist = document.getElementById('clinical-suspicion-options');
-      if (!datalist || !Array.isArray(options)) return;
-      datalist.innerHTML = options
-        .filter(Boolean)
-        .map(item => `<option value="${escapeHtml(item)}">`)
-        .join('');
+      if (datalist && Array.isArray(options)) {
+        datalist.innerHTML = options
+          .filter(Boolean)
+          .map(item => `<option value="${escapeHtml(item)}">`)
+          .join('');
+      }
+      if (typeof updateAutocompleteCatalog === 'function') {
+        updateAutocompleteCatalog(options, newCatalog);
+      }
     }
 
     async function submitProtocolForm(event) {
@@ -2855,7 +3132,7 @@
               return body;
             })()
           : await postJson(panel.dataset.createUrl, payload);
-        updateSuspicionOptions(data.clinical_suspicion_options || []);
+        updateSuspicionOptions(data.clinical_suspicion_options || [], data.clinical_suspicion_catalog || null);
         const suspicionInput = document.getElementById('suspeita-clinica');
         if (suspicionInput && data.protocol?.suspeita_principal) {
           suspicionInput.value = data.protocol.suspeita_principal;
@@ -3010,9 +3287,293 @@
       }
     });
 
-    loadButton?.addEventListener('click', loadSuggestions);
+    loadButton?.addEventListener('click', function () {
+      if (typeof closeDropdown === 'function') closeDropdown();
+      loadSuggestions();
+    });
+
     const searchInput = document.getElementById('suspeita-clinica');
     const clearButton = document.getElementById('clear-clinical-suspicion');
+    const dropdownEl = document.getElementById('clinical-suspicion-dropdown');
+
+    let catalogItems = [];
+    let currentFilteredItems = [];
+    let activeIndex = -1;
+    let isDropdownOpen = false;
+
+    function escapeRegExp(string) {
+      return String(string || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function normalizeSearchToken(str) {
+      return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    }
+
+    function initCatalogData() {
+      const scriptEl = document.getElementById('clinical-suspicion-catalog-data');
+      if (scriptEl && scriptEl.textContent.trim()) {
+        try {
+          const parsed = JSON.parse(scriptEl.textContent);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            catalogItems = parsed;
+          }
+        } catch (e) {
+          console.warn('Erro ao processar catálogo de suspeitas:', e);
+        }
+      }
+      if (catalogItems.length === 0) {
+        const datalist = document.getElementById('clinical-suspicion-options');
+        if (datalist) {
+          const opts = Array.from(datalist.options).map(o => o.value).filter(Boolean);
+          catalogItems = opts.map(val => ({
+            id: null,
+            nome: val,
+            suspeita: val,
+            especie: null,
+            gatilhos: '',
+            medicamentos_count: 0,
+            exames_count: 0,
+            is_clinic_custom: false
+          }));
+        }
+      }
+    }
+
+    function updateAutocompleteCatalog(options, newCatalog) {
+      if (Array.isArray(newCatalog) && newCatalog.length > 0) {
+        catalogItems = newCatalog;
+      } else if (Array.isArray(options) && options.length > 0) {
+        catalogItems = options.filter(Boolean).map(val => ({
+          id: null,
+          nome: val,
+          suspeita: val,
+          especie: null,
+          gatilhos: '',
+          medicamentos_count: 0,
+          exames_count: 0,
+          is_clinic_custom: false
+        }));
+      }
+    }
+
+    function highlightMatches(text, query) {
+      if (!text) return '';
+      if (!query || !query.trim()) return escapeHtml(text);
+      const terms = query.trim().split(/\s+/).filter(Boolean).map(escapeRegExp);
+      if (terms.length === 0) return escapeHtml(text);
+      try {
+        const regex = new RegExp(`(${terms.join('|')})`, 'gi');
+        const parts = String(text).split(regex);
+        return parts.map(part => {
+          if (regex.test(part)) {
+            return `<mark class="clinical-autocomplete-highlight">${escapeHtml(part)}</mark>`;
+          }
+          return escapeHtml(part);
+        }).join('');
+      } catch (e) {
+        return escapeHtml(text);
+      }
+    }
+
+    function filterCatalog(query) {
+      const q = normalizeSearchToken(query);
+      if (!q) {
+        return catalogItems.slice(0, 15);
+      }
+      const words = q.split(/\s+/).filter(Boolean);
+      return catalogItems.filter(item => {
+        const combined = normalizeSearchToken([
+          item.nome,
+          item.suspeita,
+          item.gatilhos,
+          item.especie === 'cao' ? 'cão cao canino cachorro cadela' : '',
+          item.especie === 'gato' ? 'gato felino felinos' : '',
+        ].join(' '));
+        return words.every(w => combined.includes(w));
+      }).slice(0, 20);
+    }
+
+    function renderDropdown(items, query) {
+      if (!dropdownEl) return;
+      currentFilteredItems = items || [];
+      activeIndex = -1;
+
+      if (currentFilteredItems.length === 0) {
+        dropdownEl.innerHTML = `
+          <div class="clinical-autocomplete-header">
+            <div class="clinical-autocomplete-header-title">
+              <i class="bi bi-journal-medical text-success"></i> Protocolos clínicos
+            </div>
+            <span class="clinical-autocomplete-badge-count">0 opções</span>
+          </div>
+          <div class="clinical-autocomplete-empty">
+            <div class="clinical-autocomplete-empty-icon">
+              <i class="bi bi-search"></i>
+            </div>
+            <div class="clinical-autocomplete-empty-title">
+              Nenhuma suspeita pré-cadastrada para "${escapeHtml(query)}"
+            </div>
+            <p class="clinical-autocomplete-empty-desc">
+              Pressione <strong>Enter</strong> ou clique no botão abaixo para buscar livremente por sinais clínicos e queixas.
+            </p>
+            <button type="button" class="btn btn-sm btn-success js-clinical-search-now">
+              <i class="bi bi-search me-1"></i> Pesquisar "${escapeHtml(query)}" agora
+            </button>
+          </div>
+        `;
+        dropdownEl.classList.remove('d-none');
+        isDropdownOpen = true;
+        return;
+      }
+
+      const countText = currentFilteredItems.length === 1 ? '1 protocolo' : `${currentFilteredItems.length} opções`;
+      const headerHtml = `
+        <div class="clinical-autocomplete-header">
+          <div class="clinical-autocomplete-header-title">
+            <i class="bi bi-journal-medical text-success"></i>
+            <span>${query ? 'Protocolos compatíveis' : 'Protocolos recomendados'}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="clinical-autocomplete-badge-count">${countText}</span>
+            <div class="clinical-autocomplete-kbd-hint d-none d-md-inline-flex">
+              <kbd>↑</kbd><kbd>↓</kbd> navegar <kbd>↵</kbd> selecionar
+            </div>
+          </div>
+        </div>
+      `;
+
+      const listHtml = `
+        <ul class="clinical-autocomplete-list" id="clinical-autocomplete-list" role="listbox">
+          ${currentFilteredItems.map((item, idx) => {
+            const isCat = (item.especie || '').toLowerCase() === 'gato';
+            const isDog = (item.especie || '').toLowerCase() === 'cao';
+            const iconClass = isDog ? 'species-dog' : (isCat ? 'species-cat' : 'species-all');
+            const iconHtml = isDog
+              ? '<i class="fa-solid fa-dog"></i>'
+              : (isCat ? '<i class="fa-solid fa-cat"></i>' : '<i class="bi bi-file-earmark-medical"></i>');
+            const speciesBadge = isDog
+              ? '<span class="clinical-autocomplete-pill"><i class="fa-solid fa-dog me-1 text-warning"></i>Cão</span>'
+              : (isCat
+                ? '<span class="clinical-autocomplete-pill"><i class="fa-solid fa-cat me-1 text-primary"></i>Gato</span>'
+                : '<span class="clinical-autocomplete-pill"><i class="bi bi-shield-check me-1 text-success"></i>Cão e Gato</span>');
+
+            const titleHtml = highlightMatches(item.nome || item.suspeita, query);
+            const suspBadge = (item.suspeita && item.suspeita.toLowerCase() !== (item.nome || '').toLowerCase())
+              ? `<span class="clinical-autocomplete-pill pill-suspicion">Suspeita: ${highlightMatches(item.suspeita, query)}</span>`
+              : '';
+            const clinicBadge = item.is_clinic_custom
+              ? '<span class="clinical-autocomplete-pill pill-clinic"><i class="bi bi-building me-1"></i>Da clínica</span>'
+              : '';
+
+            const medsBadge = item.medicamentos_count > 0
+              ? `<span class="text-muted small"><i class="bi bi-capsule me-1 text-secondary"></i>${item.medicamentos_count} med</span>`
+              : '';
+            const examsBadge = item.exames_count > 0
+              ? `<span class="text-muted small"><i class="bi bi-clipboard2-pulse me-1 text-secondary"></i>${item.exames_count} exames</span>`
+              : '';
+
+            const triggerText = item.gatilhos ? escapeHtml(item.gatilhos) : '';
+            const selectValue = item.nome || item.suspeita;
+
+            return `
+              <li class="clinical-autocomplete-item" role="option" data-index="${idx}" data-value="${escapeHtml(selectValue)}">
+                <div class="clinical-autocomplete-item-main">
+                  <div class="clinical-autocomplete-item-icon ${iconClass}">
+                    ${iconHtml}
+                  </div>
+                  <div class="clinical-autocomplete-item-body">
+                    <div class="clinical-autocomplete-item-title">${titleHtml}</div>
+                    <div class="clinical-autocomplete-item-badges">
+                      ${speciesBadge}
+                      ${suspBadge}
+                      ${clinicBadge}
+                      ${medsBadge}
+                      ${examsBadge}
+                      ${triggerText ? `<span class="clinical-autocomplete-triggers-preview" title="${triggerText}">· ${triggerText}</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div class="clinical-autocomplete-item-side">
+                  <span class="clinical-autocomplete-action-badge">
+                    <i class="bi bi-arrow-return-left me-1"></i>Usar
+                  </span>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      `;
+
+      const footerHtml = `
+        <div class="clinical-autocomplete-footer">
+          <i class="bi bi-lightning-charge text-warning"></i>
+          <span>Selecione um protocolo para carregar medicamentos calculados por peso, exames e condutas.</span>
+        </div>
+      `;
+
+      dropdownEl.innerHTML = headerHtml + listHtml + footerHtml;
+      dropdownEl.classList.remove('d-none');
+      isDropdownOpen = true;
+    }
+
+    function closeDropdown() {
+      if (dropdownEl) {
+        dropdownEl.classList.add('d-none');
+        dropdownEl.innerHTML = '';
+      }
+      isDropdownOpen = false;
+      activeIndex = -1;
+      currentFilteredItems = [];
+    }
+
+    function openDropdown() {
+      const currentInput = document.getElementById('suspeita-clinica');
+      const val = (currentInput?.value || '').trim();
+      const filtered = filterCatalog(val);
+      renderDropdown(filtered, val);
+    }
+
+    function updateActiveItem() {
+      if (!dropdownEl) return;
+      const items = dropdownEl.querySelectorAll('.clinical-autocomplete-item');
+      items.forEach((item, idx) => {
+        const isActive = idx === activeIndex;
+        item.classList.toggle('active', isActive);
+        item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      scrollActiveItemIntoView();
+    }
+
+    function scrollActiveItemIntoView() {
+      if (!dropdownEl) return;
+      const listEl = dropdownEl.querySelector('.clinical-autocomplete-list');
+      const activeEl = listEl?.querySelector('.clinical-autocomplete-item.active');
+      if (listEl && activeEl) {
+        const listRect = listEl.getBoundingClientRect();
+        const itemRect = activeEl.getBoundingClientRect();
+        if (itemRect.bottom > listRect.bottom) {
+          listEl.scrollTop += itemRect.bottom - listRect.bottom + 4;
+        } else if (itemRect.top < listRect.top) {
+          listEl.scrollTop -= listRect.top - itemRect.top + 4;
+        }
+      }
+    }
+
+    function selectItemValue(value) {
+      const currentInput = document.getElementById('suspeita-clinica');
+      if (currentInput) {
+        currentInput.value = value;
+        currentInput.focus();
+      }
+      updateClearButton();
+      closeDropdown();
+      loadSuggestions();
+    }
+
     const updateClearButton = () => {
       const currentInput = document.getElementById('suspeita-clinica');
       if (clearButton && currentInput) {
@@ -3023,13 +3584,59 @@
         }
       }
     };
-    searchInput?.addEventListener('input', updateClearButton);
-    searchInput?.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        loadSuggestions();
+
+    searchInput?.addEventListener('input', function () {
+      updateClearButton();
+      openDropdown();
+    });
+    searchInput?.addEventListener('focus', function () {
+      openDropdown();
+    });
+    searchInput?.addEventListener('click', function () {
+      if (!isDropdownOpen) {
+        openDropdown();
       }
     });
+    searchInput?.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!isDropdownOpen) {
+          openDropdown();
+          return;
+        }
+        if (currentFilteredItems.length > 0) {
+          activeIndex = activeIndex < currentFilteredItems.length - 1 ? activeIndex + 1 : 0;
+          updateActiveItem();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!isDropdownOpen) {
+          openDropdown();
+          return;
+        }
+        if (currentFilteredItems.length > 0) {
+          activeIndex = activeIndex > 0 ? activeIndex - 1 : currentFilteredItems.length - 1;
+          updateActiveItem();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isDropdownOpen && activeIndex >= 0 && currentFilteredItems[activeIndex]) {
+          const sel = currentFilteredItems[activeIndex];
+          selectItemValue(sel.nome || sel.suspeita);
+        } else {
+          closeDropdown();
+          loadSuggestions();
+        }
+      } else if (e.key === 'Escape') {
+        if (isDropdownOpen) {
+          e.preventDefault();
+          closeDropdown();
+        }
+      } else if (e.key === 'Tab') {
+        closeDropdown();
+      }
+    });
+
     clearButton?.addEventListener('click', function () {
       const currentInput = document.getElementById('suspeita-clinica');
       if (currentInput) {
@@ -3037,8 +3644,35 @@
         currentInput.focus();
       }
       updateClearButton();
+      closeDropdown();
       loadSuggestions();
     });
+
+    dropdownEl?.addEventListener('click', function (e) {
+      const itemEl = e.target.closest('.clinical-autocomplete-item');
+      if (itemEl && itemEl.dataset.value) {
+        e.preventDefault();
+        selectItemValue(itemEl.dataset.value);
+        return;
+      }
+      const searchNowBtn = e.target.closest('.js-clinical-search-now');
+      if (searchNowBtn) {
+        e.preventDefault();
+        closeDropdown();
+        loadSuggestions();
+        return;
+      }
+    });
+
+    document.addEventListener('pointerdown', function (e) {
+      if (!isDropdownOpen) return;
+      const wrap = document.querySelector('#clinical-suggestions-panel .clinical-search-input-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        closeDropdown();
+      }
+    });
+
+    initCatalogData();
     updateClearButton();
     proposalForm?.addEventListener('submit', submitProtocolProposal);
     proposalContentField?.addEventListener('input', updateProposalCharacterCount);
