@@ -134,3 +134,74 @@ def test_edicao_usa_nome_persistido_e_descarta_alias_visual_desatualizado():
     assert "medicamentoSelecionado.produto_match_nome = null" in template
     assert "_medicationSearchCache.clear()" in template
     assert "_medicationDetailCache.clear()" in template
+
+
+def test_busca_medicamentos_tolerancia_erro_amoxilina_e_expansao_vetsmart(client, app):
+    with app.app_context():
+        user = User(name="Vet Amox", email="vet-amox@example.com", worker="veterinario")
+        user.set_password("x")
+        db.session.add(user)
+        db.session.flush()
+
+        med = Medicamento(
+            nome="Amoxicilina + Clavulanato de Potássio",
+            principio_ativo="Amoxicilina + Clavulanato de Potássio",
+            classificacao="Antibacteriano",
+            via_administracao="Oral",
+            conteudo_estruturado={
+                "produtos_vetsmart": [
+                    {
+                        "nome": "Synulox",
+                        "fabricante": "Zoetis",
+                        "classificacao": "Antimicrobiano",
+                        "especies": ["Cães", "Gatos"],
+                        "vetsmart_produto_id": 1001,
+                        "apresentacoes": [
+                            {"forma": "Comprimido", "concentracao": "50 mg"},
+                            {"forma": "Comprimido", "concentracao": "250 mg"},
+                        ],
+                    },
+                    {
+                        "nome": "Agemoxi CL",
+                        "fabricante": "Agener União",
+                        "classificacao": "Antibacteriano",
+                        "especies": ["Cães", "Gatos"],
+                        "vetsmart_produto_id": 1002,
+                    },
+                ]
+            },
+            created_by=user.id,
+        )
+        db.session.add(med)
+        db.session.commit()
+        med_id = med.id
+
+    # Busca com erro de digitação comum: 'amoxilina' (sem o 'c')
+    resp_typo = client.get("/buscar_medicamentos?q=amoxilina")
+    assert resp_typo.status_code == 200
+    data_typo = resp_typo.get_json()
+    assert len(data_typo) >= 3
+
+    nomes = [item["nome_exibicao_busca"] for item in data_typo if item["id"] == med_id]
+    assert "Amoxicilina + Clavulanato de Potássio" in nomes
+    assert "Synulox" in nomes
+    assert "Agemoxi CL" in nomes
+
+    # O princípio ativo canônico vem antes das marcas derivadas na busca pelo princípio
+    idx_canonico = nomes.index("Amoxicilina + Clavulanato de Potássio")
+    idx_synulox = nomes.index("Synulox")
+    assert idx_canonico < idx_synulox
+
+    synulox_item = next(item for item in data_typo if item["nome_exibicao_busca"] == "Synulox")
+    assert synulox_item["tipo_item"] == "comercial"
+    assert synulox_item["fabricante"] == "Zoetis"
+    assert synulox_item["nome_comercial_filtro"] == "Synulox"
+
+    # Busca direta pela marca 'synulox' coloca a marca no topo
+    resp_marca = client.get("/buscar_medicamentos?q=synulox")
+    assert resp_marca.status_code == 200
+    data_marca = resp_marca.get_json()
+    assert data_marca
+    assert data_marca[0]["nome_exibicao_busca"] == "Synulox"
+    assert data_marca[0]["fabricante"] == "Zoetis"
+

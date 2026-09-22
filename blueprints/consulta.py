@@ -102,6 +102,78 @@ bp = Blueprint("consulta_routes", __name__)
 
 _RE_NORM_NEOMICINA = re.compile(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b")
 _RE_TOKENS_BUSCA = re.compile(r"[a-z0-9]{3,}")
+
+_RE_SUFFIX_XILINA = re.compile(r"([a-z]+)xilina\b", re.I)
+_RE_SUFFIX_NASOL = re.compile(r"([a-z]+)nasol\b", re.I)
+_RE_SUFFIX_TAZONA = re.compile(r"([a-z]+)tazona\b", re.I)
+_RE_SUFFIX_MICINE = re.compile(r"([a-z]+)micine\b", re.I)
+
+_PHARMA_TYPO_RULES = [
+    # Penicilinas e Betalactâmicos
+    (re.compile(r"\bamoxi[l|ll]ina\b", re.I), "amoxicilina"),
+    (re.compile(r"\bamoxil\b", re.I), "amoxicilina"),
+    (re.compile(r"\bampici[l|ll]ina\b", re.I), "ampicilina"),
+    (re.compile(r"\bcefa[l|ll]exia\b", re.I), "cefalexina"),
+    (re.compile(r"\bcefa[l|ll]otina\b", re.I), "cefalotina"),
+    (re.compile(r"\bceftriaxona\b", re.I), "ceftriaxona"),
+    # Tetraciclinas / Fluoroquinolonas / Aminoglicosídeos
+    (re.compile(r"\bdoxi[l|ll]ina\b", re.I), "doxiciclina"),
+    (re.compile(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b", re.I), "neomicina"),
+    (re.compile(r"\bgentamicine\b", re.I), "gentamicina"),
+    (re.compile(r"\bclindamicine\b", re.I), "clindamicina"),
+    (re.compile(r"\bazitromicine\b", re.I), "azitromicina"),
+    (re.compile(r"\benrofloxacina\b", re.I), "enrofloxacino"),
+    (re.compile(r"\bmarbofloxacina\b", re.I), "marbofloxacino"),
+    (re.compile(r"\bciprofloxacina\b", re.I), "ciprofloxacino"),
+    (re.compile(r"\bmetronida[s|z]ol\b", re.I), "metronidazol"),
+    # Anti-inflamatórios e Corticoides
+    (re.compile(r"\bmeloxican\b", re.I), "meloxicam"),
+    (re.compile(r"\bcarprofen\b", re.I), "carprofeno"),
+    (re.compile(r"\bketoprofeno\b", re.I), "cetoprofeno"),
+    (re.compile(r"\bfirocoxibe\b", re.I), "firocoxib"),
+    (re.compile(r"\bpred[s|i]?ni[s|z]ona\b", re.I), "prednisona"),
+    (re.compile(r"\bpred[s|i]?ni[s|z]olona\b", re.I), "prednisolona"),
+    (re.compile(r"\bdexameta[s|z]ona\b", re.I), "dexametasona"),
+    (re.compile(r"\bhidrocorti[s|z]ona\b", re.I), "hidrocortisona"),
+    # Analgésicos / Sedativos
+    (re.compile(r"\bdipiron\b", re.I), "dipirona"),
+    (re.compile(r"\btramal\b", re.I), "tramadol"),
+    (re.compile(r"\bgabapentine\b", re.I), "gabapentina"),
+    (re.compile(r"\bpregabalina\b", re.I), "pregabalina"),
+    # Gastro / Antieméticos
+    (re.compile(r"\bmaropitant[eo]?\b", re.I), "maropitant"),
+    (re.compile(r"\bondansetron\b", re.I), "ondansetrona"),
+    (re.compile(r"\bomepra[s|z]ol\b", re.I), "omeprazol"),
+    (re.compile(r"\branitidina\b", re.I), "ranitidina"),
+    (re.compile(r"\bfamotidina\b", re.I), "famotidina"),
+    # Antifúngicos
+    (re.compile(r"\bcetocona[s|z]ol\b", re.I), "cetoconazol"),
+    (re.compile(r"\bitracona[s|z]ol\b", re.I), "itraconazol"),
+    (re.compile(r"\bflucona[s|z]ol\b", re.I), "fluconazol"),
+    # Antiparasitários / Alergia
+    (re.compile(r"\bapocuel\b", re.I), "apoquel"),
+    (re.compile(r"\bivermectine\b", re.I), "ivermectina"),
+    (re.compile(r"\bbravecto\b", re.I), "bravecto"),
+    (re.compile(r"\bsimparic\b", re.I), "simparic"),
+    (re.compile(r"\bnexgard\b", re.I), "nexgard"),
+]
+
+
+def _normalizar_termo_farmaceutico(valor: str) -> str:
+    texto = str(valor or "").lower().strip()
+    if not texto.isascii():
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = "".join([c for c in texto if not unicodedata.combining(c)])
+    if "neo" in texto:
+        texto = _RE_NORM_NEOMICINA.sub("neomicina", texto)
+    texto = _RE_SUFFIX_XILINA.sub(r"\1xicilina", texto)
+    texto = _RE_SUFFIX_NASOL.sub(r"\1nazol", texto)
+    texto = _RE_SUFFIX_TAZONA.sub(r"\1tasona", texto)
+    texto = _RE_SUFFIX_MICINE.sub(r"\1micina", texto)
+    for pat, rep in _PHARMA_TYPO_RULES:
+        texto = pat.sub(rep, texto)
+    return texto
+
 _RE_CONCENTRACAO_RATIO = re.compile(
     r"(\d+(?:[.,]\d+)?)\s*(mg|mcg|g)\s*/\s*(\d+(?:[.,]\d+)?)\s*(ml|l)", re.I
 )
@@ -1709,52 +1781,57 @@ def detalhe_medicamento_busca(med_id):
 @bp.route("/buscar_medicamentos")
 def buscar_medicamentos():
     q = (request.args.get("q") or "").strip()
-    limit = request.args.get("limit", 15, type=int) or 15
-    limit = min(max(limit, 1), 20)
+    limit = request.args.get("limit", 25, type=int) or 25
+    limit = min(max(limit, 1), 35)
 
     if len(q) < 2:
         return jsonify([])
 
     q_lower = q.lower()
     if q_lower.isascii():
-        q_norm = q_lower
+        q_raw_norm = q_lower
     else:
-        q_norm = unicodedata.normalize("NFKD", q_lower)
-        q_norm = "".join([c for c in q_norm if not unicodedata.combining(c)])
+        q_raw_norm = unicodedata.normalize("NFKD", q_lower)
+        q_raw_norm = "".join([c for c in q_raw_norm if not unicodedata.combining(c)])
 
-    def _norm_busca(valor):
-        texto = str(valor or "").lower()
-        if not texto.isascii():
-            texto = unicodedata.normalize("NFKD", texto)
-            texto = "".join([c for c in texto if not unicodedata.combining(c)])
-        if "neo" in texto:
-            texto = _RE_NORM_NEOMICINA.sub("neomicina", texto)
-        return texto
+    q_corrigido = _normalizar_termo_farmaceutico(q_raw_norm)
+    q_norm = q_raw_norm
 
-    q_norm = _norm_busca(q_norm)
-    tokens_busca = [
+    termos_busca = [q_norm]
+    if q_corrigido != q_norm:
+        termos_busca.append(q_corrigido)
+
+    tokens_raw = [
         token
         for token in _RE_TOKENS_BUSCA.findall(q_norm)
         if token not in {"com", "para", "por", "uso", "mg", "ml"}
     ]
+    tokens_corrigidos = [
+        token
+        for token in _RE_TOKENS_BUSCA.findall(q_corrigido)
+        if token not in {"com", "para", "por", "uso", "mg", "ml"}
+    ]
+    tokens_busca = list(dict.fromkeys(tokens_raw + tokens_corrigidos))
 
     from services.species_ranking import (
         resolver_species_scope_do_animal,
         ordenar_por_species_scope,
     )
-    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
-    cache_key = (q_norm, tuple(tokens_busca), scope_alvo or "", limit)
+    scope_alvo = resolver_species_scope_do_animal(request.args.get("animal_id"))
+    cache_key = (q_norm, q_corrigido, tuple(tokens_busca), scope_alvo or "", limit)
     cached = _get_medication_search_cache(cache_key)
     if cached is not None:
         return jsonify(cached)
 
-    # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
-    like = f"%{q}%"
-    filtros_busca = [
-        Medicamento.nome.ilike(like),
-        Medicamento.principio_ativo.ilike(like),
-        cast(Medicamento.conteudo_estruturado, Text).ilike(like),
-    ]
+    # Filtros amplos no banco de dados
+    filtros_busca = []
+    for termo in termos_busca:
+        like = f"%{termo}%"
+        filtros_busca.extend([
+            Medicamento.nome.ilike(like),
+            Medicamento.principio_ativo.ilike(like),
+            cast(Medicamento.conteudo_estruturado, Text).ilike(like),
+        ])
     for token in tokens_busca:
         token_like = f"%{token}%"
         filtros_busca.extend([
@@ -1762,6 +1839,21 @@ def buscar_medicamentos():
             Medicamento.principio_ativo.ilike(token_like),
             cast(Medicamento.conteudo_estruturado, Text).ilike(token_like),
         ])
+
+    # Se a base for PostgreSQL, ativar busca por similaridade trigram (pg_trgm)
+    try:
+        bind = db.session.get_bind() if hasattr(db.session, "get_bind") else db.session.bind
+        is_pg = bool(bind and bind.dialect.name == "postgresql")
+    except Exception:
+        is_pg = False
+
+    if is_pg:
+        for termo in termos_busca:
+            if len(termo) >= 3:
+                filtros_busca.extend([
+                    func.word_similarity(termo, func.lower(Medicamento.nome)) > 0.45,
+                    func.word_similarity(termo, func.lower(func.coalesce(Medicamento.principio_ativo, ""))) > 0.45,
+                ])
 
     resultados = (
         Medicamento.query
@@ -1789,7 +1881,7 @@ def buscar_medicamentos():
         )
         .filter(or_(*filtros_busca))
         .order_by(Medicamento.nome)
-        .limit(120)
+        .limit(140)
         .all()
     )
 
@@ -1800,99 +1892,168 @@ def buscar_medicamentos():
         for m in resultados
         if m.principio_ativo and m.doses
     }
-    filtrados = []
+    filtrados_base = []
     for m in resultados:
         if not m.principio_ativo and not m.doses and principios_com_doses:
             if any(pa in m.nome.lower() for pa in principios_com_doses):
                 continue
-        filtrados.append(m)
-
-    def _produto_vetsmart_match_info(m):
-        conteudo = getattr(m, "conteudo_estruturado", None) or {}
-        produtos = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
-        if not isinstance(produtos, list):
-            return None
-        for prod in produtos:
-            if not isinstance(prod, dict):
-                continue
-            if any(q_norm in _norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo")):
-                return prod
-            produto_haystack = " ".join(_norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo"))
-            if tokens_busca and all(token in produto_haystack for token in tokens_busca):
-                return prod
-        return None
-
-    def _busca_casa_no_nome_canonico(m):
-        """Evita substituir um nome cadastrado por um alias comercial arbitrario.
-
-        Produtos VetSmart continuam aparecendo quando a busca e especifica da
-        marca/fabricante. Quando o texto ja encontra o nome canonico ou o
-        principio ativo, o cadastro e a fonte principal exibida ao usuario.
-        """
-        campos = (m.nome, m.principio_ativo)
-        campos_norm = [_norm_busca(valor) for valor in campos if valor]
-        if any(q_norm in valor for valor in campos_norm):
-            return True
-        return bool(
-            tokens_busca
-            and any(all(token in valor for token in tokens_busca) for valor in campos_norm)
-        )
-
-    def _haystack_medicamento(m):
-        partes = [
-            m.nome,
-            m.principio_ativo,
-            m.classificacao,
-            m.via_administracao,
-            m.dosagem_recomendada,
-            m.frequencia,
-            m.duracao_tratamento,
-        ]
-        conteudo = getattr(m, "conteudo_estruturado", None) or {}
-        if isinstance(conteudo, dict):
-            produtos = conteudo.get("produtos_vetsmart")
-            if isinstance(produtos, list):
-                for prod in produtos:
-                    if isinstance(prod, dict):
-                        partes.extend([prod.get("nome"), prod.get("fabricante"), prod.get("principio_ativo")])
-        else:
-            partes.append(conteudo)
-        return " ".join(_norm_busca(parte) for parte in partes if parte)
-
-    def _score(m):
-        # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
-        # (3) princípio ativo coincide exatamente, (4) tem dados básicos preenchidos
-        tem_doses = 1 if m.doses else 0
-        nome_norm = _norm_busca(m.nome)
-        pa_norm = _norm_busca(m.principio_ativo)
-        prefixo = 1 if nome_norm.startswith(q_norm) else 0
-        pa_exato = 1 if pa_norm == q_norm else 0
-        produto_match = _produto_vetsmart_match_info(m)
-        produto_match_score = 1 if produto_match else 0
-        haystack = _haystack_medicamento(m)
-        todos_tokens = 1 if tokens_busca and all(token in haystack for token in tokens_busca) else 0
-        qtd_tokens = sum(1 for token in tokens_busca if token in haystack)
-        tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
-        return (todos_tokens, produto_match_score, qtd_tokens, tem_doses, prefixo, pa_exato, tem_dados)
-
-    filtrados.sort(key=_score, reverse=True)
-
-    # Re-ranqueamento opcional pela espécie do animal sob consulta. Não filtra
-    # nada — apenas eleva itens compatíveis.
-    if scope_alvo:
-        filtrados = ordenar_por_species_scope(filtrados, scope_alvo)
+        filtrados_base.append(m)
 
     from services.bulario import serializar_medicamento_autocomplete
-    saida = []
-    for med in filtrados[:limit]:
-        item = serializar_medicamento_autocomplete(med)
-        produto_match = _produto_vetsmart_match_info(med)
-        if produto_match and not _busca_casa_no_nome_canonico(med):
-            item["produto_match_nome"] = produto_match.get("nome")
-            item["produto_match_fabricante"] = produto_match.get("fabricante")
-            item["produto_match_vetsmart_id"] = produto_match.get("vetsmart_produto_id")
-            item["nome_exibicao_busca"] = produto_match.get("nome") or item.get("nome")
-        saida.append(item)
+
+    # Desempacotar tanto os registros canônicos quanto os produtos comerciais do VetSmart
+    candidatos = []
+    nomes_vistos = set()
+
+    for m in filtrados_base:
+        m_nome_norm = _normalizar_termo_farmaceutico(m.nome)
+        m_pa_norm = _normalizar_termo_farmaceutico(m.principio_ativo or "")
+
+        match_canonico = (
+            any(t in m_nome_norm for t in termos_busca)
+            or any(t in m_pa_norm for t in termos_busca)
+            or bool(tokens_busca and all(t in f"{m_nome_norm} {m_pa_norm}" for t in tokens_busca))
+        )
+
+        # 1. Registro canônico / princípio ativo
+        if match_canonico or not m.conteudo_estruturado:
+            canonico_item = serializar_medicamento_autocomplete(
+                m,
+                tipo_item="principio_ativo",
+            )
+            key = (m.id, canonico_item["nome_exibicao_busca"].strip().lower())
+            if key not in nomes_vistos:
+                nomes_vistos.add(key)
+                candidatos.append((canonico_item, "canonico", match_canonico))
+
+        # 2. Produtos comerciais estruturados do VetSmart
+        conteudo = getattr(m, "conteudo_estruturado", None) or {}
+        produtos_vetsmart = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
+        if isinstance(produtos_vetsmart, list):
+            for prod in produtos_vetsmart:
+                if not isinstance(prod, dict):
+                    continue
+                prod_nome = (prod.get("nome") or "").strip()
+                if not prod_nome:
+                    continue
+
+                prod_fab = (prod.get("fabricante") or "").strip() or None
+                prod_class = (prod.get("classificacao") or "").strip() or m.classificacao
+                prod_pa = (prod.get("principio_ativo") or "").strip() or m.principio_ativo or m.nome
+                prod_esp = prod.get("especies") or m.species_scope
+
+                p_nome_norm = _normalizar_termo_farmaceutico(prod_nome)
+                p_fab_norm = _normalizar_termo_farmaceutico(prod_fab or "")
+                p_pa_norm = _normalizar_termo_farmaceutico(prod_pa or "")
+
+                # Se for exatamente o mesmo nome do medicamento e sem fabricante específico, evita duplicar o canônico
+                if p_nome_norm == m_nome_norm and not prod_fab:
+                    continue
+
+                prod_direto_match = (
+                    any(t in p_nome_norm for t in termos_busca)
+                    or (prod_fab and any(t in p_fab_norm for t in termos_busca))
+                    or bool(tokens_busca and any(t in f"{p_nome_norm} {p_fab_norm}" for t in tokens_busca))
+                )
+
+                if match_canonico or prod_direto_match:
+                    prod_apresentacoes = prod.get("apresentacoes") or []
+                    prod_doses = prod.get("doses") or []
+                    prod_item = {
+                        "id": m.id,
+                        "nome": m.nome,
+                        "nome_exibicao_busca": prod_nome,
+                        "nome_comercial_filtro": prod_nome,
+                        "tipo_item": "comercial",
+                        "produto_match_nome": prod_nome,
+                        "produto_match_fabricante": prod_fab,
+                        "produto_match_vetsmart_id": prod.get("vetsmart_produto_id"),
+                        "classificacao": prod_class,
+                        "principio_ativo": prod_pa,
+                        "fabricante": prod_fab,
+                        "especies": prod_esp,
+                        "via_administracao": prod.get("via_administracao") or m.via_administracao,
+                        "dosagem_recomendada": prod.get("dosagem_recomendada") or m.dosagem_recomendada,
+                        "frequencia": prod.get("frequencia") or m.frequencia,
+                        "duracao_tratamento": prod.get("duracao_tratamento") or m.duracao_tratamento,
+                        "tem_doses": bool(prod_doses or m.doses),
+                        "tem_apresentacoes": bool(prod_apresentacoes or m.apresentacoes),
+                        "apresentacoes_count": len(prod_apresentacoes) if prod_apresentacoes else len(m.apresentacoes or []),
+                    }
+                    key = (m.id, prod_nome.lower())
+                    if key not in nomes_vistos:
+                        nomes_vistos.add(key)
+                        candidatos.append((prod_item, "comercial", prod_direto_match))
+
+    def _score_candidato(entry):
+        item, origem, direto_match = entry
+        nome_visivel = _normalizar_termo_farmaceutico(item.get("nome_exibicao_busca") or item.get("nome") or "")
+        pa_item = _normalizar_termo_farmaceutico(item.get("principio_ativo") or "")
+        fab_item = _normalizar_termo_farmaceutico(item.get("fabricante") or item.get("produto_match_fabricante") or "")
+        is_comercial = (origem == "comercial")
+
+        score = 0
+
+        # Match no nome visível
+        if any(nome_visivel == t for t in termos_busca):
+            score += 1200
+        elif any(nome_visivel.startswith(t) for t in termos_busca):
+            score += 700
+        elif any(t in nome_visivel for t in termos_busca):
+            score += 350
+
+        # Match no princípio ativo
+        if any(pa_item == t for t in termos_busca):
+            score += 500
+        elif any(pa_item.startswith(t) for t in termos_busca):
+            score += 300
+        elif any(t in pa_item for t in termos_busca):
+            score += 150
+
+        # Match em tokens
+        if tokens_busca:
+            tokens_em_nome = sum(1 for t in tokens_busca if t in nome_visivel)
+            tokens_em_pa = sum(1 for t in tokens_busca if t in pa_item)
+            score += (tokens_em_nome * 100) + (tokens_em_pa * 40)
+            if all(t in nome_visivel for t in tokens_busca):
+                score += 250
+
+        # Match em fabricante
+        if fab_item and any(t in fab_item for t in termos_busca):
+            score += 400
+
+        # Quando a busca é pelo princípio ativo (ex: 'amoxicilina' ou 'sulfadiazina'):
+        # O registro canônico cadastrado tem prioridade (+200) sobre os produtos comerciais derivados,
+        # para que o usuário veja o princípio ativo base no topo e logo abaixo as marcas comerciais.
+        if not is_comercial and any(nome_visivel.startswith(t) or pa_item.startswith(t) for t in termos_busca):
+            score += 200
+        elif not is_comercial and any(t in nome_visivel or t in pa_item for t in termos_busca):
+            score += 100
+
+        # Se for produto comercial e teve match específico no nome do produto ou laboratório
+        if is_comercial and any(t in nome_visivel or (fab_item and t in fab_item) for t in termos_busca):
+            # Se o match no produto comercial é de algo que NÃO está no nome canônico (ex: marca específica)
+            m_nome_base = _normalizar_termo_farmaceutico(item.get("nome") or "")
+            if any(t in nome_visivel and t not in m_nome_base for t in termos_busca) or (fab_item and any(t in fab_item for t in termos_busca)):
+                score += 300
+
+        # Doses estruturadas e apresentações
+        if item.get("tem_doses"):
+            score += 30
+        if item.get("tem_apresentacoes"):
+            score += 20
+
+        # Compatibilidade com espécie do animal sob consulta
+        if scope_alvo:
+            esp = str(item.get("especies") or "").lower()
+            if scope_alvo in esp or (scope_alvo == "caes" and "cão" in esp) or (scope_alvo == "gatos" and "gato" in esp):
+                score += 60
+
+        return score
+
+    candidatos.sort(key=_score_candidato, reverse=True)
+
+    saida = [item for (item, origem, direto_match) in candidatos[:limit]]
     return jsonify(_set_medication_search_cache(cache_key, saida))
 
 

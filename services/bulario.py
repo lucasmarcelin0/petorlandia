@@ -1263,6 +1263,9 @@ def serializar_medicamento_autocomplete(
     medicamento,
     nome_exibicao: Optional[str] = None,
     nome_comercial_filtro: Optional[str] = None,
+    tipo_item: Optional[str] = None,
+    fabricante: Optional[str] = None,
+    especies: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Payload pequeno para autocomplete.
 
@@ -1276,12 +1279,15 @@ def serializar_medicamento_autocomplete(
         "nome": medicamento.nome,
         "nome_exibicao_busca": nome_exibicao or medicamento.nome,
         "nome_comercial_filtro": nome_comercial_filtro,
+        "tipo_item": tipo_item or "principio_ativo",
         "classificacao": getattr(medicamento, "classificacao", None),
         "principio_ativo": getattr(medicamento, "principio_ativo", None),
         "via_administracao": getattr(medicamento, "via_administracao", None),
         "dosagem_recomendada": getattr(medicamento, "dosagem_recomendada", None),
         "frequencia": getattr(medicamento, "frequencia", None),
         "duracao_tratamento": getattr(medicamento, "duracao_tratamento", None),
+        "fabricante": fabricante,
+        "especies": especies if especies is not None else getattr(medicamento, "species_scope", None),
         "tem_doses": bool(doses),
         "tem_apresentacoes": bool(apresentacoes),
         "apresentacoes_count": len(apresentacoes),
