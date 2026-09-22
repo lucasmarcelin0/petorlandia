@@ -1,0 +1,53 @@
+{% extends 'sfa/pilot_base.html' %}
+{% block title %}Piloto {{ kind|upper }} · SFA{% endblock %}
+{% block content %}
+<h1>Teste do formulário {{ kind|upper }}</h1>
+<p>Responda como faria normalmente e conte a Lucas o que poderia melhorar. <strong>Todas as respostas são opcionais.</strong> Você não está sendo inscrito na pesquisa municipal.</p>
+<nav><a href="{{ url_for('sfa_routes.piloto_convite', token=pilot.token) }}">Instruções e outras etapas</a></nav>
+{% if error %}<p class="error" role="alert">{{ error }} Suas respostas foram mantidas abaixo.</p>{% endif %}
+<form method="post" id="pilot-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<section><h2>{{ pilot.label }}</h2><p>Este link já identifica seu piloto. Não informe CPF, nome completo ou número de prontuário.</p>
+<p><strong>D0 = início dos sintomas; T0 = primeira entrevista.</strong> T7 é D0 + 7 dias; T30 é D0 + 30 dias. Ao enviar as respostas, a entrevista será registrada na data de hoje, {{ hoje.strftime('%d/%m/%Y') }}, separadamente do início da doença.</p>
+<p>Primeira entrevista: {{ calendar.first_interview.strftime('%d/%m/%Y') if calendar.first_interview else 'ainda não realizada' }}. {% if calendar.illness_days_t0 is not none %}T0 ocorreu {{ calendar.illness_days_t0 }} dias após o início dos sintomas.{% endif %}</p>
+<p id="pilot-calendar" role="status">Início dos sintomas: {{ calendar.onset.strftime('%d/%m/%Y') if calendar.onset else 'não informado' }}. T7: {{ calendar.stages[1].target.strftime('%d/%m/%Y') if calendar.stages[1].target else 'a definir' }}. T30: {{ calendar.stages[2].target.strftime('%d/%m/%Y') if calendar.stages[2].target else 'a definir' }}.</p>
+{% if kind=='t30' and calendar.first_interview %}<p class="help">Última entrevista deste piloto: {{ (calendar.stages[1].response.interview_date if calendar.stages[1].response else calendar.first_interview).strftime('%d/%m/%Y') }}. Use essa data para as perguntas “desde o último contato”.</p>{% endif %}
+{% if stage.blocked %}<p class="error" role="note">{{ stage.blocked }} Não invente respostas sobre dias futuros.</p>{% endif %}
+</section>
+{% for section in schema.sections %}
+<section class="section"><h2>{{ section.title }}</h2>{% if section.description %}<p class="help">{{ section.description }}</p>{% endif %}
+{% for field in section.fields %}
+<div class="question field" {% if field.visible_if %}data-visible-if='{{ field.visible_if|tojson }}'{% endif %}>
+{% set name='answer__' ~ field.key %}
+{% if field.type in ('radio','checkboxes') %}
+<fieldset><legend>{{ field.label }}</legend><div class="choices">
+{% for option in field.options %}<label class="choice"><input type="{{ 'checkbox' if field.type=='checkboxes' else 'radio' }}" name="{{ name }}" value="{{ option }}" {% if submitted.getlist is defined and option in submitted.getlist(name) %}checked{% endif %}><span>{{ option }}</span></label>{% endfor %}
+</div></fieldset>
+{% else %}
+<label for="{{ name }}">{{ field.label }}</label>
+{% if field.type=='textarea' %}<textarea id="{{ name }}" name="{{ name }}" maxlength="3000">{{ submitted.get(name,'') }}</textarea>
+{% elif field.type=='select' %}<select id="{{ name }}" name="{{ name }}"><option value="">Selecione</option>{% for option in field.options %}<option {% if submitted.get(name)==option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+{% else %}<input id="{{ name }}" name="{{ name }}" type="{{ field.type }}" value="{{ submitted.get(name,'') }}" {% if field.min is defined %}min="{{ field.min }}"{% endif %} {% if field.max is defined %}max="{{ field.max }}"{% endif %} {% if field.step is defined %}step="{{ field.step }}"{% endif %} {% if field.type=='text' %}maxlength="3000"{% endif %}>
+{% endif %}{% endif %}
+{% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+</div>{% endfor %}
+{% if section.workplaces %}
+<p class="help">Inclua trabalho/estudo em casa ou sem local fixo. Se não trabalha nem estuda, pode deixar a lista vazia. Endereço ou ponto de referência basta; não precisa informar nomes de outras pessoas. Dias por semana e horas por dia são detalhes opcionais em teste.</p>
+<div id="workplaces">
+{% set count=submitted.getlist('work_name')|length if submitted.getlist is defined else 0 %}
+{% for index in range([count,1]|max) %}<div class="workplace"><h3>Local <span class="work-index">{{ loop.index }}</span></h3><div class="grid">
+{% for key,label in [('activity','Atividade'),('name','Estabelecimento ou instituição'),('city','Município e estado'),('neighborhood','Bairro'),('address','Endereço ou ponto de referência'),('days','Dias por semana (opcional)'),('hours','Horas por dia (opcional)')] %}
+{% set value=submitted.getlist('work_'~key)[index] if count>index else '' %}
+<label>{{ label }}{% if key=='activity' %}<select name="work_activity"><option value="">Selecione</option>{% for option in ['Trabalho','Estudo','Trabalho e estudo'] %}<option {% if value==option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>{% else %}<input name="work_{{ key }}" value="{{ value }}" {% if key in ['days','hours'] %}type="number" min="0" max="{{ 7 if key=='days' else 24 }}" step="0.5"{% else %}type="text" maxlength="500"{% endif %}>{% endif %}</label>
+{% endfor %}</div><button type="button" class="secondary remove-work">Retirar este local</button></div>{% endfor %}</div>
+<button type="button" class="secondary" id="add-work">Adicionar outro local</button><p class="help">Até 20 locais; para uma rotina itinerante, descreva as áreas no ponto de referência.</p>
+{% endif %}
+</section>{% endfor %}
+<section><h2>Como foi responder?</h2><label for="pilot_minutes">Quanto tempo levou, em minutos?</label><input id="pilot_minutes" name="pilot_minutes" type="number" min="0" max="1440" step="0.5" value="{{ submitted.get('pilot_minutes','') }}">
+{% for key,label in [('confusing','Qual pergunta ficou confusa?'),('missing','Faltou alguma opção de resposta ou pergunta?'),('suggestion','Que mudança você sugere?')] %}<div class="question"><label for="pilot_{{ key }}">{{ label }}</label><textarea id="pilot_{{ key }}" name="pilot_{{ key }}" maxlength="3000">{{ submitted.get('pilot_'~key,'') }}</textarea></div>{% endfor %}
+<p class="help">As respostas ficam vinculadas somente a este piloto, acessível à equipe autorizada, fora da coorte municipal. “Enviar somente sugestões” não guarda respostas de saúde e não registra uma entrevista.</p>
+<button type="submit" name="action" value="answer" {% if stage.blocked %}disabled{% endif %}>Enviar respostas do {{ kind|upper }} e sugestões</button>
+<button type="submit" name="action" value="feedback" class="secondary" formnovalidate>Enviar somente sugestões</button></section>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}"></script><script src="{{ url_for('static', filename='js/sfa_pilot.js') }}"></script>{% endblock %}

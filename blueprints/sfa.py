@@ -210,6 +210,9 @@ def dashboard():
         year, month = mes_valido
         mes_label = f"{month:02d}/{year}"
 
+    from models.sfa import SfaPilotParticipant
+    from services.sfa_pilot import pilot_calendar
+    pilotos = [(p, pilot_calendar(p)) for p in SfaPilotParticipant.query.order_by(SfaPilotParticipant.id.desc()).all()]
     stats = stats_painel(mes_inicio_sintomas=mes_selecionado)
     diagnostico = diagnostico_configuracao()
     resumo_testes = resumo_dados_teste_sfa()
@@ -237,6 +240,7 @@ def dashboard():
 
     return render_template(
         "sfa/dashboard.html",
+        pilotos=pilotos,
         stats=stats,
         diagnostico=diagnostico,
         resumo_testes=resumo_testes,
@@ -2662,3 +2666,6 @@ def webhook_t10_legacy():
 @require_sfa_internal_access
 def t10_config_legacy():
     return redirect(url_for('sfa_routes.historico_instrumentos', versao='collective-v2', etapa='t10'))
+
+from blueprints.sfa_pilot import register as _register_pilot_routes
+_register_pilot_routes(bp, require_sfa_internal_access, _review_schema_loader)

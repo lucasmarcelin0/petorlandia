@@ -9,6 +9,30 @@ from sqlalchemy import Text, UniqueConstraint
 from time_utils import utcnow
 
 
+class SfaPilotParticipant(db.Model):
+    """Participante de ensaio, sem vínculo com a coorte municipal/SINAN."""
+    __tablename__ = 'sfa_pilot_participant'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(120), nullable=False)
+    token = db.Column(db.String(64), nullable=False, unique=True)
+    creation_key = db.Column(db.String(64), nullable=False, unique=True)
+    reported_onset = db.Column(db.Date)
+    context_json = db.Column(db.Text, nullable=False, default='{}')
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    responses = db.relationship('SfaPilotResponse', backref='participant', order_by='SfaPilotResponse.created_at')
+
+
+class SfaPilotResponse(db.Model):
+    __tablename__ = 'sfa_pilot_response'
+    __table_args__ = (UniqueConstraint('pilot_id', 'stage', name='uq_sfa_pilot_response_stage'),)
+    id = db.Column(db.Integer, primary_key=True)
+    pilot_id = db.Column(db.Integer, db.ForeignKey('sfa_pilot_participant.id'), nullable=False, index=True)
+    stage = db.Column(db.String(10), nullable=False)
+    interview_date = db.Column(db.Date, nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------

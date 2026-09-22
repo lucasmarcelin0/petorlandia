@@ -1,0 +1,9 @@
+{% extends 'sfa/base.html' %}{% block page_title %}Pilotos de usabilidade{% endblock %}{% block content %}
+{% include 'sfa/_pilot_dashboard.html' %}
+<div class="card"><div class="card-body"><h4>Cadastrar participante piloto</h4><p>Use apenas um rótulo neutro e informações autorizadas. Este cadastro não cria ficha SINAN, resposta T0 ou inscrição na coorte municipal.</p>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="creation_key" value="{{ creation_key }}">
+<div class="mb-3"><label class="form-label" for="pilot-label">Rótulo neutro</label><input class="form-control" name="label" id="pilot-label" value="Piloto de usabilidade" maxlength="120" required></div>
+<div class="mb-3"><label class="form-label" for="pilot-onset">Início dos sintomas, se conhecido</label><input class="form-control" name="onset" id="pilot-onset" type="date"></div>
+{% for test in ['ns1','pcr'] %}<div class="mb-3"><label class="form-label" for="pilot-{{ test }}">Resultado {{ test|upper }} informado</label><select class="form-select" id="pilot-{{ test }}" name="pilot_{{ test }}_resultado"><option value="">Não informado</option>{% for value in ['Não realizado','Positivo','Negativo','Inconclusivo','Aguardando resultado','Não sei'] %}<option>{{ value }}</option>{% endfor %}</select></div>{% endfor %}
+<fieldset class="mb-3"><legend class="fs-6">Sintomas relatados, se informados</legend>{% for symptom in ['Febre','Dor de cabeça','Dor atrás dos olhos','Dores musculares','Dores articulares','Cansaço','Manchas na pele','Coceira','Náusea ou vômitos','Outros'] %}<label class="me-3"><input type="checkbox" name="pilot_sintomas" value="{{ symptom }}"> {{ symptom }}</label>{% endfor %}</fieldset>
+<button class="btn btn-primary">Criar piloto e obter links</button></form></div></div>{% endblock %}

@@ -1,0 +1,5 @@
+<section class="card shadow-sm mb-3" aria-label="Pilotos de usabilidade">
+<div class="card-body"><div class="d-flex flex-wrap justify-content-between gap-2"><h4>Pilotos de usabilidade</h4><a href="{{ url_for('sfa_routes.pilotos') }}" class="btn btn-outline-primary btn-sm">Gerenciar pilotos</a></div>
+<p class="text-muted">Área de teste com participantes reais, separada da coorte municipal. Estes registros não entram nos indicadores acima ou abaixo.</p>
+{% for pilot, calendar in pilotos %}<div class="border-top py-2"><a href="{{ url_for('sfa_routes.piloto_detail', pilot_id=pilot.id) }}"><strong>{{ pilot.label }}</strong></a><span class="badge bg-secondary ms-2">PILOTO</span><div class="small">T0: {{ calendar.first_interview.strftime('%d/%m/%Y') if calendar.first_interview else 'entrevista não realizada' }} · T7: {{ calendar.stages[1].target.strftime('%d/%m/%Y') if calendar.stages[1].target else 'a definir' }} · T30: {{ calendar.stages[2].target.strftime('%d/%m/%Y') if calendar.stages[2].target else 'a definir' }}</div></div>{% else %}<p class="mb-0">Nenhum participante piloto cadastrado.</p>{% endfor %}
+</div></section>

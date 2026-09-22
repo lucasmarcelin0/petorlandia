@@ -1,0 +1,4 @@
+{% extends 'sfa/pilot_base.html' %}{% block content %}
+<h1>{% if feedback_only %}Sugestões recebidas{% elif already %}Este {{ kind|upper }} já foi recebido{% else %}Respostas do {{ kind|upper }} recebidas{% endif %}</h1>
+<p>{% if feedback_only %}As sugestões foram vinculadas ao seu piloto. Nenhuma entrevista ou resposta de saúde foi registrada neste envio.{% else %}As respostas ficaram vinculadas somente ao seu piloto. Elas não entram nos registros nem nas análises da coorte municipal.{% endif %}</p>
+<p>Você pode avisar Lucas de que concluiu. Não há envio automático de mensagens.</p><a class="button" href="{{ url_for('sfa_routes.piloto_convite', token=pilot.token) }}">Voltar às instruções e etapas</a>{% endblock %}
