@@ -23,11 +23,17 @@ def test_consulta_save_controls_stay_associated_with_form():
     consulta_template = read_template("templates/partials/consulta_form.html")
     panel_template = read_template("templates/partials/clinical_suggestions_panel.html")
 
+    form_start = consulta_template.index('<form id="consulta-form"')
+    form_end = consulta_template.index("</form>", form_start)
     panel_include = consulta_template.index("{% include 'partials/clinical_suggestions_panel.html' %}")
-    history_start = consulta_template.index("{% if consulta %}")
-    save_section = consulta_template[panel_include:history_start]
+    retorno_start = consulta_template.index('<div id="retorno-container">')
+    save_button_match = re.search(r'<button[^>]+type="submit"[^>]+form="consulta-form"', consulta_template)
 
-    assert re.search(r'<button[^>]+type="submit"[^>]+form="consulta-form"', save_section)
+    assert save_button_match is not None
+    save_button_pos = save_button_match.start()
+
+    # Apoio clínico deve aparecer posicionado entre Salvar Consulta e Retorno
+    assert form_end < save_button_pos < panel_include < retorno_start
     assert re.search(r'<input[^>]+id="suspeita-clinica"[^>]+form="consulta-form"', consulta_template)
     assert re.search(r'<input[^>]+id="suspeita-clinica"[^>]+form="consulta-form"', panel_template)
 

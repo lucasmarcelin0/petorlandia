@@ -94,8 +94,6 @@
 
 </form>
 
-{% include 'partials/clinical_suggestions_panel.html' %}
-
   <div class="d-flex justify-content-between mt-4">
     <button type="submit" class="btn btn-primary" form="consulta-form">
       {% if edit_mode %}
@@ -121,6 +119,8 @@
   {% endif %}
 </div>
 {% endif %}
+
+{% include 'partials/clinical_suggestions_panel.html' %}
 
 <div id="retorno-container">
   {% if consulta.appointment %}
