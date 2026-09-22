@@ -566,6 +566,112 @@ def aplicar_sugestao_clinica(consulta_id):
     return jsonify({'success': True, **response_payload})
 
 
+@bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/aplicar_lote', methods=['POST'])
+@login_required
+def aplicar_lote_sugestao_clinica(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem aplicar sugestões clínicas.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        protocol_id = int(payload.get('protocol_id')) if payload.get('protocol_id') is not None else None
+    except (TypeError, ValueError):
+        protocol_id = None
+
+    if not protocol_id:
+        return jsonify({'success': False, 'message': 'Informe o protocolo clínico a ser aplicado.'}), 400
+
+    protocol = (
+        ProtocoloClinico.query
+        .options(
+            selectinload(ProtocoloClinico.exames_sugeridos),
+            selectinload(ProtocoloClinico.medicamentos_sugeridos),
+            selectinload(ProtocoloClinico.retornos_sugeridos),
+        )
+        .get_or_404(protocol_id)
+    )
+    if protocol.clinica_id and protocol.clinica_id != consulta.clinica_id:
+        return jsonify({'success': False, 'message': 'Protocolo clínico indisponível para esta clínica.'}), 403
+
+    include_conduta = payload.get('include_conduta', True)
+    include_exames = payload.get('include_exames', True)
+    include_meds = payload.get('include_medicamentos', True)
+    include_retorno = payload.get('include_retorno', True)
+
+    from services.clinical_plan import build_clinical_plan
+    plan = build_clinical_plan(consulta, protocol, session=db.session)
+
+    # 1. Conduta
+    conduta_text = None
+    if include_conduta and protocol.conduta_sugerida:
+        consulta.conduta = _append_consulta_text(consulta.conduta, protocol.conduta_sugerida)
+        conduta_text = consulta.conduta
+
+    # 2. Exames
+    exames_html = None
+    if include_exames and protocol.exames_sugeridos:
+        bloco = BlocoExames(
+            animal_id=consulta.animal_id,
+            observacoes_gerais=f"Sugestões do protocolo {protocol.nome}.",
+        )
+        db.session.add(bloco)
+        db.session.flush()
+        for exame in protocol.exames_sugeridos:
+            db.session.add(
+                ExameSolicitado(
+                    bloco_id=bloco.id,
+                    nome=exame.nome,
+                    justificativa=exame.justificativa,
+                    status='pendente',
+                )
+            )
+        db.session.flush()
+        animal_atualizado = Animal.query.get(consulta.animal_id)
+        exames_html = render_template('partials/historico_exames.html', animal=animal_atualizado)
+
+    # 3. Medicamentos (drafts)
+    draft_prescriptions = []
+    if include_meds and protocol.medicamentos_sugeridos:
+        for med_plan in (plan.get('medications') or []):
+            draft = med_plan.get('draft_prescription')
+            if draft:
+                draft_prescriptions.append({
+                    'draft': draft,
+                    'instructions': plan.get('instructions') or protocol.orientacoes_tutor or '',
+                })
+
+    # 4. Retorno
+    prefill = None
+    if include_retorno and protocol.retornos_sugeridos:
+        primeiro_retorno = protocol.retornos_sugeridos[0]
+        prefill = build_followup_prefill(primeiro_retorno, reference_date=date.today())
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=protocol.id,
+        actor_user_id=current_user.id,
+        tipo_item='protocolo_completo',
+        acao='accepted',
+        titulo_item=protocol.nome,
+        justificativa=protocol.suspeita_principal,
+        payload={'protocol_id': protocol.id, 'lote': True},
+    )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Protocolo "{protocol.nome}" aplicado com sucesso!',
+        'conduta': conduta_text,
+        'exames_html': exames_html,
+        'draft_prescriptions': draft_prescriptions,
+        'draft_instructions': plan.get('instructions') or protocol.orientacoes_tutor or '',
+        'prefill': prefill,
+    })
+
+
+
 @bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos', methods=['POST'])
 @login_required
 def criar_protocolo_clinico_inline(consulta_id):
@@ -1823,67 +1929,83 @@ def buscar_medicamentos():
     if cached is not None:
         return jsonify(cached)
 
-    # Filtros amplos no banco de dados
-    filtros_busca = []
+    # 1. Fast Path indexado (0.2ms no PostgreSQL): busca direta por nome e princípio ativo
+    filtros_fast = []
     for termo in termos_busca:
         like = f"%{termo}%"
-        filtros_busca.extend([
+        filtros_fast.extend([
             Medicamento.nome.ilike(like),
             Medicamento.principio_ativo.ilike(like),
-            cast(Medicamento.conteudo_estruturado, Text).ilike(like),
         ])
     for token in tokens_busca:
         token_like = f"%{token}%"
-        filtros_busca.extend([
+        filtros_fast.extend([
             Medicamento.nome.ilike(token_like),
             Medicamento.principio_ativo.ilike(token_like),
-            cast(Medicamento.conteudo_estruturado, Text).ilike(token_like),
         ])
 
-    # Se a base for PostgreSQL, ativar busca por similaridade trigram (pg_trgm)
-    try:
-        bind = db.session.get_bind() if hasattr(db.session, "get_bind") else db.session.bind
-        is_pg = bool(bind and bind.dialect.name == "postgresql")
-    except Exception:
-        is_pg = False
-
-    if is_pg:
-        for termo in termos_busca:
-            if len(termo) >= 3:
-                filtros_busca.extend([
-                    func.word_similarity(termo, func.lower(Medicamento.nome)) > 0.45,
-                    func.word_similarity(termo, func.lower(func.coalesce(Medicamento.principio_ativo, ""))) > 0.45,
-                ])
+    med_options = (
+        load_only(
+            Medicamento.id,
+            Medicamento.nome,
+            Medicamento.principio_ativo,
+            Medicamento.classificacao,
+            Medicamento.via_administracao,
+            Medicamento.dosagem_recomendada,
+            Medicamento.frequencia,
+            Medicamento.duracao_tratamento,
+            Medicamento.conteudo_estruturado,
+            Medicamento.species_scope,
+        ),
+        selectinload(Medicamento.doses).load_only(
+            DoseMedicamento.id,
+            DoseMedicamento.medicamento_id,
+        ),
+        selectinload(Medicamento.apresentacoes).load_only(
+            ApresentacaoMedicamento.id,
+            ApresentacaoMedicamento.medicamento_id,
+        ),
+    )
 
     resultados = (
         Medicamento.query
-        .options(
-            load_only(
-                Medicamento.id,
-                Medicamento.nome,
-                Medicamento.principio_ativo,
-                Medicamento.classificacao,
-                Medicamento.via_administracao,
-                Medicamento.dosagem_recomendada,
-                Medicamento.frequencia,
-                Medicamento.duracao_tratamento,
-                Medicamento.conteudo_estruturado,
-                Medicamento.species_scope,
-            ),
-            selectinload(Medicamento.doses).load_only(
-                DoseMedicamento.id,
-                DoseMedicamento.medicamento_id,
-            ),
-            selectinload(Medicamento.apresentacoes).load_only(
-                ApresentacaoMedicamento.id,
-                ApresentacaoMedicamento.medicamento_id,
-            ),
-        )
-        .filter(or_(*filtros_busca))
+        .options(*med_options)
+        .filter(or_(*filtros_fast))
         .order_by(Medicamento.nome)
-        .limit(140)
+        .limit(60)
         .all()
     )
+
+    # 2. Se a busca rápida trouxer poucos resultados (< 15), executar busca complementar
+    # em marcas comerciais no conteudo_estruturado ou similaridade pg_trgm (%)
+    if len(resultados) < 15:
+        ids_vistos = {m.id for m in resultados}
+        filtros_extra = []
+        for termo in termos_busca:
+            filtros_extra.append(cast(Medicamento.conteudo_estruturado, Text).ilike(f"%{termo}%"))
+        for token in tokens_busca:
+            filtros_extra.append(cast(Medicamento.conteudo_estruturado, Text).ilike(f"%{token}%"))
+
+        try:
+            bind = db.session.get_bind() if hasattr(db.session, "get_bind") else db.session.bind
+            is_pg = bool(bind and bind.dialect.name == "postgresql")
+        except Exception:
+            is_pg = False
+
+        if is_pg and not resultados:
+            for termo in termos_busca:
+                if len(termo) >= 3:
+                    filtros_extra.extend([
+                        Medicamento.nome.op("%")(termo),
+                        Medicamento.principio_ativo.op("%")(termo),
+                    ])
+
+        if filtros_extra:
+            q_extra = Medicamento.query.options(*med_options).filter(or_(*filtros_extra))
+            if ids_vistos:
+                q_extra = q_extra.filter(Medicamento.id.notin_(ids_vistos))
+            extras = q_extra.order_by(Medicamento.nome).limit(40).all()
+            resultados.extend(extras)
 
     # Filtrar entradas "orphan": sem principio_ativo E sem doses, quando já existe
     # uma entrada canônica melhor no pool de resultados.
