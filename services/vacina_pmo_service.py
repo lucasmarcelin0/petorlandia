@@ -1870,10 +1870,21 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
     if pmo_animal.status != "vacinado":
         return
     _ensure_real_animal(pmo_animal)
+    if pmo_animal.animal is not None and not pmo_animal.animal_id:
+        # ``_ensure_real_animal`` acabou de criar o cadastro e so atribuiu o
+        # relacionamento: ate o flush o ``animal_id`` continua nulo e a dose
+        # desta visita saia daqui sem virar registro de vacina. Era esse
+        # silencio que deixava a carteirinha do dia sem data de reforco ate a
+        # proxima sincronizacao da planilha.
+        db.session.flush()
     if not pmo_animal.animal_id:
         return
 
-    applied_date = pmo_animal.visit.vaccine_date or date.today()
+    # A planilha nem sempre preenche a coluna de data; quando ela vem vazia o
+    # dia da campanha continua escrito no titulo da aba. Cair direto em
+    # ``date.today()`` gravava a dose no dia em que alguem abriu o painel, e
+    # nao no dia em que o animal foi vacinado.
+    applied_date = _pmo_visit_reference_date(pmo_animal.visit) or date.today()
     if pmo_animal.vaccine_id:
         vaccine = db.session.get(Vacina, pmo_animal.vaccine_id)
     else:
@@ -2382,6 +2393,17 @@ def _pmo_visit_reference_date(visit: PmoVaccinationVisit) -> date | None:
     except (TypeError, ValueError):
         pass
     return visit.requested_date
+
+
+def pmo_visit_reference_date(visit: PmoVaccinationVisit) -> date | None:
+    """Dia da visita, para quem le de fora do servico (carteirinha publica).
+
+    Mesma regra de ``_pmo_visit_reference_date``: a data da vacina quando a
+    planilha a preencheu, senao o dia escrito no titulo da aba e por fim o dia
+    do pedido. Exposta porque a carteirinha precisa contar o reforco a partir
+    exatamente do dia que ela mostra como aplicacao.
+    """
+    return _pmo_visit_reference_date(visit)
 
 
 def _pmo_dose_date(animal: PmoVaccinationAnimal, visit: PmoVaccinationVisit) -> date | None:
