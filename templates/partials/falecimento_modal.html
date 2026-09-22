@@ -1,4 +1,4 @@
-<div class="modal fade" id="falecimentoModal" tabindex="-1" aria-labelledby="falecimentoModalLabel" aria-hidden="true">
+<div class="modal fade" id="falecimentoModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="falecimentoModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content rounded-4">
       <div class="modal-header">
@@ -9,7 +9,9 @@
         <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="mb-3 js-animal-status js-confirm" data-message="Deseja marcar {{ animal.name }} como falecido agora?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="falecimento_em" value="">
-          <button class="btn btn-dark w-100" type="submit">✅ Falecido agora</button>
+          <button class="btn btn-dark w-100" type="submit" aria-label="Marcar {{ animal.name }} como falecido agora">
+            <i class="fa-solid fa-check me-1" aria-hidden="true"></i> Falecido agora
+          </button>
         </form>
         <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja marcar {{ animal.name }} como falecido?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -17,7 +19,9 @@
             <label for="falecimento_em_modal" class="form-label mb-1">Data e hora do falecimento:</label>
             <input type="datetime-local" name="falecimento_em" id="falecimento_em_modal" class="form-control form-control-sm">
           </div>
-          <button class="btn btn-dark w-100" type="submit">✅ Confirmar data</button>
+          <button class="btn btn-dark w-100" type="submit" aria-label="Confirmar data de falecimento de {{ animal.name }}">
+            <i class="fa-solid fa-calendar-check me-1" aria-hidden="true"></i> Confirmar data
+          </button>
         </form>
       </div>
     </div>
