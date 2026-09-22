@@ -10729,20 +10729,29 @@ def _clinical_suspicion_catalog(clinic_id: int | None = None) -> list[dict]:
             'is_clinic_custom': bool(proto.clinica_id),
         })
 
-    existing_terms = {c['suspeita'].lower() for c in catalog} | {c['nome'].lower() for c in catalog}
+    existing_terms = {
+        _strip_accents(c['suspeita']).lower() for c in catalog if c.get('suspeita')
+    } | {
+        _strip_accents(c['nome']).lower() for c in catalog if c.get('nome')
+    }
     for opt in _clinical_suspicion_options(clinic_id):
-        if opt.lower() not in existing_terms:
-            catalog.append({
-                'id': None,
-                'nome': opt,
-                'suspeita': opt,
-                'especie': None,
-                'gatilhos': '',
-                'medicamentos_count': 0,
-                'exames_count': 0,
-                'is_clinic_custom': False,
-            })
-            existing_terms.add(opt.lower())
+        norm_opt = _strip_accents(opt).lower().strip()
+        if not norm_opt or norm_opt in existing_terms:
+            continue
+        # Evitar duplicatas que sejam substrings ou variações de termos já existentes
+        if any(norm_opt in t or t in norm_opt for t in existing_terms):
+            continue
+        catalog.append({
+            'id': None,
+            'nome': opt,
+            'suspeita': opt,
+            'especie': None,
+            'gatilhos': '',
+            'medicamentos_count': 0,
+            'exames_count': 0,
+            'is_clinic_custom': False,
+        })
+        existing_terms.add(norm_opt)
 
     catalog.sort(key=lambda item: _strip_accents(item['nome'] or item['suspeita']).lower())
     return catalog
@@ -10994,9 +11003,9 @@ def _export_veterinarian_activity_csv(veterinario, activities, start_date, end_d
         writer.writerow([
             getattr(getattr(veterinario, 'user', None), 'name', ''),
             getattr(veterinario, 'crmv', ''),
-            start_date.isoformat(),
-            end_date.isoformat(),
-            item['timestamp'].strftime('%Y-%m-%d %H:%M') if item.get('timestamp') else '',
+            start_date.strftime('%d/%m/%Y'),
+            end_date.strftime('%d/%m/%Y'),
+            item['timestamp'].strftime('%d/%m/%Y %H:%M') if item.get('timestamp') else '',
             _veterinarian_activity_kind_label(item['kind']),
             item.get('status', ''),
             item.get('animal_name', ''),
@@ -11807,8 +11816,8 @@ from flask import request, jsonify
 
 
 _MEDICATION_SEARCH_CACHE = {}
-_MEDICATION_SEARCH_CACHE_TTL = 180
-_MEDICATION_SEARCH_CACHE_MAX = 256
+_MEDICATION_SEARCH_CACHE_TTL = 1800
+_MEDICATION_SEARCH_CACHE_MAX = 2048
 
 
 def _clear_medication_search_cache():
@@ -12269,7 +12278,7 @@ def _export_data_share_logs_csv(logs):
         access = getattr(log, 'access', None)
         writer.writerow([
             log.id,
-            log.occurred_at.isoformat() if log.occurred_at else '',
+            log.occurred_at.strftime('%d/%m/%Y %H:%M:%S') if log.occurred_at else '',
             log.event_type,
             log.resource_type,
             log.resource_id or '',
@@ -12299,7 +12308,7 @@ def _export_data_share_logs_pdf(logs):
     for log in logs:
         access = getattr(log, 'access', None)
         lines = [
-            f"{log.occurred_at:%Y-%m-%d %H:%M:%S} – {log.event_type} {log.resource_type} #{log.resource_id or '-'}",
+            f"{log.occurred_at:%d/%m/%Y %H:%M:%S} – {log.event_type} {log.resource_type} #{log.resource_id or '-'}",
             f"Tutor #{access.user_id if access else '-'} | Animal #{access.animal_id if access else '-'} | Clínica #{access.source_clinic_id if access else '-'}",
             f"Destinatário {access.granted_to_type.value if access and access.granted_to_type else '-'} #{access.granted_to_id if access else '-'} | Ator #{log.actor_id or '-'}",
             f"IP {log.request_ip or '-'} | {log.request_path or ''}",

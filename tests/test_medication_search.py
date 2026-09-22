@@ -205,3 +205,17 @@ def test_busca_medicamentos_tolerancia_erro_amoxilina_e_expansao_vetsmart(client
     assert data_marca[0]["nome_exibicao_busca"] == "Synulox"
     assert data_marca[0]["fabricante"] == "Zoetis"
 
+
+def test_frontend_configuracao_busca_instantanea():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "templates/partials/prescricao_form.html").read_text(encoding="utf-8")
+
+    assert "_medicationCatalogPool" in template
+    assert "_filtrarMedicamentosDoPool" in template
+    assert "_renderizarSugestoesPrescricao" in template
+    # Debounce ultrarrápido de 80ms
+    assert "}, 80);" in template
+    # Pré-carregamento no pool
+    assert "_armazenarNoPoolMedicamentos(lista)" in template
+
+
