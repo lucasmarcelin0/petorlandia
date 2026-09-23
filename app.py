@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import wraps
 from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
-from typing import Iterable, Optional, Set, Dict
+from typing import Iterable, Optional, Set, Dict, Any
+from dataclasses import dataclass
 
 # Tests and factory imports may load this module through either name. Keep both
 # aliases pointed at the same module so runtime monkeypatches and configuration
@@ -12573,31 +12574,35 @@ def _normalize_role_scope(scope_value, *, allow_full_scope):
     return normalized
 
 
-def _get_recent_animais(
-    scope,
-    page,
-    clinic_id=None,
-    user_id=None,
-    require_appointments=False,
-    veterinario_id=None,
-    search=None,
-    sort_option=None,
-):
+
+@dataclass
+class RecentRecordsQuery:
+    scope: str
+    page: int
+    clinic_id: Any = None
+    user_id: Optional[int] = None
+    require_appointments: bool = False
+    veterinario_id: Optional[int] = None
+    search: Optional[str] = None
+    sort_option: Optional[str] = None
+
+
+def _get_recent_animais(params: RecentRecordsQuery):
     """Return recent animals and pagination metadata for dashboards."""
 
     from models import Species, Breed
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    effective_user_id = user_id or (getattr(current_user, 'id', None))
-    clinic_ids = _normalize_clinic_ids(clinic_id)
+    effective_user_id = params.user_id or (getattr(current_user, 'id', None))
+    clinic_ids = _normalize_clinic_ids(params.clinic_id)
     can_view_clinic_scope = bool(
         clinic_ids
         and viewer
         and has_professional_access(viewer)
     )
     resolved_scope = _normalize_role_scope(
-        scope,
+        params.scope,
         allow_full_scope=is_admin or can_view_clinic_scope,
     )
 
@@ -12606,8 +12611,8 @@ def _get_recent_animais(
 
     base_query = Animal.query.filter(Animal.removido_em.is_(None))
 
-    search_value = (search or '').strip().lower()
-    sort_value = (sort_option or 'date_desc').strip().lower() or 'date_desc'
+    search_value = (params.search or '').strip().lower()
+    sort_value = (params.sort_option or 'date_desc').strip().lower() or 'date_desc'
     per_page = 9
 
     species_alias = aliased(Species)
@@ -12666,10 +12671,10 @@ def _get_recent_animais(
 
     if resolved_scope == 'mine' and effective_user_id:
         query = base_query
-        if clinic_ids and not require_appointments:
+        if clinic_ids and not params.require_appointments:
             query = query.filter(Animal.clinica_id.in_(clinic_ids))
 
-        if require_appointments and clinic_ids:
+        if params.require_appointments and clinic_ids:
             appointment_exists = (
                 db.session.query(Appointment.id)
                 .filter(
@@ -12677,9 +12682,9 @@ def _get_recent_animais(
                     Appointment.clinica_id.in_(clinic_ids),
                 )
             )
-            if veterinario_id:
+            if params.veterinario_id:
                 appointment_exists = appointment_exists.filter(
-                    Appointment.veterinario_id == veterinario_id
+                    Appointment.veterinario_id == params.veterinario_id
                 )
             query = query.filter(appointment_exists.exists())
 
@@ -12698,7 +12703,7 @@ def _get_recent_animais(
             )
         )
     elif clinic_ids:
-        if require_appointments:
+        if params.require_appointments:
             last_appt_query = (
                 db.session.query(
                     Appointment.animal_id,
@@ -12706,9 +12711,9 @@ def _get_recent_animais(
                 )
                 .filter(Appointment.clinica_id.in_(clinic_ids))
             )
-            if veterinario_id:
+            if params.veterinario_id:
                 last_appt_query = last_appt_query.filter(
-                    Appointment.veterinario_id == veterinario_id
+                    Appointment.veterinario_id == params.veterinario_id
                 )
             last_appt = last_appt_query.group_by(Appointment.animal_id).subquery()
             query = base_query.join(last_appt, Animal.id == last_appt.c.animal_id)
@@ -12740,42 +12745,33 @@ def _get_recent_animais(
         if last_reference is not None:
             last_reference = func.max(last_reference)
     query = apply_sorting(query, last_reference)
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.paginate(page=params.page, per_page=per_page, error_out=False)
 
     return pagination.items, pagination, resolved_scope
 
 
-def _get_recent_tutores(
-    scope,
-    page,
-    clinic_id=None,
-    user_id=None,
-    require_appointments=False,
-    veterinario_id=None,
-    search=None,
-    sort_option=None,
-):
+def _get_recent_tutores(params: RecentRecordsQuery):
     """Return recent tutors and pagination metadata for dashboards."""
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    effective_user_id = user_id or getattr(current_user, 'id', None)
-    clinic_ids = _normalize_clinic_ids(clinic_id)
+    effective_user_id = params.user_id or getattr(current_user, 'id', None)
+    clinic_ids = _normalize_clinic_ids(params.clinic_id)
     can_view_clinic_scope = bool(
         clinic_ids
         and viewer
         and has_professional_access(viewer)
     )
     resolved_scope = _normalize_role_scope(
-        scope,
+        params.scope,
         allow_full_scope=is_admin or can_view_clinic_scope,
     )
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
 
-    search_value = (search or '').strip().lower()
-    sort_value = (sort_option or 'name_asc').strip().lower() or 'name_asc'
+    search_value = (params.search or '').strip().lower()
+    sort_value = (params.sort_option or 'name_asc').strip().lower() or 'name_asc'
     per_page = 9
 
     def apply_search_filters(query):
@@ -12817,10 +12813,10 @@ def _get_recent_tutores(
             User.query.filter(User.created_at != None)
             .filter(_user_visibility_clause(clinic_scope=clinic_ids))
         )
-        if clinic_ids and not require_appointments:
+        if clinic_ids and not params.require_appointments:
             base_query = base_query.filter(User.clinica_id.in_(clinic_ids))
 
-        if require_appointments and clinic_ids:
+        if params.require_appointments and clinic_ids:
             appointment_exists = (
                 db.session.query(Appointment.id)
                 .filter(
@@ -12828,9 +12824,9 @@ def _get_recent_tutores(
                     Appointment.clinica_id.in_(clinic_ids),
                 )
             )
-            if veterinario_id:
+            if params.veterinario_id:
                 appointment_exists = appointment_exists.filter(
-                    Appointment.veterinario_id == veterinario_id
+                    Appointment.veterinario_id == params.veterinario_id
                 )
             base_query = base_query.filter(appointment_exists.exists())
 
@@ -12854,7 +12850,7 @@ def _get_recent_tutores(
             User.query.filter(User.created_at != None)
             .filter(_user_visibility_clause(clinic_scope=clinic_ids))
         )
-        if require_appointments:
+        if params.require_appointments:
             appointment_exists = (
                 db.session.query(Appointment.id)
                 .filter(
@@ -12862,9 +12858,9 @@ def _get_recent_tutores(
                     Appointment.clinica_id.in_(clinic_ids),
                 )
             )
-            if veterinario_id:
+            if params.veterinario_id:
                 appointment_exists = appointment_exists.filter(
-                    Appointment.veterinario_id == veterinario_id
+                    Appointment.veterinario_id == params.veterinario_id
                 )
             query = query.filter(appointment_exists.exists())
         else:
@@ -12876,7 +12872,7 @@ def _get_recent_tutores(
 
     query = apply_search_filters(query)
     query = apply_sorting(query)
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.paginate(page=params.page, per_page=per_page, error_out=False)
 
     return pagination.items, pagination, resolved_scope
 

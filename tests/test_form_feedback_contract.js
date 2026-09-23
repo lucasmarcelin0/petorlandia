@@ -25,6 +25,7 @@ class FakeClassList {
 }
 
 class FakeElement {
+  closest(selector) { return this.parentNode || null; }
   constructor() {
     this.dataset = {};
     this.attributes = new Map();
