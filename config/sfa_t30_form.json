@@ -5,8 +5,83 @@
   "submit_label": "Enviar acompanhamento T30",
   "sections": [
     {
+      "title": "Quem responde",
+      "description": "Se outra pessoa estiver respondendo, as perguntas sobre como a pessoa esta hoje se referem a pessoa acompanhada no estudo.",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "Quem esta respondendo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A propria pessoa",
+            "Pai, mae ou responsavel",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "Nome e relacao de quem responde",
+          "type": "text",
+          "required": true,
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "not_equals",
+                "value": "A propria pessoa"
+              }
+            ]
+          }
+        },
+        {
+          "key": "situacao_participante",
+          "label": "Qual e a situacao atual da pessoa acompanhada no estudo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Esta viva",
+            "Faleceu"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "not_equals",
+                "value": "A propria pessoa"
+              }
+            ]
+          }
+        },
+        {
+          "key": "data_obito",
+          "label": "Data do falecimento, se souber",
+          "type": "date",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "situacao_participante",
+            "operator": "equals",
+            "value": "Faleceu"
+          }
+        }
+      ]
+    },
+    {
       "title": "Encerramento individual e seguranca",
-      "description": "A recuperacao individual permanece como informacao complementar; o foco e saber se o risco coletivo foi esclarecido.",
+      "description": "Como voce esta hoje e se ainda precisa de atencao.",
       "fields": [
         {
           "key": "estado_saude_final",
@@ -19,7 +94,15 @@
             "Melhor, mas ainda com alguma limitacao",
             "Pouco melhor ou sem melhora",
             "Pior do que antes"
-          ]
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
         },
         {
           "key": "sinais_alerta_atuais",
@@ -33,7 +116,15 @@
             "Sangramento importante",
             "Piora intensa ou preocupacao urgente",
             "Nenhum destes sinais agora"
-          ]
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
         },
         {
           "key": "retorno_atividades_normais",
@@ -44,7 +135,114 @@
             "Retorno completo",
             "Retorno parcial",
             "Ainda nao retornei"
-          ]
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Sintomas hoje",
+      "description": "Compare com como voce estava antes desta doenca. Marque apenas o que comecou com ela ou ficou pior do que era antes.",
+      "fields": [
+        {
+          "key": "sintomas_atuais",
+          "label": "Hoje voce tem algum destes sintomas que comecou com esta doenca ou ficou pior do que era antes dela?",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "Nao marque o que voce ja tinha antes da doenca do mesmo jeito.",
+          "options": [
+            "Febre ou sensacao de febre",
+            "Cansaco ou fraqueza",
+            "Dor nas juntas (articulacoes)",
+            "Inchaco nas juntas",
+            "Dor no corpo ou nos musculos",
+            "Dor de cabeca",
+            "Manchas, coceira ou descamacao na pele",
+            "Dor nos olhos ou alteracao na visao",
+            "Falta de apetite, enjoo ou diarreia",
+            "Tontura",
+            "Dificuldade para dormir",
+            "Esquecimento ou dificuldade de concentracao",
+            "Queda de cabelo",
+            "Tristeza, desanimo ou ansiedade",
+            "Outro sintoma",
+            "Nenhum sintoma novo ou pior do que antes",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        },
+        {
+          "key": "sintomas_atuais_outro",
+          "label": "Qual outro sintoma?",
+          "type": "text",
+          "required": true,
+          "visible_if": {
+            "all": [
+              {
+                "not": {
+                  "source": "current",
+                  "key": "situacao_participante",
+                  "operator": "equals",
+                  "value": "Faleceu"
+                }
+              },
+              {
+                "source": "current",
+                "key": "sintomas_atuais",
+                "operator": "selected_any",
+                "values": [
+                  "Outro sintoma"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "sintomas_atuais_origem",
+          "label": "Esses sintomas comecaram com esta doenca ou ja existiam e pioraram?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Comecaram com esta doenca",
+            "Ja existiam e pioraram depois da doenca",
+            "Alguns comecaram e outros pioraram",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "not": {
+                  "source": "current",
+                  "key": "situacao_participante",
+                  "operator": "equals",
+                  "value": "Faleceu"
+                }
+              },
+              {
+                "source": "current",
+                "key": "sintomas_atuais",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhum sintoma novo ou pior do que antes",
+                  "Nao sei"
+                ]
+              }
+            ]
+          }
         }
       ]
     },
@@ -585,6 +783,21 @@
             "Sim",
             "Nao sei"
           ]
+        },
+        {
+          "key": "perda_renda_valor",
+          "label": "Valor aproximado que deixou de ganhar desde o ultimo contato (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "perda_renda",
+            "operator": "equals",
+            "value": "Sim"
+          }
         }
       ]
     }

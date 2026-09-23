@@ -184,9 +184,14 @@ assert(ial.every((step) => step.value <= step.denominator));
 const utility = model.buildQuestionUtility();
 assert(utility.some((row) => row.imported && row.seconds === 0));
 assert(utility.some((row) => row.question === 'O que exatamente pode ter sido compartilhado?' && row.roleModifier === 'is-core'));
-assert(!model.stages.t7.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income'));
-assert(!model.stages.t30.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income'));
-assert(model.stages.t7.sections.flatMap((section) => section.questions).some((item) => item.id === 'lost_income_any'));
+['t7', 't30'].forEach((stage) => {
+  const questions = model.stages[stage].sections.flatMap((section) => section.questions);
+  assert(questions.some((item) => item.id === 'lost_income_any'));
+  const lostIncome = questions.find((item) => item.id === 'lost_income');
+  assert(lostIncome && lostIncome.conditional, `${stage}: valor da perda de renda deve ser aprofundamento condicional.`);
+  assert.strictEqual(lostIncome.showWhen({ lost_income_any: 'Sim' }), true);
+  assert.strictEqual(lostIncome.showWhen({ lost_income_any: 'Não' }), false);
+});
 assert.strictEqual((source.match(/<div class="sfa-lab__comparison-row">/g) || []).length, 1, 'Cada linha comparativa deve abrir apenas um contêiner.');
 
 console.log('SFA instrument lab model checks passed');

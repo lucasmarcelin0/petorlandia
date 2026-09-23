@@ -1,0 +1,155 @@
+{
+  "titulo": "Ficha de Investigação Dengue e Febre de Chikungunya",
+  "versao": "Sinan Online — SVS 14/03/2016",
+  "definicoes": [
+    {
+      "termo": "Caso suspeito de dengue",
+      "texto": "pessoa que viva ou tenha viajado nos últimos 14 dias para área onde esteja ocorrendo transmissão de dengue ou tenha presença de Ae. aegypti que apresente febre, usualmente entre 2 e 7 dias, e apresente duas ou mais das seguintes manifestações: náuseas, vômitos, exantema, mialgias, cefaléia, dor retroorbital, petéquias ou prova do laço positiva e leucopenia."
+    },
+    {
+      "termo": "Caso suspeito de Chikungunya",
+      "texto": "febre de início súbito e artralgia ou artrite intensa com início agudo, não explicado por outras condições, que resida ou tenha viajado para áreas endêmicas ou epidêmicas até 14 dias antes do início dos sintomas, ou que tenha vínculo epidemiológico com um caso importado confirmado."
+    }
+  ],
+  "secoes": [
+    {
+      "secao": "Cabeçalho",
+      "campos": [
+        {"numero": "Nº", "campo": "Número da notificação", "opcoes": "", "uso": "Chave de vínculo entre SINAN, GAL e formulários T0, T7 e T30.", "plataforma": ["ficha_sinan", "n_caso"]}
+      ]
+    },
+    {
+      "secao": "Dados Gerais",
+      "campos": [
+        {"numero": "1", "campo": "Tipo de Notificação", "opcoes": "2 - Individual", "uso": "Não utilizado."},
+        {"numero": "2", "campo": "Agravo/doença", "opcoes": "1 - Dengue; 2 - Chikungunya. Código (CID10): A90 / A92", "uso": "Elegibilidade da base anual e da coorte.", "plataforma": ["agravo"]},
+        {"numero": "3", "campo": "Data da Notificação", "opcoes": "", "uso": "Inclusão temporal (janela de recrutamento) e prazo de até 72 horas para o T0.", "plataforma": ["data_notificacao"]},
+        {"numero": "4", "campo": "UF", "opcoes": "", "uso": "Descrição do fluxo de notificação."},
+        {"numero": "5", "campo": "Município de Notificação (código IBGE)", "opcoes": "", "uso": "Descrição do fluxo de notificação."},
+        {"numero": "6", "campo": "Unidade de Saúde (ou outra fonte notificadora) (código)", "opcoes": "", "uso": "Descrição do fluxo de notificação.", "plataforma": ["unidade_notificante"]},
+        {"numero": "7", "campo": "Data dos Primeiros Sintomas", "opcoes": "", "uso": "Define o D0: T7 no D7 e T30 no D30. Aparece preenchida no T0 para a pessoa conferir.", "plataforma": ["data_inicio_sintomas"]}
+      ]
+    },
+    {
+      "secao": "Notificação Individual",
+      "campos": [
+        {"numero": "8", "campo": "Nome do Paciente", "opcoes": "", "uso": "Cadastro restrito de contato; não entra na base analítica.", "plataforma": ["nome"]},
+        {"numero": "9", "campo": "Data de Nascimento", "opcoes": "", "uso": "Cálculo da idade; a data fica só no cadastro restrito.", "plataforma": ["data_nascimento"]},
+        {"numero": "10", "campo": "(ou) Idade", "opcoes": "1 - Hora; 2 - Dia; 3 - Mês; 4 - Ano", "uso": "Idade na base analítica.", "plataforma": ["idade_anos"]},
+        {"numero": "11", "campo": "Sexo", "opcoes": "M - Masculino; F - Feminino; I - Ignorado", "uso": "Descrição e ajuste definido a priori.", "plataforma": ["sexo"]},
+        {"numero": "12", "campo": "Gestante", "opcoes": "1 - 1º Trimestre; 2 - 2º Trimestre; 3 - 3º Trimestre; 4 - Idade gestacional ignorada; 5 - Não; 6 - Não se aplica; 9 - Ignorado", "uso": "Descrição (grupo prioritário de testagem)."},
+        {"numero": "13", "campo": "Raça/Cor", "opcoes": "1 - Branca; 2 - Preta; 3 - Amarela; 4 - Parda; 5 - Indígena; 9 - Ignorado", "uso": "Descrição.", "plataforma": ["raca_cor"]},
+        {"numero": "14", "campo": "Escolaridade", "opcoes": "0 - Analfabeto; 1 - 1ª a 4ª série incompleta do EF (antigo primário ou 1º grau); 2 - 4ª série completa do EF (antigo primário ou 1º grau); 3 - 5ª à 8ª série incompleta do EF (antigo ginásio ou 1º grau); 4 - Ensino fundamental completo (antigo ginásio ou 1º grau); 5 - Ensino médio incompleto (antigo colegial ou 2º grau); 6 - Ensino médio completo (antigo colegial ou 2º grau); 7 - Educação superior incompleta; 8 - Educação superior completa; 9 - Ignorado; 10 - Não se aplica", "uso": "Descrição."},
+        {"numero": "15", "campo": "Número do Cartão SUS", "opcoes": "", "uso": "Não utilizado."},
+        {"numero": "16", "campo": "Nome da mãe", "opcoes": "", "uso": "Não utilizado."}
+      ]
+    },
+    {
+      "secao": "Dados de Residência",
+      "campos": [
+        {"numero": "17", "campo": "UF", "opcoes": "", "uso": "Elegibilidade (residente em Orlândia)."},
+        {"numero": "18", "campo": "Município de Residência (código IBGE)", "opcoes": "", "uso": "Elegibilidade (residente em Orlândia)."},
+        {"numero": "19", "campo": "Distrito", "opcoes": "", "uso": "Não utilizado."},
+        {"numero": "20", "campo": "Bairro", "opcoes": "", "uso": "Cadastro restrito de contato.", "plataforma": ["bairro"]},
+        {"numero": "21", "campo": "Logradouro (rua, avenida, ...) (código)", "opcoes": "", "uso": "Cadastro restrito de contato.", "plataforma": ["endereco"]},
+        {"numero": "22", "campo": "Número", "opcoes": "", "uso": "Cadastro restrito de contato.", "plataforma": ["endereco"]},
+        {"numero": "23", "campo": "Complemento (apto., casa, ...)", "opcoes": "", "uso": "Cadastro restrito de contato.", "plataforma": ["endereco"]},
+        {"numero": "24", "campo": "Geo campo 1", "opcoes": "", "uso": "Não utilizado."},
+        {"numero": "25", "campo": "Geo campo 2", "opcoes": "", "uso": "Não utilizado."},
+        {"numero": "26", "campo": "Ponto de Referência", "opcoes": "", "uso": "Cadastro restrito de contato."},
+        {"numero": "27", "campo": "CEP", "opcoes": "", "uso": "Cadastro restrito de contato."},
+        {"numero": "28", "campo": "(DDD) Telefone", "opcoes": "", "uso": "Contato para T0, T7 e T30 (cadastro restrito).", "plataforma": ["telefone"]},
+        {"numero": "29", "campo": "Zona", "opcoes": "1 - Urbana; 2 - Rural; 3 - Periurbana; 9 - Ignorado", "uso": "Descrição e contexto de exposição.", "plataforma": ["zona"]},
+        {"numero": "30", "campo": "País (se residente fora do Brasil)", "opcoes": "", "uso": "Não se aplica (residentes em Orlândia)."}
+      ]
+    },
+    {
+      "secao": "Dados clínicos e laboratoriais — Investigação",
+      "campos": [
+        {"numero": "31", "campo": "Data da Investigação", "opcoes": "", "uso": "Intervalos entre início dos sintomas, notificação, investigação e T0.", "plataforma": ["data_investigacao"]},
+        {"numero": "32", "campo": "Ocupação", "opcoes": "", "uso": "Descrição e exposição ocupacional.", "plataforma": ["ocupacao"]}
+      ]
+    },
+    {
+      "secao": "Dados clínicos",
+      "campos": [
+        {"numero": "33", "campo": "Sinais clínicos", "opcoes": "1 - Sim; 2 - Não, para cada um: Febre; Mialgia; Cefaleia; Exantema; Vômito; Náuseas; Dor nas costas; Conjuntivite; Artrite; Artralgia intensa; Petéquias; Leucopenia; Prova do laço positiva; Dor retroorbital", "uso": "Perfil clínico na notificação; comparação entre os grupos A e B.", "plataforma": ["sintomas"]},
+        {"numero": "34", "campo": "Doenças pré-existentes", "opcoes": "1 - Sim; 2 - Não; 9 - Ignorado, para cada uma: Diabetes; Doenças hematológicas; Hepatopatias; Doença renal crônica; Hipertensão arterial; Doença ácido-péptica; Doenças auto-imunes", "uso": "Comorbidades consideradas a priori no ajuste.", "plataforma": ["comorbidades", "comorbidades_status"]}
+      ]
+    },
+    {
+      "secao": "Dados laboratoriais",
+      "campos": [
+        {"numero": "35", "campo": "Sorologia (IgM) Chikungunya — Data da Coleta da 1ª Amostra (S1)", "opcoes": "", "uso": "Outra etiologia confirmada é descrita separadamente."},
+        {"numero": "36", "campo": "Sorologia (IgM) Chikungunya — Data da Coleta da 2ª Amostra (S2)", "opcoes": "", "uso": "Outra etiologia confirmada é descrita separadamente."},
+        {"numero": "37", "campo": "Exame PRNT — Data da Coleta", "opcoes": "", "uso": "Outra etiologia confirmada é descrita separadamente."},
+        {"numero": "38", "campo": "Resultado (S1, S2 e PRNT)", "opcoes": "1 - Reagente; 2 - Não Reagente; 3 - Inconclusivo; 4 - Não Realizado", "uso": "Outra etiologia confirmada é descrita separadamente."},
+        {"numero": "39", "campo": "Sorologia (IgM) Dengue — Data da Coleta", "opcoes": "", "uso": "Oportunidade da coleta em relação ao D0."},
+        {"numero": "40", "campo": "Sorologia (IgM) Dengue — Resultado", "opcoes": "1 - Positivo; 2 - Negativo; 3 - Inconclusivo; 4 - Não realizado", "uso": "Classificação dos grupos A e B, interpretada segundo a data de coleta."},
+        {"numero": "41", "campo": "Exame NS1 — Data da Coleta", "opcoes": "", "uso": "Oportunidade da coleta em relação ao D0.", "plataforma": ["ns1_data_coleta"]},
+        {"numero": "42", "campo": "Exame NS1 — Resultado", "opcoes": "1 - Positivo; 2 - Negativo; 3 - Inconclusivo; 4 - Não realizado", "uso": "Registrado separadamente; teste rápido isolado não define o grupo A.", "plataforma": ["ns1_resultado"]},
+        {"numero": "43", "campo": "Isolamento — Data da Coleta", "opcoes": "", "uso": "Classificação, quando realizado."},
+        {"numero": "44", "campo": "Isolamento — Resultado", "opcoes": "1 - Positivo; 2 - Negativo; 3 - Inconclusivo; 4 - Não Realizado", "uso": "Classificação, quando realizado."},
+        {"numero": "45", "campo": "RT-PCR — Data da Coleta", "opcoes": "", "uso": "Oportunidade da coleta em relação ao D0."},
+        {"numero": "46", "campo": "RT-PCR — Resultado", "opcoes": "1 - Positivo; 2 - Negativo; 3 - Inconclusivo; 4 - Não Realizado", "uso": "Classificação dos grupos A e B; análise de sensibilidade restrita ao RT-PCR."},
+        {"numero": "47", "campo": "Sorotipo", "opcoes": "1 - DENV 1; 2 - DENV 2; 3 - DENV 3; 4 - DENV 4", "uso": "Descrição."},
+        {"numero": "48", "campo": "Histopatologia", "opcoes": "1 - Compatível; 2 - Incompatível; 3 - Inconclusivo; 4 - Não realizado", "uso": "Classificação, quando realizado."},
+        {"numero": "49", "campo": "Imunohistoquímica", "opcoes": "1 - Positivo; 2 - Negativo; 3 - Inconclusivo; 4 - Não realizado", "uso": "Classificação, quando realizado."}
+      ]
+    },
+    {
+      "secao": "Hospitalização",
+      "campos": [
+        {"numero": "50", "campo": "Ocorreu Hospitalização?", "opcoes": "1 - Sim; 2 - Não; 9 - Ignorado", "uso": "Desfecho secundário (internação) e gravidade."},
+        {"numero": "51", "campo": "Data da Internação", "opcoes": "", "uso": "Internação antes ou depois do T0."},
+        {"numero": "52", "campo": "UF", "opcoes": "", "uso": "Descrição do local de internação."},
+        {"numero": "53", "campo": "Município do Hospital (código IBGE)", "opcoes": "", "uso": "Descrição do local de internação."},
+        {"numero": "54", "campo": "Nome do Hospital (código)", "opcoes": "", "uso": "Descrição do local de internação."},
+        {"numero": "55", "campo": "(DDD) Telefone", "opcoes": "", "uso": "Não utilizado."}
+      ]
+    },
+    {
+      "secao": "Conclusão — Local Provável de Infecção (no período de 15 dias)",
+      "campos": [
+        {"numero": "56", "campo": "O caso é autóctone do município de residência?", "opcoes": "1 - Sim; 2 - Não; 3 - Indeterminado", "uso": "Deslocamento e viagem; complementa as exposições do T0."},
+        {"numero": "57", "campo": "UF", "opcoes": "", "uso": "Local provável de infecção."},
+        {"numero": "58", "campo": "País", "opcoes": "", "uso": "Local provável de infecção."},
+        {"numero": "59", "campo": "Município (código IBGE)", "opcoes": "", "uso": "Local provável de infecção."},
+        {"numero": "60", "campo": "Distrito", "opcoes": "", "uso": "Local provável de infecção."},
+        {"numero": "61", "campo": "Bairro", "opcoes": "", "uso": "Local provável de infecção."}
+      ]
+    },
+    {
+      "secao": "Conclusão",
+      "campos": [
+        {"numero": "62", "campo": "Classificação", "opcoes": "5 - Descartado; 10 - Dengue; 11 - Dengue com Sinais de Alarme; 12 - Dengue Grave; 13 - Chikungunya", "uso": "Base anual e classificação analítica, junto com os exames."},
+        {"numero": "63", "campo": "Critério de Confirmação/Descarte", "opcoes": "1 - Laboratório; 2 - Clínico-Epidemiológico; 3 - Em investigação", "uso": "Separa confirmação laboratorial (grupo A) de confirmação só clínico-epidemiológica."},
+        {"numero": "64", "campo": "Apresentação clínica", "opcoes": "1 - Aguda; 2 - Crônica", "uso": "Descrição (chikungunya)."},
+        {"numero": "65", "campo": "Evolução do Caso", "opcoes": "1 - Cura; 2 - Óbito pelo agravo; 3 - Óbito por outras causas; 4 - Óbito em investigação; 9 - Ignorado", "uso": "Óbitos entram separados no desfecho primário, nunca como ausência de sintomas."},
+        {"numero": "66", "campo": "Data do Óbito", "opcoes": "", "uso": "Óbito antes ou depois do D30."},
+        {"numero": "67", "campo": "Data do Encerramento", "opcoes": "", "uso": "Completude e oportunidade do encerramento."}
+      ]
+    },
+    {
+      "secao": "Dados clínicos — Dengue com Sinais de Alarme e Dengue Grave",
+      "campos": [
+        {"numero": "68", "campo": "Dengue com sinais de alarme", "opcoes": "1 - Sim; 2 - Não; 9 - Ignorado, para cada um: Hipotensão postural e/ou lipotímia; Queda abrupta de plaquetas; Vômitos persistentes; Dor abdominal intensa e contínua; Letargia ou irritabilidade; Aumento progressivo do hematócrito; Hepatomegalia >= 2cm; Acúmulo de líquidos; Sangramento de mucosa/outras hemorragias", "uso": "Gravidade na notificação."},
+        {"numero": "69", "campo": "Data de início dos sinais de alarme", "opcoes": "", "uso": "Gravidade na notificação."},
+        {"numero": "70", "campo": "Dengue grave", "opcoes": "1 - Sim; 2 - Não; 9 - Ignorado, para cada um. Extravasamento grave de plasma: Pulso débil ou indetectável; PA convergente <= 20 mmHg; Tempo de enchimento capilar; Acúmulo de líquidos com insuficiência respiratória; Taquicardia; Extremidades frias; Hipotensão arterial em fase tardia. Sangramento grave: Hematêmese; Melena; Metrorragia volumosa; Sangramento do SNC. Comprometimento grave de órgãos: AST/ALT > 1.000; Miocardite; Alteração da consciência; Outros órgãos, especificar", "uso": "Gravidade na notificação."},
+        {"numero": "71", "campo": "Data de início dos sinais de gravidade", "opcoes": "", "uso": "Gravidade na notificação."}
+      ]
+    },
+    {
+      "secao": "Informações complementares e observações",
+      "campos": [
+        {"numero": "", "campo": "Observações Adicionais", "opcoes": "", "uso": "Não utilizado."}
+      ]
+    },
+    {
+      "secao": "Investigador",
+      "campos": [
+        {"numero": "", "campo": "Município/Unidade de Saúde; Cód. da Unid. de Saúde; Nome; Função; Assinatura", "opcoes": "", "uso": "Não utilizado."}
+      ]
+    }
+  ]
+}

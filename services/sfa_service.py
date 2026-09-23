@@ -1355,6 +1355,26 @@ def _colunas_formulario_exportacao(form_stage: str, schema: Optional[object] = N
     return columns
 
 
+def classificar_desfecho_primario_t30(payload: dict[str, object]) -> str:
+    """Sintoma novo ou agravado em relacao a condicao previa na entrevista T30.
+
+    Obito tem categoria propria e nunca conta como ausencia de sintomas; "Nao
+    sei" fica fora do denominador de participantes com informacao valida.
+    """
+    if not payload:
+        return ""
+    if normalizar_nome_chave(payload.get("situacao_participante")) == "faleceu":
+        return "Obito"
+    if "sintomas_atuais" not in payload:
+        return "Nao coletado"
+    sintomas = _valores_regra(payload.get("sintomas_atuais"))
+    if any(not _opcao_nenhuma(item) for item in sintomas):
+        return "Sim"
+    if any(normalizar_nome_chave(item).startswith("nenhum") for item in sintomas):
+        return "Nao"
+    return "Sem informacao valida"
+
+
 def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict]] = None) -> dict[str, str]:
     schemas = schemas or {
         "t0": _schemas_exportacao_por_stage("t0"),
@@ -1390,6 +1410,8 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
         meta = payload.get("_calendario", {})
         for key in ("dia_doenca", "data_coleta", "data_alvo", "inicio_sintomas", "intervalo_desde", "intervalo_ate"):
             row[f"{etapa}__calendario_{key}"] = _serializar_valor_csv(meta.get(key))
+    _, payload_t30 = obter_payload_formulario(paciente, "t30")
+    row["desfecho__primario_t30"] = classificar_desfecho_primario_t30(payload_t30)
     return row
 
 
@@ -2070,6 +2092,7 @@ def gerar_csv_exportacao_analitica(pacientes) -> str:
     fieldnames += ["episodio__inicio_sintomas", "episodio__fonte_inicio"]
     fieldnames += [f"{etapa}__calendario_{key}" for etapa in ("t0", "t7", "t10", "t30")
                    for key in ("dia_doenca", "data_coleta", "data_alvo", "inicio_sintomas", "intervalo_desde", "intervalo_ate")]
+    fieldnames += ["desfecho__primario_t30"]
     output = io.StringIO(newline="")
     writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()

@@ -251,7 +251,10 @@
             question('additional_expense', 'Total aproximado dos novos gastos (R$)', 'number', [], {
               conditional: true, showWhen: (a) => a.additional_expense_any === 'Sim', min: 0, max: 99999, step: '0.01'
             }),
-            question('lost_income_any', 'Houve perda de renda desde o T0?', 'radio', ['Não', 'Sim'])
+            question('lost_income_any', 'Houve perda de renda desde o T0?', 'radio', ['Não', 'Sim']),
+            question('lost_income', 'Valor aproximado que deixou de ganhar desde o T0 (R$)', 'number', [], {
+              conditional: true, showWhen: (a) => a.lost_income_any === 'Sim', min: 0, max: 99999, step: '0.01'
+            })
           ]
         }
       ]
@@ -337,7 +340,10 @@
             question('additional_expense', 'Total aproximado dos novos gastos (R$)', 'number', [], {
               conditional: true, showWhen: (a) => a.additional_expense_any === 'Sim', min: 0, max: 99999, step: '0.01'
             }),
-            question('lost_income_any', 'Houve nova perda de renda desde o último contato?', 'radio', ['Não', 'Sim'])
+            question('lost_income_any', 'Houve nova perda de renda desde o último contato?', 'radio', ['Não', 'Sim']),
+            question('lost_income', 'Valor aproximado que deixou de ganhar desde o último contato (R$)', 'number', [], {
+              conditional: true, showWhen: (a) => a.lost_income_any === 'Sim', min: 0, max: 99999, step: '0.01'
+            })
           ]
         }
       ]

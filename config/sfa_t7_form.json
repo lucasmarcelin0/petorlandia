@@ -395,6 +395,21 @@
             "Sim",
             "Nao sei"
           ]
+        },
+        {
+          "key": "perda_renda_valor",
+          "label": "Valor aproximado que deixou de ganhar desde o T0 (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "perda_renda",
+            "operator": "equals",
+            "value": "Sim"
+          }
         }
       ]
     }

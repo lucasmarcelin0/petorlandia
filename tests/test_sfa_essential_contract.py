@@ -46,7 +46,9 @@ ESSENTIAL_KEYS = {
         "perda_renda",
     },
     "t30": {
+        "respondent_role",
         "estado_saude_final",
+        "sintomas_atuais",
         "sinais_alerta_atuais",
         "retorno_atividades_normais",
         "diagnostico_medico",
@@ -105,8 +107,18 @@ CONDITIONAL_KEYS = {
         "fonte_ainda_ativa",
         "outras_pessoas_ainda_expostas",
         "custo_outros",
+        "perda_renda_valor",
     },
     "t30": {
+        "respondent_name",
+        "situacao_participante",
+        "data_obito",
+        "estado_saude_final",
+        "sinais_alerta_atuais",
+        "retorno_atividades_normais",
+        "sintomas_atuais",
+        "sintomas_atuais_outro",
+        "sintomas_atuais_origem",
         "diagnostico_medico_qual",
         "diagnostico_medico_status",
         "novos_casos_quantidade",
@@ -118,6 +130,7 @@ CONDITIONAL_KEYS = {
         "orientacao_ou_acao_percebida",
         "novos_casos_apos_acao",
         "custo_outros",
+        "perda_renda_valor",
     },
 }
 

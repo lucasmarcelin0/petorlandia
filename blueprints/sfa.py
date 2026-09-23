@@ -1601,9 +1601,11 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t7", "dias_incap_novos", "dias adicionais"),
                 ("t7", "custo_outros", "gasto total adicional"),
                 ("t7", "perda_renda", "perda de renda declarada"),
+                ("t7", "perda_renda_valor", "valor que deixou de ganhar"),
                 ("t30", "dias_incap_novos", "dias adicionais finais"),
                 ("t30", "custo_outros", "gasto total adicional final"),
                 ("t30", "perda_renda", "nova perda de renda declarada"),
+                ("t30", "perda_renda_valor", "valor final que deixou de ganhar"),
             ),
         },
         {
@@ -1617,6 +1619,9 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t7", "classificacao_melhora", "evolucao intermediaria"),
                 ("t7", "sinais_alerta_atuais", "seguranca no seguimento"),
                 ("t7", "retornou_servico_saude", "captura atendimento fora da rede visivel"),
+                ("t30", "situacao_participante", "separa obitos do denominador"),
+                ("t30", "sintomas_atuais", "desfecho primario: sintoma novo ou agravado"),
+                ("t30", "sintomas_atuais_origem", "novo versus agravado"),
                 ("t30", "estado_saude_final", "estado complementar no fechamento"),
                 ("t30", "retorno_atividades_normais", "retorno funcional"),
                 ("t30", "sinais_alerta_atuais", "seguranca no fechamento"),
@@ -1794,6 +1799,14 @@ def formularios_print():
         formularios=_formularios_impressao_sfa(),
         generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )
+
+
+@bp.route("/formularios/anexos")
+@require_sfa_internal_access
+def formularios_anexos():
+    from services.sfa_anexos import montar_anexos_protocolo
+
+    return render_template("sfa/anexos_protocolo.html", **montar_anexos_protocolo())
 
 
 @bp.get("/instrumentos/historico")

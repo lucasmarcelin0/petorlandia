@@ -107,12 +107,19 @@ def _payload_t7():
         "houve_novos_gastos": "Nao",
         "custo_outros": "250.00",
         "perda_renda": "Nao",
+        "perda_renda_valor": "400.00",
     }
 
 
 def _payload_t30():
     return {
+        "respondent_role": "A propria pessoa",
+        "situacao_participante": "Faleceu",
+        "data_obito": "10/08/2026",
         "estado_saude_final": "Quase recuperado(a) - diferencas minimas",
+        "sintomas_atuais": ["Cansaco ou fraqueza", "Dor nas juntas (articulacoes)"],
+        "sintomas_atuais_outro": "Sintoma injetado",
+        "sintomas_atuais_origem": "Comecaram com esta doenca",
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
         "retorno_atividades_normais": "Retorno completo",
         "diagnostico_medico": "Nao",
@@ -131,6 +138,7 @@ def _payload_t30():
         "houve_novos_gastos": "Nao",
         "custo_outros": "300.00",
         "perda_renda": "Nao",
+        "perda_renda_valor": "500.00",
     }
 
 
@@ -306,6 +314,30 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["nova_pista_detalhe"] == ""
     assert captured["fonte_ainda_ativa"] == ""
     assert captured["custo_outros"] == ""
+    assert captured["perda_renda_valor"] == ""
+
+
+@pytest.mark.parametrize("stage", ["t7", "t30"])
+def test_public_native_followup_mantem_valor_da_perda_de_renda_quando_sim(native_t0_app, monkeypatch, stage):
+    app, paciente, _schema_holder = native_t0_app
+    paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
+    client = app.test_client()
+    captured = {}
+
+    def fake_on_submit(dados):
+        captured.update(dados)
+        setattr(paciente, f"respostas_{stage}", [object()])
+        return {"ok": True, "id_estudo": paciente.id_estudo}
+
+    monkeypatch.setattr(sfa_service, f"on_submit_{stage}", fake_on_submit)
+    payload = _payload_t7() if stage == "t7" else _payload_t30()
+    payload.update({"perda_renda": "Sim", "perda_renda_valor": "420.50"})
+
+    response = client.post(f"/sfa/p/{paciente.token_acesso}/{stage}", data=payload)
+
+    assert response.status_code == 200
+    assert captured["perda_renda"] == "Sim"
+    assert captured["perda_renda_valor"] == "420.50"
 
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -330,12 +362,70 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert captured["_origem"] == "native_t30_form"
     assert captured["_instrument_version"] == "collective-v3-disease-clock"
     assert captured["estado_saude_final"] == "Quase recuperado(a) - diferencas minimas"
+    assert captured["situacao_participante"] == ""
+    assert captured["data_obito"] == ""
+    assert captured["sintomas_atuais"] == ["Cansaco ou fraqueza", "Dor nas juntas (articulacoes)"]
+    assert captured["sintomas_atuais_outro"] == ""
+    assert captured["sintomas_atuais_origem"] == "Comecaram com esta doenca"
     assert captured["diagnostico_medico_qual"] == ""
     assert captured["novos_casos_quantidade"] == ""
     assert captured["nova_informacao_fonte_detalhe"] == ""
     assert captured["orientacao_ou_acao_percebida"] == ""
     assert captured["novos_casos_apos_acao"] == ""
     assert captured["custo_outros"] == ""
+    assert captured["perda_renda_valor"] == ""
+
+
+def test_public_native_t30_obito_informado_por_familiar_nao_vira_ausencia_de_sintomas(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+    paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
+    client = app.test_client()
+    captured = {}
+
+    def fake_on_submit(dados):
+        captured.update(dados)
+        paciente.respostas_t30 = [object()]
+        return {"ok": True, "id_estudo": paciente.id_estudo}
+
+    monkeypatch.setattr(sfa_service, "on_submit_t30", fake_on_submit)
+    payload = _payload_t30()
+    payload.update({
+        "respondent_role": "Outra pessoa autorizada",
+        "respondent_name": "Joana, filha",
+        "situacao_participante": "Faleceu",
+        "sintomas_atuais": ["Nenhum sintoma novo ou pior do que antes"],
+    })
+
+    response = client.post(f"/sfa/p/{paciente.token_acesso}/t30", data=payload)
+
+    assert response.status_code == 200
+    assert "Obrigado pela sua participacao" in response.get_data(as_text=True)
+    assert captured["situacao_participante"] == "Faleceu"
+    assert captured["data_obito"] == "10/08/2026"
+    for key in ("estado_saude_final", "retorno_atividades_normais", "sintomas_atuais_origem"):
+        assert captured[key] == ""
+    assert captured["sintomas_atuais"] == []
+    assert captured["sinais_alerta_atuais"] == []
+    # O familiar ainda informa o que diz respeito ao risco coletivo.
+    assert captured["novos_casos_semelhantes"] == "Nao"
+    assert sfa_service.classificar_desfecho_primario_t30(captured) == "Obito"
+
+
+@pytest.mark.parametrize(
+    ("payload", "esperado"),
+    [
+        ({}, ""),
+        ({"situacao_participante": "Faleceu", "sintomas_atuais": []}, "Obito"),
+        ({"estado_saude_final": "Recuperado(a) - como antes da doenca"}, "Nao coletado"),
+        ({"sintomas_atuais": ["Cansaco ou fraqueza"]}, "Sim"),
+        ({"sintomas_atuais": ["Outro sintoma"], "situacao_participante": "Esta viva"}, "Sim"),
+        ({"sintomas_atuais": ["Nenhum sintoma novo ou pior do que antes"]}, "Nao"),
+        ({"sintomas_atuais": ["Nao sei"]}, "Sem informacao valida"),
+        ({"sintomas_atuais": []}, "Sem informacao valida"),
+    ],
+)
+def test_classificar_desfecho_primario_t30(payload, esperado):
+    assert sfa_service.classificar_desfecho_primario_t30(payload) == esperado
 
 
 @pytest.mark.parametrize(

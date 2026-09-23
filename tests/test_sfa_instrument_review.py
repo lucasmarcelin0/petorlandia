@@ -77,7 +77,7 @@ def test_sfa_review_links_and_qrcode_render(client):
     assert b'id="sfa-lab-decisions"' in response.data
     assert b'id="sfa-lab-question-utility"' in response.data
     assert b"sfa_instrument_lab.css?v=20260831b" in response.data
-    assert b"sfa_instrument_lab.js?v=20260831b" in response.data
+    assert b"sfa_instrument_lab.js?v=20260923a" in response.data
     assert "nada é gravado e os formulários reais não são alterados".encode() in response.data
     assert "IA assistiva, não diagnóstica".encode() in response.data
     assert b'value="semantic"' in response.data
@@ -97,7 +97,7 @@ def test_sfa_chart_review_records_feedback(app, client):
     assert b"100 respostas inteiramente sinteticas" in response.data
     assert b'data-initial-view="cohort"' in response.data
     assert "Lama e sinais de roedores".encode() not in response.data
-    assert b"sfa_instrument_lab.js?v=20260831b" in response.data
+    assert b"sfa_instrument_lab.js?v=20260923a" in response.data
     assert b'id="sfa-lab-onset-chart"' in response.data
     assert b'id="sfa-lab-signal-chart"' in response.data
     assert b"Perguntas reais usadas neste bloco" in response.data

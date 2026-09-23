@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anexos do protocolo SFA</title>
+  {# Estilos inline de propósito: o HTML também é importado no Google Docs,
+     que ignora a maior parte das folhas de estilo. #}
+  <style>
+    @page { size: A4; margin: 18mm 16mm; }
+    body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.35; color: #1f2933; max-width: 180mm; margin: 0 auto; }
+    table { border-collapse: collapse; width: 100%; }
+  </style>
+</head>
+<body>
+{% set cor_condicao = "#9a4d00" %}
+{% set cor_suave = "#5d6a75" %}
+
+<h1 style="font-family:Arial,sans-serif;font-size:14pt;text-align:center;margin:0 0 4pt 0;">ANEXO A</h1>
+<h2 style="font-family:Arial,sans-serif;font-size:12pt;text-align:center;margin:0 0 10pt 0;">Ficha SINAN — {{ sinan.titulo }}</h2>
+<p style="text-align:justify;">
+  Preenchida pela unidade de saúde no momento da notificação, antes de qualquer contato do estudo.
+  É a porta de entrada do participante: define a elegibilidade, a data dos primeiros sintomas (D0),
+  que agenda o T7 no D7 e o T30 no D30, e o número que vincula a ficha aos formulários T0, T7 e T30.
+  O estudo não altera a ficha nem acrescenta campos a ela. Abaixo, a ficha campo a campo, na numeração
+  e com os códigos impressos no formulário oficial ({{ sinan.versao }}), com o uso de cada campo no estudo
+  e como o dado chega à pesquisa.
+</p>
+
+<table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;margin:6pt 0 8pt 0;">
+  <tr>
+    <td style="border:1px solid #9aa5b1;background:#f6f8fa;padding:6pt;font-size:9.5pt;">
+      <p style="margin:0 0 3pt 0;font-weight:bold;">SINAN — Sistema de Informação de Agravos de Notificação · {{ sinan.titulo }} · Nº ________</p>
+      {% for definicao in sinan.definicoes %}
+      <p style="margin:3pt 0 0 0;text-align:justify;"><b>{{ definicao.termo }}:</b> {{ definicao.texto }}</p>
+      {% endfor %}
+    </td>
+  </tr>
+</table>
+
+<p style="color:{{ cor_suave }};font-size:9.5pt;">
+  <b>Origem no estudo:</b> “Transcrito na plataforma” = copiado da ficha para a plataforma do estudo logo após a notificação;
+  “Base SINAN/GAL” = obtido na extração das bases oficiais, conforme o item 5.5.
+  Nome, data de nascimento, endereço e telefone ficam no cadastro restrito, separado da base analítica.
+</p>
+
+{% for secao in sinan.secoes %}
+<h3 style="font-family:Arial,sans-serif;font-size:11pt;margin:12pt 0 4pt 0;">{{ secao.secao }}</h3>
+<table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;font-size:9pt;">
+  <tr>
+    <th style="border:1px solid #9aa5b1;background:#eef2f5;padding:4pt;text-align:center;width:6%;" width="6%">Nº</th>
+    <th style="border:1px solid #9aa5b1;background:#eef2f5;padding:4pt;text-align:left;width:24%;" width="24%">Campo da ficha</th>
+    <th style="border:1px solid #9aa5b1;background:#eef2f5;padding:4pt;text-align:left;width:30%;" width="30%">Opções (códigos da ficha)</th>
+    <th style="border:1px solid #9aa5b1;background:#eef2f5;padding:4pt;text-align:left;width:27%;" width="27%">Uso no estudo</th>
+    <th style="border:1px solid #9aa5b1;background:#eef2f5;padding:4pt;text-align:left;width:13%;" width="13%">Origem no estudo</th>
+  </tr>
+  {% for campo in secao.campos %}
+  <tr>
+    <td style="border:1px solid #9aa5b1;padding:4pt;vertical-align:top;text-align:center;">{{ campo.numero or "—" }}</td>
+    <td style="border:1px solid #9aa5b1;padding:4pt;vertical-align:top;">{{ campo.campo }}</td>
+    <td style="border:1px solid #9aa5b1;padding:4pt;vertical-align:top;">{{ campo.opcoes or "—" }}</td>
+    <td style="border:1px solid #9aa5b1;padding:4pt;vertical-align:top;">{{ campo.uso }}</td>
+    <td style="border:1px solid #9aa5b1;padding:4pt;vertical-align:top;">{{ "Transcrito na plataforma" if campo.plataforma else "Base SINAN/GAL" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+
+{% set letras = ["B", "C", "D"] %}
+{% for form in formularios %}
+{% set schema = form.schema %}
+<h1 style="font-family:Arial,sans-serif;font-size:14pt;text-align:center;margin:0 0 4pt 0;page-break-before:always;">ANEXO {{ letras[loop.index0] }}</h1>
+<h2 style="font-family:Arial,sans-serif;font-size:12pt;text-align:center;margin:0 0 10pt 0;">Formulário {{ form.etapa }} — como aparece no site</h2>
+<p style="text-align:justify;">
+  Reprodução do formulário {{ form.etapa }} publicado na plataforma, com os textos, as opções e a ordem exatamente como a pessoa
+  os vê, pelo link individual ou em entrevista por telefone ou presencial com a equipe preenchendo a mesma tela.
+  São {{ form.total_perguntas }} perguntas, das quais {{ form.total_condicionais }} só aparecem conforme respostas anteriores;
+  por isso cada pessoa responde apenas parte delas.
+  {% if form.stage != "t0" %}Quando a condição depende de uma entrevista anterior, a plataforma a verifica antes de abrir o formulário.{% endif %}
+</p>
+<p style="color:{{ cor_suave }};font-size:9.5pt;">
+  <b>Legenda:</b> ○ escolher uma opção; ☐ pode marcar mais de uma; * resposta obrigatória quando a pergunta aparece;
+  <span style="color:{{ cor_condicao }};">↳ pergunta que só aparece conforme outra resposta</span>.
+  Nas perguntas de marcar, “Nenhum/Nenhuma…” e “Nao sei” desmarcam as demais opções.
+</p>
+
+<table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;margin:6pt 0 10pt 0;">
+  <tr>
+    <td style="border:1px solid #015f73;background:#eef6f8;padding:8pt;">
+      <p style="margin:0;color:#015f73;font-size:9pt;font-weight:bold;letter-spacing:1px;">FORMULARIO {{ form.etapa }}</p>
+      <p style="margin:2pt 0 0 0;font-size:13pt;font-weight:bold;">Ola, [nome do participante].</p>
+      <p style="margin:4pt 0 0 0;"><b>{{ schema.title }}</b><br>{{ schema.subtitle }}</p>
+      <p style="margin:4pt 0 0 0;font-size:9.5pt;">Etapa: {{ form.etapa }} · Seus dados cadastrais ja estao vinculados nos bastidores.</p>
+    </td>
+  </tr>
+</table>
+
+{% for secao in form.secoes %}
+<h3 style="font-family:Arial,sans-serif;font-size:11.5pt;margin:12pt 0 2pt 0;border-bottom:1px solid #e8711c;">{{ secao.title }}</h3>
+{% if secao.description %}<p style="margin:0 0 6pt 0;color:{{ cor_suave }};font-style:italic;">{{ secao.description }}</p>{% endif %}
+
+{% for p in secao.perguntas %}
+{% set aprofundada = p.condicao and p.condicao.aprofundamento %}
+{% set recuo = "18pt" if aprofundada else "0" %}
+{% set recuo_opcoes = "36pt" if aprofundada else "18pt" %}
+<p style="margin:8pt 0 1pt {{ recuo }};"><b>{{ p.numero }}. {{ p.label }}</b>{% if p.required %} <span style="color:#b42318;">*</span>{% endif %}</p>
+{% if p.condicao %}
+<p style="margin:0 0 1pt {{ recuo }};color:{{ cor_condicao }};font-size:9.5pt;">{% if aprofundada %}↳ {% endif %}{{ p.condicao.texto }}</p>
+{% if p.condicao.itens %}
+<ul style="margin:0 0 2pt 36pt;color:{{ cor_condicao }};font-size:9.5pt;">
+  {% for item in p.condicao.itens %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+{% if p.prefill %}<p style="margin:0 0 1pt {{ recuo }};color:{{ cor_suave }};font-size:9.5pt;">Vem preenchida com a data da ficha SINAN; a pessoa confere ou corrige.</p>{% endif %}
+{% if p.help_text %}<p style="margin:0 0 1pt {{ recuo }};color:{{ cor_suave }};font-size:9.5pt;">{{ p.help_text }}</p>{% endif %}
+{% if form.stage == "t0" and p.key == "aceite_tcle" %}
+<table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;margin:3pt 0;">
+  <tr><td style="border:1px solid #9aa5b1;padding:6pt;font-size:9.5pt;">{% include "sfa/_tcle_resumo.html" %}</td></tr>
+</table>
+{% endif %}
+{% if p.type == "radio" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">{% for option in p.options %}○ {{ option }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% elif p.type == "checkboxes" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">{% for option in p.options %}☐ {{ option }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% elif p.type == "select" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">[ Selecione ▾ ] — lista com uma escolha: {{ p.options | join(" · ") }}</p>
+{% elif p.type == "number" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">[ ____________ ]{% if p.min is defined and p.max is defined %} <span style="color:{{ cor_suave }};font-size:9.5pt;">número de {{ p.min }} a {{ p.max }}</span>{% endif %}</p>
+{% elif p.type == "date" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">[ ___/___/_____ ]</p>
+{% elif p.type == "textarea" %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">[ ________________________________________ ]<br>[ ________________________________________ ]{% if p.placeholder %}<br><span style="color:{{ cor_suave }};font-size:9.5pt;">Texto de apoio no campo: {{ p.placeholder }}</span>{% endif %}</p>
+{% else %}
+<p style="margin:1pt 0 0 {{ recuo_opcoes }};">[ ________________________________________ ]{% if p.placeholder %}<br><span style="color:{{ cor_suave }};font-size:9.5pt;">Texto de apoio no campo: {{ p.placeholder }}</span>{% endif %}</p>
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+<p style="margin:14pt 0 0 0;text-align:center;"><b>[ {{ schema.submit_label or "Enviar" }} ]</b></p>
+{% endfor %}
+</body>
+</html>

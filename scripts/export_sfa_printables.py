@@ -38,6 +38,7 @@ def _export_pdf_if_possible(html_path: Path, pdf_path: Path) -> str | None:
 
 
 def main() -> None:
+    from services.sfa_anexos import montar_anexos_protocolo
     from blueprints.sfa import (
         _consulta_pacientes_filtrada,
         _filtros_pacientes_vazios,
@@ -70,19 +71,27 @@ def main() -> None:
                 generated_at=generated_at,
             )
 
+        with app.test_request_context("/sfa/formularios/anexos"):
+            anexos_html = render_template("sfa/anexos_protocolo.html", **montar_anexos_protocolo())
+
     graficos_html_path = OUTPUT_DIR / f"sfa_graficos_testes_a4_{timestamp}.html"
     formularios_html_path = OUTPUT_DIR / f"sfa_perguntas_t0_t7_t30_a4_{timestamp}.html"
     graficos_pdf_path = OUTPUT_DIR / f"sfa_graficos_testes_a4_{timestamp}.pdf"
     formularios_pdf_path = OUTPUT_DIR / f"sfa_perguntas_t0_t7_t30_a4_{timestamp}.pdf"
+    anexos_html_path = OUTPUT_DIR / f"sfa_anexos_protocolo_{timestamp}.html"
+    anexos_pdf_path = OUTPUT_DIR / f"sfa_anexos_protocolo_{timestamp}.pdf"
 
     graficos_html_path.write_text(graficos_html, encoding="utf-8")
     formularios_html_path.write_text(formularios_html, encoding="utf-8")
+    anexos_html_path.write_text(anexos_html, encoding="utf-8")
 
     graficos_pdf_result = _export_pdf_if_possible(graficos_html_path, graficos_pdf_path)
     formularios_pdf_result = _export_pdf_if_possible(formularios_html_path, formularios_pdf_path)
+    anexos_pdf_result = _export_pdf_if_possible(anexos_html_path, anexos_pdf_path)
 
     print(f"HTML gerado: {graficos_html_path}")
     print(f"HTML gerado: {formularios_html_path}")
+    print(f"HTML gerado: {anexos_html_path}")
     print(
         f"PDF graficos: {graficos_pdf_path}"
         if graficos_pdf_result is None
@@ -92,6 +101,11 @@ def main() -> None:
         f"PDF formularios: {formularios_pdf_path}"
         if formularios_pdf_result is None
         else f"PDF formularios: {formularios_pdf_result}"
+    )
+    print(
+        f"PDF anexos: {anexos_pdf_path}"
+        if anexos_pdf_result is None
+        else f"PDF anexos: {anexos_pdf_result}"
     )
 
 
