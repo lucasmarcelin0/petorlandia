@@ -1,5 +1,7 @@
 import requests
 
+from security.url_safe import is_url_ssrf_safe
+
 from flask import abort, current_app, redirect, render_template, session, url_for
 from flask_login import current_user
 from functools import wraps
@@ -37,9 +39,13 @@ def reverse_geocode_city(lat, lon):
     except (TypeError, ValueError):
         return None
 
+    target_url = "https://nominatim.openstreetmap.org/reverse"
+    if not is_url_ssrf_safe(target_url):
+        return None
+
     try:
         response = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
+            target_url,
             params={
                 "lat": lat_f,
                 "lon": lon_f,
@@ -101,9 +107,13 @@ def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None
         return lat, lon
 
     def _request(params: dict) -> tuple[float, float] | None:
+        target_url = "https://nominatim.openstreetmap.org/search"
+        if not is_url_ssrf_safe(target_url):
+            return None
+
         try:
             response = session.get(
-                "https://nominatim.openstreetmap.org/search",
+                target_url,
                 params={**params, "format": "json", "limit": 1, "countrycodes": "br"},
                 timeout=5,
             )
