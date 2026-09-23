@@ -10,7 +10,7 @@ from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import wraps
-from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
+from urllib.parse import quote_plus, urlparse, urlencode
 from typing import Iterable, Optional, Set, Dict
 
 # Tests and factory imports may load this module through either name. Keep both
