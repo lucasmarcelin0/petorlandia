@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 import logging
