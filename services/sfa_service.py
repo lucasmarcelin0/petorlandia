@@ -2312,8 +2312,7 @@ def _sanitize_limited_text(
 ) -> str:
     original = "" if value is None else str(value)
     cleaned = original.replace("\u00a0", " ")
-    cleaned = re.sub(r"[\r\n\t]+", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = " ".join(cleaned.split())
 
     acao = None
     if cleaned != original.strip():
@@ -3728,7 +3727,7 @@ def _resolve_sinan_sheet_target(service) -> tuple[str, str]:
 def _normalize_form_header(value: object) -> str:
     normalized = normalizar_nome_chave(value or "")
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
+    normalized = " ".join(normalized.split())
     return re.sub(r"^\d+\s+", "", normalized).strip()
 
 
