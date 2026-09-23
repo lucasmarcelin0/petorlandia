@@ -60,6 +60,13 @@ def test_reverse_geocode_invalid_json(mock_get):
     assert reverse_geocode_city(10.0, 20.0) is None
 
 
+@patch("helpers.is_url_ssrf_safe", return_value=False)
+@patch("helpers.requests.get")
+def test_reverse_geocode_ssrf_blocked(mock_get, mock_ssrf_check):
+    assert reverse_geocode_city(-19.9, -43.9) is None
+    mock_get.assert_not_called()
+
+
 @patch("helpers.requests.get")
 def test_reverse_geocode_request_exception(mock_get):
     mock_get.side_effect = requests.RequestException("Network error")
