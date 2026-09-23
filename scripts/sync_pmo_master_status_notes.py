@@ -116,7 +116,7 @@ def _strip_accents(value: str) -> str:
 def _normalize_text_key(value: str) -> str:
     text = _strip_accents(value or "").lower()
     text = re.sub(r"[^a-z0-9]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return " ".join(str(text).split())
 
 
 def _tracked_non_date_titles() -> set[str]:

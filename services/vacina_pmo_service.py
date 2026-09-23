@@ -189,11 +189,11 @@ class PmoSyncResult:
 
 
 def _normalize_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return " ".join(str(value or "").split())
 
 
 def _normalize_note_line(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return " ".join(str(value or "").split())
 
 
 def _append_visit_note(visit: PmoVaccinationVisit, line: str) -> None:
@@ -337,7 +337,7 @@ def _normalize_shift(value: Any) -> str:
 def _pmo_is_master_sheet(title: Any) -> bool:
     """True quando o título é a aba mestre de status — o app não deve escrever nela."""
     def _norm(value: Any) -> str:
-        return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+        return " ".join(str(_strip_accents(_normalize_text(value)).lower()).split())
 
     return bool(_normalize_text(title)) and _norm(title) == _norm(PMO_MASTER_SHEET_TITLE)
 
@@ -1238,7 +1238,7 @@ def _provisional_email(phone: str, visit_id: int | None = None) -> str:
 
 
 def _normalize_person_name(value: Any) -> str:
-    return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+    return " ".join(str(_strip_accents(_normalize_text(value)).lower()).split())
 
 
 _NAME_PARTICLES = {"da", "das", "de", "do", "dos", "e", "d"}
@@ -4396,7 +4396,7 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
 def _pmo_normalize_title(value: Any) -> str:
     """Normaliza um título de aba: sem acento, minúsculo, espaços colapsados."""
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"\s+", " ", text).strip()
+    return " ".join(str(text).split())
 
 
 def _pmo_match_sheet_title(titles: list[str], wanted: str) -> str:
@@ -6599,7 +6599,7 @@ def _request_row_key(row: list[str]) -> tuple[str, str, str]:
 
     def cell(index: int) -> str:
         value = row[index] if index < len(row) else ""
-        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+        return " ".join(str(value or "").split()).lower()
 
     return (
         cell(PMO_REQUEST_TIMESTAMP_INDEX),
