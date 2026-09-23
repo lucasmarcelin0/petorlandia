@@ -1517,7 +1517,9 @@ body {
 }
 
 .prescription-panel.is-active {
-  animation: prescription-panel-in .18s ease both;
+  /* backwards: nao manter transform apos a animacao (criaria contexto de
+     empilhamento e esconderia a lista de medicamentos atras do historico) */
+  animation: prescription-panel-in .18s ease backwards;
 }
 
 .prescription-empty-state {
