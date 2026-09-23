@@ -97,6 +97,14 @@ def test_bulario_search_and_filter_a11y():
     assert 'aria-controls="drawer-' in content
 
 
+def test_bulario_form_remove_presentation_a11y():
+    with open("templates/bulario/form.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="Remover apresentação"' in content
+    assert '<i class="fas fa-times" aria-hidden="true"></i>' in content
+
+
 def test_form_macros_accessibility_attributes():
     with open("templates/components/form_macros.html", "r", encoding="utf-8") as f:
         content = f.read()
