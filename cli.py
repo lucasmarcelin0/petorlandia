@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import click
 from flask.cli import with_appcontext
+from sqlalchemy.orm import joinedload
 
 from extensions import db
 from models.agenda import VetSchedule
@@ -89,7 +90,7 @@ def cleanup_test_users(apply, user_ids, store_owner_id):
         # cascata no banco, deixando o ORM resolver as demais dependencias.
         for message in set(user.sent_messages).union(user.received_messages):
             db.session.delete(message)
-        for payment in Payment.query.filter_by(user_id=user.id).all():
+        for payment in Payment.query.filter_by(user_id=user.id).options(joinedload(Payment.subscriptions)).all():
             for subscription in list(payment.subscriptions):
                 subscription.payment = None
             db.session.delete(payment)
