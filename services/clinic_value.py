@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
+from sqlalchemy import func
+
 from models import Animal, Appointment, Consulta, Orcamento, Vacina
 from time_utils import normalize_to_utc, utcnow
 
@@ -125,16 +127,18 @@ def build_clinic_value_report(clinic_id: int, period_days: int = 30) -> dict:
                 Appointment.status.in_(OPEN_STATUSES),
             ).distinct().all()
         }
-        last_visits = {}
-        for consultation in Consulta.query.filter(
-            Consulta.clinica_id == clinic_id,
-            Consulta.animal_id.in_(animal_ids),
-            Consulta.status == "finalizada",
-        ).all():
-            value = consultation.finalizada_em or consultation.created_at
-            value = _utc(value)
-            if value and (consultation.animal_id not in last_visits or value > last_visits[consultation.animal_id]):
-                last_visits[consultation.animal_id] = value
+        visit_date = func.coalesce(Consulta.finalizada_em, Consulta.created_at)
+        last_visits = {
+            animal_id: _utc(value)
+            for animal_id, value in Consulta.query.with_entities(
+                Consulta.animal_id, func.max(visit_date)
+            ).filter(
+                Consulta.clinica_id == clinic_id,
+                Consulta.animal_id.in_(animal_ids),
+                Consulta.status == "finalizada",
+            ).group_by(Consulta.animal_id).all()
+            if value is not None
+        }
         cutoff = end - timedelta(days=180)
         candidates = [animal_id for animal_id, seen in last_visits.items() if seen < cutoff and animal_id not in future_ids]
         if candidates:

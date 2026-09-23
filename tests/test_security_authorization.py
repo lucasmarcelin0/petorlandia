@@ -169,6 +169,21 @@ class TestUrlSanitization:
             assert _sanitize_login_next_url('javascript:alert(1)') == default_url
             assert _sanitize_login_next_url('/vacina-pmo/c/token123/pet/456') == default_url
 
+    def test_safe_referrer_rejects_external_hosts(self, app):
+        from blueprints.agendamentos import _safe_referrer
+
+        with app.test_request_context(
+            "/appointments",
+            headers={"Referer": "https://attacker.example/collect"},
+        ):
+            assert _safe_referrer() == "/appointments"
+
+        with app.test_request_context(
+            "/appointments",
+            headers={"Referer": "/appointments/manage?page=2"},
+        ):
+            assert _safe_referrer() == "/appointments/manage?page=2"
+
     def test_cep_lookup_ssrf_validation(self, client, app, monkeypatch):
         """Test that api_cep_lookup uses is_url_ssrf_safe to reject unsafe external URLs."""
         monkeypatch.setattr("blueprints.api.is_url_ssrf_safe", lambda url: False)
