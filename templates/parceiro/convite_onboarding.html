@@ -76,11 +76,25 @@
       <div class="row g-3">
         <div class="col-md-6 mb-3">
           <label class="form-label" for="password">Senha (mín. 8 caracteres)</label>
-          <input type="password" class="form-control rounded-pill" id="password" name="password" required minlength="8">
+          <div class="input-group auth-password-group">
+            <input type="password" class="form-control" id="password" name="password" required minlength="8" autocomplete="new-password">
+            <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                    data-password-toggle aria-controls="password" aria-pressed="false"
+                    aria-label="Mostrar senha" title="Mostrar senha">
+              <i class="fa fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
         <div class="col-md-6 mb-4">
           <label class="form-label" for="password_confirmation">Confirme a senha</label>
-          <input type="password" class="form-control rounded-pill" id="password_confirmation" name="password_confirmation" required>
+          <div class="input-group auth-password-group">
+            <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required minlength="8" autocomplete="new-password">
+            <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                    data-password-toggle aria-controls="password_confirmation" aria-pressed="false"
+                    aria-label="Mostrar senha" title="Mostrar senha">
+              <i class="fa fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
       </div>
       {% endif %}

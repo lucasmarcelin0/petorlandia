@@ -76,13 +76,27 @@
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold" for="password">Crie sua senha</label>
-            <input class="form-control" type="password" id="password" name="password"
-                   minlength="8" required autocomplete="new-password">
+            <div class="input-group auth-password-group">
+              <input class="form-control" type="password" id="password" name="password"
+                     minlength="8" required autocomplete="new-password">
+              <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                      data-password-toggle aria-controls="password" aria-pressed="false"
+                      aria-label="Mostrar senha" title="Mostrar senha">
+                <i class="fa fa-eye" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold" for="password_confirmation">Repita a senha</label>
-            <input class="form-control" type="password" id="password_confirmation"
-                   name="password_confirmation" minlength="8" required autocomplete="new-password">
+            <div class="input-group auth-password-group">
+              <input class="form-control" type="password" id="password_confirmation"
+                     name="password_confirmation" minlength="8" required autocomplete="new-password">
+              <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                      data-password-toggle aria-controls="password_confirmation" aria-pressed="false"
+                      aria-label="Mostrar senha" title="Mostrar senha">
+                <i class="fa fa-eye" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
