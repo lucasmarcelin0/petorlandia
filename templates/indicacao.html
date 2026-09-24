@@ -64,9 +64,33 @@
 
     <a href="{{ share_whatsapp }}" target="_blank" rel="noopener" class="btn btn-success btn-lg"
        data-cta="referral_share_whatsapp">
-      <i class="fa-brands fa-whatsapp me-2"></i> Compartilhar no WhatsApp
+      <i class="fa-brands fa-whatsapp me-2" aria-hidden="true"></i> Compartilhar no WhatsApp
     </a>
   </div>
+
+  <script>
+    (function () {
+      const copyBtn = document.getElementById('btn-copiar');
+      const inputEl = document.getElementById('link-indicacao');
+      if (!copyBtn || !inputEl) return;
+      let copyTimer = null;
+
+      copyBtn.addEventListener('click', function () {
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(inputEl.value).then(function () {
+          clearTimeout(copyTimer);
+          copyBtn.innerHTML = '<i class="fa-solid fa-check me-1" aria-hidden="true"></i> Copiado!';
+          copyBtn.setAttribute('aria-label', 'Link de indicação copiado para a área de transferência');
+          copyTimer = setTimeout(function () {
+            copyBtn.innerHTML = '<i class="fa-regular fa-copy me-1" aria-hidden="true"></i> Copiar';
+            copyBtn.setAttribute('aria-label', 'Copiar link de indicação');
+          }, 2000);
+        }).catch(function () {
+          copyBtn.setAttribute('aria-label', 'Não foi possível copiar o link');
+        });
+      });
+    })();
+  </script>
 
   <div class="d-flex flex-wrap justify-content-center gap-4 text-center">
     <div>
