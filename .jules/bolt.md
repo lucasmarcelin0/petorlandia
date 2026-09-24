@@ -43,3 +43,7 @@
 **Learning:** In `services/sfa_service.py`, `normalizar_nome_chave` used `re.sub(r"\s+", " ", s)` which executes relatively slowly inside hot loops comparing text fields. Replacing this with `" ".join(s.split())` acts exactly the same for reducing arbitrary whitespace gaps into single spaces but avoids the regex engine entirely. Combined with short-circuiting `.isascii()` on pure ascii strings (bypassing `unicodedata`), execution time decreased by ~90% for pure ascii inputs and ~40% for strings requiring unicode translation.
 **Action:** For reducing arbitrary whitespace characters into single spaces, prefer `" ".join(string.split())` over `re.sub(r"\s+", " ", string)` in hot paths.
 
+
+## 2026-10-30 - Eliminating N+1 Queries in Notification Check Loops
+**Learning:** In `services/finance.py`, iterating over database query results (like `PJPayment` items) and issuing a new `.one_or_none()` `.filter_by()` query for existing `ClinicNotification`s inside the loop caused severe N+1 query performance degradation.
+**Action:** When cross-matching or updating related records (like notifications for a list of payments), pre-fetch the existing target records using an `.all()` query, index them into a memory dictionary keyed by target ID (e.g. `payment_id`), and then iterate using `dict.get(payment_id)`.
