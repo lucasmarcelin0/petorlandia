@@ -54,8 +54,8 @@ def search_animals(
     from models.base import Breed, Species
 
     like_term = f"%{(term or '').strip()}%"
-
-    last_appt = _build_last_appointment_subquery(clinic_scope)
+    sort_value = _coerce_sort(sort)
+    max_results = min(limit or DEFAULT_LIMIT, DEFAULT_LIMIT)
 
     # outerjoin Species and Breed so we can filter by their names
     query = (
@@ -67,8 +67,6 @@ def search_animals(
             contains_eager(Animal.species),
             contains_eager(Animal.breed),
         )
-        .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-        .add_columns(last_appt.c.last_at.label("last_appointment_at"))
         .filter(Animal.removido_em.is_(None))
     )
 
@@ -91,17 +89,38 @@ def search_animals(
     if tutor_id:
         query = query.filter(Animal.user_id == tutor_id)
 
-    sort_value = _coerce_sort(sort)
-
-    if sort_value == "name_asc":
-        query = query.order_by(Animal.name.asc())
-    elif sort_value == "recent_attended":
-        query = query.order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+    if sort_value == "recent_attended":
+        last_appt = _build_last_appointment_subquery(clinic_scope)
+        query = (
+            query
+            .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+            .add_columns(last_appt.c.last_at.label("last_appointment_at"))
+            .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+        )
+        results_raw: Iterable[tuple[Animal, Optional[datetime]]] = query.limit(max_results).all()
+        results = results_raw
     else:
-        query = query.order_by(Animal.date_added.desc())
+        # Optimization (Bolt): For non-`recent_attended` sorts, defer the appointment aggregation query.
+        # Joining `_build_last_appointment_subquery` upfront causes full-table GROUP BY over all appointments
+        # in the DB on every search query. Filtering and limiting animals first (max 50) and querying
+        # max scheduled_at only for matching animal IDs avoids full-table aggregations.
+        if sort_value == "name_asc":
+            query = query.order_by(Animal.name.asc())
+        else:
+            query = query.order_by(Animal.date_added.desc())
 
-    max_results = min(limit or DEFAULT_LIMIT, DEFAULT_LIMIT)
-    results: Iterable[tuple[Animal, Optional[datetime]]] = query.limit(max_results).all()
+        animals: List[Animal] = query.limit(max_results).all()
+        animal_ids = [a.id for a in animals]
+        last_at_map = {}
+        if animal_ids:
+            last_appt = _build_last_appointment_subquery(clinic_scope)
+            appt_query = (
+                db.session.query(last_appt.c.animal_id, last_appt.c.last_at)
+                .filter(last_appt.c.animal_id.in_(animal_ids))
+            )
+            last_at_map = dict(appt_query.all())
+
+        results = [(animal, last_at_map.get(animal.id)) for animal in animals]
 
     serialized: List[dict] = []
     for animal, last_at in results:
