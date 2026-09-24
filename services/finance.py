@@ -964,6 +964,27 @@ def _ensure_pending_plantao_notifications(
         .filter(func.lower(func.coalesce(PJPayment.tipo_prestador, '')) == 'plantonista')
         .filter(or_(PJPayment.status.is_(None), PJPayment.status != 'pago'))
     )
+
+    existing_notices = (
+        ClinicNotification.query.filter_by(
+            clinic_id=clinic.id,
+            month=month_start,
+            title=title,
+        )
+        .filter(ClinicNotification.message.like('[PJPayment:%'))
+        .all()
+    )
+
+    notice_by_payment_id = {}
+    for notice in existing_notices:
+        marker = (notice.message or '').split(']')[0]
+        if marker.startswith('[PJPayment:'):
+            try:
+                payment_id = int(marker.split(':', 1)[1])
+                notice_by_payment_id[payment_id] = notice
+            except (ValueError, IndexError):
+                pass
+
     active_ids: set[int] = set()
     for payment in query.all():
         if not payment.data_servico:
@@ -975,15 +996,9 @@ def _ensure_pending_plantao_notifications(
             f"{prefix} Plantão de {payment.prestador_nome} em "
             f"{payment.data_servico.strftime('%d/%m/%Y')} segue pendente há {days_overdue} dia(s)."
         )
-        existing = (
-            ClinicNotification.query.filter_by(
-                clinic_id=clinic.id,
-                month=month_start,
-                title=title,
-            )
-            .filter(ClinicNotification.message.like(f"{prefix}%"))
-            .one_or_none()
-        )
+
+        existing = notice_by_payment_id.get(payment.id)
+
         if existing:
             existing.message = message
             if existing.resolved:
@@ -1000,23 +1015,7 @@ def _ensure_pending_plantao_notifications(
             )
         )
 
-    stale_notices = (
-        ClinicNotification.query.filter_by(
-            clinic_id=clinic.id,
-            month=month_start,
-            title=title,
-        )
-        .filter(ClinicNotification.message.like('[PJPayment:%'))
-        .all()
-    )
-    for notice in stale_notices:
-        marker = (notice.message or '').split(']')[0]
-        if not marker.startswith('[PJPayment:'):
-            continue
-        try:
-            payment_id = int(marker.split(':', 1)[1])
-        except (ValueError, IndexError):
-            continue
+    for payment_id, notice in notice_by_payment_id.items():
         if payment_id not in active_ids and not notice.resolved:
             notice.resolved = True
             notice.resolution_date = utcnow()
