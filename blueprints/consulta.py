@@ -102,6 +102,16 @@ bp = Blueprint("consulta_routes", __name__)
 
 _RE_NORM_NEOMICINA = re.compile(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b")
 _RE_TOKENS_BUSCA = re.compile(r"[a-z0-9]{3,}")
+_RE_CONCENTRACAO_RATIO = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(mg|mcg|g)\s*/\s*(\d+(?:[.,]\d+)?)\s*(ml|l)", re.I
+)
+_RE_CONCENTRACAO_COMPOUND = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(mg/ml|mcg/ml|ug/ml|g/ml|ui/ml|mg/g|%)", re.I
+)
+_RE_CONCENTRACAO_SINGLE = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui|ml|l)\b", re.I
+)
+_RE_CONCENTRACAO_NUMERIC = re.compile(r"^(\d+(?:[.,]\d+)?)$")
 
 _RE_SUFFIX_XILINA = re.compile(r"([a-z]+)xilina\b", re.I)
 _RE_SUFFIX_NASOL = re.compile(r"([a-z]+)nasol\b", re.I)
