@@ -239,7 +239,7 @@ COLS_SINAN = {
 
 def normalizar_telefone(tel: str) -> str:
     """Normaliza telefone para formato E.164 sem '+' (ex: 5516991234567)."""
-    s = re.sub(r"\D", "", str(tel or ""))
+    s = "".join([c for c in str(tel or "") if c.isdigit()])
     if not s:
         return ""
     if len(s) == 8:
@@ -2335,8 +2335,7 @@ def _sanitize_limited_text(
 ) -> str:
     original = "" if value is None else str(value)
     cleaned = original.replace("\u00a0", " ")
-    cleaned = re.sub(r"[\r\n\t]+", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = " ".join(cleaned.split())
 
     acao = None
     if cleaned != original.strip():
@@ -2369,10 +2368,10 @@ def calcular_idade(data_nasc: date, data_ref: date) -> Optional[int]:
 
 
 def chave_dedup_sinan(row: list) -> Optional[str]:
-    ficha = re.sub(r"\D", "", str(row[COLS_SINAN["FICHA_SINAN"]] or ""))
+    ficha = "".join([c for c in str(row[COLS_SINAN["FICHA_SINAN"]] or "") if c.isdigit()])
     if len(ficha) >= 5:
         return f"FICHA-{ficha}"
-    n = re.sub(r"\D", "", str(row[COLS_SINAN["N"]] or ""))
+    n = "".join([c for c in str(row[COLS_SINAN["N"]] or "") if c.isdigit()])
     if n:
         return f"N-{n.zfill(3)}"
     return None
@@ -2531,10 +2530,10 @@ def anexar_dados_sinan_pacientes(pacientes) -> None:
 
 
 def _chave_dedup_sinan_dados(dados: dict) -> Optional[str]:
-    ficha = re.sub(r"\D", "", str(dados.get("ficha_sinan") or ""))
+    ficha = "".join([c for c in str(dados.get("ficha_sinan") or "") if c.isdigit()])
     if len(ficha) >= 5:
         return f"FICHA-{ficha}"
-    n_caso = re.sub(r"\D", "", str(dados.get("n_caso") or ""))
+    n_caso = "".join([c for c in str(dados.get("n_caso") or "") if c.isdigit()])
     return f"N-{n_caso.zfill(3)}" if n_caso else None
 
 
@@ -3751,7 +3750,7 @@ def _resolve_sinan_sheet_target(service) -> tuple[str, str]:
 def _normalize_form_header(value: object) -> str:
     normalized = normalizar_nome_chave(value or "")
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
+    normalized = " ".join(normalized.split())
     return re.sub(r"^\d+\s+", "", normalized).strip()
 
 
@@ -3780,7 +3779,7 @@ def _safe_int(value: object) -> int:
             return int(parsed)
     except Exception:
         pass
-    digits = re.sub(r"[^\d-]", "", raw)
+    digits = "".join([c for c in raw if c.isdigit() or c == "-"])
     if not digits:
         return 0
     try:
@@ -3794,7 +3793,7 @@ def _safe_decimal_text(value: object) -> str:
     if not raw:
         return "0"
     cleaned = raw.replace(".", "").replace(",", ".")
-    cleaned = re.sub(r"[^0-9.\-]", "", cleaned)
+    cleaned = "".join([c for c in cleaned if c.isdigit() or c in ".-"])
     if cleaned.count(".") > 1:
         first, *rest = cleaned.split(".")
         cleaned = first + "." + "".join(rest)
