@@ -32,7 +32,8 @@
       <select class="form-select bg-body-tertiary fw-semibold"
               id="{{ prefixo }}_age_unit"
               name="{{ nome_unidade or 'age_unit' }}"
-              data-age-unit>
+              data-age-unit
+              aria-label="Unidade de medida da idade">
         <option value="anos"
                 {% if unidade_atual in ['anos', 'ano'] %}selected{% endif %}>anos</option>
         <option value="meses"
