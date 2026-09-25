@@ -162,6 +162,9 @@ def test_photo_cropper_macro_a11y_attributes():
     assert 'role="group"' in content
     assert 'aria-label="Controles de edição da imagem"' in content
     assert '<i class="fas fa-undo" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-edit me-1" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-camera fa-3x text-secondary" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-upload me-1" aria-hidden="true"></i>' in content
     assert '<i class="fas fa-redo" aria-hidden="true"></i>' in content
     assert '<i class="fas fa-search-minus" aria-hidden="true"></i>' in content
     assert '<i class="fas fa-search-plus" aria-hidden="true"></i>' in content
@@ -181,3 +184,10 @@ def test_management_icon_buttons_a11y_attributes():
         clinic_content = f.read()
     assert 'aria-label="Excluir horário de {{ h.dia_semana }}"' in clinic_content
 
+
+
+def test_campo_data_idade_macro_a11y_attributes():
+    with open("templates/components/campo_data_idade.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="Unidade de medida da idade"' in content
