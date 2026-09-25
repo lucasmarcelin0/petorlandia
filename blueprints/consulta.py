@@ -1,3 +1,4 @@
+from security.redact import redact_sensitive_text
 """Views do domínio consulta_routes (migrado do app.py)."""
 from flask import Blueprint
 import json, os, re, unicodedata, uuid
@@ -4255,7 +4256,7 @@ def pagar_consulta_orcamento(consulta_id):
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
     if resp.get('status') != 201:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
