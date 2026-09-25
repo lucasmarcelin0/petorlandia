@@ -72,15 +72,15 @@
       <span class="bulario-especie-label">Espécie:</span>
       <a href="{{ url_for('bulario', q=q, classe=classificacao) }}"
          class="bulario-especie-chip {% if not especie %}active{% endif %}">
-        <i class="fas fa-layer-group"></i> Todos
+        <i class="fas fa-layer-group" aria-hidden="true"></i> Todos
       </a>
       <a href="{{ url_for('bulario', q=q, classe=classificacao, especie='caes') }}"
          class="bulario-especie-chip {% if especie == 'caes' %}active{% endif %}">
-        <i class="fas fa-dog"></i> Cão
+        <i class="fas fa-dog" aria-hidden="true"></i> Cão
       </a>
       <a href="{{ url_for('bulario', q=q, classe=classificacao, especie='gatos') }}"
          class="bulario-especie-chip {% if especie == 'gatos' %}active{% endif %}">
-        <i class="fas fa-cat"></i> Gato
+        <i class="fas fa-cat" aria-hidden="true"></i> Gato
       </a>
     </div>
 
@@ -89,7 +89,7 @@
       <a href="{{ url_for('bulario', q=q, especie=especie) }}"
          class="bulario-macro-chip {% if not classificacao %}active{% endif %}"
          data-macro="__todos__">
-        <i class="fas fa-layer-group"></i>
+        <i class="fas fa-layer-group" aria-hidden="true"></i>
         <span>Todos</span>
       </a>
       {% for grupo in macro_grupos %}
@@ -129,7 +129,7 @@
 
   {% if not medicamentos %}
   <div class="bulario-empty">
-    <i class="fas fa-search-minus fa-3x mb-3 text-muted"></i>
+    <i class="fas fa-search-minus fa-3x mb-3 text-muted" aria-hidden="true"></i>
     <h5 class="text-muted">
       {% if q or classificacao %}
         Nenhum medicamento encontrado para os filtros aplicados.
@@ -140,7 +140,7 @@
     </h5>
     {% if q or classificacao %}
     <a href="{{ url_for('bulario') }}" class="btn btn-outline-primary mt-3">
-      <i class="fas fa-times me-1"></i> Limpar filtros
+      <i class="fas fa-times me-1" aria-hidden="true"></i> Limpar filtros
     </a>
     {% endif %}
   </div>
@@ -156,17 +156,17 @@
         <div class="bulario-card__icon d-flex align-items-center justify-content-between">
           <span>
             {% if med.classificacao and 'antibi' in med.classificacao|lower %}
-              <i class="fas fa-bacteria"></i>
+              <i class="fas fa-bacteria" aria-hidden="true"></i>
             {% elif med.classificacao and ('anti-inflamat' in med.classificacao|lower or 'antiinflamat' in med.classificacao|lower) %}
-              <i class="fas fa-fire-flame-curved"></i>
+              <i class="fas fa-fire-flame-curved" aria-hidden="true"></i>
             {% elif med.classificacao and 'parasit' in med.classificacao|lower %}
-              <i class="fas fa-bug"></i>
+              <i class="fas fa-bug" aria-hidden="true"></i>
             {% elif med.classificacao and 'vacin' in med.classificacao|lower %}
-              <i class="fas fa-syringe"></i>
+              <i class="fas fa-syringe" aria-hidden="true"></i>
             {% elif med.classificacao and 'hormôn' in med.classificacao|lower %}
-              <i class="fas fa-dna"></i>
+              <i class="fas fa-dna" aria-hidden="true"></i>
             {% else %}
-              <i class="fas fa-pills"></i>
+              <i class="fas fa-pills" aria-hidden="true"></i>
             {% endif %}
           </span>
           <div class="bulario-card__actions">
@@ -205,22 +205,22 @@
               {% endif %}
               {% set esp = especies_por_med.get(med.id, []) %}
               {% if 'CAES' in esp or 'AMBOS' in esp %}
-              <span class="bulario-badge bd-esp-badge" title="Para cães"><i class="fas fa-dog"></i></span>
+              <span class="bulario-badge bd-esp-badge" title="Para cães" aria-label="Para cães"><i class="fas fa-dog" aria-hidden="true"></i></span>
               {% endif %}
               {% if 'GATOS' in esp or 'AMBOS' in esp %}
-              <span class="bulario-badge bd-esp-badge" title="Para gatos"><i class="fas fa-cat"></i></span>
+              <span class="bulario-badge bd-esp-badge" title="Para gatos" aria-label="Para gatos"><i class="fas fa-cat" aria-hidden="true"></i></span>
               {% endif %}
             </div>
           </div>
           <div class="bulario-card__footer">
             {% if med.dosagem_recomendada %}
             <span class="bulario-card__dose">
-              <i class="fas fa-ruler-combined me-1"></i>{{ med.dosagem_recomendada | truncate(50) }}
+              <i class="fas fa-ruler-combined me-1" aria-hidden="true"></i>{{ med.dosagem_recomendada | truncate(50) }}
             </span>
             {% else %}
             <span class="bulario-card__dose text-muted">Ver informações</span>
             {% endif %}
-            <i class="fas fa-arrow-right bulario-card__arrow"></i>
+            <i class="fas fa-arrow-right bulario-card__arrow" aria-hidden="true"></i>
           </div>
         </a>
 
