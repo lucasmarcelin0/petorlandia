@@ -1,3 +1,4 @@
+from security.redact import redact_sensitive_text
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
 import time as _stdlib_time
@@ -12008,7 +12009,7 @@ def _tratamento_acompanhamento_or_404(tratamento_id):
 
 
 #Delivery routes
- 
+
 
 
 
@@ -12455,11 +12456,11 @@ def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
     try:
         resp = mp_sdk().preference().create(preference_data)
     except Exception as exc:  # noqa: BLE001
-        current_app.logger.exception('Erro de conexão com Mercado Pago: %s', exc)
+        current_app.logger.exception('Erro de conexão com Mercado Pago: %s', redact_sensitive_text(str(exc)))
         raise PaymentPreferenceError('Falha ao conectar com Mercado Pago.', status_code=502) from exc
 
     if resp.get('status') != 201:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         raise PaymentPreferenceError('Erro ao iniciar pagamento.', status_code=502)
 
     pref = resp.get('response') or {}
@@ -13485,11 +13486,11 @@ def _parse_mp_datetime(value):
 def verify_mp_signature(req, secret: str) -> bool:
     """
     Verify the signature of a Mercado Pago webhook notification.
-    
+
     Args:
         req: Flask request object
         secret: Webhook secret key from Mercado Pago
-    
+
     Returns:
         bool: True if signature is valid, False otherwise
     """

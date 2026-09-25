@@ -1,3 +1,4 @@
+from security.redact import redact_sensitive_text
 """Loja, carrinho, pagamentos (Mercado Pago) e entregas — views do domínio.
 
 ``mp_sdk``, ``upload_to_s3``, ``verify_mp_signature``, ``CheckoutForm``,
@@ -2283,7 +2284,7 @@ def checkout():
         return respond_error("Falha ao conectar com Mercado Pago.")
 
     if resp.get("status") != 201:
-        current_app.logger.error("MP error (HTTP %s): %s", resp["status"], resp)
+        current_app.logger.error("MP error (HTTP %s): %s", resp["status"], redact_sensitive_text(str(resp)))
         return respond_error("Erro ao iniciar pagamento.")
 
     pref = resp["response"]
@@ -3301,7 +3302,7 @@ def racao_assinar(product_id):
             return redirect(url_for('produto_detail', product_id=product.id))
 
         if resp.get('status') not in {200, 201}:
-            current_app.logger.warning('Preapproval de ração rejeitado: %s', resp)
+            current_app.logger.warning('Preapproval de ração rejeitado: %s', redact_sensitive_text(str(resp)))
             sub.status = 'failed'
             sub.last_error = str(resp.get('response') or resp)[:500]
             db.session.commit()

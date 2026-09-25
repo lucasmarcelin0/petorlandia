@@ -152,3 +152,26 @@ def test_sensitive_tags_cobre_variantes_conhecidas():
     # Sanity check — se alguém reduzir SENSITIVE_TAGS num refactor, quebra.
     for tag in ("cpf", "cnpj", "senha", "token", "chaveacesso"):
         assert tag in SENSITIVE_TAGS
+
+
+def test_email_eh_redigido():
+    assert redact_sensitive_text('contato usuario@exemplo.com.br ok') == 'contato ***@*** ok'
+    assert redact_sensitive_text('email john.doe@gmail.com enviado') == 'email ***@*** enviado'
+
+
+def test_mercadopago_response_dict_str_eh_redigido():
+    resp_dict = {
+        'status': 400,
+        'response': {
+            'payer': {
+                'email': 'tutor@petorlandia.com',
+                'identification': {'type': 'CPF', 'number': '12345678901'},
+            },
+            'message': 'Invalid payer identification',
+        }
+    }
+    redacted = redact_sensitive_text(str(resp_dict))
+    assert 'tutor@petorlandia.com' not in redacted
+    assert '12345678901' not in redacted
+    assert '***@***' in redacted
+    assert '***' in redacted

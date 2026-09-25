@@ -1,3 +1,4 @@
+from security.redact import redact_sensitive_text
 """Views do domínio site_routes (migrado do app.py)."""
 from flask import Blueprint
 import os, re, requests
@@ -423,7 +424,7 @@ def veterinarian_membership_checkout():
         return redirect(url_for('veterinarian_membership'))
 
     if resp.get('status') not in {200, 201}:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         db.session.rollback()
         if attempt:
             mark_subscription_attempt_failed(
