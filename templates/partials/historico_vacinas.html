@@ -32,9 +32,9 @@
         </div>
 
       <div class="mt-2 d-flex gap-2">
-        <button class="btn btn-sm btn-danger" onclick="excluirVacina({{ vacina.id }})">🗑️ Remover</button>
-        <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">✏️ Editar</button>
-        <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank">🖨️ Imprimir</a>
+        <button class="btn btn-sm btn-danger" onclick="excluirVacina({{ vacina.id }})" aria-label="Remover vacina {{ vacina.nome }}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Remover</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})" aria-label="Editar vacina {{ vacina.nome }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Editar</button>
+        <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank" rel="noopener noreferrer" aria-label="Imprimir carteira de vacinas"><i class="fa-solid fa-print" aria-hidden="true"></i> Imprimir</a>
       </div>
       </li>
       {% endfor %}
@@ -62,28 +62,28 @@ function editarVacina(id) {
 
   li.innerHTML = `
     <div class="mb-2">
-      <label class="form-label">Nome</label>
+      <label class="form-label" for="edit-nome-${id}">Nome</label>
       <input class="form-control" id="edit-nome-${id}" value="${nome}">
     </div>
     <div class="mb-2">
-      <label class="form-label">Tipo</label>
+      <label class="form-label" for="edit-tipo-${id}">Tipo</label>
       <input class="form-control" id="edit-tipo-${id}" value="${tipo}">
     </div>
     <div class="mb-2">
-      <label class="form-label">Fabricante</label>
+      <label class="form-label" for="edit-fabricante-${id}">Fabricante</label>
       <input class="form-control" id="edit-fabricante-${id}" value="${fabricante}">
     </div>
     <div class="row">
       <div class="col-md-4 mb-2">
-        <label class="form-label">Doses Totais</label>
+        <label class="form-label" for="edit-doses-${id}">Doses Totais</label>
         <input type="number" class="form-control" id="edit-doses-${id}" value="${doses}">
       </div>
       <div class="col-md-4 mb-2">
-        <label class="form-label">Intervalo (dias)</label>
+        <label class="form-label" for="edit-intervalo-${id}">Intervalo (dias)</label>
         <input type="number" class="form-control" id="edit-intervalo-${id}" value="${intervalo}">
       </div>
       <div class="col-md-4 mb-2">
-        <label class="form-label">Frequência</label>
+        <label class="form-label" for="edit-frequencia-${id}">Frequência</label>
         <input class="form-control" id="edit-frequencia-${id}" value="${frequencia}">
       </div>
     </div>
@@ -92,14 +92,14 @@ function editarVacina(id) {
       <label class="form-check-label" for="edit-aplicada-${id}">Aplicada?</label>
     </div>
     <div class="mb-2">
-      <label class="form-label">Data</label>
+      <label class="form-label" for="edit-aplicada-em-${id}">Data</label>
       <input type="date" class="form-control" id="edit-aplicada-em-${id}" value="${aplicada_em}" ${aplicada === '1' ? '' : 'disabled'}>
     </div>
     <div class="mb-2">
-      <label class="form-label">Observações</label>
+      <label class="form-label" for="edit-obs-${id}">Observações</label>
       <textarea class="form-control" id="edit-obs-${id}">${obs}</textarea>
     </div>
-    <button class="btn btn-sm btn-success" onclick="salvarEdicaoVacina(${id})">💾 Salvar</button>
+    <button class="btn btn-sm btn-success" onclick="salvarEdicaoVacina(${id})" aria-label="Salvar edição da vacina"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Salvar</button>
     <button class="btn btn-sm btn-secondary" onclick="location.reload()">Cancelar</button>
   `;
 

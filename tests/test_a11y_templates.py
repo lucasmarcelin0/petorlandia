@@ -181,3 +181,19 @@ def test_management_icon_buttons_a11y_attributes():
         clinic_content = f.read()
     assert 'aria-label="Excluir horário de {{ h.dia_semana }}"' in clinic_content
 
+
+def test_historico_vacinas_a11y_labels():
+    with open("templates/partials/historico_vacinas.html", "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert 'aria-label="Remover vacina {{ vacina.nome }}"' in content
+    assert 'aria-label="Editar vacina {{ vacina.nome }}"' in content
+    assert 'aria-label="Imprimir carteira de vacinas"' in content
+    assert 'rel="noopener noreferrer"' in content
+    assert '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>' in content
+    assert '<i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>' in content
+    assert '<i class="fa-solid fa-print" aria-hidden="true"></i>' in content
+    assert '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>' in content
+    assert 'for="edit-nome-${id}"' in content
+    assert 'for="edit-tipo-${id}"' in content
+    assert 'for="edit-fabricante-${id}"' in content
