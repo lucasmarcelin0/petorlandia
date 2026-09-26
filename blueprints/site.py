@@ -161,10 +161,12 @@ def secret_game_partituras():
 @bp.route("/surpresa/<path:filename>")
 def secret_game_static(filename: str):
     response = send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
-    if filename in {"sala-a-dois.html", "sala-a-dois.js"}:
+    if filename in {"sala-a-dois.html", "sala-a-dois.js", "desafio.html", "main.js"}:
         # A chamada muda rapidamente e uma versao antiga pode remover TURN,
         # chat ou permissoes. Nunca deixe o navegador reutilizar estes dois
-        # arquivos sem consultar o servidor.
+        # arquivos sem consultar o servidor. O Desafio Secreto entra aqui pelo
+        # mesmo motivo: com 7 dias de cache, quem abriu a versao que carregava
+        # o Socket.IO de um CDN bloqueado pela CSP ficaria preso sem modo online.
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"

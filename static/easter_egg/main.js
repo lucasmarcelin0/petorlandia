@@ -95,6 +95,8 @@
     ruleMessage: null,
     roomError: null,
     mode: supportsSocket ? "online" : "local",
+    connection: supportsSocket && socket.connected ? "connected" : "connecting",
+    mySeat: null,
   };
 
   const container = document.getElementById("root");
@@ -105,6 +107,20 @@
   document.body.classList.add("game-body");
 
   const isOnlineMode = () => state.mode === "online" && supportsSocket;
+
+  // No online o servidor só aceita jogadas de quem está na vez. Sem este aviso
+  // o clique era desfeito pela resposta do servidor sem nenhuma explicação.
+  const waitingForOpponent = () =>
+    isOnlineMode() &&
+    state.connection === "connected" &&
+    (state.mySeat === 1 || state.mySeat === 2) &&
+    state.turn !== state.mySeat;
+
+  const currentTurnName = () =>
+    sanitizeName(
+      state.playerNames[state.turn - 1],
+      DEFAULT_PLAYER_NAMES[state.turn - 1] || `Jogador ${state.turn}`
+    );
 
   const setMode = (mode) => {
     if (mode === state.mode) {
@@ -284,6 +300,15 @@
     if (isOnlineMode()) {
       const shareLink = `${window.location.origin}${window.location.pathname}?sala=${roomCode}`;
       shareBox.innerHTML = `Convide alguém com este link:<br><code>${shareLink}</code>`;
+      if (state.connection !== "connected") {
+        const connectionNotice = document.createElement("p");
+        connectionNotice.className = "share-box__status";
+        connectionNotice.textContent =
+          state.connection === "offline"
+            ? "Sem conexão com o servidor. Tentando reconectar… Enquanto isso, dá para jogar no modo local."
+            : "Conectando ao servidor…";
+        shareBox.appendChild(connectionNotice);
+      }
     } else if (!supportsSocket) {
       shareBox.textContent =
         "Modo online indisponível. Continue jogando no modo local com seus amigos.";
@@ -311,6 +336,17 @@
       status.innerHTML = `Vez de ${activeName} <span class="emoji">${emoji}</span>`;
     }
     wrapper.appendChild(status);
+
+    if (isOnlineMode() && (state.mySeat === 1 || state.mySeat === 2)) {
+      const seatText = document.createElement("p");
+      seatText.className = "seat-text";
+      const myName = currentNames[state.mySeat - 1] || `Jogador ${state.mySeat}`;
+      seatText.textContent =
+        myName === `Jogador ${state.mySeat}`
+          ? `Você é o Jogador ${state.mySeat}`
+          : `Você é o Jogador ${state.mySeat} (${myName})`;
+      wrapper.appendChild(seatText);
+    }
 
     if (typeof state.ruleMessage === "string" && state.ruleMessage.trim()) {
       const ruleNotice = document.createElement("p");
@@ -436,6 +472,11 @@
         stickEl.addEventListener("click", () => {
           if (state.winner) return;
           if (!state.rows[rowIndex]?.[stickIndex]) return;
+          if (waitingForOpponent()) {
+            state.ruleMessage = `Aguarde sua vez: agora é a vez de ${currentTurnName()}.`;
+            render();
+            return;
+          }
           if (state.activeRow !== null && state.activeRow !== rowIndex) {
             state.ruleMessage = "Conclua esta linha antes de cortar outra.";
             render();
@@ -571,6 +612,11 @@
     resetButton.className = "button button--secondary";
     resetButton.textContent = "Reiniciar";
     resetButton.addEventListener("click", () => {
+      if (waitingForOpponent()) {
+        state.ruleMessage = `Na partida online, só quem está na vez (${currentTurnName()}) pode reiniciar.`;
+        render();
+        return;
+      }
       const currentNames = [
         sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
         sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
@@ -806,6 +852,14 @@
       render();
     });
 
+    socket.on("seat", (payload) => {
+      const seatValue = Number.parseInt(payload && payload.seat, 10);
+      state.mySeat = seatValue === 1 || seatValue === 2 ? seatValue : null;
+      if (isOnlineMode()) {
+        render();
+      }
+    });
+
     socket.on("room_full", (payload) => {
       if (state.mode !== "online") {
         return;
@@ -820,7 +874,24 @@
       render();
     });
 
+    // Só redesenha quando o estado muda: o cliente tenta reconectar a cada
+    // poucos segundos e um render por tentativa apagaria o nome em digitação.
+    const setConnection = (next) => {
+      if (state.connection === next) {
+        return false;
+      }
+      state.connection = next;
+      return state.mode === "online";
+    };
+
+    socket.on("connect_error", () => {
+      if (setConnection("offline")) {
+        render();
+      }
+    });
+
     socket.on("disconnect", (reason) => {
+      const changed = setConnection("offline");
       if (state.mode !== "online") {
         return;
       }
@@ -828,12 +899,20 @@
       if (!state.roomError && reason === "io server disconnect") {
         state.roomError = "Conexão encerrada pelo servidor.";
         render();
+        return;
+      }
+      if (changed) {
+        render();
       }
     });
 
     socket.on("connect", () => {
+      const changed = setConnection("connected");
       if (state.mode === "online") {
         state.roomError = null;
+        if (changed) {
+          render();
+        }
       }
     });
   }
