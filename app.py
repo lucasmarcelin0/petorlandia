@@ -6006,7 +6006,8 @@ def _integration_extract_freeform_intake(payload: dict):
                 other_links.append(found_url)
 
         for found_phone in phone_pattern.findall(content):
-            normalized_phone = re.sub(r'\D+', '', found_phone)
+            str_phone = str(found_phone or "")
+            normalized_phone = str_phone if str_phone.isdigit() else "".join([c for c in str_phone if c.isdigit()])
             if normalized_phone and normalized_phone not in phones:
                 phones.append(normalized_phone)
 
@@ -12008,7 +12009,7 @@ def _tratamento_acompanhamento_or_404(tratamento_id):
 
 
 #Delivery routes
- 
+
 
 
 
@@ -13485,11 +13486,11 @@ def _parse_mp_datetime(value):
 def verify_mp_signature(req, secret: str) -> bool:
     """
     Verify the signature of a Mercado Pago webhook notification.
-    
+
     Args:
         req: Flask request object
         secret: Webhook secret key from Mercado Pago
-    
+
     Returns:
         bool: True if signature is valid, False otherwise
     """

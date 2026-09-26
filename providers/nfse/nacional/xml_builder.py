@@ -15,8 +15,11 @@ BR_TZ = ZoneInfo("America/Sao_Paulo")
 DEFAULT_MUNICIPIO_BH = "3106200"
 
 
-def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+def _digits(value) -> str:
+    str_val = str(value or "")
+    if str_val.isdigit():
+        return str_val
+    return "".join([c for c in str_val if c.isdigit()])
 
 
 def _text(value: Any) -> str:

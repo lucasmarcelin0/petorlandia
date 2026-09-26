@@ -132,8 +132,11 @@ def _tracked_non_date_titles() -> set[str]:
     return titles
 
 
-def _digits(value: str | None) -> str:
-    return re.sub(r"\D+", "", value or "")
+def _digits(value) -> str:
+    str_val = str(value or "")
+    if str_val.isdigit():
+        return str_val
+    return "".join([c for c in str_val if c.isdigit()])
 
 
 def _phone_digit_keys(*values: str | None) -> set[str]:

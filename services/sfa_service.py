@@ -239,7 +239,8 @@ COLS_SINAN = {
 
 def normalizar_telefone(tel: str) -> str:
     """Normaliza telefone para formato E.164 sem '+' (ex: 5516991234567)."""
-    s = re.sub(r"\D", "", str(tel or ""))
+    str_tel = str(tel or "")
+    s = str_tel if str_tel.isdigit() else "".join([c for c in str_tel if c.isdigit()])
     if not s:
         return ""
     if len(s) == 8:
@@ -2369,10 +2370,12 @@ def calcular_idade(data_nasc: date, data_ref: date) -> Optional[int]:
 
 
 def chave_dedup_sinan(row: list) -> Optional[str]:
-    ficha = re.sub(r"\D", "", str(row[COLS_SINAN["FICHA_SINAN"]] or ""))
+    str_ficha = str(row[COLS_SINAN["FICHA_SINAN"]] or "")
+    ficha = str_ficha if str_ficha.isdigit() else "".join([c for c in str_ficha if c.isdigit()])
     if len(ficha) >= 5:
         return f"FICHA-{ficha}"
-    n = re.sub(r"\D", "", str(row[COLS_SINAN["N"]] or ""))
+    str_n = str(row[COLS_SINAN["N"]] or "")
+    n = str_n if str_n.isdigit() else "".join([c for c in str_n if c.isdigit()])
     if n:
         return f"N-{n.zfill(3)}"
     return None
@@ -2531,10 +2534,12 @@ def anexar_dados_sinan_pacientes(pacientes) -> None:
 
 
 def _chave_dedup_sinan_dados(dados: dict) -> Optional[str]:
-    ficha = re.sub(r"\D", "", str(dados.get("ficha_sinan") or ""))
+    str_ficha2 = str(dados.get("ficha_sinan") or "")
+    ficha = str_ficha2 if str_ficha2.isdigit() else "".join([c for c in str_ficha2 if c.isdigit()])
     if len(ficha) >= 5:
         return f"FICHA-{ficha}"
-    n_caso = re.sub(r"\D", "", str(dados.get("n_caso") or ""))
+    str_n_caso = str(dados.get("n_caso") or "")
+    n_caso = str_n_caso if str_n_caso.isdigit() else "".join([c for c in str_n_caso if c.isdigit()])
     return f"N-{n_caso.zfill(3)}" if n_caso else None
 
 
