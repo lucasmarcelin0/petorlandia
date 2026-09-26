@@ -4,6 +4,8 @@
 ``_run_whatsapp_batch_selenium`` e ``_is_admin`` são late-bound via módulo app
 (testes fazem monkeypatch desses nomes — contrato do antigo lazy_view).
 """
+from security.redact import redact_sensitive_text
+
 import json
 import logging
 import re
@@ -2272,7 +2274,7 @@ def checkout():
         if marketplace_fee > 0:
             preference_data["marketplace_fee"] = marketplace_fee
     current_app.logger.debug("MP Preference Payload:\n%s",
-                             json.dumps(preference_data, indent=2, ensure_ascii=False))
+                             redact_sensitive_text(json.dumps(preference_data, indent=2, ensure_ascii=False)))
 
     # 5️⃣ cria Preference no Mercado Pago
     try:
@@ -2283,7 +2285,7 @@ def checkout():
         return respond_error("Falha ao conectar com Mercado Pago.")
 
     if resp.get("status") != 201:
-        current_app.logger.error("MP error (HTTP %s): %s", resp["status"], resp)
+        current_app.logger.error("MP error (HTTP %s): %s", resp["status"], redact_sensitive_text(str(resp)))
         return respond_error("Erro ao iniciar pagamento.")
 
     pref = resp["response"]
@@ -3301,7 +3303,7 @@ def racao_assinar(product_id):
             return redirect(url_for('produto_detail', product_id=product.id))
 
         if resp.get('status') not in {200, 201}:
-            current_app.logger.warning('Preapproval de ração rejeitado: %s', resp)
+            current_app.logger.warning('Preapproval de ração rejeitado: %s', redact_sensitive_text(str(resp)))
             sub.status = 'failed'
             sub.last_error = str(resp.get('response') or resp)[:500]
             db.session.commit()
