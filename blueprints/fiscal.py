@@ -79,8 +79,11 @@ from services.nfse_service import _normalize_municipio
 from app import current_user_clinic_id
 
 
-def _only_digits(value: str | None) -> str:
-    return re.sub(r"\D+", "", value or "")
+def _only_digits(value) -> str:
+    str_val = str(value or "")
+    if str_val.isdigit():
+        return str_val
+    return "".join([c for c in str_val if c.isdigit()])
 
 
 FISCAL_UF_CODES = {

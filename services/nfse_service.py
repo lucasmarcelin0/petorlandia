@@ -352,8 +352,10 @@ def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, 
         "valor": valor_total,
         "item_lista": codigo_servico,
     }
-    cnae_digits = re.sub(r"\D+", "", str(getattr(clinic, "cnae", None) or ""))
-    codigo_servico_digits = re.sub(r"\D+", "", str(codigo_servico or ""))
+    str_cnae = str(getattr(clinic, "cnae", None) or "")
+    cnae_digits = str_cnae if str_cnae.isdigit() else "".join([c for c in str_cnae if c.isdigit()])
+    str_cod_serv = str(codigo_servico or "")
+    codigo_servico_digits = str_cod_serv if str_cod_serv.isdigit() else "".join([c for c in str_cod_serv if c.isdigit()])
     if (
         cnae_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"]
         or codigo_servico_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"]

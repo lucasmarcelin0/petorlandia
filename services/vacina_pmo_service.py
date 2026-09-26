@@ -258,8 +258,11 @@ def _strip_accents(value: str) -> str:
     )
 
 
-def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+def _digits(value) -> str:
+    str_val = str(value or "")
+    if str_val.isdigit():
+        return str_val
+    return "".join([c for c in str_val if c.isdigit()])
 
 
 def _parse_count(value: Any) -> int:
@@ -6582,7 +6585,8 @@ def _request_row_identity(row: list[Any]) -> str:
         if user_id not in {"", "0"}:
             return f"user:{user_id}"
 
-    phone = re.sub(r"\D+", "", _cell(row, PMO_REQUEST_PHONE_INDEX))
+    raw_phone = str(_cell(row, PMO_REQUEST_PHONE_INDEX) or "")
+    phone = raw_phone if raw_phone.isdigit() else "".join([c for c in raw_phone if c.isdigit()])
     name = _pmo_normalize_title(_cell(row, PMO_REQUEST_TUTOR_INDEX))
     if name and len(phone) >= 8:
         return f"nome+fone:{name}|{phone[-11:]}"

@@ -1491,7 +1491,8 @@ def register_account(
 
 
 def _parse_ofx_date(value: str) -> date:
-    digits = re.sub(r"[^0-9]", "", value or "")
+    str_val = str(value or "")
+    digits = str_val if str_val.isdigit() else "".join([c for c in str_val if c.isdigit()])
     return datetime.strptime(digits[:8], "%Y%m%d").date()
 
 

@@ -2205,7 +2205,8 @@ def checkout():
         "email": current_user.email,
     }
     if current_user.phone:
-        digits = re.sub(r"\D", "", current_user.phone)
+        str_phone = str(current_user.phone or "")
+        digits = str_phone if str_phone.isdigit() else "".join([c for c in str_phone if c.isdigit()])
         if digits.startswith("55") and len(digits) > 11:
             digits = digits[2:]
         if len(digits) >= 10:
@@ -2218,7 +2219,7 @@ def checkout():
     if current_user.cpf:
         payer_info["identification"] = {
             "type": "CPF",
-            "number": re.sub(r"\D", "", current_user.cpf),
+            "number": current_user.cpf if current_user.cpf and str(current_user.cpf).isdigit() else "".join([c for c in str(current_user.cpf or "") if c.isdigit()]),
         }
     if order.shipping_address:
         payer_info["address"] = {"street_name": order.shipping_address}

@@ -665,7 +665,7 @@ class UserAdminView(MyModelView):
             f'<a href="{url_for("ficha_tutor", tutor_id=m.id)}">{m.name}</a>'
         ),
         'phone': lambda v, c, m, p: Markup(
-            f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
+            f'<a href="https://wa.me/55{m.phone if m.phone.isdigit() else "".join([c for c in m.phone if c.isdigit()])}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'profile_photo': lambda v, c, m, p: Markup(
             f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100">'

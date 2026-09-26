@@ -1168,8 +1168,10 @@ class _FakeReconcileSheetsService:
         """(primeira linha, última linha ou None) da parte A2:R9 da faixa."""
         trecho = range_value.split("!", 1)[1]
         inicio, _, fim = trecho.partition(":")
-        primeira = int(re.sub(r"[^0-9]", "", inicio) or 1)
-        ultima = re.sub(r"[^0-9]", "", fim)
+        str_inicio = str(inicio or "")
+        primeira = int((str_inicio if str_inicio.isdigit() else "".join([c for c in str_inicio if c.isdigit()])) or 1)
+        str_fim = str(fim or "")
+        ultima = str_fim if str_fim.isdigit() else "".join([c for c in str_fim if c.isdigit()])
         return primeira, (int(ultima) if ultima else None)
 
     def clear(self, **kwargs):

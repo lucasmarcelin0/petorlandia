@@ -542,8 +542,11 @@ def _clinic_address_payload(clinic: Any, emitter: FiscalEmitter) -> dict[str, An
     }
 
 
-def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+def _digits(value) -> str:
+    str_val = str(value or "")
+    if str_val.isdigit():
+        return str_val
+    return "".join([c for c in str_val if c.isdigit()])
 
 
 def _service_defaults_for_emitter(emitter: FiscalEmitter | None) -> dict[str, str]:
@@ -565,7 +568,8 @@ def _is_nacional_nfse(emitter: FiscalEmitter, payload: dict[str, Any] | None = N
     payload = payload or {}
     provider = _normalize_provider_text(payload.get("provider") or payload.get("provedor_nfse"))
     municipio_nfse = _normalize_provider_text(payload.get("municipio_nfse") or "")
-    municipio_ibge = re.sub(r"\D+", "", str(payload.get("municipio_ibge") or emitter.municipio_ibge or ""))
+    str_ibge = str(payload.get("municipio_ibge") or emitter.municipio_ibge or "")
+    municipio_ibge = str_ibge if str_ibge.isdigit() else "".join([c for c in str_ibge if c.isdigit()])
     if provider in {"nacional", "nfse_nacional", "pbh", "belo_horizonte", "contagem"}:
         return True
     if municipio_ibge in NFSE_NACIONAL_MUNICIPIO_IBGE:
