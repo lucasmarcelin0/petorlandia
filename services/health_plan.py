@@ -100,6 +100,11 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
     overall_status = 'approved'
     messages: List[str] = []
     now = utcnow()
+    # Keep reservations made earlier in this evaluation in memory. Usage rows
+    # are flushed only after the full authorization completes, so querying the
+    # database for each line independently lets a multi-line estimate exceed
+    # a shared monetary limit.
+    pending_usage: Dict[int, Decimal] = {}
 
     for item in consulta.orcamento_items:
         coverage = _match_coverage(plan, item)
@@ -120,7 +125,7 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
             eligible_at = start_date + timedelta(days=int(coverage.waiting_period_days))
             if now < eligible_at:
                 item.coverage_status = 'waiting_period'
-                item.coverage_message = f'Carência ativa até {eligible_at.date().isoformat()}.'
+                item.coverage_message = f'Carência ativa até {eligible_at.date().strftime("%d/%m/%Y")}.'
                 overall_status = 'denied'
                 continue
 
@@ -131,6 +136,7 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
                 coverage.limit_period or 'lifetime',
                 now,
             )
+            consumed += pending_usage.get(coverage.id, Decimal('0'))
             remaining = Decimal(coverage.monetary_limit or 0) - consumed
             if eligible_amount > remaining:
                 item.coverage_status = 'limit_exceeded'
@@ -152,6 +158,7 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
         usage.status = 'approved'
         usage.notes = item.coverage_message
         db.session.add(usage)
+        pending_usage[coverage.id] = pending_usage.get(coverage.id, Decimal('0')) + eligible_amount
         messages.append(f"{item.descricao}: {coverage_label('approved')}")
 
     if overall_status != 'approved' and not messages:
