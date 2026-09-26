@@ -5697,10 +5697,10 @@
       : `<span class="badge rounded-pill bg-light text-muted border ms-1" style="font-size:0.68rem; padding:0.12rem 0.35rem;" title="Navegação por busca nominal de endereço"><i class="fas fa-map-pin me-1"></i>Rua</span>`;
 
     const mapsLink = mapsUrl
-      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="${hasGps ? 'Abrir no Google Maps (GPS Exato)' : 'Abrir no Google Maps (Busca de Endereço)'}" aria-label="Abrir no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
+      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="${hasGps ? 'Abrir no Google Maps (GPS Exato)' : 'Abrir no Google Maps (Busca de Endereço)'}" aria-label="Abrir no Google Maps"><i class="fas fa-map-location-dot" aria-hidden="true"></i></a>`
       : '';
     const wazeLink = waze
-      ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Abrir no Waze" aria-label="Abrir no Waze"><i class="fas fa-route"></i></a>`
+      ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Abrir no Waze" aria-label="Abrir no Waze"><i class="fas fa-route" aria-hidden="true"></i></a>`
       : '';
     const textClass = compact ? '' : ' class="pmo-address-text"';
     return `<div class="d-flex align-items-start gap-1 flex-wrap"><span${textClass}>${label}</span>${gpsBadge}<span class="d-flex gap-1 ms-auto ms-sm-0">${mapsLink}${wazeLink}</span></div>`;
@@ -6274,7 +6274,7 @@
       if (button) {
         button.classList.remove('is-busy');
         button.disabled = false;
-        button.innerHTML = '<i class="fas fa-camera"></i>';
+        button.innerHTML = '<i class="fas fa-camera" aria-hidden="true"></i>';
       }
     }
   }
@@ -6972,7 +6972,7 @@
       `;
     }
 
-    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera"></i></button>`;
+    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera" aria-hidden="true"></i></button>`;
   }
 
   const STATUS_LABELS = {
@@ -7625,7 +7625,7 @@
         <option value="gato">Gato</option>
       </select>
       <button type="button" class="btn btn-outline-secondary" data-nv="animal-remove"
-              aria-label="Remover este animal"><i class="fas fa-trash"></i></button>`;
+              aria-label="Remover este animal"><i class="fas fa-trash" aria-hidden="true"></i></button>`;
     return linha;
   }
 
