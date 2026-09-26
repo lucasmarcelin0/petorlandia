@@ -95,7 +95,14 @@ def format_timedelta(value):
 
 def digits_only(value):
     """Return only the digits from a string."""
-    return "".join(filter(str.isdigit, value)) if value else ""
+    if not value:
+        return ""
+    # FAST-PATH OPTIMIZATION: If the string already consists solely of digits
+    # (e.g. raw CPF/Phone inputs that are already clean), bypass string
+    # iteration entirely for an O(1) return.
+    if type(value) is str and value.isdigit():
+        return value
+    return "".join([c for c in str(value) if c.isdigit()])
 
 
 def whatsapp_chat_url(phone: str | None, message: str | None = None) -> str | None:
