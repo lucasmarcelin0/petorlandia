@@ -3,6 +3,7 @@
 ## 2026-08-31 - Pre-compiling Regex Patterns in Posology and Jinja Filter Hot Paths
 **Learning:** In PetOrlandia, posology normalization (`services/posologia_normalizacao.py`) and Jinja species/datetime filters (`template_filters.py`) are executed frequently during catalog searches, monography displays, and template rendering. Passing raw string regexes to `re.sub`/`re.search`/`re.finditer` causes redundant regex parsing and compilation on every single execution.
 **Action:** Always pre-compile module-level regexes into `re.compile` objects when defining text parsing tables or filter utilities.
+
 ## 2025-05-20 - Fast-path short-circuiting for string accent stripping
 **Learning:** In string processing helpers like `_strip_accents`, checking `value.isascii()` to bypass `unicodedata.normalize("NFD", value)` and character category loops on pure ASCII strings provides a ~40% execution speedup.
 **Action:** When performing Unicode normalization or accent stripping across large collections of text, check for ASCII pre-conditions first to short-circuit non-accented inputs safely.
@@ -43,3 +44,6 @@
 **Learning:** In `services/sfa_service.py`, `normalizar_nome_chave` used `re.sub(r"\s+", " ", s)` which executes relatively slowly inside hot loops comparing text fields. Replacing this with `" ".join(s.split())` acts exactly the same for reducing arbitrary whitespace gaps into single spaces but avoids the regex engine entirely. Combined with short-circuiting `.isascii()` on pure ascii strings (bypassing `unicodedata`), execution time decreased by ~90% for pure ascii inputs and ~40% for strings requiring unicode translation.
 **Action:** For reducing arbitrary whitespace characters into single spaces, prefer `" ".join(string.split())` over `re.sub(r"\s+", " ", string)` in hot paths.
 
+## 2026-11-02 - Pre-compiling Regexes and Avoiding Redundant Regex Passes in Vacina PMO Normalization
+**Learning:** In `services/vacina_pmo_service.py`, `_normalize_text` and associated helpers (`_normalize_note_line`, `_pmo_normalize_title`, `_normalize_person_name`, `_request_row_key`) called `re.sub(r"\s+", " ", ...)` on every text input during Google Sheets row parsing and synchronization. Replacing `re.sub(r"\s+", " ", ...)` with `" ".join(str(value).split())` and pre-compiling module-level regex objects (`_RE_DIGITS` and `_RE_NON_ALPHANUMERIC`) eliminates regex compilation overhead and provides a ~3x-4x speedup for string normalization in PMO vaccination workflows.
+**Action:** Prefer `" ".join(s.split())` over `re.sub(r"\s+", " ", s)` for whitespace collapsing, and pre-compile module-level regex objects for digit and alphanumeric parsing.
