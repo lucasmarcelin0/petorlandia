@@ -11647,7 +11647,7 @@ def _run_whatsapp_batch_selenium(batch_items, warmup_only=False):
         input_path.write_text(json.dumps({"items": batch_items}, ensure_ascii=False), encoding="utf-8")
 
         command = [
-            r"C:\edb\languagepack\v3\Python-3.10\python.exe",
+            sys.executable or "python3",
             str(script_path),
             "--input",
             str(input_path),

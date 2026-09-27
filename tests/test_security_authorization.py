@@ -642,3 +642,36 @@ class TestDataPrivacy:
         
         # Should not show tutor2's private animals
         assert 'Animal 2' not in html or response.status_code == 200
+
+
+class TestSubprocessExecutionSecurity:
+    """Test secure subprocess execution parameters."""
+
+    def test_whatsapp_batch_uses_sys_executable(self, monkeypatch, app):
+        import sys
+        from pathlib import Path
+        import app as app_module
+
+        captured_commands = []
+
+        def mock_subprocess_run(cmd, *args, **kwargs):
+            captured_commands.append(cmd)
+
+            class MockCompletedProcess:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            output_idx = cmd.index("--output") + 1
+            output_path = cmd[output_idx]
+            Path(output_path).write_text('{"results": []}', encoding="utf-8")
+
+            return MockCompletedProcess()
+
+        monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+        res = app_module._run_whatsapp_batch_selenium([{"tutor_id": 1, "message": "hello"}], warmup_only=True)
+        assert len(captured_commands) == 1
+        cmd = captured_commands[0]
+        assert cmd[0] == (sys.executable or "python3")
+        assert "send_whatsapp_batch_selenium.py" in cmd[1]
