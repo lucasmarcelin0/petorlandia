@@ -233,4 +233,8 @@ def _format_decimal(value: Decimal | str | float | int) -> str:
 
 
 def _only_digits(value: str) -> str:
-    return "".join(ch for ch in (value or "") if ch.isdigit())
+    if not value:
+        return ""
+    if value.isdigit():
+        return value
+    return "".join([ch for ch in value if ch.isdigit()])
