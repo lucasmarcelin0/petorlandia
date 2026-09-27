@@ -1450,8 +1450,8 @@
               <div class="clinical-search-input-wrap">
                 <i class="bi bi-search clinical-search-icon"></i>
                 <div id="clinical-suspicion-input-slot" class="w-100"></div>
-                <button type="button" class="clinical-search-clear d-none" id="clear-clinical-suspicion" title="Limpar pesquisa">
-                  <i class="bi bi-x-circle-fill"></i>
+                <button type="button" class="clinical-search-clear d-none" id="clear-clinical-suspicion" title="Limpar pesquisa" aria-label="Limpar pesquisa">
+                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
                 </button>
                 <datalist id="clinical-suspicion-options">
                   {% for item in clinical_suspicion_options or [] %}
@@ -1994,8 +1994,8 @@
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}"
             data-title="${escapeHtml(title || '')}"
-            title="Dispensar item">
-            <i class="bi bi-x"></i>
+            title="Dispensar item" aria-label="Dispensar item">
+            <i class="bi bi-x" aria-hidden="true"></i>
           </button>
         </div>
       `;
@@ -2094,8 +2094,8 @@
             data-protocol-id="${protocolId}"
             data-item-id="${itemId || ''}"
             data-title="${escapeHtml(title || '')}"
-            title="Dispensar medicamento">
-            <i class="bi bi-x"></i>
+            title="Dispensar medicamento" aria-label="Dispensar medicamento">
+            <i class="bi bi-x" aria-hidden="true"></i>
           </button>
         </div>
       `;
