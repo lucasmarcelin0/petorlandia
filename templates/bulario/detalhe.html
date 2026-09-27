@@ -62,8 +62,8 @@
 
       <!-- Ações rápidas -->
       <div class="d-flex flex-column flex-sm-row gap-2">
-        <button class="btn bd-btn-copy" onclick="copiarParaPrescricao()" title="Copiar para prescrição">
-          <i class="fas fa-prescription me-2"></i>Usar em prescrição
+        <button class="btn bd-btn-copy" onclick="copiarParaPrescricao()" title="Copiar para prescrição" aria-label="Copiar dados para prescrição" aria-live="polite">
+          <i class="fas fa-prescription me-2" aria-hidden="true"></i>Usar em prescrição
         </button>
         {% if vetsmart_produto_url %}
         <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
@@ -1208,10 +1208,16 @@ function copiarParaPrescricao() {
     ].filter(Boolean).join('\n');
     navigator.clipboard.writeText(texto).then(() => {
       const btn = document.querySelector('.bd-btn-copy');
-      const orig = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-check me-2"></i>Copiado!';
+      const origText = btn.innerHTML;
+      const origLabel = btn.getAttribute('aria-label') || 'Copiar dados para prescrição';
+      btn.innerHTML = '<i class="fas fa-check me-2" aria-hidden="true"></i>Copiado!';
+      btn.setAttribute('aria-label', 'Copiado para a área de transferência');
       btn.style.background = 'rgba(34,197,94,.3)';
-      setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
+      setTimeout(() => {
+        btn.innerHTML = origText;
+        btn.setAttribute('aria-label', origLabel);
+        btn.style.background = '';
+      }, 2000);
     });
   }
 }
