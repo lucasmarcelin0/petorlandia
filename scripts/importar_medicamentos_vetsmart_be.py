@@ -166,7 +166,7 @@ def eh_vazio(texto: Optional[str]) -> bool:
 def limpar(texto: Optional[str], max_len: int = 500) -> Optional[str]:
     if not texto:
         return None
-    texto = re.sub(r'\s+', ' ', texto).strip()
+    texto = " ".join(str(texto).split())
     if not texto:
         return None
     return texto[:max_len]
@@ -209,7 +209,7 @@ def _itemprop_value(soup: BeautifulSoup, prop: str) -> Optional[str]:
     if not tag:
         return None
     valor = tag.get("content") or tag.get_text(" ", strip=True)
-    valor = re.sub(r'\s+', ' ', valor or '').strip()
+    valor = " ".join(str(valor or '').split())
     if eh_vazio(valor):
         return None
     return valor or None
@@ -220,7 +220,7 @@ def _css_value(soup: BeautifulSoup, selector: str) -> Optional[str]:
     if not el:
         return None
     valor = el.get_text(" ", strip=True)
-    valor = re.sub(r'\s+', ' ', valor or '').strip()
+    valor = " ".join(str(valor or '').split())
     return valor or None
 
 

@@ -215,7 +215,7 @@ def _eh_vazio(texto: str) -> bool:
 def _limpar(texto: Optional[str], max_len: int = 500) -> Optional[str]:
     if not texto:
         return None
-    texto = re.sub(r'\s+', ' ', texto).strip()
+    texto = " ".join(str(texto).split())
     return texto[:max_len] if texto else None
 
 
@@ -229,7 +229,7 @@ def _limpar_dose(texto: Optional[str]) -> Optional[str]:
     texto = re.sub(r'^\s*(Doses|Dosagem indicada)\s+', '', texto, flags=re.IGNORECASE)
     # Remove hífen e prefixo "- Cães/Gatos" inicial
     texto = re.sub(r'^[-–]\s*', '', texto)
-    texto = re.sub(r'\s+', ' ', texto).strip()
+    texto = " ".join(str(texto).split())
     return texto[:300] if texto else None
 
 
@@ -238,7 +238,7 @@ def _itemprops(soup, prop: str) -> List[str]:
     valores = []
     for tag in soup.find_all(attrs={'itemprop': prop}):
         v = tag.get('content') or tag.get_text(' ', strip=True)
-        v = re.sub(r'\s+', ' ', v).strip() if v else ''
+        v = " ".join(str(v).split()) if v else ''
         if v and not _eh_vazio(v):
             valores.append(v)
     return valores
@@ -272,7 +272,7 @@ def _split_lista_textual(texto: Optional[str]) -> List[str]:
         linha = re.sub(r'^\s*[-–—]\s*', '', linha).strip(' .;:-')
         if len(linha) < 3:
             continue
-        chave = re.sub(r'\s+', ' ', linha).casefold()
+        chave = " ".join(str(linha).split()).casefold()
         if chave in vistos:
             continue
         vistos.add(chave)
@@ -291,7 +291,7 @@ def _montar_secao_padrao(itens: Optional[List[str]] = None, texto: Optional[str]
 def _normalizar_rotulo_secao(rotulo: Optional[str]) -> Optional[str]:
     if not rotulo:
         return None
-    alvo = re.sub(r'\s+', ' ', rotulo).strip(' :').casefold()
+    alvo = " ".join(str(rotulo).split()).strip(' :').casefold()
     if 'contraindica' in alvo:
         return 'contraindicacoes'
     if any(token in alvo for token in ['advert', 'precau', 'cuidado']):
@@ -2588,7 +2588,7 @@ def _norm(texto: str) -> str:
     colapsa espaços/quebras internas em um único espaço, strip."""
     import unicodedata
     s = unicodedata.normalize("NFKD", texto or "").encode("ASCII", "ignore").decode().lower()
-    return re.sub(r"\s+", " ", s).strip()
+    return " ".join(str(s).split())
 
 
 def _trunc(v, n):

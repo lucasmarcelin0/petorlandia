@@ -195,7 +195,7 @@ def normalize_key(name: str) -> str:
     """Remove acentos, lowercase, colapsa espaços — para comparação de duplicatas."""
     nfkd = unicodedata.normalize("NFKD", name)
     ascii_str = nfkd.encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"\s+", " ", ascii_str).strip().lower()
+    return " ".join(str(ascii_str).split()).lower()
 
 
 def best_name(names: list[str]) -> str:

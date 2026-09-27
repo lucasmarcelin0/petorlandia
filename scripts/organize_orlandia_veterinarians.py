@@ -33,7 +33,7 @@ def normalize(value):
     if not normalized.isascii():
         normalized = unicodedata.normalize("NFKD", normalized)
         normalized = "".join([ch for ch in normalized if not unicodedata.combining(ch)])
-    return re.sub(r"\s+", " ", normalized)
+    return " ".join(str(normalized).split())
 
 
 def vet_city(vet):

@@ -81,7 +81,7 @@ COL_DATE_FALLBACK = 16   # Q (algumas abas colocam a data aqui)
 def _norm(value: str) -> str:
     text = _strip_accents(value or "").lower()
     import re
-    return re.sub(r"\s+", " ", text).strip()
+    return " ".join(str(text).split())
 
 
 def _should_process(title: str) -> bool:

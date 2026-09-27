@@ -802,7 +802,7 @@ def _normalize_breed_key(name: str) -> str:
     causa de variação de maiúscula/acento (ex.: 'labrador' vs 'Labrador')."""
     nfkd = unicodedata.normalize("NFKD", name)
     ascii_str = nfkd.encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"\s+", " ", ascii_str).strip().lower()
+    return " ".join(str(ascii_str).split()).lower()
 
 
 def get_or_create_breed(db, Breed, species_id: int, name: str) -> int | None:
