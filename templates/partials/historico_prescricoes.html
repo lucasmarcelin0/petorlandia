@@ -76,18 +76,20 @@
                   data-target-endpoint="{{ url_for('recarregar_historico_prescricoes_ajax', animal_id=animal.id, clinic_id=clinic_scope_id) }}"
                   data-confirm="Deseja mesmo excluir este bloco de prescrições?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-outline-danger btn-sm">
-                <i class="fas fa-trash-alt me-1"></i>Excluir
+              <button class="btn btn-outline-danger btn-sm" aria-label="Excluir bloco de prescrições emitido em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}">
+                <i class="fas fa-trash-alt me-1" aria-hidden="true"></i>Excluir
               </button>
             </form>
             <div class="d-flex gap-2">
               <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
-                 class="btn btn-outline-secondary btn-sm" target="_blank">
-                <i class="fas fa-print me-1"></i>Imprimir
+                 class="btn btn-outline-secondary btn-sm" target="_blank"
+                 aria-label="Imprimir bloco de prescrições emitido em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}">
+                <i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir
               </a>
               <a href="{{ url_for('editar_bloco_prescricao', bloco_id=bloco.id) }}"
-                 class="btn btn-primary btn-sm">
-                <i class="fas fa-pen me-1"></i>Editar
+                 class="btn btn-primary btn-sm"
+                 aria-label="Editar bloco de prescrições emitido em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}">
+                <i class="fas fa-pen me-1" aria-hidden="true"></i>Editar
               </a>
             </div>
           </footer>
