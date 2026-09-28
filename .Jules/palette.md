@@ -42,3 +42,6 @@
 **Learning:** Icon-only action buttons (e.g. edit, delete, photo cropper controls) rely solely on the `title` attribute for accessibility. However, `title` attributes are not reliably announced by all screen readers and do not provide robust accessible names. Additionally, nested icon elements can create redundant or confusing announcements if not hidden.
 **Action:** Always provide an explicit `aria-label` attribute on icon-only interactive elements (like buttons and links), wrap toolbar action groups with `role="group"` and `aria-label`, and always add `aria-hidden="true"` to decorative child icon elements to ensure clear and reliable announcements for screen reader users.
 
+## 2026-09-24 - Dynamic ARIA Expanded State Synchronization on Collapsible Drawers
+**Learning:** Collapsible sections and drawer toggles without explicit `aria-expanded` and `aria-controls` bindings prevent assistive technology users from perceiving when content is expanded or collapsed.
+**Action:** Always bind toggle buttons to collapsible containers via `aria-controls` and `aria-expanded`, and update `aria-expanded` dynamically in JS event handlers whenever visibility is toggled.

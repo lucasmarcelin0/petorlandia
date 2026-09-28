@@ -181,3 +181,14 @@ def test_management_icon_buttons_a11y_attributes():
         clinic_content = f.read()
     assert 'aria-label="Excluir horário de {{ h.dia_semana }}"' in clinic_content
 
+
+def test_collapsible_drawers_a11y_attributes():
+    with open("templates/partials/documentos.html", "r", encoding="utf-8") as f:
+        doc_content = f.read()
+    assert 'aria-expanded="false"' in doc_content
+    assert 'aria-controls="termos-container-{{ animal.id }}"' in doc_content
+
+    with open("templates/partials/orcamento_form.html", "r", encoding="utf-8") as f:
+        orcamento_content = f.read()
+    assert 'aria-expanded="false"' in orcamento_content
+    assert 'aria-controls="novo-servico-container"' in orcamento_content
