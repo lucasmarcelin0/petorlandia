@@ -2093,6 +2093,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const quickRescheduleModal = root.querySelector('[data-quick-reschedule-modal]');
   const quickRescheduleForm = root.querySelector('[data-quick-reschedule-form]');
   const quickRescheduleError = root.querySelector('[data-quick-reschedule-error]');
+  // O painel de detalhes cria sua própria camada. O modal do Bootstrap precisa
+  // ficar no body, junto ao backdrop, para aparecer acima das duas camadas.
+  if (quickRescheduleModal) document.body.appendChild(quickRescheduleModal);
   const urlTemplates = {
     animalProfile: root.dataset.urlAnimalProfile || '',
     tutorProfile: root.dataset.urlTutorProfile || '',
