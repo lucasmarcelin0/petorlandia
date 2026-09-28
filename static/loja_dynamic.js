@@ -223,6 +223,18 @@ function initDynamicProducts(){
     fetchProducts(params);
   });
 
+  const clearSearchBtn = form.querySelector('.js-clear-search-btn');
+  clearSearchBtn?.addEventListener('click', e => {
+    e.preventDefault();
+    const searchInput = form.querySelector('input[name="q"]');
+    if (searchInput) searchInput.value = '';
+    clearSearchBtn.style.display = 'none';
+    const params = new URLSearchParams(new FormData(form));
+    params.delete('q');
+    params.set('page', 1);
+    fetchProducts(params);
+  });
+
   form.querySelector('select[name="filter"]').addEventListener('change', () => {
     const params = new URLSearchParams(new FormData(form));
     params.set('page', 1);

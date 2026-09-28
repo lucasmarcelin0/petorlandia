@@ -125,3 +125,32 @@ def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
     assert "product-seller-badge product-seller-badge--store" in html
     assert "product-seller-name" in html
     assert "text-overflow:ellipsis" in html
+
+
+def test_loja_search_controls_accessibility(app, client):
+    with app.app_context():
+        SiteFlag.set("loja_em_breve", False)
+        product = Product(
+            name="Racao Golden Especial",
+            description="Racao seca para caes adultos.",
+            price=150.0,
+            stock=5,
+            status="active",
+        )
+        db.session.add(product)
+        db.session.commit()
+
+    resp = client.get("/loja")
+    html = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert 'id="store-search-input"' in html
+    assert 'aria-label="Buscar produtos no catálogo"' in html
+    assert 'aria-label="Filtrar ou ordenar produtos por"' in html
+
+    resp_search = client.get("/loja?q=Racao")
+    html_search = resp_search.get_data(as_text=True)
+
+    assert resp_search.status_code == 200
+    assert "js-clear-search-btn" in html_search
+    assert 'aria-label="Limpar busca"' in html_search
