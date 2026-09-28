@@ -169,6 +169,10 @@
        href="{{ url_for('sfa_routes.entomologia') }}" {% if request.endpoint == 'sfa_routes.entomologia' %}aria-current="page"{% endif %}>
       <i class="fas fa-map-location-dot" aria-hidden="true"></i> Dados entomológicos<br><span class="ms-4">e censitários</span>
     </a>
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.entomologia_atualizar') }}" {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}aria-current="page"{% endif %}>
+      <i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados
+    </a>
   </div>
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>

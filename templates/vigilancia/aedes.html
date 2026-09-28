@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aedes em Orlândia — o trabalho de campo, aberto a você</title>
+  <meta name="description" content="Onde as equipes de campo passaram, o que encontraram e como cada casa pode ajudar a combater o Aedes aegypti em Orlândia.">
+  <meta property="og:title" content="Aedes em Orlândia — o trabalho de campo, aberto a você">
+  <meta property="og:description" content="Boletim agregado por região: visitas, quarteirões percorridos e focos encontrados. Veja como proteger sua casa em 10 minutos.">
+  <meta name="theme-color" content="#0b7a75">
+  {% if previa %}<meta name="robots" content="noindex">{% endif %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/vigilancia_aedes.css') }}">
+</head>
+<body>
+{% macro br(iso) %}{% if iso %}{{ iso[8:10] }}/{{ iso[5:7] }}/{{ iso[:4] }}{% endif %}{% endmacro %}
+<a class="skip" href="#conteudo">Ir para o conteúdo</a>
+{% if previa %}<div class="preview-bar" role="status">Prévia interna — este boletim ainda não foi publicado.</div>{% endif %}
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <span class="brand"><span class="brand-mark" aria-hidden="true"></span>Orlândia <span class="brand-sep">·</span> Vigilância do Aedes</span>
+    <button type="button" class="share" id="share" hidden>Compartilhar</button>
+  </div>
+</header>
+
+<main id="conteudo">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Boletim do trabalho de campo</p>
+      <h1>Cada quintal conta.</h1>
+      <p class="lede">Veja por onde as equipes passaram, o que encontraram e como a sua casa pode ajudar a manter o mosquito longe de todos.</p>
+      {% if boletim %}
+      <p class="period"><span class="dot" aria-hidden="true"></span>Período: <strong>{{ br(boletim.inicio) }} a {{ br(boletim.fim) }}</strong>{% if publicacao %} · publicado em {{ publicacao.publicado_em.strftime('%d/%m/%Y') }}{% endif %}</p>
+      {% else %}
+      <p class="period"><span class="dot muted" aria-hidden="true"></span>O primeiro boletim ainda não foi publicado pela equipe. Enquanto isso, veja abaixo como proteger sua casa.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if boletim %}
+  <section class="wrap" aria-labelledby="numeros-title">
+    <h2 id="numeros-title" class="visually-hidden">Números do período</h2>
+    <div class="kpis" id="kpis"></div>
+    {% if publicacao and publicacao.mensagem %}
+    <blockquote class="message"><p>{{ publicacao.mensagem }}</p><footer>— {{ publicacao.assinatura or 'Equipe de vigilância entomológica' }}</footer></blockquote>
+    {% endif %}
+  </section>
+
+  <section class="wrap block" aria-labelledby="mapa-title">
+    <div class="section-head">
+      <div><p class="eyebrow">Sua região</p><h2 id="mapa-title">Onde a equipe esteve</h2>
+      <p>Toque em uma região do mapa. A cidade aparece dividida em setores do Censo 2022; nenhum endereço é identificado.</p></div>
+      <button type="button" class="btn" id="locate">Usar minha localização</button>
+    </div>
+    <div class="map-layout">
+      <div class="map-card"><div id="map" class="map" role="region" aria-label="Mapa das regiões visitadas no período"></div>
+        <ul class="legend" id="legend" aria-label="Legenda do mapa"></ul></div>
+      <aside class="detail" id="detail" aria-live="polite">
+        <p class="eyebrow">Região selecionada</p>
+        <h3>Escolha no mapa</h3>
+        <p>Toque em uma região ou use sua localização. Sua posição é calculada só no seu aparelho e não é enviada a ninguém.</p>
+      </aside>
+    </div>
+    <p class="footnote" id="map-note"></p>
+  </section>
+
+  <section class="wrap block" aria-labelledby="ritmo-title">
+    <p class="eyebrow">Ritmo</p><h2 id="ritmo-title">Quarteirões percorridos por semana</h2>
+    <div class="chart" id="chart" role="img" aria-label="Quarteirões percorridos nas últimas oito semanas"></div>
+    <p class="footnote">Semanas de domingo a sábado. Semana sem registro enviado aparece vazia — não significa que não houve trabalho.</p>
+  </section>
+  {% endif %}
+
+  <section class="wrap block" aria-labelledby="dez-title">
+    <p class="eyebrow">Faça sua parte</p>
+    <h2 id="dez-title">10 minutos por semana que protegem sua casa</h2>
+    <p>O ovo do Aedes resiste meses no seco e eclode com a primeira água. Uma volta rápida pelo quintal, uma vez por semana, interrompe o ciclo.</p>
+    <ul class="checklist">
+      <li><label><input type="checkbox"><span><strong>Caixa d’água</strong> bem tampada, sem frestas.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Pratinhos de vaso</strong> sem água ou com areia até a borda.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Garrafas, baldes e potes</strong> virados de boca para baixo ou guardados.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Calhas e lajes</strong> limpas, sem água parada.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Pneus</strong> guardados em local coberto e seco.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Bebedouro dos animais</strong> lavado com escova e água trocada a cada dois ou três dias.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Ralos</strong> limpos e fechados; tampa em vasos sanitários pouco usados.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Lixo</strong> em sacos fechados; entulho e recicláveis longe da chuva.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Piscinas e fontes</strong> tratadas ou cobertas.</span></label></li>
+      <li><label><input type="checkbox"><span><strong>Plantas que acumulam água</strong> (bromélias) regadas com cuidado ou retiradas.</span></label></li>
+    </ul>
+    <p class="checklist-count" id="checklist-count" aria-live="polite"></p>
+  </section>
+
+  <section class="wrap block" aria-labelledby="agente-title">
+    <p class="eyebrow">Receba bem quem cuida da cidade</p>
+    <h2 id="agente-title">Quando o agente bater à sua porta</h2>
+    <div class="cards">
+      <article><h3>Como reconhecer</h3><p>Os agentes de controle de endemias trabalham uniformizados e com crachá de identificação. Peça para ver o crachá sempre que quiser.</p></article>
+      <article><h3>O que acontece na visita</h3><p>O agente procura recipientes com água no quintal, retira ou trata os criadouros e explica como evitar novos. A visita é gratuita e leva poucos minutos.</p></article>
+      <article><h3>Se não havia ninguém em casa</h3><p>Casas fechadas são o maior desafio da equipe. {% if publicacao and publicacao.contato %}Para combinar um retorno: <strong>{{ publicacao.contato }}</strong>.{% else %}Procure a Unidade de Saúde mais próxima para combinar um retorno.{% endif %}</p></article>
+    </div>
+  </section>
+
+  {% if boletim %}
+  <section class="wrap block">
+    <details class="method"><summary>Como ler estes números</summary>
+      <ul>
+        <li><strong>Imóveis trabalhados</strong> somam as visitas do período; uma casa visitada duas vezes conta duas vezes.</li>
+        <li><strong>Remoção de criadouros</strong> conta imóveis em que houve controle mecânico (retirada ou eliminação de recipientes), não o número de recipientes.</li>
+        <li><strong>Foco encontrado</strong> indica que ao menos uma visita da região registrou larvas no período. Não é um índice de infestação nem mede o risco de dengue.</li>
+        <li><strong>Sem foco nas visitas com resultado</strong> quer dizer que as visitas com resultado registrado não encontraram larvas; não garante ausência do mosquito.</li>
+        <li><strong>Sem resultado informado</strong>: houve visita, mas o resultado de larvas não foi preenchido. Vazio não é zero.</li>
+        <li>Os setores são áreas do Censo 2022 (IBGE) e não correspondem exatamente a bairros.</li>
+      </ul>
+    </details>
+  </section>
+  {% endif %}
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p><strong>{{ publicacao.assinatura if publicacao and publicacao.assinatura else 'Equipe de vigilância entomológica de Orlândia' }}</strong></p>
+    <p>Dados agregados por região. Esta página não identifica endereços, imóveis, moradores ou agentes. Limites dos setores: IBGE, Censo 2022. Fundo de mapa: © colaboradores do OpenStreetMap.</p>
+  </div>
+</footer>
+
+{% if boletim %}
+<script type="application/json" id="aedes-data">{{ {'boletim': boletim, 'census': census}|tojson }}</script>
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/vigilancia_aedes.js') }}"></script>
+</body>
+</html>

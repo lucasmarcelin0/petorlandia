@@ -10,6 +10,10 @@
   const escape = text => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels = {worked:'Imóveis trabalhados',positive:'Imóveis com larvas',aegypti:'Imóveis com A. aegypti',albopictus:'Imóveis com A. albopictus',closed:'Imóveis fechados',refused:'Recusas',aegypti_larvae:'Larvas de A. aegypti',population:'População residente',households:'Domicílios totais',occupied_households:'Particulares ocupados',density:'Densidade (hab./km²)'};
   const state = {rows:[],page:0,census:[],groups:new Map(),visitMap:null,censusMap:null,referenceMap:null};
+  const actions = dataset.actions || [];
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const openActions = sector => actions.filter(a => a.sector === sector && a.status !== 'VERIFICADA');
   const palette = ['#d0eeea','#80c9bf','#359f98','#097873','#054d50'];
   function options(select, values, empty, chosen='') {
     select.replaceChildren(new Option(empty, ''), ...values.map(value => new Option(value, value)));
@@ -109,6 +113,26 @@
     }).addTo(state.visitMap);
     if($('sector-filter').value) state.visitLayer.eachLayer(layer=>{if(layer.feature.properties.sector===$('sector-filter').value){layer.setStyle({weight:3,color:'#c56616'});state.visitMap.fitBounds(layer.getBounds(),{padding:[35,35],maxZoom:16});}});
     legend('map-legend',max,labels[metric],true);
+    addLayers();
+  }
+  function addLayers() {
+    const layers = dataset.layers || [];
+    if (!layers.length || state.overlays || !state.visitMap) return;
+    const colors = ['#c56616','#6b4fbb','#d6336c','#2f6fb3','#2b8a3e'];
+    const popup = p => `<div class="ento-popup"><strong>${escape(p.name || 'Sem nome')}</strong>${p.folder ? `<small>${escape(p.folder)}</small><br>` : ''}${p.description ? escape(p.description) : ''}</div>`;
+    state.overlays = {};
+    layers.forEach((item, index) => {
+      const color = colors[index % colors.length];
+      const layer = L.geoJSON(item.geojson, {
+        style: () => ({color, weight: 2, fillOpacity: .12}),
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng, {radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: .95}),
+        onEachFeature: (feature, target) => target.bindPopup(popup(feature.properties || {}))
+      }).addTo(state.visitMap);
+      state.overlays[`<span style="color:${color}">■</span> ${escape(item.title)}`] = layer;
+    });
+    L.control.layers(null, state.overlays, {collapsed: false}).addTo(state.visitMap);
+    $('layers-note').hidden = false;
+    $('layers-note').textContent = `${layers.length} camada(s) enviada(s) pela equipe (Google Earth) sobre o mapa. Use a caixa no canto para mostrar ou ocultar.`;
   }
   function updateTrend() {
     const points=M.timeline(state.rows,$('date-start').value,$('date-end').value,$('trend-metric').value);
@@ -177,7 +201,8 @@
     $('planning-count').textContent=`Exibindo ${Math.min(20,queue.length)} de ${fmt(queue.length)} territórios candidatos. CSV inclui a lista completa. ${fmt(unmapped)} sem código na malha 2022.`;
     const columns=queueColumns[kind];
     $('planning-head').innerHTML='<tr><th>Território</th>'+columns.map(([,label])=>`<th>${label}</th>`).join('')+'<th>Último registro</th><th>Consultar</th></tr>';
-    $('planning-rows').innerHTML=queue.length?queue.slice(0,20).map((r,index)=>`<tr><td><strong>Setor ${escape(r.sector.slice(-4))}${codes.has(r.sector)?'':' *'}</strong><small class="ento-code">${escape(r.sector)}${$('planning-scale').value==='block'?` • área ${escape(r.area)} / quadra ${escape(r.block)}`:''}</small></td>${columns.map(([key])=>`<td>${fmt(r[key])}</td>`).join('')}<td>${day(r.last_visit)}</td><td><button class="btn btn-sm btn-outline-secondary" type="button" data-queue-index="${index}">Ver registros</button></td></tr>`).join(''):`<tr><td colspan="${columns.length+3}" class="ento-empty">Nenhum território com esse sinal no recorte. Isso não comprova ausência de risco.</td></tr>`;
+    $('planning-rows').innerHTML=queue.length?queue.slice(0,20).map((r,index)=>{const open=openActions(r.sector);return `<tr><td><strong>Setor ${escape(r.sector.slice(-4))}${codes.has(r.sector)?'':' *'}</strong><small class="ento-code">${escape(r.sector)}${$('planning-scale').value==='block'?` • área ${escape(r.area)} / quadra ${escape(r.block)}`:''}</small>${open.length?`<span class="ento-badge ok">${open.length} ação(ões) em aberto: ${open.map(a=>'#'+a.id).join(', ')}</span>`:''}</td>${columns.map(([key])=>`<td>${fmt(r[key])}</td>`).join('')}<td>${day(r.last_visit)}</td><td><div class="ento-row-actions"><button class="btn btn-sm btn-outline-secondary" type="button" data-queue-index="${index}">Ver registros</button><button class="btn btn-sm btn-outline-primary" type="button" data-action-index="${index}">Criar ação</button></div></td></tr>`;}).join(''):`<tr><td colspan="${columns.length+3}" class="ento-empty">Nenhum território com esse sinal no recorte. Isso não comprova ausência de risco.</td></tr>`;
+    $('planning-rows').querySelectorAll('[data-action-index]').forEach(button=>button.addEventListener('click',()=>openActionDialog(state.queue[Number(button.dataset.actionIndex)],kind,plan)));
     $('planning-rows').querySelectorAll('[data-queue-index]').forEach(button=>button.addEventListener('click',()=>{
       const r=state.queue[Number(button.dataset.queueIndex)];
       $('date-start').value=plan.start<dataset.source.start?dataset.source.start:plan.start;$('date-end').value=plan.end;
@@ -190,8 +215,79 @@
     $('planning-comparison').innerHTML=[['count','Registros'],['sectors','Setores com registros'],['worked','Imóveis trabalhados'],['positive','Imóveis com larvas'],['closed','Imóveis fechados'],['refused','Recusas'],['coverage','Preenchimento de larvas (%)']].map(([key,label])=>`<tr><td>${label}</td><td>${fmt(a[key])}</td><td>${fmt(plan.previous[key])}</td></tr>`).join('');
     $('export-planning').disabled=!queue.length;
   }
+  const actionTypes = {focus:'Verificar foco registrado', access:'Recuperar acesso aos imóveis', quality:'Completar registro de campo'};
+  function openActionDialog(r, kind, plan) {
+    const block = $('planning-scale').value==='block' ? ` • área ${r.area} / quarteirão ${r.block}` : '';
+    const facts = {focus:`${fmt(r.positive)} ocorrência(s) com larvas, ${fmt(r.aegypti)} com A. aegypti; último achado em ${day(r.last_positive||r.last_visit)}.`,
+      access:`${fmt(r.closed)} imóveis fechados e ${fmt(r.refused)} recusas em ${fmt(r.count)} registros.`,
+      quality:`${fmt(r.missing)} de ${fmt(r.count)} registros sem resultado de larvas.`}[kind];
+    const goal = {focus:'Objetivo: conferir a espécie, o local e a eliminação dos criadouros; registrar o resultado.',
+      access:'Objetivo: combinar retornos (horários alternativos, contato com ACS) e registrar quantos imóveis foram inspecionados.',
+      quality:'Objetivo: revisar as fichas originais e distinguir zero, não examinado e não informado.'}[kind];
+    $('action-sector').value = r.sector;
+    $('action-territory').textContent = `Setor ${r.sector}${block}`;
+    $('action-type').value = actionTypes[kind];
+    $('action-reason').value = `Planejamento ${day(plan.start)} a ${day(plan.end)}${block}: ${facts} ${goal}`;
+    const deadline = new Date(); deadline.setDate(deadline.getDate()+7);
+    $('action-deadline').value = `${deadline.getFullYear()}-${String(deadline.getMonth()+1).padStart(2,'0')}-${String(deadline.getDate()).padStart(2,'0')}`;
+    $('action-deadline').min = todayIso;
+    try { $('action-owner').value = localStorage.getItem('ento-responsavel') || ''; } catch (error) { /* sem armazenamento local */ }
+    if ($('action-dialog').showModal) $('action-dialog').showModal(); else $('action-dialog').setAttribute('open','');
+  }
+  function badge(item, mode) {
+    const pct = item.target ? Math.max(0, Math.min(100, item.id==='access' ? (item.value==null?0:100*Math.min(1,item.target/Math.max(item.value,0.1))) : 100*(item.value||0)/item.target)) : 0;
+    const unit = ['quality','access'].includes(item.id) ? '%' : '';
+    const value = item.value==null ? '—' : fmt(item.value)+unit;
+    const target = item.target==null ? 'sem base' : (item.id==='access'?'até ':'')+fmt(item.target)+unit;
+    const status = mode==='progress' ? (item.earned ? 'Meta alcançada' : item.noBase ? 'Sem base de comparação' : 'Em andamento') : (item.earned ? 'Conquistada' : item.noBase ? 'Sem base' : 'Não alcançada');
+    return `<article class="ento-badge-card ${item.earned?'earned':''}"><div class="ento-badge-icon" aria-hidden="true"><i class="fas ${item.icon}"></i></div><div><div class="ento-badge-status">${status}</div><h3>${escape(item.title)}</h3><div class="ento-badge-value"><strong>${value}</strong> <span>meta: ${target}</span></div>${mode==='progress'&&!item.noBase?`<div class="ento-progress" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100" aria-label="${escape(item.title)}"><div style="width:${pct}%"></div></div>`:''}<p>${escape(item.text)}${item.overdue?` ${fmt(item.overdue)} ação(ões) com prazo vencido.`:''}</p></div></article>`;
+  }
+  function updateTeam() {
+    const end = dataset.source.end;
+    const firstWeek = M.weekStart(dataset.source.start);
+    const totalWeeks = Math.round((new Date(M.weekStart(end)+'T12:00:00Z')-new Date(firstWeek+'T12:00:00Z'))/604800000)+1;
+    const weeks = M.teamWeeks(all, end, Math.max(totalWeeks, 9));
+    const current = weeks[weeks.length-1], complete = current.partial ? weeks.slice(0,-1) : weeks;
+    const last = complete[complete.length-1];
+    const cover = M.baseline(weeks,'coverage');
+    $('team-headline').innerHTML = `Semana de <strong>${day(current.start)} a ${day(current.end)}</strong>${current.partial?' (em andamento no arquivo)':''}: <strong>${fmt(current.blocks)}</strong> quarteirões em <strong>${fmt(current.sectors)}</strong> setores; resultado de larvas em <strong>${current.coverage==null?'—':fmt(current.coverage)+'%'}</strong> das visitas${cover==null?'':` (média recente: ${fmt(cover)}%)`}. Sequência: <strong>${fmt(M.streak(weeks))}</strong> semanas com envio.`;
+    const steps = M.nextSteps(all, actions, end, todayIso);
+    const pub = dataset.publication;
+    if (!pub || pub.fim < M.shiftDate(end, -7)) steps.push({kind:'publish'});
+    const planningLink = '<button type="button" class="btn btn-link p-0 align-baseline" data-go="planning">abrir o Planejamento</button>';
+    const text = {data:s=>`<i class="fas fa-upload"></i> O último registro é de ${day(end)} (${s.days} dias atrás). <a href="${document.querySelector('.ento-hero-actions a').href}">Envie a exportação mais recente</a> para as metas refletirem o trabalho real.`,
+      focus:s=>`<i class="fas fa-bug"></i> ${s.total} setor(es) com foco nos últimos 14 dias sem ação aberta: ${s.sectors.map(c=>'setor '+escape(c.slice(-4))).join(', ')}${s.total>s.sectors.length?` e mais ${s.total-s.sectors.length}`:''}. Crie a ação no ${planningLink}.`,
+      overdue:s=>`<i class="fas fa-clock"></i> ${s.total} ação(ões) territorial(is) com prazo vencido. <a href="${$('action-dialog').querySelector('a').href}">Atualizar andamento</a>.`,
+      publish:()=>`<i class="fas fa-bullhorn"></i> ${pub?`O boletim público vai até ${day(pub.fim)}.`:'Ainda não há boletim público.'} <a href="${document.querySelector('.ento-hero-actions a').href}#publicar">Confira a prévia e publique</a> para a população acompanhar o trabalho.`,
+      verify:s=>`<i class="fas fa-magnifying-glass"></i> ${s.total} ação(ões) executada(s) aguardando verificação do resultado. <a href="${$('action-dialog').querySelector('a').href}">Verificar</a>.`};
+    $('team-next').innerHTML = steps.length ? steps.map(s=>`<li>${text[s.kind](s)}</li>`).join('') : '<li><i class="fas fa-circle-check"></i> Nada pendente nas verificações automáticas. Bom trabalho!</li>';
+    $('team-next').querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{activate(b.dataset.go);$('tab-'+b.dataset.go).focus();}));
+    $('team-progress-note').textContent = current.partial ? `Registros de ${day(current.start)} até ${day(end)}. A barra mostra quanto falta para igualar a média das últimas semanas.` : 'A semana mais recente do arquivo está completa; confira abaixo as conquistas.';
+    $('team-progress').innerHTML = M.achievements(weeks, actions, todayIso).map(item=>badge(item,'progress')).join('');
+    $('team-badges-note').textContent = last ? `Semana de ${day(last.start)} a ${day(last.end)}.` : '';
+    $('team-badges').innerHTML = last ? M.achievements(complete, actions, todayIso).map(item=>badge(item,'final')).join('') : '<p class="ento-empty">Ainda não há semana completa no arquivo.</p>';
+    const history = complete.slice(-8).map((w,i,arr)=>({week:w, items:M.achievements(complete.slice(0, complete.length-arr.length+i+1), actions, todayIso)}));
+    $('team-history-head').innerHTML = '<tr><th>Conquista</th>'+history.map(h=>`<th>${day(h.week.start)}</th>`).join('')+'</tr>';
+    $('team-history').innerHTML = (history[0]?.items||[]).map((item,row)=>`<tr><td><i class="fas ${item.icon}" aria-hidden="true"></i> ${escape(item.title)}</td>${history.map(h=>{const it=h.items[row];return `<td>${h.week.count===0?'<span class="ento-dot-empty" title="Sem registros">·</span>':it.earned?'<span class="ento-dot-earned" title="Conquistada">●</span>':'<span class="ento-dot-miss" title="Não alcançada">○</span>'}</td>`;}).join('')}</tr>`).join('');
+    const cyc = M.cycle(all, end), pct = cyc.blocksKnown ? 100*cyc.blocksVisited/cyc.blocksKnown : 0;
+    $('team-cycle-note').textContent = `Ciclo ${cyc.number} (${day(cyc.start)} até ${day(cyc.end)}): ${fmt(cyc.blocksVisited)} de ${fmt(cyc.blocksKnown)} quarteirões conhecidos (${fmt(pct)}%). ${fmt(cyc.done)} setor(es) com todos os quarteirões visitados.`;
+    $('team-cycle-bar').setAttribute('aria-valuenow', Math.round(pct)); $('team-cycle-bar').firstElementChild.style.width = pct+'%';
+    $('team-cycle-sectors').innerHTML = cyc.sectors.slice(0,12).map(r=>`<div class="ento-rank"><button type="button" data-sector="${escape(r.sector)}" title="Ver registros do setor ${escape(r.sector)}">Setor ${escape(r.sector.slice(-4))}</button><div class="ento-bar-track"><div class="ento-bar" style="width:${r.pct}%"></div></div><strong>${r.visited}/${r.known}</strong></div>`).join('') + (cyc.sectors.length>12?`<p class="ento-footnote px-0">Mostrando os 12 setores com menor cobertura de ${cyc.sectors.length}.</p>`:'');
+    $('team-cycle-sectors').querySelectorAll('[data-sector]').forEach(b=>b.addEventListener('click',()=>{$('date-start').value=cyc.start<dataset.source.start?dataset.source.start:cyc.start;$('date-end').value=end;activate('visits');selectSector(b.dataset.sector);$('tab-visits').focus();}));
+    const withData = weeks.filter(w=>w.count>0 && !w.partial);
+    const best = (key, label, unit='') => { const top = withData.filter(w=>w[key]!=null).sort((a,b)=>b[key]-a[key])[0]; return top?`<div class="ento-record"><span>${label}</span><strong>${fmt(top[key])}${unit}</strong><small>semana de ${day(top.start)}</small></div>`:''; };
+    $('team-records').innerHTML = best('blocks','Mais quarteirões percorridos') + best('coverage','Maior preenchimento de larvas','%') + best('mechanical','Mais imóveis com controle mecânico') || '<p class="ento-empty">Sem semanas completas.</p>';
+    const recent = weeks.slice(-12), max = Math.max(1,...recent.map(w=>w.blocks)), base = M.baseline(weeks,'blocks');
+    const width=560,height=210,left=36,bottom=170,plotH=130,step=(width-left-8)/recent.length,bar=Math.min(30,step*.62);
+    let svg=`<svg class="ento-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Quarteirões por semana">`;
+    recent.forEach((w,i)=>{const x=left+step*i+step/2,h=w.blocks/max*plotH;svg+=`<g><title>Semana de ${day(w.start)}: ${fmt(w.blocks)} quarteirões${w.partial?' (em andamento)':''}</title><rect x="${x-bar/2}" y="${bottom-h}" width="${bar}" height="${h}" rx="3" fill="#13878a" opacity="${w.partial?.45:1}"/><text x="${x}" y="${bottom-h-6}" text-anchor="middle">${w.count?fmt(w.blocks):'—'}</text><text x="${x}" y="${bottom+18}" text-anchor="middle">${day(w.start).slice(0,5)}</text></g>`;});
+    if(base!=null){const y=bottom-base/max*plotH;svg+=`<line x1="${left}" x2="${width-8}" y1="${y}" y2="${y}" stroke="#c56616" stroke-dasharray="5 4"/><text x="${width-8}" y="${y-6}" text-anchor="end" fill="#c56616">meta ${fmt(base)}</text>`;}
+    $('team-chart').innerHTML=svg+'</svg>';
+  }
   function activate(view) {
     document.querySelectorAll('[data-view]').forEach(button=>{const active=button.dataset.view===view;button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;$('panel-'+button.dataset.view).hidden=!active;});
+    if(view==='team')updateTeam();
+    if(view==='planning')updatePlanning();
     if(view==='census')updateCensus();
     if(view==='reference')reference();
     if(view==='visits')updateVisits();
@@ -199,6 +295,7 @@
   }
   try {
     $('source-period').textContent=`${day(dataset.source.start)} a ${day(dataset.source.end)}`;
+    if(dataset.source.imported_at)$('source-updated').textContent=`Atualizada em ${day(dataset.source.imported_at.slice(0,10))} • ${(dataset.updates||[]).length} envio(s) da equipe`;
     $('source-area').textContent=`Área operacional: ${[...new Set(all.map(r=>r.area))].join(', ')} • fonte municipal`;
     ['date-start','date-end'].forEach(id=>{$(id).min=dataset.source.start;$(id).max=dataset.source.end;});
     $('date-start').value=dataset.source.start;$('date-end').value=dataset.source.end;
@@ -223,7 +320,11 @@
     const tabs=[...document.querySelectorAll('[data-view]')];
     tabs.forEach((button,index)=>{button.addEventListener('click',()=>activate(button.dataset.view));button.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].focus();activate(tabs[next].dataset.view);}});});
     $('reference-select').addEventListener('change',reference);
+    $('print-planning').addEventListener('click',()=>window.print());
+    $('action-cancel').addEventListener('click',()=>{if($('action-dialog').close)$('action-dialog').close();else $('action-dialog').removeAttribute('open');});
+    $('action-dialog').querySelector('form').addEventListener('submit',()=>{try{localStorage.setItem('ento-responsavel',$('action-owner').value);}catch(error){/* sem armazenamento local */}});
     updatePlanning();
+    activate(location.hash==='#acao-criada'?'planning':'team');
   } catch(error) {
     $('ento-error').hidden=false;$('ento-error').textContent='Não foi possível inicializar o painel. Recarregue a página ou contate o administrador.';
     console.error('Entomologia dashboard:',error);

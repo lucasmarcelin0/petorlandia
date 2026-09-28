@@ -10,7 +10,7 @@ def register(bp, require_access):
         from models.sfa import SfaPaciente, SfaAcao, SfaEventoColetivo
         from services.sfa_service import anexar_dados_sinan_pacientes, filtrar_pacientes_reais_sfa
         from services.sfa_workflow import pendencias_qualidade, resumo_calendario, hoje_local
-        from services.entomologia_service import load_entomologia
+        from services.entomologia_service import setores_operacionais
         todos = filtrar_pacientes_reais_sfa(SfaPaciente.query.order_by(SfaPaciente.id_estudo).all())
         anexar_dados_sinan_pacientes(todos)
         episodio = request.args.get('episodio', '')
@@ -22,7 +22,7 @@ def register(bp, require_access):
                                pendencias=pendencias_qualidade(todos),
                                acoes=SfaAcao.query.order_by(SfaAcao.prazo, SfaAcao.id).all(),
                                eventos=SfaEventoColetivo.query.order_by(SfaEventoColetivo.id.desc()).all(),
-                               setores=sorted({str(r['sector']) for r in load_entomologia()['records'] if r.get('sector')}),
+                               setores=sorted(s for s in setores_operacionais() if s),
                                hoje=hoje_local())
 
     @bp.route('/trabalho/registrar', methods=['POST'])
@@ -38,6 +38,9 @@ def register(bp, require_access):
             flash(str(exc), 'danger')
         else:
             flash('Registro salvo com histórico de auditoria.', 'success')
+        if request.form.get('retorno') == 'entomologia':
+            # Ações criadas no Planejamento voltam ao mesmo painel (destino fixo, sem URL livre).
+            return redirect(url_for('sfa_routes.entomologia', token=request.args.get('token') or None) + '#acao-criada')
         return redirect(url_for('sfa_routes.trabalho', episodio=request.form.get('id_estudo', '')))
 
     @bp.route('/vigilancia-semanal')
@@ -46,13 +49,13 @@ def register(bp, require_access):
         from models.sfa import SfaPaciente
         from services.sfa_service import anexar_dados_sinan_pacientes
         from services.sfa_workflow import vigilancia_semanal as montar
-        from services.entomologia_service import load_entomologia
+        from services.entomologia_service import dataset_atual
         defasagem = request.args.get('defasagem', 0, type=int)
         if defasagem not in range(5):
             abort(400)
         pacientes = SfaPaciente.query.all()
         anexar_dados_sinan_pacientes(pacientes)
-        resumo = montar(pacientes, load_entomologia(), defasagem)
+        resumo = montar(pacientes, dataset_atual(), defasagem)
         setor = request.args.get('setor', '').strip()
         setores = sorted({r['setor'] for r in resumo['linhas']})
         if setor:

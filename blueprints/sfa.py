@@ -161,17 +161,22 @@ def _verificar_webhook_secret() -> bool:
 @bp.route("/entomologia")
 @require_sfa_internal_access
 def entomologia():
-    from services.entomologia_service import load_entomologia, load_reference_maps
+    from blueprints.entomologia_routes import acoes_territoriais, publicacao_vigente
+    from services.entomologia_service import dataset_atual, load_reference_maps
 
-    dataset = dict(load_entomologia())
+    dataset = dict(dataset_atual())
     dataset['reference_maps'] = [
         dict(item, url=url_for('sfa_routes.entomologia_mapa', filename=item['file'],
                                token=_token_admin_informado() or None))
         for item in load_reference_maps()
     ]
+    dataset['actions'] = acoes_territoriais()
+    publicacao = publicacao_vigente()
+    dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
+                               'fim': publicacao.fim.isoformat()} if publicacao else None)
 
     response = current_app.make_response(render_template(
-        "sfa/entomologia.html", dataset=dataset,
+        "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
     ))
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
@@ -2749,6 +2754,9 @@ def rodar_rotina():
 
 from blueprints.sfa_workflow_routes import register as _register_workflow_routes
 _register_workflow_routes(bp, require_sfa_internal_access)
+
+from blueprints.entomologia_routes import register as _register_entomologia_routes
+_register_entomologia_routes(bp, require_sfa_internal_access)
 
 
 @bp.route('/p/<token>/t10', methods=['GET', 'POST'])

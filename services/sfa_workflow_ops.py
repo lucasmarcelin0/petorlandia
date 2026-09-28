@@ -11,7 +11,7 @@ from services.sfa_workflow import hoje_local, aplicar_calendario
 
 def registrar_operacao(form, ator):
     from services.sfa_service import parse_data, atualizar_operacional_paciente
-    from services.entomologia_service import load_entomologia
+    from services.entomologia_service import setores_operacionais
 
     def texto(campo, limite=200, obrigatorio=True):
         value = str(form.get(campo) or "").strip()
@@ -42,8 +42,7 @@ def registrar_operacao(form, ator):
         return row
 
     def setor_validado(value):
-        setores = {str(r.get('sector') or '') for r in load_entomologia().get('records', [])}
-        if value and value not in setores:
+        if value and value not in setores_operacionais():
             raise ValueError("Setor não encontrado na malha operacional do levantamento. Confira o código completo.")
         return value
 
