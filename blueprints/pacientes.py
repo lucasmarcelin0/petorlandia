@@ -1901,8 +1901,8 @@ def update_tutor(user_id):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"❌ ERRO ao salvar tutor: {e}")
-        message = f'Ocorreu um erro ao salvar: {str(e)}'
+        current_app.logger.exception("Falha ao salvar tutor %s", user.id)
+        message = 'Não foi possível salvar os dados do tutor. Tente novamente.'
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
         flash(message, 'danger')
@@ -2119,7 +2119,8 @@ def update_animal(animal_id):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        message = f'Ocorreu um erro ao salvar: {str(e)}'
+        current_app.logger.exception("Falha ao salvar animal %s", animal.id)
+        message = 'Não foi possível salvar os dados do animal. Tente novamente.'
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
         flash(message, 'danger')

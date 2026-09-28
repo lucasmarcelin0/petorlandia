@@ -189,11 +189,11 @@ class PmoSyncResult:
 
 
 def _normalize_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return " ".join(str(value or "").split())
 
 
 def _normalize_note_line(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
+    return " ".join(str(value or "").split())
 
 
 def _append_visit_note(visit: PmoVaccinationVisit, line: str) -> None:

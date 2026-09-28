@@ -4405,19 +4405,20 @@
     border-radius: 12px;
   }
 
+  /* A lista de resultados ocupa espaço no fluxo da página: empurra o
+     histórico de prescrições (e o restante do conteúdo) para baixo em vez de
+     flutuar por cima dele, evitando que fique escondida atrás de outros cards. */
   #sugestoes-medicamentos.prescription-search-results {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 1060;
-    max-height: min(600px, 75vh);
+    position: relative;
+    z-index: 5;
+    max-height: min(520px, 60vh);
     overflow-y: auto;
     background: #ffffff;
     border: 1px solid #cbd5e1;
     border-radius: 12px;
     padding: 6px;
-    margin-top: 0;
+    margin-top: 6px;
+    margin-bottom: 1rem;
   }
 
   /* Scrollbar moderna */

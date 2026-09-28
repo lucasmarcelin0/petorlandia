@@ -1153,11 +1153,24 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
     has_played_bool = bool(proposed_state.get("has_played"))
     winner_flag = proposed_state.get("winner")
 
-    is_reset = (
+    current_turn_int = _nim_parse_player(current_state.get("turn"), 1)
+    looks_like_reset = (
         proposed_rows == default_rows
         and (winner_flag is None or winner_flag == "")
         and not has_played_bool
         and proposed_turn_int in (1, 2)
+    )
+    # Com o tabuleiro ainda intacto, o cliente reenvia esse mesmo formato ao
+    # entrar na sala (tema), ao editar um nome ou ao voltar do modo local. Nesses
+    # casos a vez vem igual a do servidor; tratar como "Reiniciar" invertia quem
+    # comeca a cada sincronizacao. O botao Reiniciar sempre propoe a outra vez.
+    board_is_fresh = (
+        current_rows == default_rows
+        and current_state.get("winner") in (None, "")
+        and not current_state.get("has_played")
+    )
+    is_reset = looks_like_reset and (
+        not board_is_fresh or proposed_turn_int != current_turn_int
     )
 
     if _nim_has_restorations(current_rows, proposed_rows) and not is_reset:
@@ -1167,7 +1180,6 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
     total_removed_turn = sum(removed_by_row_turn)
     rows_with_removals = [index for index, count in enumerate(removed_by_row_turn) if count > 0]
 
-    current_turn_int = _nim_parse_player(current_state.get("turn"), 1)
     next_turn_int = _nim_parse_player(proposed_state.get("turn"), current_turn_int)
 
     proposed_state["turn"] = next_turn_int
@@ -1571,6 +1583,9 @@ def nim_connect():  # pragma: no cover - exercised via browser
     nim_session_players[request.sid] = assigned_seat
     members.add(request.sid)
     join_room(room)
+    # O servidor so aceita jogadas de quem esta na vez; o cliente precisa saber
+    # qual lugar ocupa para avisar isso em vez de desfazer o clique em silencio.
+    emit("seat", {"seat": assigned_seat, "room": room})
     emit("update_state", _nim_payload(room))
 
 
