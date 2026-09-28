@@ -54,3 +54,21 @@ class EntomologiaPublicacao(db.Model):
     publicado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     retirado_em = db.Column(db.DateTime(timezone=True))
     retirado_por = db.Column(db.String(160))
+
+
+class EntomologiaEquipe(db.Model):
+    """Papel adicional "Combate à dengue": não altera ``User.role``.
+
+    Uma conta pode ser vacinador, tutor ou parceiro e, além disso, fazer parte
+    da equipe de combate à dengue. Acesso ativo = ``revogado_em`` vazio.
+    """
+    __tablename__ = "entomologia_equipe"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    concedido_por = db.Column(db.String(160), nullable=False)
+    concedido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    revogado_em = db.Column(db.DateTime(timezone=True))
+    revogado_por = db.Column(db.String(160))
+
+    user = db.relationship("User", foreign_keys=[user_id])

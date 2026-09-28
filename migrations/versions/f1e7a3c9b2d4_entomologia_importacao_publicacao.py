@@ -1,4 +1,4 @@
-"""Entomologia: arquivos de campo enviados pela equipe e boletins públicos.
+"""Entomologia: arquivos de campo, boletins públicos e equipe de combate à dengue.
 
 Revision ID: f1e7a3c9b2d4
 Revises: e4b8d5f2a411
@@ -47,9 +47,19 @@ def upgrade():
         sa.Column('retirado_em', sa.DateTime(timezone=True)),
         sa.Column('retirado_por', sa.String(160)))
     op.create_index('ix_entomologia_publicacao_status', 'entomologia_publicacao', ['status'])
+    op.create_table('entomologia_equipe',
+        sa.Column('id', sa.Integer(), primary_key=True),
+        sa.Column('user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
+        sa.Column('concedido_por', sa.String(160), nullable=False),
+        sa.Column('concedido_em', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('revogado_em', sa.DateTime(timezone=True)),
+        sa.Column('revogado_por', sa.String(160)))
+    op.create_index('ix_entomologia_equipe_user_id', 'entomologia_equipe', ['user_id'])
 
 
 def downgrade():
+    op.drop_index('ix_entomologia_equipe_user_id', table_name='entomologia_equipe')
+    op.drop_table('entomologia_equipe')
     op.drop_index('ix_entomologia_publicacao_status', table_name='entomologia_publicacao')
     op.drop_table('entomologia_publicacao')
     for field in ('tipo', 'status', 'sha256'):

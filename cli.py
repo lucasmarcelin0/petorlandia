@@ -215,8 +215,55 @@ def repair_pmo_duplicate_animals(apply_changes):
         click.echo('Previa apenas. Rode de novo com --apply para gravar.')
 
 
+@click.command('entomologia-equipe')
+@click.argument('acao', type=click.Choice(['listar', 'conceder', 'revogar']))
+@click.argument('email', required=False)
+@click.option('--por', 'responsavel', default='Administração (linha de comando)',
+              help='Responsável registrado na auditoria.')
+@with_appcontext
+def entomologia_equipe(acao, email, responsavel):
+    """Papel adicional "Combate à dengue": listar, conceder ou revogar por e-mail.
+
+    Não altera ``User.role``. Não imprime e-mails completos.
+    """
+    import json
+    from models.sfa import SfaAuditoria
+    from services.entomologia_acesso import ROTULO_PAPEL, buscar_conta, conceder, membros_ativos, revogar
+
+    def mascarar(valor):
+        nome, _, dominio = (valor or '').partition('@')
+        return f"{nome[:2]}***@{dominio}" if dominio else '***'
+
+    if acao == 'listar':
+        membros = membros_ativos()
+        click.echo(f'{len(membros)} conta(s) com o papel {ROTULO_PAPEL}.')
+        for membro in membros:
+            click.echo(f'  #{membro.user_id} {mascarar(membro.user.email)} desde {membro.concedido_em:%d/%m/%Y}')
+        return
+    if not email:
+        raise click.UsageError('Informe o e-mail da conta.')
+    try:
+        conta = buscar_conta(email)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if acao == 'conceder':
+        _, criado = conceder(conta, responsavel)
+        mensagem = f'Papel {ROTULO_PAPEL} concedido à conta #{conta.id}' if criado else None
+    else:
+        mensagem = f'Papel {ROTULO_PAPEL} revogado da conta #{conta.id}' if revogar(conta.id, responsavel) else None
+    if not mensagem:
+        click.echo(f'Nada a fazer para a conta #{conta.id} ({acao}).')
+        return
+    db.session.add(SfaAuditoria(nivel='INFO', categoria='ENTOMOLOGIA', funcao=f'{acao}_papel', mensagem=mensagem,
+                                detalhes_json=json.dumps({'user_id': conta.id, 'responsavel': responsavel,
+                                                          'origem': 'cli'}, ensure_ascii=False)))
+    db.session.commit()
+    click.echo(mensagem + '. Os demais acessos da conta não mudaram.')
+
+
 def register_cli_commands(app):
     app.cli.add_command(classify_transactions_history)
     app.cli.add_command(cleanup_test_users)
     app.cli.add_command(reconcile_veterinarian_billing)
     app.cli.add_command(repair_pmo_duplicate_animals)
+    app.cli.add_command(entomologia_equipe)

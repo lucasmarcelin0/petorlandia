@@ -73,6 +73,13 @@
       <p class="ento-footnote mt-3">Somas de ocorrências, com possíveis revisitas. “—” é ausência de valor informado; zero pode ser uma soma parcial. Larvas em várias datas indicam repetição de registros no território, sem comprovar persistência no mesmo imóvel. A fonte não informa se as pendências continuam abertas.</p>
     </section>
     <section class="ento-panel mt-3"><h2>Como o recorte se compara ao anterior</h2><p id="planning-comparison-note"></p><div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Medida</th><th>Janela selecionada</th><th>Janela anterior</th></tr></thead><tbody id="planning-comparison"></tbody></table></div><p class="ento-footnote mt-3">Diferenças podem refletir locais visitados, esforço de busca e preenchimento. Não demonstram aumento ou queda da transmissão.</p></section>
+    <section class="ento-panel mt-3" id="acoes-territoriais" aria-labelledby="acoes-territoriais-title"
+      data-csrf="{{ csrf_token() }}" data-pode-alterar="{{ 1 if pode_alterar else 0 }}"
+      data-andamento-url="{{ url_for('sfa_routes.entomologia_acao_andamento', acao_id=0, token=token) }}"
+      data-trabalho-url="{{ url_for('sfa_routes.trabalho', token=token) if acesso_completo else '' }}">
+      <div class="ento-panel-title"><div><div class="ento-eyebrow">DO PLANO À VERIFICAÇÃO</div><h2 id="acoes-territoriais-title">Ações territoriais</h2><p>Registre a execução e, depois, a verificação do resultado. Uma ação só conta em “Ciclo fechado” quando verificada.</p></div></div>
+      <div id="acoes-lista"></div>
+    </section>
     <details class="ento-panel ento-method"><summary>Ações propostas e como verificar o retorno à população</summary>
       <p>Propostas para pactuação com a vigilância, atenção básica e serviços urbanos. Os dados atuais permitem selecionar territórios para revisão; ainda não medem o efeito dessas ações.</p>
       <div class="ento-table-wrap"><table class="table table-sm ento-programs"><thead><tr><th>Frente</th><th>Trabalho proposto</th><th>Resultado a acompanhar</th></tr></thead><tbody>
@@ -87,7 +94,7 @@
   </section>
 
   <dialog id="action-dialog" class="ento-dialog" aria-labelledby="action-dialog-title">
-    <form method="post" action="{{ url_for('sfa_routes.trabalho_registrar', token=token) }}" class="ento-form-stack">
+    <form method="post" action="{{ url_for('sfa_routes.trabalho_registrar', token=token) if acesso_completo else url_for('sfa_routes.entomologia_acao_criar', token=token) }}" class="ento-form-stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="operacao" value="acao"><input type="hidden" name="id_estudo" value=""><input type="hidden" name="retorno" value="entomologia"><input type="hidden" name="setor" id="action-sector">
       <h2 id="action-dialog-title">Transformar em ação</h2>
       <p id="action-territory" class="ento-code"></p>
@@ -95,7 +102,7 @@
       <div><label for="action-reason">Motivo e objetivo verificável</label><textarea id="action-reason" name="motivo" rows="4" maxlength="3000" class="form-control" required></textarea></div>
       <div><label for="action-deadline">Prazo</label><input type="date" id="action-deadline" name="prazo" required></div>
       <div><label for="action-owner">Responsável</label><input id="action-owner" name="responsavel" maxlength="160" required autocomplete="name"></div>
-      <p class="ento-footnote px-0">A ação entra em <a href="{{ url_for('sfa_routes.trabalho', token=token) }}#acoes">Organização do trabalho</a>, com execução e verificação registradas.</p>
+      <p class="ento-footnote px-0">A ação entra na lista de ações territoriais do Planejamento{% if acesso_completo %} e em <a href="{{ url_for('sfa_routes.trabalho', token=token) }}#acoes">Organização do trabalho</a>{% endif %}, com execução e verificação registradas.</p>
       <div class="ento-button-row"><button type="button" class="btn btn-outline-secondary" id="action-cancel">Cancelar</button><button class="btn btn-primary">Criar ação</button></div>
     </form>
   </dialog>

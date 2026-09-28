@@ -34,7 +34,7 @@ class Experience:
         return self.workspaces
 
 
-def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False):
+def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -86,6 +86,12 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
     if role in {'vacinador', 'admin'}:
         area('vaccinator', 'Área do Vacinador', 'fa-syringe',
              action('Vacinação', 'vacina_pmo', 'fa-syringe'))
+    if dengue or admin:
+        # Papel adicional "Combate à dengue" (services.entomologia_acesso): não depende de role.
+        area('dengue', 'Combate à dengue', 'fa-mosquito',
+             action('Painel do território', 'sfa_routes.entomologia', 'fa-map-location-dot'),
+             action('Atualizar dados', 'sfa_routes.entomologia_atualizar', 'fa-upload'),
+             action('Página pública', 'vigilancia_publica.painel_aedes_publico', 'fa-bullhorn'))
     if internship:
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
@@ -111,6 +117,7 @@ def current_experience():
     if 'user_experience' not in g:
         from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao
         from helpers import _user_can_access_accounting, is_veterinarian
+        from services.entomologia_acesso import membro_equipe
 
         g.user_experience = resolve_experience(
             current_user,
@@ -118,6 +125,7 @@ def current_experience():
             accounting=_user_can_access_accounting(current_user),
             store=inject_minha_casa_de_racao()['minha_casa_de_racao'],
             clinic_access=inject_has_clinic_access()['has_clinic_access'],
+            dengue=membro_equipe(current_user),
         )
     return g.user_experience
 

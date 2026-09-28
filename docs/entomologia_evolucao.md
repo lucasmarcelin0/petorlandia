@@ -46,10 +46,9 @@ Escolhas deliberadas:
   vezes. **Desfazer** devolve os dias à versão anterior. Tudo fica auditado
   (`sfa_auditoria`, categoria `ENTOMOLOGIA`) com responsável.
 - **Quem pode alterar**: enviar, confirmar, desfazer, publicar e retirar exigem
-  conta de **administrador logada** (cada alteração fica atribuída a uma pessoa).
-  O token interno do SFA continua abrindo o painel e a tela de atualização, só
-  para leitura. Criar ação pelo Planejamento segue a regra já existente de
-  Organização do trabalho.
+  conta logada de **administrador** ou da equipe **“Combate à dengue”** (cada
+  alteração fica atribuída a uma pessoa). O token interno do SFA continua abrindo
+  o painel e a tela de atualização, só para leitura.
 - A fotografia versionada em `services/data/entomologia` continua sendo a base e
   nunca é alterada pelo servidor. Sem banco disponível, o painel usa a fotografia.
 - **Planejamento → Ação em um clique**: cada território das listas de revisão tem
@@ -81,6 +80,38 @@ Sem boletim publicado, a página mostra apenas as orientações. Há prévia int
 antes de publicar e o botão “Retirar do ar”. O boletim guarda somente agregados por
 setor; a malha pública leva apenas geometria, código e situação do setor.
 
+## Acesso: papel “Combate à dengue”
+
+A área de território e vigilância é acessada por **administradores** e por contas
+com o papel **“Combate à dengue”**. O papel é **adicional**: fica na tabela
+`entomologia_equipe` e não altera `User.role`. Uma conta de vacinador da campanha,
+por exemplo, continua com a Área do Vacinador e passa a ter também a nova área.
+
+| Quem | O que acessa |
+|---|---|
+| Administrador | Tudo no SFA, incluindo esta área; concede e revoga o papel |
+| Papel “Combate à dengue” | Somente esta área: painel, atualizar dados, camadas, ações territoriais e boletim público. Não vê pacientes, episódios, eventos nem as demais telas do SFA |
+| Token interno do SFA | Leitura do painel, como antes |
+| Demais contas | Nenhum acesso (a página pública `/aedes` segue aberta a todos) |
+
+- **Página inicial e menu**: quem tem acesso vê a área **“Combate à dengue”** com
+  Painel do território, Atualizar dados e Página pública.
+- **Ações territoriais**: a equipe cria ações no Planejamento e registra execução e
+  verificação na lista “Ações territoriais”, sem passar pela Organização do
+  trabalho (que mostra pacientes). Ações ligadas a episódios ou eventos não
+  aparecem para a equipe e não podem ser alteradas por ela.
+- **Conceder ou revogar**: em Atualizar dados → Equipe “Combate à dengue” (só
+  administrador), pelo e-mail de uma conta existente; ou pela linha de comando:
+
+```bash
+flask entomologia-equipe conceder pessoa@exemplo.com --por "Nome de quem concedeu"
+flask entomologia-equipe listar
+flask entomologia-equipe revogar pessoa@exemplo.com --por "Nome"
+```
+
+Tudo fica em `sfa_auditoria` (categoria `ENTOMOLOGIA`). A linha de comando não
+imprime e-mails completos.
+
 ## Como usar no dia a dia
 
 1. Ao fim do dia (ou da semana), exporte “Visita a Imóvel” e envie em **Atualizar dados**.
@@ -108,17 +139,20 @@ Ordenados pelo retorno esperado com o menor esforço da equipe.
 
 ## Sobre o projeto do Google Earth
 
-O link compartilhado (`earth.google.com/earth/d/1eruMbx5…`) não pôde ser aberto por
-aqui: o Google Earth Web não carrega fora do navegador e o arquivo não está visível
-no Google Drive conectado. Para incorporá-lo, exporte o projeto como KML (menu ⋮ do
-projeto → Exportar como arquivo KML) e envie em **Atualizar dados → Camada de mapa**.
-Se ele contiver os quarteirões oficiais, o próximo passo é usá-los como universo do
-ciclo na aba Equipe.
+O link (`earth.google.com/earth/d/1eruMbx5…`) é um projeto nativo do Google Earth
+(“Cópia de 2026”), compartilhado com qualquer pessoa com o link. Esse tipo de
+arquivo não é exportado pela API do Google Drive e o Earth Web só carrega o
+conteúdo com sessão do Google, então ele não é lido automaticamente pelo servidor.
+Para incorporá-lo: abra o projeto no Earth, menu ⋮ → **Exportar como arquivo KML**,
+e envie em **Atualizar dados → Camada de mapa**. Ao atualizar o projeto no Earth,
+repita a exportação e desfaça a camada antiga. Se ele contiver os quarteirões
+oficiais, o próximo passo é usá-los como universo do ciclo na aba Equipe.
 
 ## Implantação
 
-- Migração `f1e7a3c9b2d4` cria `entomologia_importacao` e `entomologia_publicacao`
-  (somente tabelas novas; nenhuma coluna existente muda).
+- Migração `f1e7a3c9b2d4` cria `entomologia_importacao`, `entomologia_publicacao`
+  e `entomologia_equipe` (somente tabelas novas; nenhuma coluna existente muda).
 - Nova rota pública: `/aedes` (`vigilancia_publica.painel_aedes_publico`).
 - Testes: `tests/test_entomologia_atualizacao.py` (inclui os testes JS de
-  entomologia, agora executados também pela CI) e `tests/test_entomologia_team_model.js`.
+  entomologia, agora executados também pela CI), `tests/test_entomologia_equipe.py`
+  e `tests/test_entomologia_team_model.js`.

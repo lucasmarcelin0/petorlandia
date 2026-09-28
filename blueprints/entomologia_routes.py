@@ -18,16 +18,25 @@ def _ator():
 
 
 def usuario_pode_alterar():
-    return bool(current_user.is_authenticated and (getattr(current_user, 'role', '') or '').lower() == 'admin')
+    """Administrador ou membro da equipe "Combate à dengue", com conta logada."""
+    from services.entomologia_acesso import pode_acessar
+    return pode_acessar(current_user)
+
+
+def ensure_entomologia_editor():
+    """Alterar a base ou a página pública exige uma conta identificada.
+
+    O token interno do SFA continua dando acesso de leitura ao painel; gravações
+    ficam atribuídas a uma pessoa real na auditoria.
+    """
+    if not usuario_pode_alterar():
+        abort(403)
 
 
 def ensure_entomologia_admin():
-    """Alterar a base ou a página pública exige administrador identificado.
-
-    O token interno do SFA continua dando acesso de leitura ao painel; gravações
-    ficam atribuídas a uma conta real na auditoria.
-    """
-    if not usuario_pode_alterar():
+    """Conceder ou revogar o papel "Combate à dengue" é tarefa de administrador."""
+    from services.entomologia_acesso import eh_admin
+    if not eh_admin(current_user):
         abort(403)
 
 
@@ -52,18 +61,31 @@ def _sem_cache(response):
     return response
 
 
-def acoes_territoriais():
-    """Ações com setor, sem vínculo pessoal, para o planejamento e a aba Equipe."""
+def _dia(valor):
+    return valor.date().isoformat() if isinstance(valor, datetime) else (valor.isoformat() if valor else None)
+
+
+def _eh_territorial(acao):
+    return not acao.id_estudo and not acao.evento_id and bool(acao.setor)
+
+
+def acoes_territoriais(completo=True):
+    """Ações com setor para o planejamento e a aba Equipe.
+
+    Sem acesso completo ao SFA (equipe de combate à dengue), só entram ações
+    puramente territoriais: nada vinculado a episódio ou evento de pacientes.
+    """
     from models.sfa import SfaAcao
     from services.entomologia_service import consultar_sem_interromper
 
-    def dia(valor):
-        return valor.date().isoformat() if isinstance(valor, datetime) else (valor.isoformat() if valor else None)
     rows = consultar_sem_interromper(lambda: SfaAcao.query.filter(
         SfaAcao.setor.isnot(None), SfaAcao.setor != '').order_by(SfaAcao.id).all(), [])
-    return [{'id': a.id, 'sector': a.setor, 'tipo': a.tipo, 'status': a.status, 'prazo': dia(a.prazo),
-             'criado_em': dia(a.criado_em), 'executado_em': dia(a.executado_em),
-             'verificado_em': dia(a.verificado_em)} for a in rows]
+    if not completo:
+        rows = [a for a in rows if _eh_territorial(a)]
+    return [{'id': a.id, 'sector': a.setor, 'tipo': a.tipo, 'status': a.status, 'prazo': _dia(a.prazo),
+             'criado_em': _dia(a.criado_em), 'executado_em': _dia(a.executado_em),
+             'verificado_em': _dia(a.verificado_em), 'motivo': a.motivo, 'responsavel': a.responsavel,
+             'resultado': a.resultado, 'territorial': _eh_territorial(a)} for a in rows]
 
 
 def publicacao_vigente():
@@ -100,20 +122,23 @@ def register(bp, require_access):
             previa = EntomologiaImportacao.query.filter_by(id=previa_id, status='PREVIA').first()
         envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA') \
             .order_by(EntomologiaImportacao.id.desc()).limit(60).all()
+        from services.entomologia_acesso import eh_admin, membros_ativos
         publicacoes = EntomologiaPublicacao.query.order_by(EntomologiaPublicacao.id.desc()).limit(12).all()
         dataset = dataset_atual()
+        gerencia_equipe = eh_admin(current_user)
         return _sem_cache(current_app.make_response(render_template(
             'sfa/entomologia_atualizar.html', previa=previa,
             previa_resumo=json.loads(previa.resumo_json or '{}') if previa else None,
             envios=envios, publicacoes=publicacoes, fonte=dataset['source'],
             hoje=hoje_local(), token=request.args.get('token') or None, pode_alterar=usuario_pode_alterar(),
+            gerencia_equipe=gerencia_equipe, equipe=membros_ativos() if gerencia_equipe else [],
         )))
 
     @bp.route('/entomologia/atualizar', methods=['POST'])
     @require_access
     @login_required
     def entomologia_enviar():
-        ensure_entomologia_admin()
+        ensure_entomologia_editor()
         from extensions import db
         from models.entomologia import EntomologiaImportacao
         from services import entomologia_service as service
@@ -172,7 +197,7 @@ def register(bp, require_access):
     @require_access
     @login_required
     def entomologia_confirmar(envio_id):
-        ensure_entomologia_admin()
+        ensure_entomologia_editor()
         from extensions import db
         from models.entomologia import EntomologiaImportacao
         from time_utils import utcnow
@@ -204,7 +229,7 @@ def register(bp, require_access):
     @require_access
     @login_required
     def entomologia_desfazer(envio_id):
-        ensure_entomologia_admin()
+        ensure_entomologia_editor()
         from extensions import db
         from models.entomologia import EntomologiaImportacao
         from time_utils import utcnow
@@ -246,7 +271,7 @@ def register(bp, require_access):
     @require_access
     @login_required
     def entomologia_publicar():
-        ensure_entomologia_admin()
+        ensure_entomologia_editor()
         from extensions import db
         from models.entomologia import EntomologiaPublicacao
         from services.entomologia_service import boletim_publico, dataset_atual
@@ -277,7 +302,7 @@ def register(bp, require_access):
     @require_access
     @login_required
     def entomologia_retirar(publicacao_id):
-        ensure_entomologia_admin()
+        ensure_entomologia_editor()
         from extensions import db
         from models.entomologia import EntomologiaPublicacao
         from time_utils import utcnow
@@ -295,3 +320,97 @@ def register(bp, require_access):
         db.session.commit()
         flash('Boletim retirado da página pública.', 'info')
         return redirect(url_for('sfa_routes.entomologia_atualizar', token=request.args.get('token') or None) + '#publicar')
+
+    def _voltar_planejamento():
+        return redirect(url_for('sfa_routes.entomologia', token=request.args.get('token') or None) + '#acao-criada')
+
+    @bp.route('/entomologia/acoes', methods=['POST'])
+    @require_access
+    @login_required
+    def entomologia_acao_criar():
+        """Ação territorial criada no Planejamento, sem vínculo com pacientes."""
+        ensure_entomologia_editor()
+        from extensions import db
+        from services.sfa_workflow_ops import registrar_operacao
+        if not str(request.form.get('setor') or '').strip():
+            flash('Informe o setor da ação territorial.', 'danger')
+            return _voltar_planejamento()
+        form = {campo: request.form.get(campo, '') for campo in ('responsavel', 'setor', 'tipo', 'motivo', 'prazo')}
+        form.update(operacao='acao', id_estudo='', evento_id='')
+        try:
+            registrar_operacao(form, _ator())
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+        else:
+            flash('Ação territorial criada. Acompanhe o andamento na lista de ações do Planejamento.', 'success')
+        return _voltar_planejamento()
+
+    @bp.route('/entomologia/acoes/<int:acao_id>/andamento', methods=['POST'])
+    @require_access
+    @login_required
+    def entomologia_acao_andamento(acao_id):
+        """Execução e verificação de ações territoriais (não mexe em ações de pacientes)."""
+        ensure_entomologia_editor()
+        from extensions import db
+        from models.sfa import SfaAcao
+        from services.sfa_workflow_ops import registrar_operacao
+        acao = db.session.get(SfaAcao, acao_id)
+        if not acao or not _eh_territorial(acao):
+            abort(404)
+        form = {campo: request.form.get(campo, '') for campo in
+                ('responsavel', 'status', 'resultado', 'evidencia_verificacao', 'horas', 'custo')}
+        form.update(operacao='acao_status', acao_id=str(acao.id), id_estudo='')
+        try:
+            registrar_operacao(form, _ator())
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+        else:
+            flash(f'Ação #{acao.id} atualizada.', 'success')
+        return _voltar_planejamento()
+
+    @bp.route('/entomologia/equipe', methods=['POST'])
+    @require_access
+    @login_required
+    def entomologia_equipe_conceder():
+        ensure_entomologia_admin()
+        from extensions import db
+        from services.entomologia_acesso import ROTULO_PAPEL, buscar_conta, conceder
+        destino = url_for('sfa_routes.entomologia_atualizar', token=request.args.get('token') or None) + '#equipe'
+        try:
+            conta = buscar_conta(request.form.get('email'))
+            _, criado = conceder(conta, _responsavel())
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+            return redirect(destino)
+        if criado:
+            _auditar('conceder_papel', f'Papel {ROTULO_PAPEL} concedido à conta #{conta.id}',
+                     {'user_id': conta.id, 'responsavel': request.form.get('responsavel')})
+            db.session.commit()
+            flash(f'{conta.name or conta.email} agora faz parte da equipe {ROTULO_PAPEL}.', 'success')
+        else:
+            flash('Essa conta já faz parte da equipe.', 'info')
+        return redirect(destino)
+
+    @bp.route('/entomologia/equipe/<int:user_id>/revogar', methods=['POST'])
+    @require_access
+    @login_required
+    def entomologia_equipe_revogar(user_id):
+        ensure_entomologia_admin()
+        from extensions import db
+        from services.entomologia_acesso import ROTULO_PAPEL, revogar
+        destino = url_for('sfa_routes.entomologia_atualizar', token=request.args.get('token') or None) + '#equipe'
+        try:
+            responsavel = _responsavel()
+        except ValueError as exc:
+            flash(str(exc), 'danger')
+            return redirect(destino)
+        if not revogar(user_id, responsavel):
+            abort(404)
+        _auditar('revogar_papel', f'Papel {ROTULO_PAPEL} revogado da conta #{user_id}',
+                 {'user_id': user_id, 'responsavel': responsavel})
+        db.session.commit()
+        flash('Acesso à área de combate à dengue revogado. Os demais acessos da conta não mudaram.', 'info')
+        return redirect(destino)

@@ -215,6 +215,34 @@
     $('planning-comparison').innerHTML=[['count','Registros'],['sectors','Setores com registros'],['worked','Imóveis trabalhados'],['positive','Imóveis com larvas'],['closed','Imóveis fechados'],['refused','Recusas'],['coverage','Preenchimento de larvas (%)']].map(([key,label])=>`<tr><td>${label}</td><td>${fmt(a[key])}</td><td>${fmt(plan.previous[key])}</td></tr>`).join('');
     $('export-planning').disabled=!queue.length;
   }
+  const statusLabels = {ABERTA:'Aberta', EM_ANDAMENTO:'Em andamento', EXECUTADA:'Executada — aguardando verificação', VERIFICADA:'Verificada'};
+  const transitions = {ABERTA:[['EM_ANDAMENTO','Em andamento'],['EXECUTADA','Executada']], EM_ANDAMENTO:[['EXECUTADA','Executada']],
+    EXECUTADA:[['VERIFICADA','Verificada'],['ABERTA','Reabrir']], VERIFICADA:[['ABERTA','Reabrir']]};
+  function renderActions() {
+    const panel = $('acoes-territoriais');
+    if (!panel) return;
+    const canEdit = panel.dataset.podeAlterar === '1', csrf = panel.dataset.csrf, trabalho = panel.dataset.trabalhoUrl;
+    const url = id => panel.dataset.andamentoUrl.replace('/acoes/0/', `/acoes/${id}/`);
+    let owner = ''; try { owner = localStorage.getItem('ento-responsavel') || ''; } catch (error) { /* sem armazenamento local */ }
+    const open = actions.filter(a => a.status !== 'VERIFICADA').sort((a,b) => (a.prazo||'').localeCompare(b.prazo||'') || a.id-b.id);
+    const done = actions.filter(a => a.status === 'VERIFICADA').sort((a,b) => (b.verificado_em||'').localeCompare(a.verificado_em||'')).slice(0, 10);
+    const field = (name, label, type='text') => `<div><label>${label}<input type="${type}" name="${name}" ${type==='number'?'min="0" step="0.01"':''} maxlength="3000"></label></div>`;
+    const form = a => canEdit && a.territorial ? `<details class="mt-2"><summary>Registrar andamento</summary><form method="post" action="${escape(url(a.id))}" class="ento-form-stack mt-2">
+        <input type="hidden" name="csrf_token" value="${escape(csrf)}">
+        <div><label>Nova situação<select name="status" required>${(transitions[a.status]||[]).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label></div>
+        ${field('resultado','Resultado (obrigatório ao executar ou verificar)')}${field('evidencia_verificacao','Evidência da verificação (obrigatória ao verificar)')}
+        <div class="ento-inline-form">${field('horas','Horas aplicadas','number')}${field('custo','Custo em R$','number')}</div>
+        <div><label>Responsável<input name="responsavel" maxlength="160" required value="${escape(owner)}"></label></div>
+        <button class="btn btn-sm btn-primary">Salvar andamento</button></form></details>`
+      : (trabalho ? `<a class="ento-footnote px-0" href="${escape(trabalho)}#acoes">Atualizar em Organização do trabalho</a>` : '');
+    const item = a => `<article class="ento-action ${a.status==='VERIFICADA'?'done':''}"><div class="ento-action-head"><strong>#${a.id} ${escape(a.tipo)}</strong><span class="ento-badge ${a.status==='VERIFICADA'?'ok':''}">${escape(statusLabels[a.status]||a.status)}</span></div>
+      <div class="ento-code">Setor ${escape(a.sector)} • prazo <span class="${a.status!=='VERIFICADA'&&a.prazo&&a.prazo<todayIso?'text-danger fw-bold':''}">${day(a.prazo||'')}</span>${a.responsavel?` • ${escape(a.responsavel)}`:''}</div>
+      ${a.motivo?`<p class="mb-1">${escape(a.motivo)}</p>`:''}${a.resultado?`<p class="mb-1"><em>Resultado:</em> ${escape(a.resultado)}</p>`:''}${a.status!=='VERIFICADA'?form(a):''}</article>`;
+    $('acoes-lista').innerHTML = (open.length ? open.map(item).join('') : '<p class="ento-empty">Nenhuma ação territorial em aberto. Use “Criar ação” nas listas acima.</p>')
+      + (done.length ? `<details class="mt-3"><summary>Verificadas recentemente (${done.length})</summary>${done.map(item).join('')}</details>` : '');
+    $('acoes-lista').querySelectorAll('form').forEach(f => f.addEventListener('submit', () => { try { localStorage.setItem('ento-responsavel', f.responsavel.value); } catch (error) { /* sem armazenamento local */ } }));
+  }
+  function goToActions() { activate('planning'); requestAnimationFrame(() => $('acoes-territoriais').scrollIntoView({behavior:'smooth'})); }
   const actionTypes = {focus:'Verificar foco registrado', access:'Recuperar acesso aos imóveis', quality:'Completar registro de campo'};
   function openActionDialog(r, kind, plan) {
     const block = $('planning-scale').value==='block' ? ` • área ${r.area} / quarteirão ${r.block}` : '';
@@ -257,11 +285,12 @@
     const planningLink = '<button type="button" class="btn btn-link p-0 align-baseline" data-go="planning">abrir o Planejamento</button>';
     const text = {data:s=>`<i class="fas fa-upload"></i> O último registro é de ${day(end)} (${s.days} dias atrás). <a href="${document.querySelector('.ento-hero-actions a').href}">Envie a exportação mais recente</a> para as metas refletirem o trabalho real.`,
       focus:s=>`<i class="fas fa-bug"></i> ${s.total} setor(es) com foco nos últimos 14 dias sem ação aberta: ${s.sectors.map(c=>'setor '+escape(c.slice(-4))).join(', ')}${s.total>s.sectors.length?` e mais ${s.total-s.sectors.length}`:''}. Crie a ação no ${planningLink}.`,
-      overdue:s=>`<i class="fas fa-clock"></i> ${s.total} ação(ões) territorial(is) com prazo vencido. <a href="${$('action-dialog').querySelector('a').href}">Atualizar andamento</a>.`,
+      overdue:s=>`<i class="fas fa-clock"></i> ${s.total} ação(ões) territorial(is) com prazo vencido. <button type="button" class="btn btn-link p-0 align-baseline" data-go-actions>Atualizar andamento</button>.`,
       publish:()=>`<i class="fas fa-bullhorn"></i> ${pub?`O boletim público vai até ${day(pub.fim)}.`:'Ainda não há boletim público.'} <a href="${document.querySelector('.ento-hero-actions a').href}#publicar">Confira a prévia e publique</a> para a população acompanhar o trabalho.`,
-      verify:s=>`<i class="fas fa-magnifying-glass"></i> ${s.total} ação(ões) executada(s) aguardando verificação do resultado. <a href="${$('action-dialog').querySelector('a').href}">Verificar</a>.`};
+      verify:s=>`<i class="fas fa-magnifying-glass"></i> ${s.total} ação(ões) executada(s) aguardando verificação do resultado. <button type="button" class="btn btn-link p-0 align-baseline" data-go-actions>Verificar</button>.`};
     $('team-next').innerHTML = steps.length ? steps.map(s=>`<li>${text[s.kind](s)}</li>`).join('') : '<li><i class="fas fa-circle-check"></i> Nada pendente nas verificações automáticas. Bom trabalho!</li>';
     $('team-next').querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{activate(b.dataset.go);$('tab-'+b.dataset.go).focus();}));
+    $('team-next').querySelectorAll('[data-go-actions]').forEach(b=>b.addEventListener('click',goToActions));
     $('team-progress-note').textContent = current.partial ? `Registros de ${day(current.start)} até ${day(end)}. A barra mostra quanto falta para igualar a média das últimas semanas.` : 'A semana mais recente do arquivo está completa; confira abaixo as conquistas.';
     $('team-progress').innerHTML = M.achievements(weeks, actions, todayIso).map(item=>badge(item,'progress')).join('');
     $('team-badges-note').textContent = last ? `Semana de ${day(last.start)} a ${day(last.end)}.` : '';
@@ -287,7 +316,7 @@
   function activate(view) {
     document.querySelectorAll('[data-view]').forEach(button=>{const active=button.dataset.view===view;button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;$('panel-'+button.dataset.view).hidden=!active;});
     if(view==='team')updateTeam();
-    if(view==='planning')updatePlanning();
+    if(view==='planning'){updatePlanning();renderActions();}
     if(view==='census')updateCensus();
     if(view==='reference')reference();
     if(view==='visits')updateVisits();
@@ -325,6 +354,7 @@
     $('action-dialog').querySelector('form').addEventListener('submit',()=>{try{localStorage.setItem('ento-responsavel',$('action-owner').value);}catch(error){/* sem armazenamento local */}});
     updatePlanning();
     activate(location.hash==='#acao-criada'?'planning':'team');
+    if(location.hash==='#acao-criada')goToActions();
   } catch(error) {
     $('ento-error').hidden=false;$('ento-error').textContent='Não foi possível inicializar o painel. Recarregue a página ou contate o administrador.';
     console.error('Entomologia dashboard:',error);

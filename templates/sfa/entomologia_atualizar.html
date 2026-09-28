@@ -18,7 +18,7 @@
     <div class="ento-source-chip"><span class="ento-dot"></span> Base em uso<br><strong>{{ br(fonte.start) }} → {{ br(fonte.end) }}</strong><small>{{ '{:,}'.format(fonte.rows).replace(',', '.') }} registros{% if fonte.imported_at %} • último envio {{ br(fonte.imported_at[:10]) }}{% endif %}</small></div>
   </header>
   <p><a href="{{ url_for('sfa_routes.entomologia', token=token) }}">← Voltar ao painel</a></p>
-  {% if not pode_alterar %}<div class="ento-notice" role="note"><strong>Somente leitura.</strong> Enviar, confirmar, desfazer e publicar exigem entrar com uma conta de administrador; assim cada alteração fica atribuída a uma pessoa na auditoria.</div>{% endif %}
+  {% if not pode_alterar %}<div class="ento-notice" role="note"><strong>Somente leitura.</strong> Enviar, confirmar, desfazer e publicar exigem entrar com uma conta de administrador ou da equipe “Combate à dengue”; assim cada alteração fica atribuída a uma pessoa na auditoria.</div>{% endif %}
 
   <ol class="ento-steps" aria-label="Como atualizar">
     <li><strong>Exporte</strong><span>“Visita a Imóvel” no sistema, em CSV ou ZIP, com o período desejado.</span></li>
@@ -126,5 +126,25 @@
     </tbody></table></div>
     {% endif %}
   </section>
+
+  {% if gerencia_equipe %}
+  <section class="ento-panel mt-3" id="equipe" aria-labelledby="equipe-title">
+    <div class="ento-eyebrow">ACESSO</div>
+    <h2 id="equipe-title">Equipe “Combate à dengue”</h2>
+    <p>Quem está aqui acessa somente a área de território e vigilância (painel, atualização de dados, ações territoriais e boletim), além da área “Combate à dengue” na página inicial. Não acessa pacientes nem as demais telas do SFA. É um papel adicional: os outros acessos da conta continuam iguais.</p>
+    <form method="post" action="{{ url_for('sfa_routes.entomologia_equipe_conceder', token=token) }}" class="ento-inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label for="equipe-email">E-mail da conta</label><input type="email" id="equipe-email" name="email" maxlength="254" required placeholder="pessoa@exemplo.com"></div>
+      {{ responsavel('equipe-responsavel') }}
+      <button class="btn btn-primary">Conceder acesso</button>
+    </form>
+    <p class="ento-footnote px-0 mt-2">A pessoa precisa ter uma conta no site com esse e-mail. Confira se o e-mail pertence mesmo a quem vai receber o acesso.</p>
+    <div class="ento-table-wrap mt-3"><table class="table table-sm"><thead><tr><th>Nome</th><th>E-mail</th><th>Desde</th><th>Concedido por</th><th>Revogar</th></tr></thead><tbody>
+    {% for m in equipe %}<tr><td>{{ m.user.name or '—' }}</td><td>{{ m.user.email }}</td><td>{{ m.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ m.concedido_por }}</td>
+      <td><details><summary>Revogar</summary><form method="post" action="{{ url_for('sfa_routes.entomologia_equipe_revogar', user_id=m.user_id, token=token) }}" class="ento-form-stack mt-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ responsavel('revogar-equipe-' ~ m.user_id) }}<button class="btn btn-sm btn-outline-danger">Confirmar</button></form></details></td></tr>
+    {% else %}<tr><td colspan="5" class="ento-empty">Ninguém na equipe ainda. Administradores sempre têm acesso.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

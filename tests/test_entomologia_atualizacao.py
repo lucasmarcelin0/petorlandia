@@ -234,9 +234,11 @@ def test_planejamento_cria_acao_e_volta_ao_painel(app, client):
     assert acao.setor == '353430205000017' and acao.status == 'ABERTA'
     html = client.get('/sfa/entomologia').get_data(as_text=True)
     dataset = json.loads(html.split('id="ento-dataset">', 1)[1].split('</script>', 1)[0])
-    assert dataset['actions'] == [{'id': acao.id, 'sector': '353430205000017', 'tipo': 'Verificar foco registrado',
-                                   'status': 'ABERTA', 'prazo': '2099-01-01', 'criado_em': dataset['actions'][0]['criado_em'],
-                                   'executado_em': None, 'verificado_em': None}]
+    [exposta] = dataset['actions']
+    assert {k: exposta[k] for k in ('id', 'sector', 'tipo', 'status', 'prazo', 'territorial')} == {
+        'id': acao.id, 'sector': '353430205000017', 'tipo': 'Verificar foco registrado',
+        'status': 'ABERTA', 'prazo': '2099-01-01', 'territorial': True}
+    assert 'id_estudo' not in exposta and 'evento_id' not in exposta
     # Sem retorno explícito, o fluxo antigo continua indo para Organização do trabalho.
     antigo = client.post('/sfa/trabalho/registrar', data={
         'operacao': 'acao', 'responsavel': 'Supervisão', 'setor': '353430205000017',
