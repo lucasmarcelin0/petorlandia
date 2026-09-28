@@ -271,6 +271,22 @@ WORKSPACE_THEMES: dict[str, dict[str, Any]] = {
         },
         "prefixes": ("/estagio",),
     },
+    "dengue": {
+        "label": "Combate à dengue",
+        "emoji": "🦟",
+        "icon": "fa-mosquito",
+        "area": "#0b6568",
+        "tone2": "#13878a",
+        "tone3": "#80c9bf",
+        "tone4": "#d0eeea",
+        "ink": "#143b43",
+        "tint": "#f2faf9",
+        "edge": "#cde1df",
+        # Só colore o cartão da página inicial; as telas usam o layout do SFA.
+        "blueprints": set(),
+        "endpoints": set(),
+        "prefixes": (),
+    },
     "personal-shortcuts": {
         "label": "Minha vida pet",
         "emoji": "🐾",

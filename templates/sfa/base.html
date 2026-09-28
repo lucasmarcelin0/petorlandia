@@ -72,6 +72,8 @@
   <div class="sfa-brand">
     <i class="fas fa-virus-covid me-2"></i>SFA Orlândia
   </div>
+  {% set sfa_completo = sfa_acesso_completo is not defined or sfa_acesso_completo() %}
+  {% if sfa_completo %}
   <ul class="nav flex-column mt-2">
     <li class="nav-item"><a class="nav-link" href="{{ url_for('sfa_routes.trabalho') }}"><i class="fas fa-list-check"></i> Organização do trabalho</a></li>
     <li class="nav-item"><a class="nav-link" href="{{ url_for('sfa_routes.vigilancia_semanal') }}"><i class="fas fa-calendar-week"></i> Pacientes e larvas</a></li>
@@ -163,12 +165,20 @@
       </form>
     </li>
   </ul>
+  {% endif %}
   <div class="mx-3 my-3 p-2 rounded" style="border:1px solid rgba(255,255,255,.25)">
     <div class="px-2 mb-1" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7)">Território e vigilância</div>
     <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia' %}active{% endif %}"
        href="{{ url_for('sfa_routes.entomologia') }}" {% if request.endpoint == 'sfa_routes.entomologia' %}aria-current="page"{% endif %}>
       <i class="fas fa-map-location-dot" aria-hidden="true"></i> Dados entomológicos<br><span class="ms-4">e censitários</span>
     </a>
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.entomologia_atualizar') }}" {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}aria-current="page"{% endif %}>
+      <i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados
+    </a>
+    {% if not sfa_completo %}
+    <a class="nav-link px-2" href="/"><i class="fas fa-house" aria-hidden="true"></i> Página inicial</a>
+    {% endif %}
   </div>
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>

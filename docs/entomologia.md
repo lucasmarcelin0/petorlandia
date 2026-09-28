@@ -1,8 +1,10 @@
 # Dados entomológicos e censitários
 
 A página `/sfa/entomologia` usa a mesma autorização interna do SFA. O acesso na
-barra lateral fica depois de Ações, antes do rodapé SFA. Possui quatro abas:
-Planejamento, Entomologia, Censo 2022 e Mapas de campo. Não consulta dados dos participantes.
+barra lateral fica depois de Ações, antes do rodapé SFA. Possui cinco abas:
+Equipe, Planejamento, Entomologia, Censo 2022 e Mapas de campo. Não consulta dados dos participantes.
+A aba Equipe, a atualização pelo navegador e a página pública `/aedes` estão
+descritas em [entomologia_evolucao.md](entomologia_evolucao.md).
 
 ## Fontes e recorte entregue
 
@@ -54,9 +56,16 @@ selecionada, não estimativas populacionais de 2026. Não são denominadores de
 visitas. Densidade é população / área em km². Dados censitários ausentes não
 seriam convertidos em zero; totais incompletos ficam indisponíveis.
 
+## Atualizar os dados pelo navegador
+
+O caminho do dia a dia é `/sfa/entomologia/atualizar`: envio do CSV/ZIP, prévia
+por dia, confirmação com responsável e opção de desfazer. Os envios ficam na
+tabela `entomologia_importacao` e substituem, na base consolidada, os dias que
+contêm; a fotografia abaixo continua sendo a base e não é alterada pelo servidor.
+
 ## Atualizar a fotografia dos dados
 
-Não há gravação no banco nem migração. `services/data/entomologia/snapshot.json`
+A fotografia versionada não depende do banco. `services/data/entomologia/snapshot.json`
 e `maps/` acompanham o código; as rotas protegidas servem os dados e as imagens.
 Nenhum download externo é feito pelo servidor em cada acesso. O navegador usa
 OpenStreetMap para o fundo de ruas; os limites e indicadores funcionam sem esse

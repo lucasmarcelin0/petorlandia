@@ -131,6 +131,28 @@ def require_sfa_internal_access(view):
     return wrapper
 
 
+def require_entomologia_access(view):
+    """Território e vigilância: acesso interno do SFA ou papel "Combate à dengue".
+
+    O papel dá acesso somente a esta área; pacientes e demais telas do SFA
+    continuam restritos a ``require_sfa_internal_access``.
+    """
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        from services.entomologia_acesso import membro_equipe
+        if _acesso_interno_sfa_liberado() or membro_equipe(current_user):
+            return view(*args, **kwargs)
+        return _bloquear_acesso_interno()
+
+    return wrapper
+
+
+@bp.context_processor
+def _inject_sfa_acesso_completo():
+    # A equipe de combate à dengue vê só a área de território na barra lateral.
+    return {"sfa_acesso_completo": _acesso_interno_sfa_liberado}
+
+
 # ---------------------------------------------------------------------------
 # Autenticação simples por token de admin
 # ---------------------------------------------------------------------------
@@ -159,19 +181,26 @@ def _verificar_webhook_secret() -> bool:
 # ---------------------------------------------------------------------------
 
 @bp.route("/entomologia")
-@require_sfa_internal_access
+@require_entomologia_access
 def entomologia():
-    from services.entomologia_service import load_entomologia, load_reference_maps
+    from blueprints.entomologia_routes import acoes_territoriais, publicacao_vigente, usuario_pode_alterar
+    from services.entomologia_service import dataset_atual, load_reference_maps
 
-    dataset = dict(load_entomologia())
+    dataset = dict(dataset_atual())
     dataset['reference_maps'] = [
         dict(item, url=url_for('sfa_routes.entomologia_mapa', filename=item['file'],
                                token=_token_admin_informado() or None))
         for item in load_reference_maps()
     ]
+    acesso_completo = _acesso_interno_sfa_liberado()
+    dataset['actions'] = acoes_territoriais(completo=acesso_completo)
+    publicacao = publicacao_vigente()
+    dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
+                               'fim': publicacao.fim.isoformat()} if publicacao else None)
 
     response = current_app.make_response(render_template(
-        "sfa/entomologia.html", dataset=dataset,
+        "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
+        acesso_completo=acesso_completo, pode_alterar=usuario_pode_alterar(),
     ))
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
@@ -179,7 +208,7 @@ def entomologia():
 
 
 @bp.route("/entomologia/mapas/<filename>")
-@require_sfa_internal_access
+@require_entomologia_access
 def entomologia_mapa(filename):
     from services.entomologia_service import DATA_DIR, load_reference_maps
 
@@ -2749,6 +2778,9 @@ def rodar_rotina():
 
 from blueprints.sfa_workflow_routes import register as _register_workflow_routes
 _register_workflow_routes(bp, require_sfa_internal_access)
+
+from blueprints.entomologia_routes import register as _register_entomologia_routes
+_register_entomologia_routes(bp, require_entomologia_access)
 
 
 @bp.route('/p/<token>/t10', methods=['GET', 'POST'])

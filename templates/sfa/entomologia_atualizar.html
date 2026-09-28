@@ -1,0 +1,150 @@
+{% extends 'sfa/base.html' %}
+{% block title %}Atualizar dados do território — Orlândia{% endblock %}
+{% block page_title %}Território e vigilância{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
+{% endblock %}
+{% macro br(iso) %}{% if iso %}{{ iso[8:10] }}/{{ iso[5:7] }}/{{ iso[:4] }}{% else %}—{% endif %}{% endmacro %}
+{% macro responsavel(id) %}
+<div><label for="{{ id }}">Responsável</label><input type="text" id="{{ id }}" name="responsavel" maxlength="160" required autocomplete="name" placeholder="Nome de quem confere"></div>
+{% endmacro %}
+{% block content %}
+<div class="ento-page">
+  <header class="ento-hero">
+    <div><div class="ento-eyebrow">ATUALIZAÇÃO SEM DEPLOY</div>
+      <h1>Atualizar dados do território</h1>
+      <p>Envie a exportação diária do sistema de campo ou uma camada do Google Earth. Tudo passa por uma prévia, fica registrado com responsável e pode ser desfeito.</p>
+    </div>
+    <div class="ento-source-chip"><span class="ento-dot"></span> Base em uso<br><strong>{{ br(fonte.start) }} → {{ br(fonte.end) }}</strong><small>{{ '{:,}'.format(fonte.rows).replace(',', '.') }} registros{% if fonte.imported_at %} • último envio {{ br(fonte.imported_at[:10]) }}{% endif %}</small></div>
+  </header>
+  <p><a href="{{ url_for('sfa_routes.entomologia', token=token) }}">← Voltar ao painel</a></p>
+  {% if not pode_alterar %}<div class="ento-notice" role="note"><strong>Somente leitura.</strong> Enviar, confirmar, desfazer e publicar exigem entrar com uma conta de administrador ou da equipe “Combate à dengue”; assim cada alteração fica atribuída a uma pessoa na auditoria.</div>{% endif %}
+
+  <ol class="ento-steps" aria-label="Como atualizar">
+    <li><strong>Exporte</strong><span>“Visita a Imóvel” no sistema, em CSV ou ZIP, com o período desejado.</span></li>
+    <li><strong>Envie</strong><span>O arquivo é lido aqui; LOGIN e AGENTE são descartados na leitura.</span></li>
+    <li><strong>Confira</strong><span>A prévia mostra, dia a dia, o que entra e o que será substituído.</span></li>
+    <li><strong>Confirme</strong><span>Os painéis passam a usar os dados na hora. Errou? Desfaça.</span></li>
+  </ol>
+
+  {% if previa %}
+  <section class="ento-panel mt-3 ento-preview" id="previa" aria-labelledby="previa-title">
+    <div class="ento-eyebrow">PRÉVIA — AINDA NÃO APLICADA</div>
+    <h2 id="previa-title">{{ previa.nome_arquivo }}</h2>
+    {% if previa.tipo == 'visitas' %}
+    <div class="ento-kpis">
+      <article class="ento-kpi highlight"><div class="label">Registros no arquivo</div><div class="value">{{ previa_resumo.linhas }}</div><div class="note">{{ br(previa_resumo.inicio) }} a {{ br(previa_resumo.fim) }}</div></article>
+      <article class="ento-kpi"><div class="label">Dias novos</div><div class="value">{{ previa_resumo.dias_novos }}</div><div class="note">Ainda não existiam na base</div></article>
+      <article class="ento-kpi"><div class="label">Dias substituídos</div><div class="value">{{ previa_resumo.dias_substituidos }}</div><div class="note">O arquivo passa a valer nesses dias</div></article>
+      <article class="ento-kpi"><div class="label">Quarteirões / setores</div><div class="value">{{ previa_resumo.quarteiroes }} / {{ previa_resumo.setores }}</div><div class="note">{{ previa_resumo.trabalhados }} imóveis trabalhados</div></article>
+    </div>
+    {% for aviso in previa_resumo.avisos %}<div class="ento-notice" role="alert">{{ aviso }}</div>{% endfor %}
+    {% if previa_resumo.repetidas %}<p class="ento-footnote px-0">{{ previa_resumo.repetidas }} linha(s) idênticas foram mantidas: a fonte não tem identificador único de visita.</p>{% endif %}
+    <details class="mb-3"><summary>Ver os {{ previa_resumo.dias|length }} dias do arquivo</summary>
+      <div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Dia</th><th>Situação</th><th>Registros na base</th><th>Registros após confirmar</th></tr></thead><tbody>
+      {% for d in previa_resumo.dias %}<tr class="{{ 'table-warning' if d.reduz else '' }}"><td>{{ br(d.data) }}</td><td>{{ 'Novo dia' if d.situacao == 'novo' else 'Substitui' }}</td><td>{{ d.antes }}</td><td>{{ d.depois }}</td></tr>{% endfor %}
+      </tbody></table></div>
+    </details>
+    {% else %}
+    <p><strong>{{ previa_resumo.elementos }}</strong> elementos: {% for tipo, n in previa_resumo.tipos.items() %}{{ n }} {{ {'Point':'pontos','LineString':'linhas','Polygon':'polígonos','GeometryCollection':'grupos'}.get(tipo, tipo) }}{{ ', ' if not loop.last }}{% endfor %}. Título: <strong>{{ previa.titulo }}</strong>.</p>
+    {% if previa_resumo.pastas %}<p class="ento-footnote px-0">Pastas: {{ previa_resumo.pastas|join(' • ') }}</p>{% endif %}
+    <p class="ento-footnote px-0">A camada fica só no painel interno (aba Entomologia), nunca na página pública.</p>
+    {% endif %}
+    <div class="ento-actions-row">
+      <form method="post" action="{{ url_for('sfa_routes.entomologia_confirmar', envio_id=previa.id, token=token) }}" class="ento-inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ responsavel('confirmar-responsavel') }}
+        <button class="btn btn-primary">Confirmar e aplicar</button>
+      </form>
+      <form method="post" action="{{ url_for('sfa_routes.entomologia_desfazer', envio_id=previa.id, token=token) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-secondary">Descartar prévia</button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="ento-planning-grid mt-3">
+    <section class="ento-panel" aria-labelledby="enviar-visitas">
+      <div class="ento-eyebrow">TRABALHO DIÁRIO</div>
+      <h2 id="enviar-visitas">Registros de visita</h2>
+      <p>O arquivo substitui os dias que contém. Pode ser só o dia de hoje ou o acumulado do ano: dias repetidos não são somados duas vezes.</p>
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('sfa_routes.entomologia_enviar', token=token) }}" class="ento-form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="tipo" value="visitas">
+        <div><label for="arquivo-visitas">Arquivo (.csv ou .zip)</label><input type="file" id="arquivo-visitas" name="arquivo" accept=".csv,.zip,.txt" required></div>
+        {{ responsavel('visitas-responsavel') }}
+        <button class="btn btn-primary">Enviar e ver prévia</button>
+      </form>
+    </section>
+    <section class="ento-panel" aria-labelledby="enviar-camada">
+      <div class="ento-eyebrow">GOOGLE EARTH</div>
+      <h2 id="enviar-camada">Camada de mapa</h2>
+      <p>No projeto do Google Earth, abra o menu ⋮ e escolha <em>Exportar como arquivo KML</em>. Pontos estratégicos, quarteirões ou roteiros viram uma camada do mapa interno.</p>
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('sfa_routes.entomologia_enviar', token=token) }}" class="ento-form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="tipo" value="camada">
+        <div><label for="arquivo-camada">Arquivo (.kml ou .kmz)</label><input type="file" id="arquivo-camada" name="arquivo" accept=".kml,.kmz" required></div>
+        <div><label for="camada-titulo">Nome da camada (opcional)</label><input type="text" id="camada-titulo" name="titulo" maxlength="200" placeholder="Ex.: Pontos estratégicos 2026"></div>
+        {{ responsavel('camada-responsavel') }}
+        <button class="btn btn-primary">Enviar e ver prévia</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="ento-panel mt-3" aria-labelledby="historico-title">
+    <h2 id="historico-title">Histórico de envios</h2>
+    <p>Os envios ativos são aplicados em ordem; um envio mais recente vale nos dias que repete. Desfazer devolve esses dias à versão anterior.</p>
+    <div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>#</th><th>Tipo</th><th>Arquivo</th><th>Período / elementos</th><th>Situação</th><th>Responsável</th><th>Desfazer</th></tr></thead><tbody>
+    {% for e in envios %}<tr>
+      <td>{{ e.id }}</td><td>{{ 'Visitas' if e.tipo == 'visitas' else 'Camada' }}</td>
+      <td>{{ e.titulo if e.tipo == 'camada' else e.nome_arquivo }}</td>
+      <td>{% if e.tipo == 'visitas' %}{{ e.inicio.strftime('%d/%m/%Y') }} a {{ e.fim.strftime('%d/%m/%Y') }} • {{ e.linhas }} registros{% else %}{{ e.linhas }} elementos{% endif %}</td>
+      <td>{% if e.status == 'ATIVA' %}<span class="ento-badge ok">Em uso</span>{% else %}<span class="ento-badge">Desfeito{% if e.desfeito_por %} por {{ e.desfeito_por }}{% endif %}</span>{% endif %}</td>
+      <td>{{ e.responsavel }}<br><small class="ento-code">{{ e.confirmado_em.strftime('%d/%m/%Y %H:%M') if e.confirmado_em else '' }} UTC</small></td>
+      <td>{% if e.status == 'ATIVA' %}<details><summary>Desfazer #{{ e.id }}</summary><form method="post" action="{{ url_for('sfa_routes.entomologia_desfazer', envio_id=e.id, token=token) }}" class="ento-form-stack mt-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ responsavel('desfazer-' ~ e.id) }}<button class="btn btn-sm btn-outline-danger">Confirmar desfazer</button></form></details>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="7" class="ento-empty">Nenhum envio ainda. O painel usa a fotografia importada até {{ br(fonte.base_end or fonte.end) }}.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="ento-panel mt-3" id="publicar" aria-labelledby="publicar-title">
+    <div class="ento-eyebrow">TRANSPARÊNCIA</div>
+    <h2 id="publicar-title">Boletim para a população</h2>
+    {% set publica = entomologia_url_publica() %}<p>A página pública {% if publica %}<a href="{{ publica }}" target="_blank" rel="noopener">/aedes</a>{% else %}/aedes{% endif %} mostra apenas o último boletim publicado aqui: números agregados por setor censitário, sem endereço, imóvel ou morador. Nada vai ao ar sem esta confirmação.</p>
+    {% set vigente = publicacoes|selectattr('status', 'equalto', 'PUBLICADA')|first %}
+    {% if vigente %}<div class="ento-notice">No ar: boletim de {{ vigente.inicio.strftime('%d/%m/%Y') }} a {{ vigente.fim.strftime('%d/%m/%Y') }}, publicado por {{ vigente.responsavel }} em {{ vigente.publicado_em.strftime('%d/%m/%Y') }}.</div>{% else %}<div class="ento-notice">Nenhum boletim no ar. A página pública mostra somente orientações de prevenção.</div>{% endif %}
+    <form method="post" action="{{ url_for('sfa_routes.entomologia_publicar', token=token) }}" class="ento-filters ento-panel mt-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label for="publicar-dias">Período até o último registro</label><select id="publicar-dias" name="dias"><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="28" selected>Últimos 28 dias</option></select></div>
+      <div><label for="publicar-assinatura">Assinatura (opcional)</label><input type="text" id="publicar-assinatura" name="assinatura" maxlength="200" placeholder="Ex.: Equipe de Controle de Vetores"></div>
+      <div><label for="publicar-contato">Contato para a população (opcional)</label><input type="text" id="publicar-contato" name="contato" maxlength="300" placeholder="Telefone ou canal oficial"></div>
+      {{ responsavel('publicar-responsavel') }}
+      <div style="grid-column:1/-1"><label for="publicar-mensagem">Mensagem da equipe (opcional)</label><textarea id="publicar-mensagem" name="mensagem" maxlength="1200" rows="3" class="form-control" placeholder="Ex.: nesta semana reforçamos o trabalho no Centro; receba o agente com o crachá."></textarea></div>
+      <div class="ento-filter-actions" style="grid-column:1/-1;gap:12px"><a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.entomologia_boletim_previa', token=token) }}" target="_blank" rel="noopener">Ver prévia do boletim</a><button class="btn btn-primary">Publicar boletim</button></div>
+    </form>
+    {% if publicacoes %}
+    <div class="ento-table-wrap mt-3"><table class="table table-sm"><thead><tr><th>#</th><th>Período</th><th>Situação</th><th>Responsável</th><th>Ação</th></tr></thead><tbody>
+    {% for p in publicacoes %}<tr><td>{{ p.id }}</td><td>{{ p.inicio.strftime('%d/%m/%Y') }} a {{ p.fim.strftime('%d/%m/%Y') }}</td><td>{{ {'PUBLICADA':'No ar','SUBSTITUIDA':'Substituído','RETIRADA':'Retirado'}.get(p.status, p.status) }}</td><td>{{ p.responsavel }}</td><td>{% if p.status == 'PUBLICADA' %}<details><summary>Retirar do ar</summary><form method="post" action="{{ url_for('sfa_routes.entomologia_retirar', publicacao_id=p.id, token=token) }}" class="ento-form-stack mt-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ responsavel('retirar-' ~ p.id) }}<button class="btn btn-sm btn-outline-danger">Retirar</button></form></details>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% endif %}
+  </section>
+
+  {% if gerencia_equipe %}
+  <section class="ento-panel mt-3" id="equipe" aria-labelledby="equipe-title">
+    <div class="ento-eyebrow">ACESSO</div>
+    <h2 id="equipe-title">Equipe “Combate à dengue”</h2>
+    <p>Quem está aqui acessa somente a área de território e vigilância (painel, atualização de dados, ações territoriais e boletim), além da área “Combate à dengue” na página inicial. Não acessa pacientes nem as demais telas do SFA. É um papel adicional: os outros acessos da conta continuam iguais.</p>
+    <form method="post" action="{{ url_for('sfa_routes.entomologia_equipe_conceder', token=token) }}" class="ento-inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label for="equipe-email">E-mail da conta</label><input type="email" id="equipe-email" name="email" maxlength="254" required placeholder="pessoa@exemplo.com"></div>
+      {{ responsavel('equipe-responsavel') }}
+      <button class="btn btn-primary">Conceder acesso</button>
+    </form>
+    <p class="ento-footnote px-0 mt-2">A pessoa precisa ter uma conta no site com esse e-mail. Confira se o e-mail pertence mesmo a quem vai receber o acesso.</p>
+    <div class="ento-table-wrap mt-3"><table class="table table-sm"><thead><tr><th>Nome</th><th>E-mail</th><th>Desde</th><th>Concedido por</th><th>Revogar</th></tr></thead><tbody>
+    {% for m in equipe %}<tr><td>{{ m.user.name or '—' }}</td><td>{{ m.user.email }}</td><td>{{ m.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ m.concedido_por }}</td>
+      <td><details><summary>Revogar</summary><form method="post" action="{{ url_for('sfa_routes.entomologia_equipe_revogar', user_id=m.user_id, token=token) }}" class="ento-form-stack mt-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ responsavel('revogar-equipe-' ~ m.user_id) }}<button class="btn btn-sm btn-outline-danger">Confirmar</button></form></details></td></tr>
+    {% else %}<tr><td colspan="5" class="ento-empty">Ninguém na equipe ainda. Administradores sempre têm acesso.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

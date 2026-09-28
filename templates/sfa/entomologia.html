@@ -12,18 +12,44 @@
       <h1>Um olhar sobre o território</h1>
       <p>Organize o trabalho de campo com os sinais entomológicos, as dificuldades de acesso e o contexto da cidade.</p>
     </div>
-    <div class="ento-source-chip"><span class="ento-dot"></span> Vigilância entomológica<br><strong id="source-period">Carregando período…</strong><small>Base importada • Censo de referência: 2022</small></div>
+    <div class="ento-source-chip"><span class="ento-dot"></span> Vigilância entomológica<br><strong id="source-period">Carregando período…</strong><small id="source-updated">Base importada • Censo de referência: 2022</small>
+      <div class="ento-hero-actions"><a class="btn btn-sm btn-primary" href="{{ url_for('sfa_routes.entomologia_atualizar', token=token) }}"><i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados</a>{% set publica = entomologia_url_publica() %}{% if publica %}<a class="btn btn-sm btn-outline-secondary" href="{{ publica }}" target="_blank" rel="noopener"><i class="fas fa-bullhorn" aria-hidden="true"></i> Página pública</a>{% endif %}</div></div>
   </header>
   <noscript><div class="alert alert-warning">Ative o JavaScript para usar o mapa e os filtros.</div></noscript>
   <div id="ento-error" class="alert alert-danger" role="alert" hidden></div>
   <div class="ento-tabs" role="tablist" aria-label="Visões dos dados">
-    <button type="button" role="tab" id="tab-planning" aria-selected="true" aria-controls="panel-planning" data-view="planning">Planejamento</button>
+    <button type="button" role="tab" id="tab-team" aria-selected="true" aria-controls="panel-team" data-view="team">Equipe</button>
+    <button type="button" role="tab" id="tab-planning" aria-selected="false" aria-controls="panel-planning" tabindex="-1" data-view="planning">Planejamento</button>
     <button type="button" role="tab" id="tab-visits" aria-selected="false" aria-controls="panel-visits" tabindex="-1" data-view="visits">Entomologia</button>
     <button type="button" role="tab" id="tab-census" aria-selected="false" aria-controls="panel-census" tabindex="-1" data-view="census">Censo 2022</button>
     <button type="button" role="tab" id="tab-reference" aria-selected="false" aria-controls="panel-reference" tabindex="-1" data-view="reference">Mapas de campo</button>
   </div>
 
-  <section id="panel-planning" role="tabpanel" aria-labelledby="tab-planning">
+  <section id="panel-team" role="tabpanel" aria-labelledby="tab-team">
+    <div class="ento-panel-title"><div><h2>Como a equipe está nesta semana</h2><p>Metas comparadas com a própria equipe: a média das últimas quatro semanas com registro. Nenhum agente é identificado ou ranqueado.</p></div></div>
+    <p id="team-headline" class="ento-headline" role="status"></p>
+    <section class="ento-panel" aria-labelledby="team-next-title"><div class="ento-eyebrow">PRÓXIMOS PASSOS</div><h2 id="team-next-title">O que fazer agora</h2><ul id="team-next" class="ento-next"></ul></section>
+    <section class="ento-panel mt-3" aria-labelledby="team-progress-title">
+      <div class="ento-panel-title"><div><div class="ento-eyebrow">SEMANA EM ANDAMENTO</div><h2 id="team-progress-title">Progresso rumo às metas</h2><p id="team-progress-note"></p></div></div>
+      <div id="team-progress" class="ento-badges"></div>
+    </section>
+    <section class="ento-panel mt-3" aria-labelledby="team-badges-title">
+      <div class="ento-panel-title"><div><div class="ento-eyebrow">ÚLTIMA SEMANA COMPLETA</div><h2 id="team-badges-title">Conquistas</h2><p id="team-badges-note"></p></div></div>
+      <div id="team-badges" class="ento-badges"></div>
+      <h3 class="mt-4">Histórico das últimas 8 semanas</h3>
+      <div class="ento-table-wrap"><table class="table table-sm ento-badge-history"><thead id="team-history-head"></thead><tbody id="team-history"></tbody></table></div>
+      <p class="ento-footnote px-0 mt-2">As conquistas premiam cobertura, registro completo, acesso e verificação das ações — não o número de focos encontrados. Metas relativas à própria equipe evitam números arbitrários.</p>
+    </section>
+    <div class="ento-charts">
+      <section class="ento-panel" aria-labelledby="team-cycle-title"><div class="ento-eyebrow">CICLO DE DOIS MESES</div><h2 id="team-cycle-title">Cobertura do território no ciclo</h2><p id="team-cycle-note"></p>
+        <div class="ento-progress" role="progressbar" id="team-cycle-bar" aria-valuemin="0" aria-valuemax="100"><div></div></div>
+        <div id="team-cycle-sectors" class="ento-cycle-list"></div>
+        <p class="ento-footnote px-0">Universo: quarteirões que já apareceram no arquivo para cada setor. Com a lista oficial de quarteirões (por exemplo, uma camada do Google Earth), o denominador fica exato.</p></section>
+      <section class="ento-panel" aria-labelledby="team-records-title"><div class="ento-eyebrow">RECORDES DA EQUIPE</div><h2 id="team-records-title">Melhores semanas</h2><div id="team-records"></div><h3 class="mt-3">Quarteirões por semana</h3><div id="team-chart" tabindex="0" role="region" aria-label="Quarteirões percorridos por semana"></div></section>
+    </div>
+  </section>
+
+  <section id="panel-planning" role="tabpanel" aria-labelledby="tab-planning" hidden>
     <div class="ento-panel-title"><div><h2>Onde concentrar a próxima revisão de campo</h2><p>Listas para apoiar a equipe municipal. A ordenação indica sinais observados; não estima o risco de dengue.</p></div></div>
     <div id="planning-freshness" class="ento-notice" role="status"></div>
     <form id="planning-filters" class="ento-panel ento-filters">
@@ -40,13 +66,20 @@
       <section class="ento-panel"><div class="ento-eyebrow">TERRITÓRIO E MORADIA</div><h2>Do setor ao bairro</h2><p>O Censo 2022 descreve população e domicílios. Para planejar rotas por bairro, falta validar o vínculo entre bairro, setor e quarteirão com a equipe municipal.</p><p>As contagens de visitas podem incluir revisitas. Não são cobertura de residências únicas. Consulte a aba Censo 2022 para dimensionar o território.</p></section>
     </div>
     <section class="ento-panel mt-3">
-      <div class="ento-panel-title"><div><h2>Listas de revisão operacional</h2><p>Conferir intervenções e retornos já realizados antes de distribuir trabalho.</p></div><button type="button" id="export-planning" class="btn btn-outline-secondary">Exportar lista CSV</button></div>
+      <div class="ento-panel-title"><div><h2>Listas de revisão operacional</h2><p>Conferir intervenções e retornos já realizados antes de distribuir trabalho.</p></div><div class="ento-button-row"><button type="button" id="print-planning" class="btn btn-outline-secondary"><i class="fas fa-print" aria-hidden="true"></i> Imprimir roteiro</button><button type="button" id="export-planning" class="btn btn-outline-secondary">Exportar lista CSV</button></div></div>
       <div class="ento-queue-control"><label for="planning-queue">Frente de trabalho</label><select id="planning-queue"><option value="focus">Verificar focos registrados</option><option value="access">Recuperar acesso aos imóveis</option><option value="quality">Completar informação de campo</option></select></div>
       <p id="planning-rule" class="mt-3"></p><p id="planning-count" role="status"></p>
       <div class="ento-table-wrap"><table class="table table-sm"><thead id="planning-head"></thead><tbody id="planning-rows"></tbody></table></div>
       <p class="ento-footnote mt-3">Somas de ocorrências, com possíveis revisitas. “—” é ausência de valor informado; zero pode ser uma soma parcial. Larvas em várias datas indicam repetição de registros no território, sem comprovar persistência no mesmo imóvel. A fonte não informa se as pendências continuam abertas.</p>
     </section>
     <section class="ento-panel mt-3"><h2>Como o recorte se compara ao anterior</h2><p id="planning-comparison-note"></p><div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Medida</th><th>Janela selecionada</th><th>Janela anterior</th></tr></thead><tbody id="planning-comparison"></tbody></table></div><p class="ento-footnote mt-3">Diferenças podem refletir locais visitados, esforço de busca e preenchimento. Não demonstram aumento ou queda da transmissão.</p></section>
+    <section class="ento-panel mt-3" id="acoes-territoriais" aria-labelledby="acoes-territoriais-title"
+      data-csrf="{{ csrf_token() }}" data-pode-alterar="{{ 1 if pode_alterar else 0 }}"
+      data-andamento-url="{{ url_for('sfa_routes.entomologia_acao_andamento', acao_id=0, token=token) }}"
+      data-trabalho-url="{{ url_for('sfa_routes.trabalho', token=token) if acesso_completo else '' }}">
+      <div class="ento-panel-title"><div><div class="ento-eyebrow">DO PLANO À VERIFICAÇÃO</div><h2 id="acoes-territoriais-title">Ações territoriais</h2><p>Registre a execução e, depois, a verificação do resultado. Uma ação só conta em “Ciclo fechado” quando verificada.</p></div></div>
+      <div id="acoes-lista"></div>
+    </section>
     <details class="ento-panel ento-method"><summary>Ações propostas e como verificar o retorno à população</summary>
       <p>Propostas para pactuação com a vigilância, atenção básica e serviços urbanos. Os dados atuais permitem selecionar territórios para revisão; ainda não medem o efeito dessas ações.</p>
       <div class="ento-table-wrap"><table class="table table-sm ento-programs"><thead><tr><th>Frente</th><th>Trabalho proposto</th><th>Resultado a acompanhar</th></tr></thead><tbody>
@@ -59,6 +92,20 @@
       <p>A combinação de vigilância e manejo integrado segue a orientação do <a href="https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/a/aedes-aegypti/vigilancia-entomologica" target="_blank" rel="noopener noreferrer">Ministério da Saúde sobre vigilância e controle do vetor</a>. A escolha de intervenções cabe à equipe técnica; a lista não prescreve aplicação de inseticida.</p>
     </details>
   </section>
+
+  <dialog id="action-dialog" class="ento-dialog" aria-labelledby="action-dialog-title">
+    <form method="post" action="{{ url_for('sfa_routes.trabalho_registrar', token=token) if acesso_completo else url_for('sfa_routes.entomologia_acao_criar', token=token) }}" class="ento-form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="operacao" value="acao"><input type="hidden" name="id_estudo" value=""><input type="hidden" name="retorno" value="entomologia"><input type="hidden" name="setor" id="action-sector">
+      <h2 id="action-dialog-title">Transformar em ação</h2>
+      <p id="action-territory" class="ento-code"></p>
+      <div><label for="action-type">Tipo da ação</label><input id="action-type" name="tipo" maxlength="40" required></div>
+      <div><label for="action-reason">Motivo e objetivo verificável</label><textarea id="action-reason" name="motivo" rows="4" maxlength="3000" class="form-control" required></textarea></div>
+      <div><label for="action-deadline">Prazo</label><input type="date" id="action-deadline" name="prazo" required></div>
+      <div><label for="action-owner">Responsável</label><input id="action-owner" name="responsavel" maxlength="160" required autocomplete="name"></div>
+      <p class="ento-footnote px-0">A ação entra na lista de ações territoriais do Planejamento{% if acesso_completo %} e em <a href="{{ url_for('sfa_routes.trabalho', token=token) }}#acoes">Organização do trabalho</a>{% endif %}, com execução e verificação registradas.</p>
+      <div class="ento-button-row"><button type="button" class="btn btn-outline-secondary" id="action-cancel">Cancelar</button><button class="btn btn-primary">Criar ação</button></div>
+    </form>
+  </dialog>
 
   <section id="panel-visits" role="tabpanel" aria-labelledby="tab-visits" hidden>
     <form id="ento-filters" class="ento-panel ento-filters">
@@ -80,6 +127,7 @@
         <div class="ento-panel-title"><div><h2>Distribuição por setor</h2><p>Clique em um setor para filtrar a análise.</p></div><button id="map-reset" class="btn btn-sm btn-outline-secondary" type="button">Enquadrar cidade</button></div>
         <div class="ento-map-toolbar"><label for="map-metric">Colorir por</label><select id="map-metric"><option value="positive">Imóveis com larvas</option><option value="aegypti">Imóveis com A. aegypti</option><option value="albopictus">Imóveis com A. albopictus</option><option value="worked">Imóveis trabalhados</option><option value="closed">Imóveis fechados</option><option value="refused">Recusas</option><option value="aegypti_larvae">Larvas de A. aegypti</option></select></div>
         <div id="visits-map" class="ento-map" role="region" aria-label="Mapa interativo de visitas por setor censitário"></div>
+        <p id="layers-note" class="ento-footnote mt-2" hidden></p>
         <div id="map-legend" class="ento-legend"></div>
         <p class="ento-footnote">Limites IBGE 2022. Associação exploratória pelo código do setor; a equivalência com o cadastro operacional ainda precisa ser validada. Os polígonos não indicam a posição de cada imóvel.</p>
       </section>

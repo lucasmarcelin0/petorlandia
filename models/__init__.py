@@ -60,6 +60,7 @@ from .sfa import (
     SfaRespostaT30,
     SfaSinanLog,
 )
+from .entomologia import EntomologiaEquipe, EntomologiaImportacao, EntomologiaPublicacao
 from .petsitter import (
     CareerApplication,
     PetsitterProfile,
@@ -154,6 +155,9 @@ __all__ = [
     "SfaRespostaT7",
     "SfaRespostaT30",
     "SfaSinanLog",
+    "EntomologiaEquipe",
+    "EntomologiaImportacao",
+    "EntomologiaPublicacao",
     "CareerApplication",
     "PetsitterProfile",
     "PetsitterRequest",
