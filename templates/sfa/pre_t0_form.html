@@ -97,7 +97,7 @@
             {% elif field.type == 'matrix' %}
               <div class="matrix-heading"><span class="field-label">{{ question_label(field) }}</span><span class="matrix-options">{% for option in field.options %}<span>{{ option.label }}</span>{% endfor %}</span></div>
               <div class="matrix-list">
-                {% for item_key, item_label in field.items %}
+                {% for item_key, item_label in field['items'] %}
                 <div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><div class="matrix-answer" role="radiogroup" aria-label="{{ item_label }}">{% for option in field.options %}<label class="matrix-choice"><input type="radio" name="{{ field.key }}__{{ item_key }}" value="{{ option.value }}" {% if submitted.get(field.key ~ '__' ~ item_key) == option.value %}checked{% endif %}><span>{{ option.value }}</span><span class="sr-only">{{ option.label }}</span></label>{% endfor %}</div></div>
                 {% endfor %}
               </div>
@@ -106,7 +106,7 @@
               <span class="field-label">{{ question_label(field) }}</span>
               <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
               <p class="field-hint matrix-hint">Sinais correspondentes:</p>
-              <div class="flag-list">{% for item_key, item_label in field.items %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}</div>
+              <div class="flag-list">{% for item_key, item_label in field['items'] %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}</div>
 
             {% elif field.type == 'test_result' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -124,7 +124,7 @@
 
             {% elif field.type == 'investigator' %}
               <span class="field-label">{{ question_label(field) }}</span>
-              <div class="investigator-grid">{% for item_key, item_label, max_length in field.items %}<label for="input-investigador-{{ item_key }}">{{ item_label }}{% if item_key == 'assinatura' %}<small>Digite seu nome para registrar a assinatura</small>{% endif %}<input id="input-investigador-{{ item_key }}" name="investigador__{{ item_key }}" type="text" maxlength="{{ max_length }}" autocomplete="{% if item_key == 'nome' %}name{% else %}off{% endif %}" value="{{ submitted.get('investigador__' ~ item_key, '') }}"></label>{% endfor %}</div>
+              <div class="investigator-grid">{% for item_key, item_label, max_length in field['items'] %}<label for="input-investigador-{{ item_key }}">{{ item_label }}{% if item_key == 'assinatura' %}<small>Digite seu nome para registrar a assinatura</small>{% endif %}<input id="input-investigador-{{ item_key }}" name="investigador__{{ item_key }}" type="text" maxlength="{{ max_length }}" autocomplete="{% if item_key == 'nome' %}name{% else %}off{% endif %}" value="{{ submitted.get('investigador__' ~ item_key, '') }}"></label>{% endfor %}</div>
             {% endif %}
           </article>
           {% endfor %}
