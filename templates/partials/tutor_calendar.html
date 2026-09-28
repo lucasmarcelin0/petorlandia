@@ -148,6 +148,34 @@
       </div>
     </div>
   </div>
+  <div class="modal fade" data-quick-reschedule-modal tabindex="-1" aria-labelledby="{{ component_id }}-reschedule-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="{{ component_id }}-reschedule-title">Remarcar agendamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <form data-quick-reschedule-form>
+          <div class="modal-body">
+            <p class="text-muted small">A agenda será atualizada imediatamente, sem pedir confirmação ao tutor.</p>
+            <div class="mb-3">
+              <label class="form-label" for="{{ component_id }}-reschedule-date">Nova data</label>
+              <input class="form-control" id="{{ component_id }}-reschedule-date" name="date" type="date" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="{{ component_id }}-reschedule-time">Novo horário</label>
+              <input class="form-control" id="{{ component_id }}-reschedule-time" name="time" type="time" required>
+            </div>
+            <div class="alert alert-danger d-none" data-quick-reschedule-error role="alert"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar remarcação</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </section>
 
 <style>
@@ -2062,6 +2090,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
   const viewModeButtons = Array.prototype.slice.call(root.querySelectorAll('[data-view-mode]'));
   const csrfToken = root.dataset.csrfToken || '';
+  const quickRescheduleModal = root.querySelector('[data-quick-reschedule-modal]');
+  const quickRescheduleForm = root.querySelector('[data-quick-reschedule-form]');
+  const quickRescheduleError = root.querySelector('[data-quick-reschedule-error]');
   const urlTemplates = {
     animalProfile: root.dataset.urlAnimalProfile || '',
     tutorProfile: root.dataset.urlTutorProfile || '',
@@ -2075,6 +2106,54 @@ document.addEventListener('DOMContentLoaded', function() {
     canStartConsulta: root.dataset.canStartConsulta === 'true',
     canManageStatus: root.dataset.canManageStatus === 'true',
   };
+
+  function openQuickReschedule(eventData, editUrl) {
+    const vetId = getEventVetId(eventData);
+    if (!quickRescheduleForm || !quickRescheduleModal || !vetId || !window.bootstrap || !bootstrap.Modal) {
+      window.location.href = editUrl;
+      return;
+    }
+    quickRescheduleForm.dataset.editUrl = editUrl;
+    quickRescheduleForm.dataset.vetId = vetId;
+    quickRescheduleForm.elements.date.value = eventData.date || '';
+    quickRescheduleForm.elements.time.value = (eventData.time || '').slice(0, 5);
+    quickRescheduleError.classList.add('d-none');
+    quickRescheduleError.textContent = '';
+    bootstrap.Modal.getOrCreateInstance(quickRescheduleModal).show();
+  }
+
+  quickRescheduleForm && quickRescheduleForm.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    if (!quickRescheduleForm.reportValidity()) return;
+    const submitButton = quickRescheduleForm.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    quickRescheduleError.classList.add('d-none');
+    try {
+      const response = await fetch(quickRescheduleForm.dataset.editUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          date: quickRescheduleForm.elements.date.value,
+          time: quickRescheduleForm.elements.time.value,
+          veterinario_id: quickRescheduleForm.dataset.vetId,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success !== true) {
+        throw new Error(result.message || 'Não foi possível remarcar o agendamento.');
+      }
+      window.location.reload();
+    } catch (error) {
+      quickRescheduleError.textContent = error.message || 'Não foi possível remarcar o agendamento.';
+      quickRescheduleError.classList.remove('d-none');
+      submitButton.disabled = false;
+    }
+  });
 
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
@@ -4125,16 +4204,21 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
-    if (editUrl) {
-      const btn = document.createElement('a');
+    if (editUrl && baseType === 'appointment') {
+      const btn = document.createElement(permissions.canManageStatus ? 'button' : 'a');
       btn.className = 'btn btn-sm btn-outline-info';
-      btn.href = editUrl;
-      btn.title = 'Propor novo horário';
+      if (permissions.canManageStatus) {
+        btn.type = 'button';
+        btn.addEventListener('click', function() { openQuickReschedule(eventData, editUrl); });
+      } else {
+        btn.href = editUrl;
+      }
+      btn.title = permissions.canManageStatus ? 'Remarcar' : 'Propor novo horário';
       const icon = document.createElement('i');
       icon.className = 'fa-solid fa-arrows-rotate me-1';
       icon.setAttribute('aria-hidden', 'true');
       btn.appendChild(icon);
-      btn.appendChild(document.createTextNode('Propor novo horário'));
+      btn.appendChild(document.createTextNode(permissions.canManageStatus ? 'Remarcar' : 'Propor novo horário'));
       appendActionElement(btn);
     }
 
