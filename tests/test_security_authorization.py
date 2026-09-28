@@ -226,6 +226,20 @@ class TestUrlSanitization:
         assert 'https://attacker.com' not in html
         assert 'attacker.com' not in html
 
+    def test_sanitize_referrer_open_redirect(self, app):
+        """Test that _sanitize_login_next_url sanitizes Referer headers before redirecting."""
+        from app import _sanitize_login_next_url
+        from flask import url_for
+
+        with app.test_request_context():
+            default_url = url_for('index')
+            # Malicious Referer values
+            assert _sanitize_login_next_url('https://attacker.com', fallback=default_url) == default_url
+            assert _sanitize_login_next_url('//attacker.com', fallback=default_url) == default_url
+            assert _sanitize_login_next_url('/\\attacker.com', fallback=default_url) == default_url
+            # Safe local Referer values
+            assert _sanitize_login_next_url('/animal/1/ficha', fallback=default_url) == '/animal/1/ficha'
+
 
 class TestAuthentication:
     """Test authentication mechanisms."""
