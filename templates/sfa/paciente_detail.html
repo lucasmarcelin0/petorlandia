@@ -68,7 +68,12 @@
 {% endblock %}
 
 {% block content %}
-<a class="btn btn-outline-primary mb-3" href="{{ url_for('sfa_routes.trabalho',episodio=p.id_estudo) }}">Tempo de doença, contatos e ações deste episódio</a>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-primary" href="{{ url_for('sfa_routes.trabalho',episodio=p.id_estudo) }}">Tempo de doença, contatos e ações deste episódio</a>
+  {% if pre_t0_ficha_url %}
+  <a class="btn btn-outline-warning" href="{{ pre_t0_ficha_url }}"><i class="fas fa-file-medical me-1" aria-hidden="true"></i>Ficha SINAN completa · pré-T0</a>
+  {% endif %}
+</div>
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card shadow-sm mb-3">

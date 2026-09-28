@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#103f46">
+  <title>Ficha recebida · SFA Orlândia</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260928a">
+  <style>
+    .success-card { max-width: 720px; margin: 45px auto; padding: clamp(26px,5vw,52px); border: 1px solid #e0e9e4; border-radius: 24px; background: #fff; box-shadow: 0 20px 60px rgba(20,54,60,.08); text-align: center; }
+    .success-icon { display: grid; place-items: center; width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 24px; color: #fff; background: linear-gradient(135deg,#257b67,#47a37d); font: 800 35px Manrope,sans-serif; box-shadow: 0 10px 24px rgba(37,123,103,.2); transform: rotate(-5deg); }
+    .success-card .eyebrow { color: #2b8068; }
+    .success-card h1 { margin: 9px 0 13px; color: #17333b; font-size: clamp(26px,5vw,38px); }
+    .success-card p { max-width: 510px; margin: 0 auto; color: #637b80; font-size: 14px; line-height: 1.65; }
+    .success-note { margin: 24px auto!important; padding: 14px 17px; border-radius: 12px; color: #47665e!important; background: #f0f7f1; font-size: 12px!important; }
+    .success-card .button-primary { margin-top: 8px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="pre-t0-shell">
+    <header class="brand-row"><span class="brand-mark" aria-hidden="true">S</span><span><strong>SFA Orlândia</strong><small>Vigilância em saúde</small></span><span class="brand-status"><span></span> Ficha digital</span></header>
+    <section class="success-card" role="status">
+      <div class="success-icon" aria-hidden="true">✓</div>
+      <p class="eyebrow">FICHA ENVIADA</p>
+      <h1>Etapa concluída!</h1>
+      <p>A ficha de investigação foi recebida e vinculada ao acompanhamento anterior ao T0.</p>
+      <p class="success-note">As respostas foram registradas para a equipe de vigilância. Você pode fechar esta página com segurança.</p>
+      <a class="button-primary" href="{{ url_for('sfa_routes.pre_t0_ficha') }}">Preencher outra ficha <span aria-hidden="true">→</span></a>
+    </section>
+    <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · etapa anterior ao T0</p></footer>
+  </main>
+</body>
+</html>

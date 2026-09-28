@@ -19,6 +19,39 @@
   </a>
 </div>
 
+<div class="card border-0 shadow-sm mb-4" style="border-left:5px solid #e8711c !important">
+  <div class="card-body p-4">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-9">
+        <div class="d-flex align-items-start gap-3">
+          <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;background:#fff2e5;color:#ba5b18;font-size:1.25rem">
+            <i class="fas fa-file-circle-plus" aria-hidden="true"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h5 class="mb-0">Ficha SINAN digital · antes do T0</h5>
+              <span class="badge rounded-pill" style="background:#fff2e5;color:#8e4717">Uso na rotina</span>
+            </div>
+            <p class="text-muted small mt-2 mb-3">Envie este link à equipe autorizada para registrar a Ficha de Investigação de Dengue e Febre de Chikungunya antes da aplicação do T0. O preenchimento exige acesso ao SFA. As perguntas e opções seguem o formulário original.</p>
+            <div class="input-group input-group-sm mb-2" style="max-width:720px">
+              <input id="pre-t0-public-link" class="form-control" value="{{ pre_t0_url }}" readonly aria-label="Link público da ficha SINAN antes do T0" onclick="this.select()">
+              <button class="btn btn-outline-secondary" type="button" data-copy-pre-t0 aria-label="Copiar link da ficha">Copiar link</button>
+            </div>
+            <a class="btn btn-sm btn-primary" href="{{ pre_t0_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>Abrir formulário</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ pre_t0_qr_url }}" target="_blank" rel="noopener"><i class="fas fa-qrcode me-1" aria-hidden="true"></i>Abrir QR code</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-3 text-center">
+        <a href="{{ pre_t0_qr_url }}" target="_blank" rel="noopener" aria-label="Abrir QR code da ficha digital antes do T0">
+          <img src="{{ pre_t0_qr_url }}" alt="QR code para abrir a ficha SINAN digital antes do T0" width="150" height="150" class="border rounded-3 p-2 bg-white">
+        </a>
+        <div class="small text-muted mt-1">Leia para abrir no celular</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   {% for item in links %}
   <div class="col-lg-6">
@@ -59,4 +92,20 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='js/sfa_instrument_lab.js') }}?v=20260923a" defer></script>
+<script>
+  document.querySelector('[data-copy-pre-t0]')?.addEventListener('click', async function () {
+    const link = document.getElementById('pre-t0-public-link');
+    try {
+      await navigator.clipboard.writeText(link.value);
+      this.textContent = 'Copiado!';
+      window.setTimeout(() => { this.textContent = 'Copiar link'; }, 1600);
+    } catch (_) {
+      link.focus();
+      link.select();
+      document.execCommand('copy');
+      this.textContent = 'Copiado!';
+      window.setTimeout(() => { this.textContent = 'Copiar link'; }, 1600);
+    }
+  });
+</script>
 {% endblock %}

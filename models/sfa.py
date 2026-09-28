@@ -290,9 +290,9 @@ class SfaSinanLog(db.Model):
     resultado = db.Column(db.String(120))
     grupo = db.Column(db.String(20))
     id_estudo_vinculado = db.Column(db.String(30))
-    # Complemento estruturado das fichas em papel. O JSON aceita apenas
-    # variaveis clinicas/de pesquisa definidas no servico; identificadores
-    # sensiveis como CPF, CNS e filiacao nao sao persistidos aqui.
+    # Variáveis estruturadas para análise e, quando enviada pela rota pré-T0,
+    # a ficha operacional completa em `formulario_pre_t0`. A leitura analítica
+    # aplica lista de campos autorizados e não exporta esse conteúdo integral.
     dados_json = db.Column(db.Text)
     fonte_complementar = db.Column(db.String(60))
     revisao_status = db.Column(

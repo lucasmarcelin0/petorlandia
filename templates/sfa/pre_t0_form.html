@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#103f46">
+  <title>Ficha SINAN antes do T0 · SFA Orlândia</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260928a">
+</head>
+<body>
+  <main class="pre-t0-shell">
+    <header class="brand-row" aria-label="Sistema SFA Orlândia">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span><strong>SFA Orlândia</strong><small>Vigilância em saúde</small></span>
+      <span class="brand-status"><span></span> Ficha digital</span>
+    </header>
+
+    <section class="hero-card">
+      <div class="hero-copy">
+        <p class="eyebrow">NOTIFICAÇÃO · ETAPA ANTERIOR AO T0</p>
+        <h1>Ficha de investigação<br><em>Dengue e Febre de Chikungunya</em></h1>
+        <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Se um dado ainda não estiver disponível, deixe o campo em branco; use “Ignorado” quando essa opção existir.</p>
+        <div class="hero-tags"><span>71 campos do modelo</span><span>Etapas curtas</span><span>Funciona no celular</span></div>
+        <p class="form-scope-note">O envio registra a ficha no SFA municipal para consulta da equipe. Não há transmissão automática ao sistema federal SINAN.</p>
+      </div>
+      <div class="hero-stamp" aria-hidden="true"><span>PRÉ</span><strong>T0</strong><small>SINAN</small></div>
+    </section>
+
+    <details class="definition-card">
+      <summary><span class="definition-icon" aria-hidden="true">i</span><span><strong>Definições de caso do formulário original</strong><small>Toque para consultar enquanto preenche</small></span><span class="summary-chevron" aria-hidden="true">⌄</span></summary>
+      <div class="definition-content">
+        {% for item in schema.definitions %}
+        <p><strong>{{ item.termo }}:</strong> {{ item.texto }}</p>
+        {% endfor %}
+      </div>
+    </details>
+
+    {% if error %}<div class="form-alert" role="alert"><span aria-hidden="true">!</span><div><strong>Confira antes de continuar</strong><p>{{ error }}</p></div></div>{% endif %}
+
+    <section class="journey-card" aria-label="Progresso do formulário">
+      <div class="journey-top"><div><span class="eyebrow">SUA JORNADA</span><strong data-step-label>Etapa 1 de {{ schema.sections|length }}</strong></div><span class="journey-percent" data-progress-label>0%</span></div>
+      <div class="progress-track" role="progressbar" aria-label="Progresso pelas etapas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-track><span data-progress-fill></span></div>
+      <nav class="stepper" aria-label="Etapas da ficha" data-stepper>
+        {% for section in schema.sections %}
+        <button type="button" class="step-dot{% if loop.first %} is-current{% endif %}" data-step-target="{{ loop.index0 }}" aria-label="Etapa {{ loop.index }}: {{ section.title }}" aria-current="{% if loop.first %}step{% else %}false{% endif %}"><span>{{ loop.index }}</span></button>
+        {% endfor %}
+      </nav>
+    </section>
+
+    <form action="{{ form_action }}" method="post" novalidate data-step-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+
+      {% macro question_label(field) -%}
+        <span class="question-title">
+          {% if field.number %}<span class="question-number">{{ field.number }}</span>{% endif %}
+          <span>{{ field.campo }}</span>
+          {% if field.required %}<span class="required-mark" title="Obrigatório">Obrigatório</span>{% endif %}
+        </span>
+      {%- endmacro %}
+
+      {% for section in schema.sections %}
+      <fieldset class="step-panel{% if loop.first %} is-active{% endif %}" data-step-panel="{{ loop.index0 }}" aria-labelledby="step-title-{{ loop.index }}">
+        <legend class="sr-only">{{ section.title }}</legend>
+        <div class="section-heading"><div class="section-kicker">ETAPA {{ "%02d"|format(loop.index) }}</div><h2 id="step-title-{{ loop.index }}">{{ section.title }}</h2><p>{% if section.title == 'Dados Gerais' %}Identifique a notificação e registre quando começou a investigação.{% elif section.title == 'Notificação Individual' %}Dados de identificação conforme as opções da ficha SINAN.{% elif 'Residência' in section.title %}Endereço e localização da pessoa notificada.{% elif 'clínicos e laboratoriais — Investigação' in section.title %}Informações iniciais da investigação.{% elif section.title == 'Dados clínicos' %}Marque a resposta de cada sinal e condição pré-existente.{% elif section.title == 'Dados laboratoriais' %}Datas e resultados disponíveis na ficha.{% elif section.title == 'Hospitalização' %}Preencha se a pessoa foi internada.{% elif 'Local Provável' in section.title %}Local provável de infecção nos 15 dias anteriores.{% elif section.title == 'Conclusão' %}Classificação e evolução informadas na ficha.{% elif 'Dengue com Sinais' in section.title %}Sinais de alarme e gravidade conforme o formulário original.{% elif section.title == 'Cabeçalho' %}Comece com o número impresso na ficha de notificação.{% else %}Informações de observação e identificação de quem investigou.{% endif %}</p></div>
+
+        <div class="field-grid">
+          {% for field in section.fields %}
+          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}" data-field-card="{{ field.key }}">
+            {% if field.type == 'fixed' %}
+              {{ question_label(field) }}
+              <input type="hidden" name="{{ field.key }}" value="{{ field.value }}">
+              <div class="fixed-answer"><span class="fixed-check" aria-hidden="true">✓</span><strong>{{ field.options[0].label }}</strong><small>Tipo de notificação fixo no modelo</small></div>
+
+            {% elif field.type == 'paired_text' %}
+              <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
+              <div class="paired-text-row"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
+
+            {% elif field.type in ['text','tel','date'] %}
+              <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
+              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric"{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}>
+
+            {% elif field.type == 'radio' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <div class="choice-grid{% if field.options|length > 6 %} choice-grid-compact{% endif %}" role="radiogroup" aria-label="{{ field.campo }}">
+                {% for option in field.options %}
+                <label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %} {% if field.required and loop.first %}required aria-required="true"{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>
+                {% endfor %}
+              </div>
+
+            {% elif field.type == 'age' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <div class="age-row"><label class="sr-only" for="input-idade_valor">Idade</label><input id="input-idade_valor" name="idade_valor" type="number" min="0" max="999999" inputmode="numeric" placeholder="Idade" value="{{ submitted.get('idade_valor', '') }}"><label class="sr-only" for="input-idade_unidade">Unidade da idade</label><select id="input-idade_unidade" name="idade_unidade"><option value="">Unidade</option>{% for option in field.units %}<option value="{{ option.value }}" {% if submitted.get('idade_unidade') == option.value %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
+
+            {% elif field.type == 'matrix' %}
+              <div class="matrix-heading"><span class="field-label">{{ question_label(field) }}</span><span class="matrix-options">{% for option in field.options %}<span>{{ option.label }}</span>{% endfor %}</span></div>
+              <div class="matrix-list">
+                {% for item_key, item_label in field.items %}
+                <div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><div class="matrix-answer" role="radiogroup" aria-label="{{ item_label }}">{% for option in field.options %}<label class="matrix-choice"><input type="radio" name="{{ field.key }}__{{ item_key }}" value="{{ option.value }}" {% if submitted.get(field.key ~ '__' ~ item_key) == option.value %}checked{% endif %}><span>{{ option.value }}</span><span class="sr-only">{{ option.label }}</span></label>{% endfor %}</div></div>
+                {% endfor %}
+              </div>
+
+            {% elif field.type == 'flag_matrix' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
+              <p class="field-hint matrix-hint">Sinais correspondentes:</p>
+              <div class="flag-list">{% for item_key, item_label in field.items %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}</div>
+
+            {% elif field.type == 'test_result' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <p class="field-hint">Marque as amostras registradas e selecione o resultado.</p>
+              <div class="sample-row">{% for sample_key, sample_label in field.samples %}<label class="sample-choice"><input type="checkbox" name="{{ field.key }}__{{ sample_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ sample_key) == '1' %}checked{% endif %}><span>{{ sample_label }}</span></label>{% endfor %}</div>
+              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="Resultado do exame PRNT">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
+
+            {% elif field.type == 'severity' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
+              <div class="severity-groups">{% for group_label, items in field.groups %}<div class="severity-group"><h3>{{ group_label }}</h3>{% for item_key, item_label in items %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}{% if group_label == 'Comprometimento grave de órgãos' %}<label class="other-organs-label" for="input-outros_orgaos_especificar">Especificar outros órgãos</label><input id="input-outros_orgaos_especificar" type="text" name="outros_orgaos_especificar" maxlength="180" value="{{ submitted.get('outros_orgaos_especificar', '') }}">{% endif %}</div>{% endfor %}</div>
+
+            {% elif field.type == 'textarea' %}
+              <label for="input-{{ field.key }}">{{ question_label(field) }}</label><textarea id="input-{{ field.key }}" name="{{ field.key }}" maxlength="{{ field.maxlength }}" rows="5">{{ submitted.get(field.key, '') }}</textarea>
+
+            {% elif field.type == 'investigator' %}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <div class="investigator-grid">{% for item_key, item_label, max_length in field.items %}<label for="input-investigador-{{ item_key }}">{{ item_label }}{% if item_key == 'assinatura' %}<small>Digite seu nome para registrar a assinatura</small>{% endif %}<input id="input-investigador-{{ item_key }}" name="investigador__{{ item_key }}" type="text" maxlength="{{ max_length }}" autocomplete="{% if item_key == 'nome' %}name{% else %}off{% endif %}" value="{{ submitted.get('investigador__' ~ item_key, '') }}"></label>{% endfor %}</div>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% endfor %}
+
+      <div class="nojs-submit"><p>As etapas estão abertas para preenchimento. Revise os campos obrigatórios e envie ao final.</p><button class="button-primary" type="submit">Enviar ficha</button></div>
+      <div class="step-actions" data-step-actions>
+        <button class="button-secondary" type="button" data-previous disabled><span aria-hidden="true">←</span> Anterior</button>
+        <span class="step-actions-note">Você pode voltar antes de enviar</span>
+        <button class="button-primary" type="button" data-next>Próxima etapa <span aria-hidden="true">→</span></button>
+        <button class="button-primary" type="submit" data-submit hidden>Finalizar ficha <span aria-hidden="true">✓</span></button>
+      </div>
+    </form>
+
+    <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
+  </main>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260928a" defer></script>
+</body>
+</html>

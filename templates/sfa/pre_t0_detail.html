@@ -1,0 +1,60 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Ficha SINAN · {{ p.id_estudo }}{% endblock %}
+{% block page_title %}Ficha SINAN · etapa pré-T0{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+  .pre-t0-detail-hero { border: 0; border-radius: 16px; color: #fff; background: linear-gradient(115deg,#103f46,#176b6d); }
+  .pre-t0-detail-hero p { color: rgba(255,255,255,.77); }
+  .pre-t0-detail-hero .badge { color: #15484d; background: #f4d596; }
+  .pre-t0-answer { height: 100%; padding: 12px 14px; border: 1px solid #e3eae7; border-radius: 11px; background: #fff; }
+  .pre-t0-answer-label { margin-bottom: 5px; color: #557075; font-size: .76rem; font-weight: 700; }
+  .pre-t0-answer-value { color: #18383e; font-size: .9rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pre-t0-question-number { display: inline-grid; place-items: center; min-width: 22px; height: 21px; margin-right: 5px; border-radius: 6px; color: #15525a; background: #e7f2ef; font-size: .68rem; font-weight: 800; }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="btn btn-outline-secondary mb-3" href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Voltar ao caso</a>
+
+<section class="card shadow-sm pre-t0-detail-hero mb-3">
+  <div class="card-body p-4">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+      <div>
+        <span class="badge rounded-pill mb-2">ANTES DO T0 · SINAN</span>
+        <h3 class="mb-1">{{ p.nome or "Paciente" }} <small class="opacity-75">{{ p.id_estudo }}</small></h3>
+        <p class="mb-0">Ficha {{ ficha.ficha_sinan or "sem número" }} · modelo {{ ficha.version }}</p>
+      </div>
+      <div class="text-sm-end small">Recebida em<br><strong>{{ ficha.submitted_at or "Data não disponível" }}</strong></div>
+    </div>
+  </div>
+</section>
+
+<div class="accordion shadow-sm" id="pre-t0-accordion">
+  {% for section in ficha.sections %}
+  <section class="accordion-item">
+    <h2 class="accordion-header" id="pre-t0-heading-{{ loop.index }}">
+      <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#pre-t0-collapse-{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="pre-t0-collapse-{{ loop.index }}">
+        <span>{{ section.title }}</span><span class="badge bg-light text-dark ms-2">{{ section.fields|length }} campos</span>
+      </button>
+    </h2>
+    <div id="pre-t0-collapse-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="pre-t0-heading-{{ loop.index }}" data-bs-parent="#pre-t0-accordion">
+      <div class="accordion-body">
+        <div class="row g-2">
+          {% for field in section.fields %}
+          <div class="col-lg-6">
+            <div class="pre-t0-answer">
+              <div class="pre-t0-answer-label">{% if field.number %}<span class="pre-t0-question-number">{{ field.number }}</span>{% endif %}{{ field.label }}</div>
+              <div class="pre-t0-answer-value">{{ field.value }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

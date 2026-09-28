@@ -2463,6 +2463,7 @@ def obter_dados_sinan_log(log_sinan) -> dict[str, object]:
     raw_source = getattr(log_sinan, "fonte_complementar", "") or ""
     source_labels = {
         "ficha_sinan_fotografada": "Ficha SINAN fotografada",
+        "formulario_digital_pre_t0": "Ficha digital Pré-T0",
     }
     core = {
         "ficha_sinan": getattr(log_sinan, "ficha_sinan", "") or "",
@@ -2694,14 +2695,20 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
                 if value and (new_log or not str(getattr(log_sinan, field, "") or "").strip()):
                     setattr(log_sinan, field, value)
             existing_structured = {}
+            preserved_formulario_pre_t0 = None
             if log_sinan.dados_json:
                 try:
-                    existing_structured = normalizar_dados_estruturados_sinan(
-                        json.loads(log_sinan.dados_json)
-                    )
+                    existing_payload = json.loads(log_sinan.dados_json)
+                    existing_structured = normalizar_dados_estruturados_sinan(existing_payload)
+                    if isinstance(existing_payload, dict):
+                        preserved_formulario_pre_t0 = existing_payload.get("formulario_pre_t0")
                 except (TypeError, json.JSONDecodeError):
                     existing_structured = {}
             existing_structured.update(structured)
+            if isinstance(preserved_formulario_pre_t0, dict):
+                # A importação de variáveis para análise não pode remover a
+                # ficha operacional completa já enviada antes do T0.
+                existing_structured["formulario_pre_t0"] = preserved_formulario_pre_t0
             log_sinan.dados_json = json.dumps(existing_structured, ensure_ascii=False, sort_keys=True)
             log_sinan.fonte_complementar = _sanitize_limited_text(
                 dados.get("fonte") or "ficha_sinan_fotografada", 60, "fonte"

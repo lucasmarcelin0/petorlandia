@@ -1874,7 +1874,69 @@ def revisao_links():
                 "summary_url": url_for("sfa_routes.revisao_resumo", kind=kind),
             }
         )
-    return render_template("sfa/review_links.html", links=links)
+    return render_template(
+        "sfa/review_links.html",
+        links=links,
+        pre_t0_url=url_for("sfa_routes.pre_t0_ficha", _external=True),
+        pre_t0_qr_url=url_for("sfa_routes.pre_t0_qrcode"),
+    )
+
+
+@bp.route("/pre-t0", methods=["GET", "POST"])
+@require_sfa_internal_access
+def pre_t0_ficha():
+    """Ficha SINAN compartilhável, preenchida antes do questionário T0."""
+    from services.sfa_pre_t0 import (
+        carregar_esquema_pre_t0,
+        coletar_respostas_pre_t0,
+        salvar_ficha_pre_t0,
+    )
+
+    schema = carregar_esquema_pre_t0()
+    error = ""
+
+    def page_response(template_name: str, **context):
+        response = current_app.make_response(render_template(template_name, **context))
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    if request.method == "POST":
+        if request.content_length and request.content_length > 131072:
+            abort(413)
+        # Campo armadilha para descartar envios automatizados sem guardar dados.
+        if str(request.form.get("website") or "").strip():
+            return page_response("sfa/pre_t0_submitted.html")
+        try:
+            answers = coletar_respostas_pre_t0(request.form, schema)
+            salvar_ficha_pre_t0(answers)
+            return page_response("sfa/pre_t0_submitted.html")
+        except ValueError as exc:
+            error = str(exc)
+        except RuntimeError as exc:
+            error = str(exc)
+
+    return page_response(
+        "sfa/pre_t0_form.html",
+        schema=schema,
+        error=error,
+        submitted=request.form,
+        form_action=url_for("sfa_routes.pre_t0_ficha"),
+    )
+
+
+@bp.route("/pre-t0/qrcode.png")
+@require_sfa_internal_access
+def pre_t0_qrcode():
+    import qrcode
+
+    target_url = url_for("sfa_routes.pre_t0_ficha", _external=True)
+    image = qrcode.make(target_url)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return send_file(buffer, mimetype="image/png", download_name="sfa_ficha_pre_t0.png")
 
 
 @bp.route("/revisao/resumo")
@@ -2049,6 +2111,7 @@ def paciente_detail(id_estudo: str):
         gerar_url_t0, gerar_url_t7, gerar_url_t30,
         montar_visao_resposta_formulario, obter_resposta_formulario,
     )
+    from services.sfa_pre_t0 import obter_ficha_pre_t0
 
     def _format_currency(value) -> str:
         if value in (None, ""):
@@ -2085,6 +2148,7 @@ def paciente_detail(id_estudo: str):
         ]
 
     p = SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    pre_t0_ficha = obter_ficha_pre_t0(id_estudo)
     _anexar_datas_notificacao_sinan([p])
     auditoria = (SfaAuditoria.query
                  .filter_by(id_estudo=id_estudo)
@@ -2168,12 +2232,37 @@ def paciente_detail(id_estudo: str):
                            auditoria=auditoria,
                            links_whatsapp=links_whatsapp,
                            response_views=response_views,
+                           pre_t0_ficha_url=(
+                               url_for("sfa_routes.paciente_pre_t0_ficha", id_estudo=id_estudo)
+                               if pre_t0_ficha else ""
+                           ),
                            url_t0=url_t0,
                            url_t0_debug=url_t0_debug,
                            url_t7=url_t7,
                            url_t7_debug=url_t7_debug,
                            url_t30=url_t30,
                            url_t30_debug=url_t30_debug)
+
+
+@bp.route("/paciente/<id_estudo>/ficha-pre-t0")
+@require_sfa_internal_access
+def paciente_pre_t0_ficha(id_estudo: str):
+    from models.sfa import SfaPaciente
+    from services.sfa_pre_t0 import obter_ficha_pre_t0
+
+    paciente = SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    ficha = obter_ficha_pre_t0(id_estudo)
+    if ficha is None:
+        abort(404)
+    response = current_app.make_response(render_template(
+        "sfa/pre_t0_detail.html",
+        p=paciente,
+        ficha=ficha,
+    ))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 @bp.get("/paciente/<id_estudo>/qrcode/<stage>.png")
