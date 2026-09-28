@@ -13,7 +13,7 @@
 
 {% if is_active_veterinarian %}
 <div class="mb-3">
-  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
+  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}" aria-expanded="false" aria-controls="termos-container-{{ animal.id }}">Ver termos</button>
   <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
@@ -30,7 +30,9 @@
 document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click', function() {
   const container = document.getElementById('termos-container-{{ animal.id }}');
   container.classList.toggle('d-none');
-  this.textContent = container.classList.contains('d-none') ? 'Ver termos' : 'Ocultar termos';
+  const isHidden = container.classList.contains('d-none');
+  this.textContent = isHidden ? 'Ver termos' : 'Ocultar termos';
+  this.setAttribute('aria-expanded', String(!isHidden));
 });
 </script>
 {% endif %}
