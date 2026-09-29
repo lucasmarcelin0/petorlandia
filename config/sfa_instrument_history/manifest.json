@@ -48,6 +48,30 @@
           "sha256": "7405d87a16ab90dac2dd965bcdfa4790a7f28c2de1cd17657ecd8777e68c45d5"
         }
       }
+    },
+    {
+      "id": "collective-v3-disease-clock",
+      "label": "Exposições coletivas — T0/T7/T30 pelo início dos sintomas (até 29/09/2026)",
+      "status": "archived",
+      "archived_at": "2026-09-29",
+      "description": "Preserva as perguntas anteriores à inclusão de bebidas em festas no T0, ao fluxo curto do T7 para quem já se recuperou e à apresentação do T30.",
+      "stages": {
+        "t0": {
+          "file": "collective-v3-disease-clock/t0.json",
+          "field_count": 35,
+          "sha256": "53ebfa62e1ad79d336304cb8a4d91a3d56b87862a75bde0b2bbda5732ce4e2b6"
+        },
+        "t7": {
+          "file": "collective-v3-disease-clock/t7.json",
+          "field_count": 19,
+          "sha256": "e43614e3f5ebb731eb66b5f06601b86ff1089c5b164331a02e8025886ffc07b5"
+        },
+        "t30": {
+          "file": "collective-v3-disease-clock/t30.json",
+          "field_count": 28,
+          "sha256": "235985735b2c01ba3028d3b84588900537c2a24bc3afc4f590870a21cea1de00"
+        }
+      }
     }
   ]
 }

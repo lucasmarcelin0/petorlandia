@@ -33,7 +33,7 @@ Os links individuais permitem acesso ao contexto do piloto. Devem ser enviados s
 
 ## Decisões analíticas e diferenças do documento
 
-Fonte operacional: `config/sfa_t0_form.json`, `config/sfa_t7_form.json` e `config/sfa_t30_form.json`, versão `collective-v3-disease-clock`. O piloto copia essas definições em memória; não altera os instrumentos municipais.
+Fonte operacional: `config/sfa_t0_form.json`, `config/sfa_t7_form.json` e `config/sfa_t30_form.json`, versão `collective-v4-2026-09-29`. O piloto copia essas definições em memória; não altera os instrumentos municipais.
 
 O [projeto em revisão](https://docs.google.com/document/d/1ULrp0zsN6kFzF5PPYZ_MV-oGHafvgykCZJmllYiJRXQ/edit), consultado pelos anexos A/B/C, ainda traz T10 e acompanhamentos contados desde T0. A decisão posterior de Lucas acima prevalece no piloto. O texto original do documento não foi editado por esta implementação.
 

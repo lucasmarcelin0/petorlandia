@@ -9,7 +9,7 @@ Implementação local de 13/09/2026. Esta entrega não executa migração no ser
 - Uma revisão documentada na tela de trabalho tem precedência sobre as fontes originais. A revisão identifica responsável e fonte; seu histórico é auditado. Não reescreve respostas anteriores.
 - Os formulários de seguimento exigem T0 e início válido. Antes do dia previsto, informam a data de abertura. Respostas tardias guardam o dia real da doença e o alvo original; não são retrodatadas.
 - O payload de cada nova coleta inclui `_calendario`: início, fonte, dia da doença, data da coleta, alvo e intervalo de referência. No T0 o intervalo começa no início da doença; nos seguimentos, na última resposta anterior. Não somar despesas ou incapacidade de períodos sobrepostos.
-- T10 permanece em tabela, campos e exportação próprios. Um episódio com T10 histórico não recebe uma segunda coleta equivalente em T7. Os instrumentos `collective-v2` e `legacy-2026-08-24` ficam disponíveis com seus hashes; o novo instrumento é `collective-v3-disease-clock`.
+- T10 permanece em tabela, campos e exportação próprios. Um episódio com T10 histórico não recebe uma segunda coleta equivalente em T7. Os instrumentos `collective-v2` e `legacy-2026-08-24` ficam disponíveis com seus hashes; o instrumento seguinte foi `collective-v3-disease-clock`, arquivado em 29/09/2026 quando entrou `collective-v4-2026-09-29` (bebidas em festas no T0, fluxo curto do T7 para quem já se recuperou e apresentação do T30).
 - O CSV analítico distingue T0, T7, T10 histórico e T30, suas versões e os metadados de calendário. Registros antigos sem esses metadados permanecem vazios nesses campos.
 
 ## Quem faz o quê

@@ -68,7 +68,7 @@ def test_carregar_t0_form_schema_eh_instrumento_coletivo_essencial():
     fields = _fields_by_key(schema)
 
     assert schema["title"] == "T0 - Exposicoes coletivas e prevencao"
-    assert schema["instrument_version"] == "collective-v3-disease-clock"
+    assert schema["instrument_version"] == "collective-v4-2026-09-29"
     assert IMPORTED_KEYS.isdisjoint(fields)
     assert "vacinas_12_meses" not in fields
     assert {
@@ -123,8 +123,8 @@ def test_carregar_t7_t30_form_schemas_tem_campos_coletivos_e_custo_totalizado():
 
     assert schema_t7["title"] == "T7 - Novas pistas e permanencia da fonte"
     assert schema_t30["title"] == "T30 - Encerramento do risco coletivo"
-    assert schema_t7["instrument_version"] == "collective-v3-disease-clock"
-    assert schema_t30["instrument_version"] == "collective-v3-disease-clock"
+    assert schema_t7["instrument_version"] == "collective-v4-2026-09-29"
+    assert schema_t30["instrument_version"] == "collective-v4-2026-09-29"
     assert IMPORTED_KEYS.isdisjoint(fields_t7)
     assert IMPORTED_KEYS.isdisjoint(fields_t30)
     assert {
@@ -233,7 +233,7 @@ def test_coletar_resposta_t0_nativa_salva_contexto_e_versao_sem_campos_visiveis(
     assert dados["nome"] == "Maria Teste"
     assert dados["data_nascimento"] == "01/01/2000"
     assert dados["_imported_context"]["ficha_sinan"] == "3032976"
-    assert dados["_instrument_version"] == "collective-v3-disease-clock"
+    assert dados["_instrument_version"] == "collective-v4-2026-09-29"
     assert dados["_submitted_stage"] == "t0"
     assert dados["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
 
@@ -336,7 +336,14 @@ def test_prior_abre_ou_mantem_condicional_fechada_no_t7():
         )
     )["fonte_ainda_ativa"]
 
-    assert "visible_if" not in aberto
+    # Com pista no T0 a pergunta abre, exceto para quem se recuperou e não
+    # trouxe caso novo nem pista nova neste T7 (fluxo curto desde a v4).
+    recuperado = {"source": "current", "key": "classificacao_melhora", "operator": "equals", "value": "Recuperado(a)"}
+    assert aberto["visible_if"]["any"][-1] == {"not": recuperado}
+    visivel = lambda respostas: sfa_service._avaliar_regra_visibilidade(aberto["visible_if"], respostas, [])
+    assert visivel({"classificacao_melhora": "Melhorando"})
+    assert not visivel({"classificacao_melhora": "Recuperado(a)", "novos_casos_semelhantes": "Nao"})
+    assert visivel({"classificacao_melhora": "Recuperado(a)", "novos_casos_semelhantes": "Sim"})
     assert fechado_ate_gatilho_atual["visible_if"] == {
         "any": [
             {
@@ -370,5 +377,5 @@ def test_salvar_t0_form_schema_em_arquivo_temporario(monkeypatch):
 
     assert saved_path == schema_path
     assert persisted["title"] == "T0 Ajustado em Teste"
-    assert persisted["instrument_version"] == "collective-v3-disease-clock"
+    assert persisted["instrument_version"] == "collective-v4-2026-09-29"
     schema_path.unlink(missing_ok=True)

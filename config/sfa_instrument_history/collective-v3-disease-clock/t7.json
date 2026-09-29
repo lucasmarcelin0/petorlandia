@@ -1,5 +1,5 @@
 {
-  "instrument_version": "collective-v4-2026-09-29",
+  "instrument_version": "collective-v3-disease-clock",
   "title": "T7 - Novas pistas e permanencia da fonte",
   "subtitle": "Atualizacao breve para descobrir novos casos, novas pistas e se uma possivel fonte continua ativa. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
   "submit_label": "Enviar acompanhamento T7",
@@ -134,7 +134,7 @@
     },
     {
       "title": "Novos vinculos e permanencia da fonte",
-      "description": "Estas respostas ajudam a transformar uma pista individual em um sinal verificavel. Se voce ja se recuperou, esta parte fica mais curta.",
+      "description": "Estas respostas ajudam a transformar uma pista individual em um sinal verificavel.",
       "fields": [
         {
           "key": "novos_casos_semelhantes",
@@ -224,66 +224,50 @@
                 "value": "Sim"
               },
               {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
                 "all": [
                   {
-                    "not": {
-                      "source": "current",
-                      "key": "classificacao_melhora",
-                      "operator": "equals",
-                      "value": "Recuperado(a)"
-                    }
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
                   },
                   {
-                    "any": [
-                      {
-                        "source": "prior",
-                        "key": "outras_pessoas_com_sintomas",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_ambiental_outros_doentes",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_animal_outros_doentes",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_alimentar",
-                        "operator": "selected_any",
-                        "values": [
-                          "Outras pessoas que consumiram tambem adoeceram"
-                        ]
-                      },
-                      {
-                        "all": [
-                          {
-                            "source": "prior",
-                            "key": "vinculo_exposicao_suspeita",
-                            "operator": "nonempty"
-                          },
-                          {
-                            "source": "prior",
-                            "key": "vinculo_exposicao_suspeita",
-                            "operator": "not_equals",
-                            "value": "Nao sei"
-                          }
-                        ]
-                      },
-                      {
-                        "source": "prior",
-                        "key": "outra_exposicao_suspeita",
-                        "operator": "nonempty"
-                      }
-                    ]
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
                   }
                 ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
               }
             ]
           }
@@ -313,66 +297,50 @@
                 "value": "Sim"
               },
               {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
                 "all": [
                   {
-                    "not": {
-                      "source": "current",
-                      "key": "classificacao_melhora",
-                      "operator": "equals",
-                      "value": "Recuperado(a)"
-                    }
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
                   },
                   {
-                    "any": [
-                      {
-                        "source": "prior",
-                        "key": "outras_pessoas_com_sintomas",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_ambiental_outros_doentes",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_animal_outros_doentes",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
-                        "key": "exposicao_alimentar",
-                        "operator": "selected_any",
-                        "values": [
-                          "Outras pessoas que consumiram tambem adoeceram"
-                        ]
-                      },
-                      {
-                        "all": [
-                          {
-                            "source": "prior",
-                            "key": "vinculo_exposicao_suspeita",
-                            "operator": "nonempty"
-                          },
-                          {
-                            "source": "prior",
-                            "key": "vinculo_exposicao_suspeita",
-                            "operator": "not_equals",
-                            "value": "Nao sei"
-                          }
-                        ]
-                      },
-                      {
-                        "source": "prior",
-                        "key": "outra_exposicao_suspeita",
-                        "operator": "nonempty"
-                      }
-                    ]
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
                   }
                 ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
               }
             ]
           }

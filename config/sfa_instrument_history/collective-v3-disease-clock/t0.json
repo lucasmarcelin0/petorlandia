@@ -1,5 +1,5 @@
 {
-  "instrument_version": "collective-v4-2026-09-29",
+  "instrument_version": "collective-v3-disease-clock",
   "title": "T0 - Exposicoes coletivas e prevencao",
   "subtitle": "Perguntas adicionais ao SINAN para reconhecer exposicoes coletivas que possam ser verificadas pela Vigilancia. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
   "submit_label": "Enviar resposta T0",
@@ -272,7 +272,7 @@
         },
         {
           "key": "exposicao_alimentar",
-          "label": "Houve alguma destas exposicoes a alimento, bebida, agua ou produto?",
+          "label": "Houve alguma destas exposicoes a alimento, agua ou produto?",
           "type": "checkboxes",
           "required": true,
           "options": [
@@ -282,7 +282,6 @@
             "Agua nao tratada",
             "Comida de rua/barracas",
             "Refeicao em evento ou estabelecimento",
-            "Bebidas em festa, bar ou confraternizacao (alcoolicas ou nao)",
             "Alimento ou produto com aspecto suspeito",
             "Outras pessoas que consumiram tambem adoeceram",
             "Nenhuma dessas"
@@ -290,7 +289,7 @@
         },
         {
           "key": "exposicao_alimentar_item",
-          "label": "Qual alimento, bebida, agua ou produto?",
+          "label": "Qual alimento, agua ou produto?",
           "type": "text",
           "required": true,
           "visible_if": {

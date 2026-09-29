@@ -5,7 +5,9 @@ from zoneinfo import ZoneInfo
 import json
 
 
-VERSION = "collective-v3-disease-clock"
+VERSION = "collective-v4-2026-09-29"
+# Instrumentos em que o T0 pergunta o início dos sintomas (o D0 do calendário).
+VERSOES_COM_INICIO_NO_T0 = {"collective-v3-disease-clock", VERSION}
 
 
 def hoje_local():
@@ -27,7 +29,7 @@ def inicio_doenca(paciente):
         except (ValueError, AttributeError):
             payload = {}
         valor_inicio = getattr(resposta, "data_inicio_sintomas", None) or payload.get("data_inicio_sintomas")
-        if payload.get("_instrument_version") == VERSION and not valor_inicio:
+        if payload.get("_instrument_version") in VERSOES_COM_INICIO_NO_T0 and not valor_inicio:
             return None, "Início dos sintomas não informado no T0; revisar"
         candidatos.append((valor_inicio, "T0"))
     log = getattr(paciente, "_sinan_log", None)

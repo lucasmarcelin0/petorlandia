@@ -1,7 +1,7 @@
 {
-  "instrument_version": "collective-v4-2026-09-29",
+  "instrument_version": "collective-v3-disease-clock",
   "title": "T30 - Encerramento do risco coletivo",
-  "subtitle": "Mesmo que você já esteja bem há semanas, este último contato é importante: algumas doenças, como dengue e chikungunya, podem deixar dor nas juntas ou cansaço por semanas. Queremos confirmar se você está totalmente bem e se mais alguém adoeceu. Encerramento breve do episodio e do possivel risco coletivo, sem repetir a historia anterior. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
+  "subtitle": "Encerramento breve do episodio e do possivel risco coletivo, sem repetir a historia anterior. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
   "submit_label": "Enviar acompanhamento T30",
   "sections": [
     {

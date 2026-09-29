@@ -221,7 +221,7 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
 def test_active_sfa_schema_is_collective_v2(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "collective-v3-disease-clock"
+    assert schema.get("instrument_version") == "collective-v4-2026-09-29"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 
