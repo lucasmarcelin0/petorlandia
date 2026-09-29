@@ -43,3 +43,7 @@
 **Learning:** In `services/sfa_service.py`, `normalizar_nome_chave` used `re.sub(r"\s+", " ", s)` which executes relatively slowly inside hot loops comparing text fields. Replacing this with `" ".join(s.split())` acts exactly the same for reducing arbitrary whitespace gaps into single spaces but avoids the regex engine entirely. Combined with short-circuiting `.isascii()` on pure ascii strings (bypassing `unicodedata`), execution time decreased by ~90% for pure ascii inputs and ~40% for strings requiring unicode translation.
 **Action:** For reducing arbitrary whitespace characters into single spaces, prefer `" ".join(string.split())` over `re.sub(r"\s+", " ", string)` in hot paths.
 
+
+## 2026-10-26 - Fast-path short-circuiting for string digit filtering
+**Learning:** When extracting digits from strings that may already be purely numeric (e.g., phone numbers or numeric IDs), adding an `if value.isdigit(): return value` fast-path check before list comprehension filtering bypasses string iteration completely in O(1) time.
+**Action:** Implement `.isdigit()` fast-path check in `only_digits` and `digits_only` helper functions for significant execution speedups.

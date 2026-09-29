@@ -2,7 +2,10 @@
 
 
 def only_digits(value) -> str:
-    return "".join(filter(str.isdigit, str(value or "")))
+    v = str(value or "")
+    if v.isdigit():
+        return v
+    return "".join([c for c in v if c.isdigit()])
 
 
 def format_cnpj(value) -> str:
