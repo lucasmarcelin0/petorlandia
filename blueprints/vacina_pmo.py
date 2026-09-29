@@ -534,11 +534,15 @@ def vacina_pmo_sync():
             sheet_title=(payload.get('sheet_title') or '').strip(),
             force_ai=bool(payload.get('force_ai')),
         )
+        # O painel precisa ficar igual à aba logo após "Sincronizar": linha que
+        # saiu da planilha sai da lista. Só estaciona, nunca apaga — a poda de
+        # verdade continua com o sync agendado.
         rows = persist_vacina_pmo_rows(
             result.rows,
             spreadsheet_id=result.spreadsheet_id,
             sheet_gid=result.sheet_gid,
             sheet_title=result.sheet_title,
+            park_orphans=True,
         )
         try:
             from services.pmo_realtime import record_pmo_event
