@@ -203,6 +203,31 @@
     campoCep.addEventListener("change", consultarCep);
   }
 
+  // Caso autóctone do município de residência (56 = Sim): copia UF, país, município, código IBGE,
+  // distrito e bairro da residência para o local provável de infecção. Só preenche campos vazios.
+  const autoctone = Array.from(form.querySelectorAll('input[name="caso_autoctone"]'));
+  if (autoctone.length) {
+    const valor = (nome) => { const el = form.querySelector(`[name="${nome}"]`); return el ? el.value.trim() : ""; };
+    const preencherInfeccao = (nome, texto) => {
+      const el = form.querySelector(`[name="${nome}"]`);
+      if (el && texto && !el.value.trim()) el.value = texto;
+    };
+    const copiarResidencia = () => {
+      if (!autoctone.some((r) => r.checked && r.value === "1")) return;
+      preencherInfeccao("uf_local_infeccao", valor("uf_residencia"));
+      preencherInfeccao("pais_local_infeccao", valor("pais_residencia") || "Brasil");
+      // Município e código IBGE andam juntos: o código só é copiado se o município for o mesmo.
+      const municipioLocal = valor("municipio_local_infeccao");
+      if (!municipioLocal || municipioLocal.toLowerCase() === valor("municipio_residencia").toLowerCase()) {
+        preencherInfeccao("municipio_local_infeccao", valor("municipio_residencia"));
+        preencherInfeccao("codigo_municipio_local_infeccao", valor("codigo_municipio_residencia"));
+      }
+      preencherInfeccao("distrito_local_infeccao", valor("distrito_residencia"));
+      preencherInfeccao("bairro_local_infeccao", valor("bairro"));
+    };
+    autoctone.forEach((r) => r.addEventListener("change", copiarResidencia));
+  }
+
   form.dataset.ready = "true";
   showStep(0);
 })();
