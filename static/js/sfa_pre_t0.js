@@ -144,6 +144,31 @@
     idadeUnidade.addEventListener("change", dataDaIdade);
   }
 
+  // Sexo masculino: esconde "Gestante" e registra 6 (Não se aplica), o código da própria ficha.
+  // Ao voltar para F/I, o campo reaparece com a resposta que estava antes.
+  const cartaoGestante = form.querySelector('[data-field-card="gestante"]');
+  const sexoRadios = Array.from(form.querySelectorAll('input[name="sexo"]'));
+  if (cartaoGestante && sexoRadios.length) {
+    const gestanteRadios = Array.from(cartaoGestante.querySelectorAll('input[name="gestante"]'));
+    let anterior = null;
+    const aplicarSexo = () => {
+      const masculino = sexoRadios.some((r) => r.checked && r.value === "M");
+      if (masculino && cartaoGestante.style.display !== "none") {
+        anterior = gestanteRadios.find((r) => r.checked) || null;
+        cartaoGestante.style.display = "none";
+        const naoSeAplica = gestanteRadios.find((r) => r.value === "6");
+        if (naoSeAplica) naoSeAplica.checked = true;
+      } else if (!masculino && cartaoGestante.style.display === "none") {
+        cartaoGestante.style.display = "";
+        const escolha = anterior;
+        gestanteRadios.forEach((r) => { r.checked = r === escolha; });
+        anterior = null;
+      }
+    };
+    sexoRadios.forEach((r) => r.addEventListener("change", aplicarSexo));
+    aplicarSexo();
+  }
+
   form.dataset.ready = "true";
   showStep(0);
 })();
