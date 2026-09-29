@@ -1,0 +1,11 @@
+{% extends "sfa/simulacao_base.html" %}
+{% block title %}{{ titulo }} · Simulação SFA{% endblock %}
+{% block content %}
+<section class="sim-card {% if tom == 'espera' %}sim-card-alerta{% else %}sim-card-ok{% endif %}" role="status">
+  <h2>{{ titulo }}</h2>
+  <p>{{ mensagem }}</p>
+  {% if participante %}
+  <div class="sim-acoes"><a class="sim-btn" href="{{ url_for('sfa_routes.simulacao_painel', token=participante.token) }}">Voltar ao meu painel</a></div>
+  {% endif %}
+</section>
+{% endblock %}

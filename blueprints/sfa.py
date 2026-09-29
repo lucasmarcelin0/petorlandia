@@ -2803,3 +2803,6 @@ def t10_config_legacy():
 
 from blueprints.sfa_pilot import register as _register_pilot_routes
 _register_pilot_routes(bp, require_sfa_internal_access, _review_schema_loader)
+
+from blueprints.sfa_simulacao import register as _register_simulacao_routes
+_register_simulacao_routes(bp, require_sfa_internal_access)

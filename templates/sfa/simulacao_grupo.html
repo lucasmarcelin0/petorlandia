@@ -1,0 +1,154 @@
+{% extends "sfa/base.html" %}
+{% block title %}{{ grupo.nome }} · Simulações{% endblock %}
+{% block page_title %}Simulação · {{ grupo.nome }}{% endblock %}
+
+{% block content %}
+{% set total_respostas = linhas|map(attribute='calendario')|map(attribute='respondidas')|sum %}
+<nav class="small mb-2"><a href="{{ url_for('sfa_routes.simulacoes') }}">← Todos os grupos</a></nav>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+  <div>
+    <h4 class="mb-1">{{ grupo.nome }}
+      <span class="badge rounded-pill align-middle fs-6 {{ 'text-bg-success' if grupo.status == 'aberto' else 'text-bg-secondary' }}">{{ 'Aberto' if grupo.status == 'aberto' else 'Encerrado' }}</span>
+    </h4>
+    <div class="text-muted small">Etapas: {% for etapa in etapas %}{{ ETAPA_ROTULOS[etapa] }}{% if not loop.last %} → {% endif %}{% endfor %} · {{ sim.AGENDAS[grupo.agenda] if grupo.agenda in sim.AGENDAS else grupo.agenda }}</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-primary" href="{{ url_for('sfa_routes.simulacao_analise', g=grupo.id) }}"><i class="fas fa-chart-column me-1" aria-hidden="true"></i> Análise do grupo</a>
+    <div class="btn-group">
+      <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.simulacao_exportar', g=grupo.id, formato='largo') }}"><i class="fas fa-file-csv me-1" aria-hidden="true"></i> CSV por participante</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.simulacao_exportar', g=grupo.id, formato='longo') }}">CSV por pergunta</a>
+    </div>
+    <form method="post" action="{{ url_for('sfa_routes.simulacao_grupo_status', grupo_id=grupo.id) }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if grupo.status == 'aberto' %}
+      <input type="hidden" name="status" value="encerrado">
+      <button class="btn btn-outline-danger" type="submit" onclick="return confirm('Encerrar o grupo? Ninguém poderá entrar nem enviar novas etapas. Os dados continuam disponíveis.')"><i class="fas fa-lock me-1" aria-hidden="true"></i> Encerrar</button>
+      {% else %}
+      <input type="hidden" name="status" value="aberto">
+      <button class="btn btn-outline-success" type="submit"><i class="fas fa-lock-open me-1" aria-hidden="true"></i> Reabrir</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body d-flex gap-3 align-items-start">
+        <a href="{{ url_for('sfa_routes.simulacao_qrcode', grupo_id=grupo.id) }}" target="_blank" rel="noopener" aria-label="Abrir QR code do convite em tamanho grande">
+          <img src="{{ url_for('sfa_routes.simulacao_qrcode', grupo_id=grupo.id) }}" alt="QR code do convite" width="132" height="132" class="border rounded p-1 bg-white">
+        </a>
+        <div class="flex-grow-1 min-w-0">
+          <h6 class="mb-1">Link de convite do grupo</h6>
+          <p class="small text-muted mb-2">Envie por WhatsApp, e-mail ou projete o QR code. Cada pessoa que entrar recebe o próprio link para continuar depois.</p>
+          <div class="input-group input-group-sm mb-2">
+            <input id="convite" class="form-control" value="{{ convite_url }}" readonly onclick="this.select()" aria-label="Link de convite">
+            <button class="btn btn-outline-secondary" type="button" data-copiar="convite">Copiar</button>
+          </div>
+          <a class="btn btn-sm btn-outline-primary" href="{{ convite_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>Ver como participante</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <h6 class="mb-3">Andamento</h6>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span class="badge text-bg-light border fs-6">{{ linhas|length }} participante{{ '' if linhas|length == 1 else 's' }}</span>
+          <span class="badge text-bg-success-subtle text-success-emphasis border fs-6">{{ linhas|selectattr('calendario.concluido')|list|length }} concluíram</span>
+        </div>
+        {% for etapa in etapas %}
+        {% set feitos = namespace(n=0) %}
+        {% for linha in linhas %}{% for item in linha.calendario.etapas %}{% if item.etapa == etapa and item.status == 'respondida' %}{% set feitos.n = feitos.n + 1 %}{% endif %}{% endfor %}{% endfor %}
+        <div class="d-flex align-items-center gap-2 small mb-1">
+          <span style="width:84px">{{ ETAPA_ROTULOS[etapa] }}</span>
+          <div class="progress flex-grow-1" style="height:10px" role="progressbar" aria-label="{{ ETAPA_ROTULOS[etapa] }}" aria-valuenow="{{ feitos.n }}" aria-valuemin="0" aria-valuemax="{{ linhas|length }}">
+            <div class="progress-bar" style="width: {{ (100 * feitos.n / linhas|length)|round|int if linhas else 0 }}%; background:#015F73"></div>
+          </div>
+          <span style="width:52px" class="text-end">{{ feitos.n }}/{{ linhas|length }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h6 class="mb-3">Participantes</h6>
+    {% if linhas %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Código</th><th>Perfil</th><th>Experiência SINAN</th><th>Entrou em</th>
+            {% for etapa in etapas %}<th class="text-center">{{ ETAPA_ROTULOS[etapa] }}</th>{% endfor %}
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+          {% set p = linha.participante %}
+          <tr>
+            <td><a class="fw-semibold" href="{{ url_for('sfa_routes.simulacao_participante', participante_id=p.id) }}">{{ p.codigo }}</a>{% if p.apelido %}<div class="small text-muted">{{ p.apelido }}</div>{% endif %}</td>
+            <td class="small">{{ p.perfil or '–' }}</td>
+            <td class="small">{{ p.experiencia_sinan or '–' }}</td>
+            <td class="small text-nowrap">{{ fmt_dt(p.created_at) }}</td>
+            {% for item in linha.calendario.etapas %}
+            <td class="text-center small text-nowrap">
+              {% if item.status == 'respondida' %}
+              <span class="text-success fw-semibold" title="Enviado em {{ fmt_dt(item.resposta.enviado_em) }}">✓ {{ fmt_dur(item.resposta.duracao_segundos) }}</span>
+              {% elif item.status == 'agendada' %}<span class="text-warning-emphasis" title="{{ item.motivo }}">abre {{ item.abre_em.strftime('%d/%m') }}</span>
+              {% elif item.status == 'disponivel' %}<span class="text-primary">pendente</span>
+              {% else %}<span class="text-muted">–</span>{% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-end text-nowrap">
+              <input type="text" class="visually-hidden" id="link-{{ p.id }}" value="{{ linha.link }}" readonly tabindex="-1" aria-hidden="true">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-copiar="link-{{ p.id }}" title="Copiar o link pessoal para reenviar a quem perdeu">Link pessoal</button>
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('sfa_routes.simulacao_participante', participante_id=p.id) }}">Respostas</a>
+              <form method="post" action="{{ url_for('sfa_routes.simulacao_participante_excluir', participante_id=p.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit" title="Excluir participante" aria-label="Excluir {{ p.codigo }}" onclick="return confirm('Excluir {{ p.codigo }} e todas as respostas dele? Use para remover testes da própria equipe.')"><i class="fas fa-trash" aria-hidden="true"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small text-muted mt-2 mb-0">O tempo mostrado é o intervalo entre abrir o formulário e enviá-lo, contando tentativas com erro.</p>
+    {% else %}
+    <p class="text-muted mb-0">Ninguém entrou ainda. Envie o link de convite acima.</p>
+    {% endif %}
+  </div>
+</div>
+
+<details class="card shadow-sm border-0 mb-4">
+  <summary class="card-body fw-semibold">Configurações do grupo e caso fictício</summary>
+  <div class="card-body pt-0">
+    <form method="post" action="{{ url_for('sfa_routes.simulacao_grupo_editar', grupo_id=grupo.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% set valores = {'nome': grupo.nome, 'descricao': grupo.descricao, 'etapas': etapas, 'agenda': grupo.agenda, 'cenarios': cenarios} %}
+      {% set prefixo = 'editar' %}
+      {% include "sfa/_simulacao_grupo_campos.html" %}
+      {% if total_respostas %}<div class="alert alert-warning small mt-3 mb-0">Já há respostas neste grupo. Mudar as etapas ou o caso agora vale só para quem ainda vai responder: quem já respondeu viu a versão anterior.</div>{% endif %}
+      <div class="mt-3 d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="submit">Salvar alterações</button>
+      </div>
+    </form>
+    {% if not total_respostas %}
+    <form method="post" action="{{ url_for('sfa_routes.simulacao_grupo_excluir', grupo_id=grupo.id) }}" class="mt-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Excluir este grupo? O link de convite deixa de funcionar.')">Excluir grupo sem respostas</button>
+    </form>
+    {% endif %}
+  </div>
+</details>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% include "sfa/_simulacao_copiar.html" %}
+{% endblock %}

@@ -16,6 +16,7 @@
       <span><strong>SFA Orlândia</strong><small>Vigilância em saúde</small></span>
       <span class="brand-status"><span></span> Ficha digital</span>
     </header>
+    {% if simulacao %}{% include "sfa/_simulacao_banner.html" %}{% endif %}
 
     <section class="hero-card">
       <div class="hero-copy">
@@ -23,7 +24,11 @@
         <h1>Ficha de investigação<br><em>Dengue e Febre de Chikungunya</em></h1>
         <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Se um dado ainda não estiver disponível, deixe o campo em branco; use “Ignorado” quando essa opção existir.</p>
         <div class="hero-tags"><span>71 campos do modelo</span><span>Etapas curtas</span><span>Funciona no celular</span></div>
+        {% if simulacao %}
+        <p class="form-scope-note">Simulação: o envio fica registrado somente neste grupo de teste. Nada vai para o SFA municipal nem para o SINAN.</p>
+        {% else %}
         <p class="form-scope-note">O envio registra a ficha no SFA municipal para consulta da equipe. Não há transmissão automática ao sistema federal SINAN.</p>
+        {% endif %}
       </div>
       <div class="hero-stamp" aria-hidden="true"><span>PRÉ</span><strong>T0</strong><small>SINAN</small></div>
     </section>
@@ -51,6 +56,7 @@
 
     <form action="{{ form_action }}" method="post" novalidate data-step-form>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if simulacao %}{% include "sfa/_simulacao_campos.html" %}{% endif %}
       <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
 
       {% macro question_label(field) -%}

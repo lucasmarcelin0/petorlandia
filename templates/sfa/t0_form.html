@@ -345,13 +345,14 @@
 </head>
 <body>
   <div class="wrap">
+    {% if simulacao %}{% include "sfa/_simulacao_banner.html" %}{% endif %}
     <section class="hero">
       <div class="kicker">{{ form_name or "Estudo SFA Orlandia" }}</div>
       <h1>Ola, {{ paciente.nome or "participante" }}.</h1>
       <p><strong>{{ schema.title }}</strong><br>{{ schema.subtitle }}</p>
       <div class="meta">
         <div class="meta-chip"><strong>Etapa:</strong> {{ (form_stage or "t0").upper() }}</div>
-        <div class="meta-chip">Seus dados cadastrais ja estao vinculados nos bastidores.</div>
+        <div class="meta-chip">{% if simulacao %}Respostas de teste, fora da pesquisa real.{% else %}Seus dados cadastrais ja estao vinculados nos bastidores.{% endif %}</div>
       </div>
     </section>
 
@@ -361,6 +362,7 @@
 
     <form method="POST" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if simulacao %}{% include "sfa/_simulacao_campos.html" %}{% endif %}
 
       {% for section in schema.sections %}
       <section class="section">
@@ -445,7 +447,11 @@
       {% endfor %}
 
       <div class="actions">
+        {% if simulacao %}
+        <p>Ao enviar, a resposta fica registrada somente nesta simulação, sem entrar na pesquisa real.</p>
+        {% else %}
         <p>Ao enviar, sua resposta sera registrada diretamente no sistema da pesquisa. Se precisar de ajuda, fale com a equipe da Secretaria de Saude.</p>
+        {% endif %}
         <button type="submit" class="submit-btn">{{ schema.submit_label or "Enviar" }}</button>
       </div>
     </form>

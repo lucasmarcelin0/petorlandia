@@ -1,0 +1,54 @@
+{# Campos do cadastro/edição de grupo. Espera `valores` com nome, descricao,
+   etapas, agenda e cenarios. #}
+{% set exemplos = {
+  'geral': 'Ex.: Ana, 34 anos, professora, mora no Jardim Boa Vista, em Orlândia. Em 20/09 começou com febre alta, dor atrás dos olhos e dores no corpo. Mora com o marido e dois filhos; uma vizinha teve sintomas parecidos na mesma semana.',
+  'sinan': 'Ex.: Você é o(a) profissional da UBS que atendeu Ana em 22/09. Suspeita de dengue; NS1 coletado no mesmo dia, resultado positivo. Sem sinais de alarme.',
+  't0': 'Ex.: Hoje é 23/09. Ana ficou 2 dias sem trabalhar e gastou cerca de R$ 60 com remédios e transporte.',
+  't7': 'Ex.: 7º dia de doença. A febre passou, mas as dores nas juntas continuam e ela voltou à UBS uma vez.',
+  't30': 'Ex.: 30º dia. Ana voltou ao trabalho, mas ainda sente cansaço no fim do dia. Ninguém mais da casa adoeceu.'
+} %}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <label class="form-label fw-semibold" for="{{ prefixo }}-nome">Nome do grupo</label>
+    <input class="form-control" id="{{ prefixo }}-nome" name="nome" maxlength="120" required value="{{ valores.nome }}" placeholder="Ex.: Instituto · turma da Profa. Helena">
+    <div class="form-text">Aparece para os participantes e nas análises.</div>
+  </div>
+  <div class="col-lg-6">
+    <span class="form-label fw-semibold d-block">Etapas</span>
+    {% for etapa in sim.ETAPAS %}
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" name="etapas" value="{{ etapa }}" id="{{ prefixo }}-etapa-{{ etapa }}"
+             {% if etapa in valores.etapas or etapa == 't0' %}checked{% endif %} {% if etapa == 't0' %}disabled{% endif %}>
+      <label class="form-check-label" for="{{ prefixo }}-etapa-{{ etapa }}">{{ ETAPA_ROTULOS[etapa] }}</label>
+    </div>
+    {% endfor %}
+    <div class="form-text">O T0 é sempre incluído. As etapas seguem esta ordem.</div>
+  </div>
+  <div class="col-12">
+    <label class="form-label fw-semibold" for="{{ prefixo }}-descricao">Mensagem do convite <span class="text-muted fw-normal">(opcional)</span></label>
+    <textarea class="form-control" id="{{ prefixo }}-descricao" name="descricao" rows="2" maxlength="3000" placeholder="Ex.: Obrigado por ajudar! Queremos saber se as perguntas estão claras para quem atende e para quem adoece.">{{ valores.descricao }}</textarea>
+  </div>
+  <div class="col-12">
+    <span class="form-label fw-semibold d-block">Liberação das etapas</span>
+    {% for chave, rotulo in sim.AGENDAS.items() %}
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="agenda" value="{{ chave }}" id="{{ prefixo }}-agenda-{{ chave }}" {% if valores.agenda == chave %}checked{% endif %}>
+      <label class="form-check-label" for="{{ prefixo }}-agenda-{{ chave }}">{{ rotulo }}</label>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="col-12">
+    <details class="border rounded-3 p-3 bg-light" {% if valores.cenarios %}open{% endif %}>
+      <summary class="fw-semibold">Caso fictício compartilhado <span class="text-muted fw-normal">(opcional, recomendado)</span></summary>
+      <p class="small text-muted mt-2 mb-3">Quando todos respondem ao mesmo caso, respostas diferentes para uma mesma pergunta indicam ambiguidade. A análise mostra essa <strong>concordância</strong> pergunta a pergunta. Cada texto aparece no topo da etapa correspondente.</p>
+      <div class="row g-3">
+        {% for chave, rotulo in [('geral', 'O caso (aparece em todas as etapas)'), ('sinan', 'Para a ficha SINAN'), ('t0', 'Para o T0'), ('t7', 'Para o T7'), ('t30', 'Para o T30')] %}
+        <div class="{% if chave == 'geral' %}col-12{% else %}col-lg-6{% endif %}">
+          <label class="form-label small fw-semibold" for="{{ prefixo }}-cenario-{{ chave }}">{{ rotulo }}</label>
+          <textarea class="form-control form-control-sm" id="{{ prefixo }}-cenario-{{ chave }}" name="cenario_{{ chave }}" rows="{{ 3 if chave == 'geral' else 2 }}" maxlength="4000" placeholder="{{ exemplos[chave] }}">{{ valores.cenarios.get(chave, '') }}</textarea>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+</div>

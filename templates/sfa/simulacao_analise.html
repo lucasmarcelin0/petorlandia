@@ -1,0 +1,346 @@
+{% extends "sfa/base.html" %}
+{% block title %}Análise das simulações{% endblock %}
+{% block page_title %}Simulações · análise{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+  .an-bar { display: inline-block; width: 110px; height: 8px; margin-right: 8px; vertical-align: middle; background: #eceae4; border-radius: 0 4px 4px 0; }
+  .an-bar > span { display: block; height: 100%; min-width: 0; border-radius: 0 4px 4px 0; }
+  .an-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: baseline; }
+  .an-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .an-kpi { border: 0; border-left: 4px solid #015F73; }
+  .an-kpi .valor { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+  .an-q { padding: 14px 16px; margin-bottom: 12px; border: 1px solid #e3e6ea; border-radius: 12px; background: #fff; scroll-margin-top: 80px; }
+  .an-q:target { box-shadow: 0 0 0 3px rgba(1, 95, 115, .25); }
+  .an-q h6 { margin: 0 0 6px; font-size: .98rem; }
+  .an-q-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; color: #5f6b72; font-size: .82rem; }
+  .an-q-meta .baixa { color: #9a3b12; font-weight: 600; }
+  .an-q table { margin-bottom: 0; }
+  .an-q td, .an-q th { font-size: .86rem; }
+  .an-zero td { color: #9aa3a8; }
+  .an-secao { margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #015F73; color: #015F73; font-size: .95rem; text-transform: uppercase; letter-spacing: .04em; }
+  .an-destaque li { margin-bottom: 6px; }
+  .an-nav .nav-link { border-radius: 999px; }
+  @media print {
+    .sfa-sidebar, .sfa-header, .an-sem-impressao { display: none !important; }
+    .sfa-main { margin-left: 0 !important; padding: 0 !important; }
+    .an-q { break-inside: avoid; }
+    .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  }
+</style>
+{% endblock %}
+
+{% macro barra(pct, cor, titulo='') -%}
+<span class="an-bar" title="{{ titulo }}" aria-hidden="true"><span style="width: {{ ((pct or 0) * 100)|round(1) }}%; background: {{ cor }}"></span></span>
+{%- endmacro %}
+
+{% block content %}
+{% set cols = analise.colunas if (not analise.vazio and visao == 'comparar') else (analise.colunas[:1] if not analise.vazio else []) %}
+{% set tipos = {'categorica': 'Escolha única', 'multipla': 'Múltipla escolha', 'numerica': 'Número', 'data': 'Data', 'texto': 'Texto livre', 'oculto': 'Identificador (conteúdo não guardado)'} %}
+
+<nav class="small mb-2 an-sem-impressao"><a href="{{ url_for('sfa_routes.simulacoes') }}">← Grupos de teste</a></nav>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+  <div>
+    <h4 class="mb-1">Análise das simulações</h4>
+    {% if not analise.vazio %}
+    <div class="text-muted">
+      {% if analise.grupos|length > 1 %}Grupo único somando {{ analise.grupos|length }} grupos: {% for g in analise.grupos %}<span class="text-nowrap"><span class="an-swatch" style="background: {{ cores[g.id] }}"></span>{{ g.nome }}</span>{% if not loop.last %} + {% endif %}{% endfor %}
+      {% else %}Grupo: {{ analise.grupos[0].nome }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% if not analise.vazio %}
+  <div class="d-flex flex-wrap gap-2 an-sem-impressao">
+    <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.simulacao_exportar', g=ids, formato='largo') }}"><i class="fas fa-file-csv me-1" aria-hidden="true"></i> CSV por participante</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.simulacao_exportar', g=ids, formato='longo') }}">CSV por pergunta</a>
+    <button class="btn btn-outline-secondary" type="button" onclick="window.print()"><i class="fas fa-print me-1" aria-hidden="true"></i> Imprimir</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if todos %}
+<form method="get" class="card border-0 shadow-sm mb-4 an-sem-impressao">
+  <div class="card-body d-flex flex-wrap align-items-center gap-3">
+    <span class="fw-semibold small">Grupos:</span>
+    {% for g in todos %}
+    <div class="form-check form-check-inline mb-0">
+      <input class="form-check-input" type="checkbox" name="g" value="{{ g.id }}" id="filtro-g-{{ g.id }}" {% if g.id in selecionados %}checked{% endif %}>
+      <label class="form-check-label" for="filtro-g-{{ g.id }}"><span class="an-swatch" style="background: {{ cores[g.id] }}"></span>{{ g.nome }}{% if g.status != 'aberto' %} <span class="text-muted small">(encerrado)</span>{% endif %}</label>
+    </div>
+    {% endfor %}
+    <span class="vr d-none d-md-inline"></span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Forma de exibir">
+      <input type="radio" class="btn-check" name="visao" value="comparar" id="visao-comparar" {% if visao == 'comparar' %}checked{% endif %}>
+      <label class="btn btn-outline-primary" for="visao-comparar">Consolidado + cada grupo</label>
+      <input type="radio" class="btn-check" name="visao" value="consolidado" id="visao-consolidado" {% if visao == 'consolidado' %}checked{% endif %}>
+      <label class="btn btn-outline-primary" for="visao-consolidado">Só o consolidado</label>
+    </div>
+    <input type="hidden" name="etapa" value="{{ etapa }}">
+    <button class="btn btn-sm btn-primary" type="submit">Atualizar</button>
+    <span class="small text-muted">Sem nenhum marcado, todos entram.</span>
+  </div>
+</form>
+{% endif %}
+
+{% if analise.vazio %}
+<div class="alert alert-info">Ainda não há grupos de simulação. <a href="{{ url_for('sfa_routes.simulacoes') }}">Crie o primeiro grupo</a> e envie o link de convite.</div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  {% for rotulo, valor, detalhe in [
+    ('Grupos', analise.kpis.grupos, ''),
+    ('Participantes', analise.kpis.participantes, ''),
+    ('Etapas enviadas', analise.kpis.respostas, ''),
+    ('Concluíram tudo', analise.kpis.concluidos, fmt_pct(analise.kpis.pct_concluidos) ~ ' dos participantes' if analise.kpis.participantes else '')] %}
+  <div class="col-6 col-lg-3">
+    <div class="card shadow-sm an-kpi h-100"><div class="card-body">
+      <div class="small text-muted">{{ rotulo }}</div>
+      <div class="valor an-num">{{ valor }}</div>
+      {% if detalhe %}<div class="small text-muted">{{ detalhe }}</div>{% endif %}
+    </div></div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not analise.kpis.participantes %}
+<div class="alert alert-light border">Ninguém entrou nos grupos selecionados ainda. Os números aparecem aqui à medida que as pessoas respondem.</div>
+{% endif %}
+
+{# ---------------- Participação ---------------- #}
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h5 class="mb-1">Participação por etapa</h5>
+    <p class="small text-muted">Quantos participantes enviaram cada etapa, entre os que a tinham no percurso do grupo.</p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light"><tr><th>Grupo</th><th class="text-end">Participantes</th>
+          {% for e in analise.etapas_presentes %}<th>{{ ETAPA_ROTULOS[e] }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for linha in analise.funil if linha.coluna in cols %}
+          <tr {% if linha.coluna.consolidado and cols|length > 1 %}class="fw-semibold"{% endif %}>
+            <td><span class="an-swatch" style="background: {{ cores_coluna[linha.coluna.chave] }}"></span>{{ linha.coluna.rotulo }}</td>
+            <td class="text-end an-num">{{ linha.inscritos }}</td>
+            {% for item in linha.etapas if item.etapa in analise.etapas_presentes %}
+            <td class="an-num">{% if item.elegiveis %}{{ barra(item.pct, cores_coluna[linha.coluna.chave], linha.coluna.rotulo ~ ': ' ~ fmt_pct(item.pct)) }}{{ fmt_pct(item.pct) }} <span class="text-muted">({{ item.n }}/{{ item.elegiveis }})</span>{% else %}<span class="text-muted">fora do percurso</span>{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ---------------- Esforço ---------------- #}
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h5 class="mb-1">Tempo, facilidade e erros de preenchimento</h5>
+    <p class="small text-muted">Tempo medido do momento em que o formulário foi aberto até o envio, contando as tentativas com erro. Mediana e faixa central (metade das pessoas entre esses valores) resistem a quem deixou a página aberta. Facilidade é a nota de 1 (muito difícil) a 5 (muito fácil) dada ao final da etapa.</p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light"><tr><th>Etapa</th><th>Grupo</th><th class="text-end">Respostas</th><th class="text-end">Tempo mediano</th><th class="text-end">Faixa central</th><th class="text-end">Facilidade média</th><th>Enviaram com erro antes</th></tr></thead>
+        <tbody>
+          {% for e in analise.etapas_presentes %}
+          {% for c in cols %}
+          {% set r = analise.resumo_etapas[e][c.chave] %}
+          <tr {% if loop.first %}class="table-group-divider"{% endif %}>
+            {% if loop.first %}<th rowspan="{{ cols|length }}" class="align-top">{{ ETAPA_ROTULOS[e] }}</th>{% endif %}
+            <td><span class="an-swatch" style="background: {{ cores_coluna[c.chave] }}"></span>{{ c.rotulo }}</td>
+            <td class="text-end an-num">{{ r.n }}</td>
+            <td class="text-end an-num">{{ fmt_dur(r.duracao.mediana) if r.duracao else '–' }}</td>
+            <td class="text-end an-num text-muted">{% if r.duracao and r.duracao.n > 1 %}{{ fmt_dur(r.duracao.p25) }} – {{ fmt_dur(r.duracao.p75) }}{% else %}–{% endif %}</td>
+            <td class="text-end an-num">{% if r.facilidade %}{{ fmt_num(r.facilidade.media, 1) }} <span class="text-muted">(n={{ r.facilidade.n }})</span>{% else %}–{% endif %}</td>
+            <td class="an-num">{% if r.n %}{{ barra(r.pct_com_erro, cores_coluna[c.chave], c.rotulo ~ ': ' ~ fmt_pct(r.pct_com_erro)) }}{{ fmt_pct(r.pct_com_erro) }} <span class="text-muted">({{ r.com_erro }}/{{ r.n }})</span>{% else %}–{% endif %}</td>
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% set com_erros = analise.erros_campos.items()|selectattr('1')|list %}
+    {% if com_erros %}
+    <h6 class="mt-4">Campos que mais barraram o envio <span class="text-muted fw-normal small">(todos os grupos selecionados)</span></h6>
+    <div class="row g-3">
+      {% for e, lista in com_erros %}
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="fw-semibold small mb-2">{{ ETAPA_ROTULOS[e] }}</div>
+          <ol class="small mb-0 ps-3">{% for rotulo, n in lista %}<li>{{ rotulo }} <span class="text-muted an-num">· {{ n }} vez{{ '' if n == 1 else 'es' }}</span></li>{% endfor %}</ol>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if analise.divergencia_inicio.ambos %}
+    <p class="small mt-3 mb-0"><strong>Coerência SINAN × T0:</strong> {{ analise.divergencia_inicio.diverge }} de {{ analise.divergencia_inicio.ambos }} participantes informaram datas de início dos sintomas diferentes na ficha SINAN e no T0.</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------- Destaques ---------------- #}
+{% set d = analise.destaques %}
+{% if d.baixa_concordancia or d.diferencas or d.baixo_preenchimento %}
+<div class="row g-3 mb-4">
+  {% if d.baixa_concordancia %}
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 h-100"><div class="card-body an-destaque">
+      <h6 class="mb-1">Respostas divergentes</h6>
+      <p class="small text-muted">Menos de 70% deram a resposta mais comum. Com um mesmo caso fictício, é sinal de pergunta ambígua.</p>
+      <ul class="small ps-3 mb-0">{% for item in d.baixa_concordancia %}<li><a href="{{ url_for('sfa_routes.simulacao_analise', g=ids, etapa=item.etapa, visao=visao, _anchor='q-' ~ item.etapa ~ '-' ~ item.id) }}">{{ item.etapa_rotulo }} · {{ item.rotulo }}</a> <span class="an-num text-muted">{{ fmt_pct(item.valor) }} (n={{ item.n }})</span></li>{% endfor %}</ul>
+    </div></div>
+  </div>
+  {% endif %}
+  {% if d.diferencas %}
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 h-100"><div class="card-body an-destaque">
+      <h6 class="mb-1">Maiores diferenças entre grupos</h6>
+      <p class="small text-muted">Opções cuja proporção variou 30 pontos percentuais ou mais entre grupos com ao menos 3 respostas.</p>
+      <ul class="small ps-3 mb-0">{% for item in d.diferencas %}<li><a href="{{ url_for('sfa_routes.simulacao_analise', g=ids, etapa=item.etapa, visao='comparar', _anchor='q-' ~ item.etapa ~ '-' ~ item.id) }}">{{ item.etapa_rotulo }} · {{ item.rotulo }}</a> <span class="an-num text-muted">{{ (item.valor * 100)|round|int }} p.p.</span></li>{% endfor %}</ul>
+    </div></div>
+  </div>
+  {% endif %}
+  {% if d.baixo_preenchimento %}
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 h-100"><div class="card-body an-destaque">
+      <h6 class="mb-1">Campos pouco preenchidos</h6>
+      <p class="small text-muted">Exibidos a pelo menos 3 pessoas, mas preenchidos por menos da metade.</p>
+      <ul class="small ps-3 mb-0">{% for item in d.baixo_preenchimento %}<li><a href="{{ url_for('sfa_routes.simulacao_analise', g=ids, etapa=item.etapa, visao=visao, _anchor='q-' ~ item.etapa ~ '-' ~ item.id) }}">{{ item.etapa_rotulo }} · {{ item.rotulo }}</a> <span class="an-num text-muted">{{ fmt_pct(item.valor) }} de {{ item.n }}</span></li>{% endfor %}</ul>
+    </div></div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ---------------- Perfil ---------------- #}
+{% if analise.kpis.participantes %}
+<div class="row g-3 mb-4">
+  {% for titulo, dados in [('Atuação dos participantes', analise.perfis), ('Experiência com a ficha SINAN', analise.experiencias)] %}
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100"><div class="card-body">
+      <h6>{{ titulo }}</h6>
+      {% set chaves = [] %}{% for c in cols %}{% for k in dados[c.chave] %}{% if k not in chaves %}{% set _ = chaves.append(k) %}{% endif %}{% endfor %}{% endfor %}
+      <table class="table table-sm mb-0">
+        <thead class="table-light"><tr><th></th>{% for c in cols %}<th class="text-end"><span class="an-swatch" style="background: {{ cores_coluna[c.chave] }}"></span>{{ c.rotulo }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for k in chaves %}<tr><td class="small">{{ k }}</td>{% for c in cols %}<td class="text-end an-num small">{{ dados[c.chave][k] or '–' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table>
+    </div></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ---------------- Pergunta a pergunta ---------------- #}
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h5 class="mb-1">Pergunta a pergunta</h5>
+    <p class="small text-muted">Perguntas do instrumento vigente. “Preenchida” conta quem viu a pergunta (as condicionais só aparecem para parte das pessoas). Na múltipla escolha, o percentual é de quem marcou ao menos uma opção, e a soma pode passar de 100%. Concordância: parcela que deu a resposta mais comum (na múltipla escolha, semelhança média entre as combinações marcadas).</p>
+    {% if analise.etapas_com_resposta %}
+    <ul class="nav nav-pills an-nav gap-1 mb-3 an-sem-impressao">
+      {% for e in analise.etapas_com_resposta %}
+      <li class="nav-item"><a class="nav-link {% if e == etapa %}active{% endif %}" href="{{ url_for('sfa_routes.simulacao_analise', g=ids, etapa=e, visao=visao) }}">{{ ETAPA_ROTULOS[e] }}</a></li>
+      {% endfor %}
+    </ul>
+    {% set perguntas = analise.perguntas[etapa] %}
+    {% for p in perguntas %}
+    {% if loop.first or p.secao != perguntas[loop.index0 - 1].secao %}<h6 class="an-secao">{{ p.secao }}</h6>{% endif %}
+    {% set t = p.colunas.todos %}
+    <article class="an-q" id="q-{{ etapa }}-{{ p.id }}">
+      <h6>{{ p.rotulo }}</h6>
+      <div class="an-q-meta">
+        <span>{{ tipos[p.tipo] }}{% if p.condicional %} · condicional{% endif %}</span>
+        <span class="an-num">Preenchida por {{ t.n_preenchida }} de {{ t.n_exibida }}{% if t.pct_preenchida is not none %} ({{ fmt_pct(t.pct_preenchida) }}){% endif %}{% if t.n_exibida != t.n_respostas %} · exibida a {{ t.n_exibida }} de {{ t.n_respostas }}{% endif %}</span>
+        {% if t.concordancia is not none %}<span class="an-num {% if t.n_preenchida >= 3 and t.concordancia < 0.7 %}baixa{% endif %}">Concordância {{ fmt_pct(t.concordancia) }}</span>{% endif %}
+        {% if p.diferenca is not none and p.diferenca >= 0.1 and visao == 'comparar' %}<span class="an-num {% if p.diferenca >= 0.3 %}baixa{% endif %}">Diferença entre grupos: {{ (p.diferenca * 100)|round|int }} p.p.</span>{% endif %}
+      </div>
+
+      {% if not t.n_preenchida and p.tipo != 'oculto' %}
+      <p class="small text-muted mb-0">{% if t.n_exibida %}Ninguém preencheu esta pergunta.{% else %}Não foi exibida a ninguém (depende de respostas anteriores).{% endif %}</p>
+
+      {% elif p.tipo in ('categorica', 'multipla') %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Resposta</th>{% for c in cols %}<th><span class="an-swatch" style="background: {{ cores_coluna[c.chave] }}"></span>{{ c.rotulo }} <span class="text-muted fw-normal an-num">(n={{ p.colunas[c.chave].n_preenchida }})</span></th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for valor in t.ordem %}
+            <tr {% if not t.opcoes[valor].n %}class="an-zero"{% endif %}>
+              <td>{{ p.opcoes.get(valor, valor) }}</td>
+              {% for c in cols %}
+              {% set r = p.colunas[c.chave] %}{% set o = r.opcoes.get(valor) %}
+              <td class="an-num">{% if r.n_preenchida and o %}{{ barra(o.pct, cores_coluna[c.chave], c.rotulo ~ ': ' ~ fmt_pct(o.pct) ~ ' (' ~ o.n ~ ')') }}{{ fmt_pct(o.pct) }} <span class="text-muted">({{ o.n }})</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% elif p.tipo == 'numerica' %}
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th></th>{% for c in cols %}<th class="text-end"><span class="an-swatch" style="background: {{ cores_coluna[c.chave] }}"></span>{{ c.rotulo }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for rotulo, chave in [('Respostas', 'n'), ('Média', 'media'), ('Mediana', 'mediana'), ('Faixa central (p25–p75)', 'faixa'), ('Mínimo – máximo', 'extremos')] %}
+            <tr><td>{{ rotulo }}</td>{% for c in cols %}{% set e = p.colunas[c.chave].estat %}
+              <td class="text-end an-num">{% if not e %}–{% elif chave == 'n' %}{{ e.n }}{% elif chave == 'faixa' %}{{ fmt_num(e.p25, 1) }} – {{ fmt_num(e.p75, 1) }}{% elif chave == 'extremos' %}{{ fmt_num(e.min, 1) }} – {{ fmt_num(e.max, 1) }}{% else %}{{ fmt_num(e[chave], 1) }}{% endif %}</td>
+            {% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% elif p.tipo == 'data' %}
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th></th>{% for c in cols %}<th class="text-end"><span class="an-swatch" style="background: {{ cores_coluna[c.chave] }}"></span>{{ c.rotulo }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            <tr><td>Data mais informada</td>{% for c in cols %}{% set dd = p.colunas[c.chave].datas %}<td class="text-end an-num">{% if dd %}{{ dd.moda.strftime('%d/%m/%Y') }} <span class="text-muted">({{ dd.n_moda }})</span>{% else %}–{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Intervalo</td>{% for c in cols %}{% set dd = p.colunas[c.chave].datas %}<td class="text-end an-num">{% if dd %}{{ dd.min.strftime('%d/%m/%Y') }} – {{ dd.max.strftime('%d/%m/%Y') }}{% else %}–{% endif %}</td>{% endfor %}</tr>
+          </tbody>
+        </table>
+      </div>
+
+      {% elif p.tipo == 'texto' %}
+      {% if t.textos %}
+      <details {% if t.textos|length <= 4 %}open{% endif %}>
+        <summary class="small">{{ t.textos|length }} resposta{{ '' if t.textos|length == 1 else 's' }} escrita{{ '' if t.textos|length == 1 else 's' }}</summary>
+        <ul class="small mt-2 mb-0">{% for codigo, grupo_nome, texto in t.textos %}<li><span class="text-muted">{{ codigo }}{% if analise.grupos|length > 1 %} · {{ grupo_nome }}{% endif %}:</span> {{ texto }}</li>{% endfor %}</ul>
+      </details>
+      {% else %}<p class="small text-muted mb-0">Nenhuma resposta escrita.</p>{% endif %}
+
+      {% else %}
+      <p class="small text-muted mb-0">Identificador pessoal: o conteúdo não é guardado na simulação, só o fato de ter sido preenchido.</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted mb-0">Nenhuma etapa foi respondida ainda.</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------- Comentários ---------------- #}
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h5 class="mb-1">O que os participantes disseram</h5>
+    <p class="small text-muted">Comentários da avaliação rápida ao final de cada etapa.</p>
+    {% if analise.comentarios %}
+    <div class="table-responsive">
+      <table class="table table-sm align-top mb-0">
+        <thead class="table-light"><tr><th>Etapa</th><th>Grupo</th><th>Participante</th><th>Tipo</th><th>Comentário</th></tr></thead>
+        <tbody>
+          {% for c in analise.comentarios %}
+          <tr><td class="small text-nowrap">{{ c.etapa_rotulo }}</td><td class="small">{{ c.grupo }}</td><td class="small">{{ c.participante }}</td><td class="small text-nowrap">{{ c.tipo }}</td><td class="small" style="white-space:pre-line">{{ c.texto }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nenhum comentário ainda.</p>
+    {% endif %}
+  </div>
+</div>
+
+<p class="small text-muted">Dados de simulação com casos fictícios: servem para avaliar clareza, tempo e consistência dos formulários, não para estimar a situação de saúde da população. Nome, telefone, endereço, cartão SUS e assinaturas não são guardados.</p>
+{% endif %}
+{% endblock %}

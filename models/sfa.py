@@ -33,6 +33,59 @@ class SfaPilotResponse(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class SfaSimulacaoGrupo(db.Model):
+    """Grupo de voluntários que simula o percurso SINAN → T0 → T7 → T30.
+
+    Fica fora da coorte municipal: nada aqui cria SfaPaciente, SINAN ou TCLE.
+    """
+    __tablename__ = 'sfa_simulacao_grupo'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    descricao = db.Column(db.Text, nullable=False, default='')
+    token_convite = db.Column(db.String(64), nullable=False, unique=True)
+    creation_key = db.Column(db.String(64), nullable=False, unique=True)
+    etapas = db.Column(db.String(40), nullable=False, default='sinan,t0,t7,t30')
+    agenda = db.Column(db.String(20), nullable=False, default='imediata')
+    cenarios_json = db.Column(db.Text, nullable=False, default='{}')
+    status = db.Column(db.String(20), nullable=False, default='aberto')
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    participantes = db.relationship('SfaSimulacaoParticipante', backref='grupo',
+                                    order_by='SfaSimulacaoParticipante.id',
+                                    cascade='all, delete-orphan')
+
+
+class SfaSimulacaoParticipante(db.Model):
+    __tablename__ = 'sfa_simulacao_participante'
+    __table_args__ = (UniqueConstraint('grupo_id', 'codigo', name='uq_sfa_simulacao_participante_codigo'),)
+    id = db.Column(db.Integer, primary_key=True)
+    grupo_id = db.Column(db.Integer, db.ForeignKey('sfa_simulacao_grupo.id'), nullable=False, index=True)
+    codigo = db.Column(db.String(12), nullable=False)
+    apelido = db.Column(db.String(60), nullable=False, default='')
+    perfil = db.Column(db.String(60), nullable=False, default='')
+    experiencia_sinan = db.Column(db.String(60), nullable=False, default='')
+    token = db.Column(db.String(64), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    respostas = db.relationship('SfaSimulacaoResposta', backref='participante',
+                                order_by='SfaSimulacaoResposta.enviado_em',
+                                cascade='all, delete-orphan')
+
+
+class SfaSimulacaoResposta(db.Model):
+    __tablename__ = 'sfa_simulacao_resposta'
+    __table_args__ = (UniqueConstraint('participante_id', 'etapa', name='uq_sfa_simulacao_resposta_etapa'),)
+    id = db.Column(db.Integer, primary_key=True)
+    participante_id = db.Column(db.Integer, db.ForeignKey('sfa_simulacao_participante.id'),
+                                nullable=False, index=True)
+    etapa = db.Column(db.String(10), nullable=False)
+    respostas_json = db.Column(db.Text, nullable=False, default='{}')
+    avaliacao_json = db.Column(db.Text, nullable=False, default='{}')
+    erros_json = db.Column(db.Text, nullable=False, default='[]')
+    instrument_version = db.Column(db.String(80), nullable=False, default='')
+    iniciado_em = db.Column(db.DateTime(timezone=True))
+    enviado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    duracao_segundos = db.Column(db.Integer)
+
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------

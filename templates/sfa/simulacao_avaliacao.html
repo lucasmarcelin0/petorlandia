@@ -1,0 +1,39 @@
+{% extends "sfa/simulacao_base.html" %}
+{% block title %}Avaliação d{{ 'a' if etapa == 'sinan' else 'o' }} {{ ETAPA_ROTULOS[etapa] }} · Simulação SFA{% endblock %}
+{% block content %}
+{% set art = 'a' if etapa == 'sinan' else 'o' %}
+{% set valores = form if form else avaliacao %}
+<section class="sim-hero">
+  <span class="sim-eyebrow">ETAPA REGISTRADA ✓</span>
+  <h1>{{ ETAPA_ROTULOS[etapa] }} enviad{{ art }}!</h1>
+  <p>{% if resposta.duracao_segundos is not none %}Você levou cerca de {{ fmt_dur(resposta.duracao_segundos) }} para preencher. {% endif %}Antes de seguir, conte em um minuto como foi. É opcional, e ajuda muito a melhorar o formulário.</p>
+</section>
+
+<section class="sim-card">
+  <h2>Avaliação rápida</h2>
+  {% if erro %}<div class="sim-card sim-card-erro" role="alert">{{ erro }}</div>{% endif %}
+  <form method="post" data-envio-unico>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="sim-field">
+      <fieldset>
+        <legend>Quão fácil foi preencher {{ art }} {{ ETAPA_ROTULOS[etapa] }}?</legend>
+        <div class="sim-escala">
+          {% for valor, rotulo in sim.FACILIDADE %}
+          <label><input type="radio" name="facilidade" value="{{ valor }}" {% if valores.get('facilidade') == valor %}checked{% endif %}><b>{{ valor }}</b>{{ rotulo }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    {% for chave, rotulo in sim.FEEDBACK_TEXTOS %}
+    <div class="sim-field">
+      <label for="{{ chave }}">{{ rotulo }}</label>
+      <textarea id="{{ chave }}" name="{{ chave }}" maxlength="3000">{{ valores.get(chave, '') }}</textarea>
+    </div>
+    {% endfor %}
+    <div class="sim-acoes">
+      <button class="sim-btn" type="submit" name="acao" value="enviar">Enviar avaliação</button>
+      <button class="sim-btn sim-btn-sec" type="submit" name="acao" value="pular" formnovalidate>Pular</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
