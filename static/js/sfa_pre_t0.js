@@ -169,6 +169,40 @@
     aplicarSexo();
   }
 
+  // CEP: ao completar 8 dígitos, consulta /api/cep (mesmo domínio) e preenche logradouro, bairro,
+  // município, código IBGE e UF da residência. Só preenche o que está vazio; digitação livre segue valendo.
+  const campoCep = document.getElementById("input-cep");
+  if (campoCep && typeof fetch === "function") {
+    let ultimoCep = "";
+    const sugestoesMunicipio = Array.from(document.querySelectorAll("#sugestoes-municipio option"));
+    const preencherVazio = (id, valor) => {
+      const alvo = document.getElementById(id);
+      if (alvo && valor && !alvo.value.trim()) alvo.value = String(valor).slice(0, alvo.maxLength > 0 ? alvo.maxLength : undefined);
+    };
+    const consultarCep = async () => {
+      const cep = campoCep.value.replace(/\D/g, "");
+      if (cep.length !== 8 || cep === ultimoCep) return;
+      ultimoCep = cep;
+      try {
+        const resposta = await fetch(`/api/cep/${cep}`, { headers: { Accept: "application/json" } });
+        if (!resposta.ok) return;
+        const corpo = await resposta.json();
+        const d = corpo && corpo.success && corpo.data;
+        if (!d) return;
+        preencherVazio("input-logradouro", d.logradouro);
+        preencherVazio("input-bairro", d.bairro);
+        preencherVazio("input-municipio_residencia", d.localidade);
+        preencherVazio("input-uf_residencia", (d.uf || "").toUpperCase());
+        const conhecida = sugestoesMunicipio.find((o) => o.value.toLowerCase() === String(d.localidade || "").toLowerCase());
+        if (conhecida) preencherVazio("input-codigo_municipio_residencia", conhecida.dataset.codigo);
+      } catch (erro) {
+        ultimoCep = "";
+      }
+    };
+    campoCep.addEventListener("input", consultarCep);
+    campoCep.addEventListener("change", consultarCep);
+  }
+
   form.dataset.ready = "true";
   showStep(0);
 })();
