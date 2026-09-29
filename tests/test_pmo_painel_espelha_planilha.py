@@ -263,3 +263,32 @@ def test_sincronizar_no_painel_tira_da_lista_quem_saiu_da_aba_sem_apagar(app, cl
     volta = db.session.get(PmoVaccinationVisit, bruno_id)
     assert volta.source_row == 6
     assert volta.public_token == bruno_token
+
+
+@pytest.mark.parametrize("coluna, texto", [
+    (9, "Cachorros: Rex / Gatos: Mimi"),
+    (10, "Gatos: tomar cuidado com a Mimi"),
+    (10, "sem perdas"),
+    (10, "dar as sobras de ração"),
+])
+def test_casa_com_texto_de_totais_nos_nomes_ou_na_observacao_continua_na_lista(coluna, texto):
+    """A casa da Ângela sumia: "Gatos:" nos nomes a fazia passar por linha de totais."""
+    linha = [
+        "Ângela Souza", "Rua X", "100", "", "Centro", "16991112222", "",
+        "1", "1", "Rex, Mimi", "", "", "", "", "", "", "29/09/2026", "Tarde",
+    ]
+    linha[coluna] = texto
+
+    parsed = servico.parse_vacina_pmo_rows([linha])
+
+    assert [row["tutor"] for row in parsed] == ["Ângela Souza"]
+
+
+@pytest.mark.parametrize("linha", [
+    ["Total de animais", "", "", "", "", "", "", "10", "3"],
+    ["Cachorros: 10", "", "", "", "", "", "", "", "", "", "", "", "0", "0"],
+    ["Nome completo do tutor", "Endereço", "Número", "", "Bairro", "Telefone"],
+    ["Manhã", "", "", "", "", "", "", "", "", "", "", "", "Sobras", "", "0"],
+])
+def test_linhas_de_totais_e_cabecalho_continuam_fora(linha):
+    assert servico._is_summary_or_header(linha)

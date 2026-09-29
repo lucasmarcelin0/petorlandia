@@ -898,8 +898,16 @@ def _is_summary_or_header(row: list[Any]) -> bool:
         first = values[1]
     if not re.search(r"[a-zA-ZÀ-ú]", first):
         return True
+    # Nomes dos animais (J) e observação (K) são texto livre do tutor e do
+    # vacinador: "Gatos: Mimi" ou "sem perdas" ali não fazem da casa uma linha
+    # de totais. Procurar os marcadores nelas sumia com a casa do painel.
+    offset = _row_column_offset(row)
+    free_text = {9 + offset, 10 + offset}
+    structural = " ".join(
+        value for index, value in enumerate(values) if index not in free_text
+    ).lower()
     return any(
-        marker in joined
+        marker in structural
         for marker in (
             "nome completo do tutor",
             "total de animais",
