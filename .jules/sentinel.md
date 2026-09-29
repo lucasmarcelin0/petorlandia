@@ -23,4 +23,7 @@
 **Learning:** `_sanitize_login_next_url` should safely accept same-origin full URLs matching `request.host` while converting them to local paths, and log statements for external gateway payloads must redact customer PII (`redact_sensitive_text`).
 **Prevention:** Always sanitize redirect parameters with `_sanitize_login_next_url(..., fallback=...)` before rendering or redirecting, and never log raw customer payload objects in payment gateway flows.
 
-
+## 2026-09-29 - TOCTOU DNS Rebinding SSRF in Integration File Downloads
+**Vulnerability:** Integration download functions (`_integration_download_and_store_laudo_file` and `_integration_download_and_store_carteirinha_file`) checked `is_url_ssrf_safe` before issuing `requests.get`, creating a DNS Rebinding (TOCTOU) SSRF window.
+**Learning:** Checking DNS with `is_url_ssrf_safe` and then letting `requests.get` perform a second DNS resolution leaves a window for DNS rebinding attacks to resolve to internal/private IP addresses.
+**Prevention:** Always use `safe_fetch_url` from `security.url_safe` for downloading external HTTP(S) resources, which resolves DNS once and connects directly to the validated IP while maintaining TLS certificate validation.
