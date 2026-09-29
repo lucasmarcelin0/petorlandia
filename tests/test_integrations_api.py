@@ -400,16 +400,17 @@ def test_attach_image_exam_pdf_accepts_arquivo_pdf_contract(app, client, monkeyp
         def iter_content(self, chunk_size=1024 * 1024):
             yield b"%PDF-1.4\nlaudo sid"
 
-    def fake_get(url, timeout=20, stream=True):
+    from security.url_safe import SafeURLResponse
+    def fake_safe_fetch(url, timeout=20, max_bytes=10*1024*1024):
         assert url == "https://files.example.test/sid.pdf"
-        return FakeDownloadResponse()
+        return SafeURLResponse(200, {"content-type": "application/pdf"}, b"%PDF-1.4\nlaudo sid")
 
     def fake_upload(file_storage, filename, folder="uploads"):
         assert folder == "laudos_exames"
         assert filename.endswith("sid.pdf")
         return "/static/uploads/laudos_exames/sid.pdf"
 
-    monkeypatch.setattr(app_module.requests, "get", fake_get)
+    monkeypatch.setattr("security.url_safe.safe_fetch_url", fake_safe_fetch)
     monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
 
     with app.app_context():
@@ -1985,11 +1986,10 @@ def test_mcp_importar_laudo_volante_accepts_chatgpt_file_reference(app, client, 
         def iter_content(self, chunk_size=1024 * 1024):
             yield b"%PDF-1.4\nlaudo de teste"
 
-    def fake_get(url, timeout=20, stream=True):
+    from security.url_safe import SafeURLResponse
+    def fake_safe_fetch(url, timeout=20, max_bytes=10*1024*1024):
         assert url == "https://files.example.test/laudo.pdf"
-        assert timeout == 20
-        assert stream is True
-        return FakeDownloadResponse()
+        return SafeURLResponse(200, {"content-type": "application/pdf"}, b"%PDF-1.4\nlaudo de teste")
 
     def fake_upload(file_storage, filename, folder="uploads"):
         assert folder == "laudos_exames"
@@ -1997,7 +1997,7 @@ def test_mcp_importar_laudo_volante_accepts_chatgpt_file_reference(app, client, 
         assert file_storage.content_type == "application/pdf"
         return "/static/uploads/laudos_exames/salvo-laudo.pdf"
 
-    monkeypatch.setattr(app_module.requests, "get", fake_get)
+    monkeypatch.setattr("security.url_safe.safe_fetch_url", fake_safe_fetch)
     monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
 
     with app.app_context():
@@ -2062,7 +2062,8 @@ def test_mcp_importar_laudo_volante_attaches_file_without_rewriting_existing_exa
         def iter_content(self, chunk_size=1024 * 1024):
             yield b"%PDF-1.4\nlaudo atualizado"
 
-    monkeypatch.setattr(app_module.requests, "get", lambda *args, **kwargs: FakeDownloadResponse())
+    from security.url_safe import SafeURLResponse
+    monkeypatch.setattr("security.url_safe.safe_fetch_url", lambda *args, **kwargs: SafeURLResponse(200, {"content-type": "application/pdf"}, b"%PDF-1.4\nlaudo atualizado"))
     monkeypatch.setattr(
         app_module,
         "upload_to_s3",

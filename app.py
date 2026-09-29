@@ -7503,29 +7503,34 @@ def _integration_extract_pdf_file_reference(payload: dict) -> dict | None:
 
 
 def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
+    from security.url_safe import (
+        ExternalFetchError,
+        ExternalResponseTooLarge,
+        UnsafeExternalURL,
+        safe_fetch_url,
+    )
+
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
+    if parsed.scheme != 'https' or not parsed.netloc:
         raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo-chatgpt.pdf').strip()
     safe_name = secure_filename(original_name) or 'laudo-chatgpt.pdf'
     try:
-        response = requests.get(download_url, timeout=20, stream=True)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        fetch_res = safe_fetch_url(
+            download_url,
+            timeout=20,
+            max_bytes=MAX_MCP_LAUDO_FILE_BYTES,
+        )
+    except ExternalResponseTooLarge as exc:
+        raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.') from exc
+    except UnsafeExternalURL as exc:
+        raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.') from exc
+    except ExternalFetchError as exc:
         raise ValueError('Nao foi possivel baixar o arquivo autorizado pelo ChatGPT. Cole o texto integral do laudo e tente novamente.') from exc
 
-    content = BytesIO()
-    total = 0
-    for chunk in response.iter_content(chunk_size=1024 * 1024):
-        if not chunk:
-            continue
-        total += len(chunk)
-        if total > MAX_MCP_LAUDO_FILE_BYTES:
-            raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.')
-        content.write(chunk)
-    content.seek(0)
+    content = BytesIO(fetch_res.content)
 
     storage = FileStorage(
         stream=content,
@@ -7540,9 +7545,16 @@ def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | No
 
 def _integration_download_and_store_carteirinha_file(file_ref: dict) -> tuple[str, str]:
     """Baixa e preserva uma foto autorizada pelo ChatGPT para auditoria."""
+    from security.url_safe import (
+        ExternalFetchError,
+        ExternalResponseTooLarge,
+        UnsafeExternalURL,
+        safe_fetch_url,
+    )
+
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
+    if parsed.scheme != 'https' or not parsed.netloc:
         raise ValueError('A foto da carteirinha precisa ter uma URL HTTPS autorizada pelo ChatGPT.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'carteirinha.jpg').strip()
@@ -7551,23 +7563,21 @@ def _integration_download_and_store_carteirinha_file(file_ref: dict) -> tuple[st
     if declared_type and not (declared_type.startswith('image/') or declared_type == 'application/pdf'):
         raise ValueError('Envie imagens ou PDF da carteirinha.')
     try:
-        response = requests.get(download_url, timeout=20, stream=True)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        fetch_res = safe_fetch_url(
+            download_url,
+            timeout=20,
+            max_bytes=12 * 1024 * 1024,
+        )
+    except ExternalResponseTooLarge as exc:
+        raise ValueError('Cada arquivo da carteirinha deve ter no maximo 12 MB.') from exc
+    except UnsafeExternalURL as exc:
+        raise ValueError('A foto da carteirinha precisa ter uma URL HTTPS autorizada pelo ChatGPT.') from exc
+    except ExternalFetchError as exc:
         raise ValueError('Nao foi possivel baixar a foto autorizada pelo ChatGPT. Tente enviar novamente.') from exc
 
-    content = BytesIO()
-    total = 0
-    for chunk in response.iter_content(chunk_size=1024 * 1024):
-        if not chunk:
-            continue
-        total += len(chunk)
-        if total > 12 * 1024 * 1024:
-            raise ValueError('Cada arquivo da carteirinha deve ter no maximo 12 MB.')
-        content.write(chunk)
-    content.seek(0)
-
-    content_type = declared_type or response.headers.get('Content-Type', 'application/octet-stream').split(';', 1)[0]
+    content = BytesIO(fetch_res.content)
+    raw_content_type = fetch_res.headers.get('Content-Type') or fetch_res.headers.get('content-type') or 'application/octet-stream'
+    content_type = declared_type or raw_content_type.split(';', 1)[0].lower()
     if not (content_type.startswith('image/') or content_type == 'application/pdf'):
         raise ValueError('O arquivo da carteirinha nao parece ser uma imagem ou PDF valido.')
     storage = FileStorage(stream=content, filename=safe_name, content_type=content_type)
@@ -12023,7 +12033,7 @@ def _tratamento_acompanhamento_or_404(tratamento_id):
 
 
 #Delivery routes
- 
+
 
 
 
@@ -13500,11 +13510,11 @@ def _parse_mp_datetime(value):
 def verify_mp_signature(req, secret: str) -> bool:
     """
     Verify the signature of a Mercado Pago webhook notification.
-    
+
     Args:
         req: Flask request object
         secret: Webhook secret key from Mercado Pago
-    
+
     Returns:
         bool: True if signature is valid, False otherwise
     """
