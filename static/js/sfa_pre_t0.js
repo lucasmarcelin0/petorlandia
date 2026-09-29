@@ -96,6 +96,54 @@
     });
   });
 
+  // Data de nascimento <-> idade: preencher um atualiza o outro (vale o último campo editado).
+  // A data derivada da idade é só uma estimativa e vem sinalizada para o usuário corrigir.
+  const nascimento = document.getElementById("input-data_nascimento");
+  const idadeValor = document.getElementById("input-idade_valor");
+  const idadeUnidade = document.getElementById("input-idade_unidade");
+  if (nascimento && idadeValor && idadeUnidade) {
+    const aviso = document.createElement("p");
+    aviso.className = "field-hint";
+    aviso.hidden = true;
+    aviso.textContent = "Data estimada a partir da idade. Corrija se souber a data real.";
+    nascimento.insertAdjacentElement("afterend", aviso);
+    const pad = (n) => String(n).padStart(2, "0");
+    const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const hoje = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+
+    const idadeDaData = () => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(nascimento.value);
+      if (!m) return;
+      const nasc = new Date(+m[1], +m[2] - 1, +m[3]);
+      const ref = hoje();
+      if (nasc > ref) return;
+      let anos = ref.getFullYear() - nasc.getFullYear();
+      if (ref.getMonth() < nasc.getMonth() || (ref.getMonth() === nasc.getMonth() && ref.getDate() < nasc.getDate())) anos -= 1;
+      if (anos >= 1) { idadeValor.value = anos; idadeUnidade.value = "4"; return; }
+      let meses = (ref.getFullYear() - nasc.getFullYear()) * 12 + ref.getMonth() - nasc.getMonth();
+      if (ref.getDate() < nasc.getDate()) meses -= 1;
+      if (meses >= 1) { idadeValor.value = meses; idadeUnidade.value = "3"; return; }
+      idadeValor.value = Math.round((ref - nasc) / 86400000);
+      idadeUnidade.value = "2";
+    };
+
+    const dataDaIdade = () => {
+      const n = parseInt(idadeValor.value, 10);
+      const un = idadeUnidade.value;
+      if (!Number.isFinite(n) || n < 0 || !un) return;
+      const d = hoje();
+      if (un === "4") d.setFullYear(d.getFullYear() - n);
+      else if (un === "3") d.setMonth(d.getMonth() - n);
+      else if (un === "2") d.setDate(d.getDate() - n);
+      nascimento.value = iso(d);
+      aviso.hidden = false;
+    };
+
+    nascimento.addEventListener("change", () => { aviso.hidden = true; idadeDaData(); });
+    idadeValor.addEventListener("input", dataDaIdade);
+    idadeUnidade.addEventListener("change", dataDaIdade);
+  }
+
   form.dataset.ready = "true";
   showStep(0);
 })();
