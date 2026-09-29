@@ -634,6 +634,11 @@ def _variaveis_sinan(schema: dict) -> list[dict]:
     variaveis = []
     for secao in schema.get("sections", []):
         titulo = secao.get("title", "")
+        if secao.get("exames"):
+            opcoes = [(exame["id"], exame["rotulo"]) for exame in schema.get("exames", [])]
+            opcoes.append((schema.get("nenhum_exame", "nenhum"), "Nenhum exame até agora"))
+            variaveis.append(_var("exames_realizados", "Exames coletados neste caso", titulo, "multipla",
+                                  _get("exames_realizados"), opcoes))
         for campo in secao.get("fields", []):
             tipo, chave = campo["type"], campo["key"]
             numero = str(campo.get("number") or "")

@@ -7,7 +7,11 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#103f46">
   <title>Ficha SINAN antes do T0 · SFA Orlândia</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260928a">
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260929a">
 </head>
 <body>
   <main class="pre-t0-shell">
@@ -70,11 +74,19 @@
       {% for section in schema.sections %}
       <fieldset class="step-panel{% if loop.first %} is-active{% endif %}" data-step-panel="{{ loop.index0 }}" aria-labelledby="step-title-{{ loop.index }}">
         <legend class="sr-only">{{ section.title }}</legend>
-        <div class="section-heading"><div class="section-kicker">ETAPA {{ "%02d"|format(loop.index) }}</div><h2 id="step-title-{{ loop.index }}">{{ section.title }}</h2><p>{% if section.title == 'Dados Gerais' %}Identifique a notificação e registre quando começou a investigação.{% elif section.title == 'Notificação Individual' %}Dados de identificação conforme as opções da ficha SINAN.{% elif 'Residência' in section.title %}Endereço e localização da pessoa notificada.{% elif 'clínicos e laboratoriais — Investigação' in section.title %}Informações iniciais da investigação.{% elif section.title == 'Dados clínicos' %}Marque a resposta de cada sinal e condição pré-existente.{% elif section.title == 'Dados laboratoriais' %}Datas e resultados disponíveis na ficha.{% elif section.title == 'Hospitalização' %}Preencha se a pessoa foi internada.{% elif 'Local Provável' in section.title %}Local provável de infecção nos 15 dias anteriores.{% elif section.title == 'Conclusão' %}Classificação e evolução informadas na ficha.{% elif 'Dengue com Sinais' in section.title %}Sinais de alarme e gravidade conforme o formulário original.{% elif section.title == 'Cabeçalho' %}Comece com o número impresso na ficha de notificação.{% else %}Informações de observação e identificação de quem investigou.{% endif %}</p></div>
+        <div class="section-heading"><div class="section-kicker">ETAPA {{ "%02d"|format(loop.index) }}</div><h2 id="step-title-{{ loop.index }}">{{ section.title }}</h2><p>{% if section.title == 'Dados Gerais' %}Identifique a notificação e registre quando começou a investigação.{% elif section.title == 'Notificação Individual' %}Dados de identificação conforme as opções da ficha SINAN.{% elif 'Residência' in section.title %}Endereço e localização da pessoa notificada.{% elif 'clínicos e laboratoriais — Investigação' in section.title %}Informações iniciais da investigação.{% elif section.title == 'Dados clínicos' %}Marque só os sinais e as condições presentes; o restante fica como “Não”.{% elif section.title == 'Dados laboratoriais' %}Escolha os exames coletados; só eles pedem data e resultado.{% elif section.title == 'Hospitalização' %}Preencha se a pessoa foi internada.{% elif 'Local Provável' in section.title %}Local provável de infecção nos 15 dias anteriores.{% elif section.title == 'Conclusão' %}Classificação e evolução informadas na ficha.{% elif 'Dengue com Sinais' in section.title %}Sinais de alarme e gravidade conforme o formulário original.{% elif section.title == 'Cabeçalho' %}Comece com o número impresso na ficha de notificação.{% else %}Informações de observação e identificação de quem investigou.{% endif %}</p></div>
 
         <div class="field-grid">
+          {% if section.exames %}
+          {% set exames_marcados = submitted.getlist('exames_realizados') if submitted.getlist is defined else [] %}
+          <article class="field-card field-wide exames-card" data-exames-escolha>
+            <span class="field-label"><span class="question-title"><span>Quais exames foram coletados neste caso?</span></span></span>
+            <p class="field-hint">Só os exames marcados pedem data e resultado. Os demais são registrados como “4 - Não realizado”.</p>
+            <div class="flag-list">{% for exame in schema.exames %}<label class="flag-choice"><input type="checkbox" name="exames_realizados" value="{{ exame.id }}" {% if exame.id in exames_marcados %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ exame.rotulo }}</span></label>{% endfor %}<label class="flag-choice"><input type="checkbox" name="exames_realizados" value="{{ schema.nenhum_exame }}" data-exame-nenhum {% if schema.nenhum_exame in exames_marcados %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>Nenhum exame até agora</span></label></div>
+          </article>
+          {% endif %}
           {% for field in section.fields %}
-          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}" data-field-card="{{ field.key }}">
+          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}" data-field-card="{{ field.key }}"{% if field.exames %} data-exames="{{ field.exames|join(' ') }}"{% endif %}>
             {% if field.type == 'fixed' %}
               {{ question_label(field) }}
               <input type="hidden" name="{{ field.key }}" value="{{ field.value }}">
@@ -101,12 +113,15 @@
               <div class="age-row"><label class="sr-only" for="input-idade_valor">Idade</label><input id="input-idade_valor" name="idade_valor" type="number" min="0" max="999999" inputmode="numeric" placeholder="Idade" value="{{ submitted.get('idade_valor', '') }}"><label class="sr-only" for="input-idade_unidade">Unidade da idade</label><select id="input-idade_unidade" name="idade_unidade"><option value="">Unidade</option>{% for option in field.units %}<option value="{{ option.value }}" {% if submitted.get('idade_unidade') == option.value %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
 
             {% elif field.type == 'matrix' %}
-              <div class="matrix-heading"><span class="field-label">{{ question_label(field) }}</span><span class="matrix-options">{% for option in field.options %}<span>{{ option.label }}</span>{% endfor %}</span></div>
-              <div class="matrix-list">
-                {% for item_key, item_label in field['items'] %}
-                <div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><div class="matrix-answer" role="radiogroup" aria-label="{{ item_label }}">{% for option in field.options %}<label class="matrix-choice"><input type="radio" name="{{ field.key }}__{{ item_key }}" value="{{ option.value }}" {% if submitted.get(field.key ~ '__' ~ item_key) == option.value %}checked{% endif %}><span>{{ option.value }}</span><span class="sr-only">{{ option.label }}</span></label>{% endfor %}</div></div>
-                {% endfor %}
-              </div>
+              {# Só os presentes são marcados; o servidor grava os demais como "2 - Não"
+                 (ou "9 - Ignorado" quando não foi possível perguntar). #}
+              <span class="field-label">{{ question_label(field) }}</span>
+              <p class="field-hint">Marque só o que está presente. Os itens sem marcação são registrados como “2 - Não”.</p>
+              <input type="hidden" name="{{ field.key }}__modo" value="positivos">
+              <div class="flag-list positivos-list">{% for item_key, item_label in field['items'] %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}</div>
+              {% if field.options|selectattr('value', 'equalto', '9')|list %}
+              <label class="flag-choice matrix-ignorado"><input type="checkbox" name="{{ field.key }}__ignorado" value="1" {% if submitted.get(field.key ~ '__ignorado') == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>Não foi possível perguntar: registrar os itens sem marcação como “9 - Ignorado”</span></label>
+              {% endif %}
 
             {% elif field.type == 'flag_matrix' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -149,6 +164,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260928a" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929a" defer></script>
 </body>
 </html>

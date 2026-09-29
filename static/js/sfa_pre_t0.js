@@ -75,6 +75,47 @@
     }
   });
 
+  // Etapas com campo obrigatório ainda vazio ganham um aviso na barra, para
+  // ninguém descobrir só no fim qual passo faltou.
+  const dotLabels = dots.map((dot) => dot.getAttribute("aria-label") || "");
+  function marcarPendencias() {
+    panels.forEach((panel, position) => {
+      const dot = dots[position];
+      if (!dot) return;
+      const pendente = Array.from(panel.querySelectorAll("input, select, textarea"))
+        .some((control) => control.required && control.willValidate && !control.checkValidity());
+      dot.classList.toggle("has-pending", pendente);
+      dot.setAttribute("aria-label", pendente ? `${dotLabels[position]} (campo obrigatório pendente)` : dotLabels[position]);
+      dot.title = pendente ? "Esta etapa tem campo obrigatório pendente" : "";
+    });
+  }
+  form.addEventListener("input", marcarPendencias);
+  form.addEventListener("change", marcarPendencias);
+
+  // Exames: só os coletados mostram data e resultado.
+  const escolha = form.querySelector("[data-exames-escolha]");
+  if (escolha) {
+    const caixas = Array.from(escolha.querySelectorAll('input[name="exames_realizados"]'));
+    const nenhum = escolha.querySelector("[data-exame-nenhum]");
+    const cartoes = Array.from(form.querySelectorAll("[data-exames]"));
+    const aplicarExames = () => {
+      const marcados = new Set(caixas.filter((caixa) => caixa.checked && caixa !== nenhum).map((caixa) => caixa.value));
+      cartoes.forEach((cartao) => {
+        cartao.hidden = !cartao.dataset.exames.split(" ").some((id) => marcados.has(id));
+      });
+    };
+    escolha.addEventListener("change", (event) => {
+      if (event.target === nenhum && nenhum.checked) {
+        caixas.forEach((caixa) => { if (caixa !== nenhum) caixa.checked = false; });
+      } else if (event.target !== nenhum && event.target.checked && nenhum) {
+        nenhum.checked = false;
+      }
+      aplicarExames();
+    });
+    aplicarExames();
+  }
+
   form.dataset.ready = "true";
   showStep(0);
+  marcarPendencias();
 })();

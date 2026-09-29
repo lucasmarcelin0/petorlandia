@@ -124,6 +124,15 @@
       margin-bottom: 1rem;
     }
 
+    .section-step {
+      margin-bottom: 0.3rem;
+      color: var(--sfa-teal);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
     .section-head h2 {
       margin: 0;
       font-size: 1.2rem;
@@ -342,6 +351,10 @@
       }
     }
   </style>
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
 </head>
 <body>
   <div class="wrap">
@@ -367,6 +380,7 @@
       {% for section in schema.sections %}
       <section class="section">
         <div class="section-head">
+          <div class="section-step">Seção {{ loop.index }} de {{ schema.sections|length }}</div>
           <h2>{{ section.title }}</h2>
           {% if section.description %}
           <p>{{ section.description }}</p>

@@ -175,6 +175,24 @@ FIELD_SPECS: dict[str, dict] = {
 }
 
 
+# Exames na ordem da rotina: o NS1 é o mais feito e o RT-PCR é garantido.
+# Quem preenche marca primeiro o que foi coletado; só esses pedem data e
+# resultado, e os demais ficam como "4 - Não realizado".
+EXAMES_LABORATORIAIS = [
+    {"id": "ns1", "rotulo": "NS1", "campos": ["ns1_data_coleta", "ns1_resultado"]},
+    {"id": "rt_pcr", "rotulo": "RT-PCR", "campos": ["rt_pcr_data", "rt_pcr_resultado", "sorotipo"]},
+    {"id": "igm_dengue", "rotulo": "Sorologia IgM dengue", "campos": ["dengue_igm_data", "dengue_igm_resultado"]},
+    {"id": "igm_chikungunya", "rotulo": "Sorologia IgM chikungunya (S1/S2)",
+     "campos": ["chikungunya_s1_data", "chikungunya_s2_data", "prnt_resultado"]},
+    {"id": "prnt", "rotulo": "PRNT", "campos": ["prnt_data", "prnt_resultado"]},
+    {"id": "isolamento", "rotulo": "Isolamento viral", "campos": ["isolamento_data", "isolamento_resultado", "sorotipo"]},
+    {"id": "histopatologia", "rotulo": "Histopatologia", "campos": ["histopatologia_resultado"]},
+    {"id": "imunohistoquimica", "rotulo": "Imuno-histoquímica", "campos": ["imunohistoquimica_resultado"]},
+]
+NENHUM_EXAME = "nenhum"
+NAO_REALIZADO = "4"
+
+
 def carregar_esquema_pre_t0() -> dict:
     """Combina a redação da ficha fonte com os controles eletrônicos."""
     try:
@@ -193,10 +211,13 @@ def carregar_esquema_pre_t0() -> dict:
             spec = FIELD_SPECS.get(lookup)
             if not spec:
                 raise RuntimeError(f"Campo SINAN sem controle eletrônico definido: {number or label}")
-            section["fields"].append({**source_field, **spec, "number": number})
+            exames = [exame["id"] for exame in EXAMES_LABORATORIAIS if spec["key"] in exame["campos"]]
+            section["fields"].append({**source_field, **spec, "number": number, "exames": exames})
+        section["exames"] = any(field["exames"] for field in section["fields"])
         sections.append(section)
     return {"title": raw.get("titulo", "Ficha de Investigação"), "version": raw.get("versao", ""),
-            "definitions": raw.get("definicoes", []), "sections": sections}
+            "definitions": raw.get("definicoes", []), "sections": sections,
+            "exames": EXAMES_LABORATORIAIS, "nenhum_exame": NENHUM_EXAME}
 
 
 def _field_text(form, name: str, maximum: int, *, required: bool = False, numeric: bool = False, uppercase: bool = False) -> str:
@@ -261,6 +282,17 @@ def _answer_field(form, field: dict) -> object:
         return {"valor": value, "unidade": unit}
     if kind == "matrix":
         answers = {}
+        if str(form.get(f"{key}__modo") or "").strip() == "positivos":
+            # Só os presentes são marcados; o resto vira "Não", ou "Ignorado"
+            # quando não foi possível perguntar e a ficha prevê essa opção.
+            ignorado = (str(form.get(f"{key}__ignorado") or "") == "1"
+                        and any(option["value"] == "9" for option in field["options"]))
+            for item_key, _label in field["items"]:
+                value = str(form.get(f"{key}__{item_key}") or "").strip()
+                if value not in {"", "1"}:
+                    raise ValueError("Uma das opções enviadas não pertence a esta ficha.")
+                answers[item_key] = "1" if value == "1" else ("9" if ignorado else "2")
+            return answers
         for item_key, _label in field["items"]:
             value = _field_choice(form, f"{key}__{item_key}", field["options"])
             if value:
@@ -305,6 +337,40 @@ def _answer_field(form, field: dict) -> object:
     raise ValueError("A ficha contém um controle desconhecido.")
 
 
+def _exames_marcados(form) -> list[str] | None:
+    """None quando a pergunta ficou sem resposta: aí nada é presumido."""
+    valores = [str(v).strip() for v in (form.getlist("exames_realizados") if hasattr(form, "getlist") else [])]
+    valores = [v for v in valores if v]
+    if not valores:
+        return None
+    validos = {exame["id"] for exame in EXAMES_LABORATORIAIS} | {NENHUM_EXAME}
+    if any(valor not in validos for valor in valores):
+        raise ValueError("Uma das opções enviadas não pertence a esta ficha.")
+    if NENHUM_EXAME in valores and len(valores) > 1:
+        raise ValueError("Marque os exames coletados ou “Nenhum exame até agora”, não os dois.")
+    return [exame["id"] for exame in EXAMES_LABORATORIAIS if exame["id"] in valores]
+
+
+def _aplicar_exames_marcados(answers: dict, schema: dict, marcados: list[str]) -> None:
+    ativos = {campo for exame in EXAMES_LABORATORIAIS if exame["id"] in marcados for campo in exame["campos"]}
+    campos = {field["key"]: field for section in schema["sections"] for field in section["fields"]}
+    for exame in EXAMES_LABORATORIAIS:
+        for chave in exame["campos"]:
+            if chave in ativos or chave not in campos:
+                continue
+            field = campos[chave]
+            # Pelo rótulo, não só pelo código: no sorotipo o "4" é DENV 4.
+            realizavel = any(option["value"] == NAO_REALIZADO and "não realizado" in option["label"].lower()
+                             for option in field.get("options", []))
+            if field["type"] == "test_result":
+                answers[chave] = {"amostras": [], "resultado": NAO_REALIZADO}
+            elif field["type"] == "radio":
+                answers[chave] = NAO_REALIZADO if realizavel else ""
+            else:
+                answers[chave] = ""
+    answers["exames_realizados"] = marcados or [NENHUM_EXAME]
+
+
 def coletar_respostas_pre_t0(form, schema: dict | None = None) -> dict:
     schema = schema or carregar_esquema_pre_t0()
     answers = {}
@@ -313,6 +379,9 @@ def coletar_respostas_pre_t0(form, schema: dict | None = None) -> dict:
             if field["key"] in answers:
                 raise RuntimeError("A ficha contém identificadores duplicados.")
             answers[field["key"]] = _answer_field(form, field)
+    marcados = _exames_marcados(form)
+    if marcados is not None:
+        _aplicar_exames_marcados(answers, schema, marcados)
     return answers
 
 

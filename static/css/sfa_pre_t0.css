@@ -146,6 +146,12 @@ form { margin-top: 15px; }
 .field-hint { margin: -3px 0 11px; color: var(--muted); font-size: 11px; }
 .matrix-hint { margin: 12px 0 7px; }
 .flag-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.positivos-list { margin-top: 8px; }
+.matrix-ignorado { margin-top: 10px; border-style: dashed; }
+.exames-card { border-color: #cfe3dd; background: #f7fbf9; }
+.field-card[hidden] { display: none !important; }
+.step-dot.has-pending span { border-color: #c8741d; box-shadow: 0 0 0 3px #fbe5c8; }
+.step-dot.has-pending::before { content: ""; position: absolute; top: -3px; left: calc(50% + 6px); z-index: 2; width: 8px; height: 8px; border: 2px solid #fff; border-radius: 50%; background: #c8741d; }
 .flag-choice { display: flex; align-items: flex-start; gap: 9px; min-height: 40px; padding: 10px 11px; border: 1px solid #e7ece9; border-radius: 9px; color: #40595d; background: #fff; font-size: 11px; line-height: 1.4; cursor: pointer; transition: all .15s ease; }
 .flag-choice:hover { border-color: #a9cbc1; background: #f7fbf8; }
 .flag-choice:has(input:checked) { border-color: #8db9ad; color: var(--teal-deep); background: #edf6f2; }
