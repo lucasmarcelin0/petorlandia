@@ -11,6 +11,7 @@ import secrets
 import unicodedata
 import urllib.parse
 from dataclasses import dataclass
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -2692,8 +2693,15 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
             sheet_gid = latest.sheet_gid
             sheet_title = latest.sheet_title
 
+    # ``source_row`` <= 0 é visita estacionada: a linha saiu da aba e o
+    # registro só ficou guardado pelo trabalho de campo (ver a poda em
+    # ``persist_vacina_pmo_rows``). O painel espelha a planilha, como a folha
+    # impressa: sem esse filtro a estacionada aparecia no topo da lista e o
+    # tutor que mudou de linha surgia duas vezes. A dose dela continua
+    # contando e chega à linha viva como "já imunizado".
     visits = (
         _query_sheet_visits(sheet_gid=sheet_gid, sheet_title=sheet_title)
+        .filter(PmoVaccinationVisit.source_row > 0)
         .order_by(PmoVaccinationVisit.source_row.asc(), PmoVaccinationVisit.id.asc())
         .all()
     )
@@ -3154,6 +3162,153 @@ def undo_last_vacina_pmo_route_optimization(*, sheet_gid: str = "", sheet_title:
     }
 
 
+def _pmo_row_identity(row: dict[str, Any]) -> SimpleNamespace:
+    """A linha da planilha no formato que as comparações entre visitas esperam."""
+    return SimpleNamespace(
+        tutor_name=row.get("tutor") or "",
+        address=row.get("address") or "",
+        phone1=row.get("phone1") or "",
+        phone2=row.get("phone2") or "",
+    )
+
+
+def _pmo_name_key(name: Any) -> tuple[str, str] | None:
+    """Primeiro nome + último sobrenome: o mínimo que ``_same_person_name`` exige igual."""
+    tokens = _person_name_tokens(name)
+    return (tokens[0], tokens[-1]) if tokens else None
+
+
+def _pmo_same_row_signal(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
+    """Na mesma linha, telefone ou endereço em comum: é o nome que foi redigitado."""
+    if _pmo_visit_phones(visit) & _pmo_visit_phones(identity):
+        return True
+    address = _pmo_address_slug(visit.address)
+    return bool(address) and address == _pmo_address_slug(identity.address)
+
+
+def _pmo_plan_sheet_visits(
+    rows_by_source: dict[int, dict[str, Any]],
+    existing: list[PmoVaccinationVisit],
+) -> dict[int, PmoVaccinationVisit | None]:
+    """Qual registro do banco representa cada linha viva da aba.
+
+    O casamento era só pelo número da linha. Bastava inserir, apagar ou mover
+    uma linha na planilha para a visita da linha N receber os dados de outra
+    pessoa — herdando os status de vacina dela — enquanto o registro de quem
+    mudou de lugar sobrava no banco e o tutor aparecia duas vezes no painel.
+    Agora o registro acompanha a pessoa:
+
+    1. mesma pessoa na mesma linha: nada muda;
+    2. a pessoa mudou de linha: o registro vai junto (inclusive um que tinha
+       sido estacionado quando a linha dela sumiu);
+    3. mesma linha com o nome redigitado (telefone ou endereço iguais): fica;
+    4. outra pessoa na linha: o registro antigo só é reaproveitado se não
+       guarda trabalho de campo — vacina aplicada pertence à casa que a
+       recebeu, não ao vizinho que herdou a linha.
+
+    ``None`` no plano significa visita nova.
+    """
+    identities = {row: _pmo_row_identity(data) for row, data in rows_by_source.items()}
+    order = sorted(identities)
+    at_row = {visit.source_row: visit for visit in existing if (visit.source_row or 0) > 0}
+    plan: dict[int, PmoVaccinationVisit | None] = {}
+    claimed: set[int] = set()
+
+    def claim(row: int, visit: PmoVaccinationVisit) -> None:
+        plan[row] = visit
+        claimed.add(visit.id)
+
+    def unclaimed_at(row: int) -> PmoVaccinationVisit | None:
+        visit = at_row.get(row)
+        return visit if visit is not None and visit.id not in claimed else None
+
+    for row in order:
+        visit = unclaimed_at(row)
+        if visit is not None and _same_person_name(visit.tutor_name, identities[row].tutor_name):
+            claim(row, visit)
+
+    by_name: dict[tuple[str, str], list[PmoVaccinationVisit]] = {}
+    for visit in existing:
+        key = _pmo_name_key(visit.tutor_name)
+        if key and visit.id not in claimed:
+            by_name.setdefault(key, []).append(visit)
+    for row in order:
+        if row in plan:
+            continue
+        identity = identities[row]
+        candidates = [
+            visit
+            for visit in by_name.get(_pmo_name_key(identity.tutor_name), ())
+            if visit.id not in claimed
+            and _same_person_name(visit.tutor_name, identity.tutor_name)
+            and _pmo_same_household(visit, identity)
+        ]
+        if candidates:
+            # Primeiro quem ainda está na lista do dia; entre os estacionados,
+            # o que guarda trabalho de campo.
+            claim(row, min(
+                candidates,
+                key=lambda visit: (
+                    (visit.source_row or 0) <= 0,
+                    not _pmo_visit_has_field_record(visit),
+                    -(visit.id or 0),
+                ),
+            ))
+
+    for row in order:
+        if row in plan:
+            continue
+        visit = unclaimed_at(row)
+        if visit is not None and _pmo_same_row_signal(visit, identities[row]):
+            claim(row, visit)
+
+    for row in order:
+        if row in plan:
+            continue
+        visit = unclaimed_at(row)
+        if visit is not None and not _pmo_visit_has_field_record(visit):
+            claim(row, visit)
+        else:
+            plan[row] = None
+    return plan
+
+
+def _pmo_apply_sheet_plan(
+    plan: dict[int, PmoVaccinationVisit | None],
+    existing: list[PmoVaccinationVisit],
+) -> None:
+    """Leva cada registro à linha do plano sem ferir a unicidade (aba, linha).
+
+    Quem muda de linha e quem perdeu a linha para outra pessoa passam antes
+    por um ``source_row`` negativo e único. Quem perdeu a linha fica ali:
+    estacionado, fora da lista do dia, com o histórico preservado — a poda
+    decide depois se ele some de vez.
+    """
+    destination = {visit.id: row for row, visit in plan.items() if visit is not None}
+    parking = [
+        visit
+        for visit in existing
+        if (visit.source_row or 0) > 0
+        and (
+            destination.get(visit.id, visit.source_row) != visit.source_row
+            or (visit.id not in destination and visit.source_row in plan)
+        )
+    ]
+    moving = [
+        (visit, row)
+        for row, visit in plan.items()
+        if visit is not None and visit.source_row != row
+    ]
+    if not parking and not moving:
+        return
+    for visit in parking:
+        visit.source_row = -abs(visit.id)
+    db.session.flush()
+    for visit, row in moving:
+        visit.source_row = row
+    db.session.flush()
+
+
 def persist_vacina_pmo_rows(
     rows: list[dict[str, Any]],
     *,
@@ -3161,22 +3316,51 @@ def persist_vacina_pmo_rows(
     sheet_gid: str,
     sheet_title: str,
     prune_orphans: bool = False,
+    park_orphans: bool = False,
 ) -> list[dict[str, Any]]:
+    """Grava as linhas lidas da aba e devolve as visitas serializadas.
+
+    ``prune_orphans`` apaga as visitas cujas linhas saíram da aba (as que têm
+    trabalho de campo só são estacionadas). ``park_orphans`` é a versão que
+    nunca apaga: estaciona todas, e elas voltam se a pessoa reaparecer na aba.
+    """
     now = utcnow()
     saved: list[PmoVaccinationVisit] = []
+
+    # A aba mestre tem conciliação própria (scripts/sync_pmo_master_status_notes)
+    # e, sem gid, a consulta misturaria abas diferentes: nesses casos segue o
+    # casamento antigo, só pelo número da linha.
+    plan: dict[int, PmoVaccinationVisit | None] | None = None
+    if sheet_gid and not _pmo_is_master_sheet(sheet_title):
+        rows_by_source: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            source_row = int(row.get("sourceRow") or 0)
+            if source_row > 0:
+                rows_by_source.setdefault(source_row, row)
+        existing = (
+            PmoVaccinationVisit.query.options(joinedload(PmoVaccinationVisit.animals))
+            .filter_by(spreadsheet_id=spreadsheet_id, sheet_gid=sheet_gid)
+            .all()
+        )
+        plan = _pmo_plan_sheet_visits(rows_by_source, existing)
+        _pmo_apply_sheet_plan(plan, existing)
+
     for row in rows:
         source_row = int(row.get("sourceRow") or 0)
         if source_row <= 0:
             continue
 
-        visit = (
-            PmoVaccinationVisit.query.filter_by(
-                spreadsheet_id=spreadsheet_id,
-                sheet_gid=sheet_gid,
-                source_row=source_row,
+        if plan is not None:
+            visit = plan.get(source_row)
+        else:
+            visit = (
+                PmoVaccinationVisit.query.filter_by(
+                    spreadsheet_id=spreadsheet_id,
+                    sheet_gid=sheet_gid,
+                    source_row=source_row,
+                )
+                .first()
             )
-            .first()
-        )
         if not visit:
             visit = PmoVaccinationVisit(
                 spreadsheet_id=spreadsheet_id,
@@ -3256,8 +3440,9 @@ def persist_vacina_pmo_rows(
     # Remove registros órfãos: linhas que existiam no banco para esta aba mas
     # não aparecem mais na planilha (ex.: tutor removido da lista do dia).
     # Só roda quando solicitado e nunca na aba mestre, para não apagar o
-    # histórico compilado do Status PMO.
-    if prune_orphans and sheet_gid and not _pmo_is_master_sheet(sheet_title):
+    # histórico compilado do Status PMO. Com ``park_orphans`` nada é apagado:
+    # a visita só sai da lista do dia.
+    if (prune_orphans or park_orphans) and sheet_gid and not _pmo_is_master_sheet(sheet_title):
         live_rows = {
             int(row.get("sourceRow") or 0)
             for row in rows
@@ -3271,7 +3456,7 @@ def persist_vacina_pmo_rows(
                 .all()
             )
             for stale_visit in stale:
-                if _pmo_visit_has_field_record(stale_visit):
+                if not prune_orphans or _pmo_visit_has_field_record(stale_visit):
                     # Aqui houve trabalho de campo: animal vacinado ou
                     # dispensado por imunidade. Uma linha que mudou de lugar na
                     # planilha não pode apagar isso — junto iriam o status, a
