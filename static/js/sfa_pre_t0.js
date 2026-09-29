@@ -228,6 +228,62 @@
     autoctone.forEach((r) => r.addEventListener("change", copiarResidencia));
   }
 
+  // Sinais de alarme / dengue grave: com resposta "Não" (2), esconde a lista de sinais e a data de início.
+  // O que estava marcado é guardado e limpo (nada contraditório é enviado) e volta se a resposta mudar.
+  [["sinais_alarme", "data_inicio_sinais_alarme"], ["dengue_grave", "data_inicio_sinais_gravidade"]].forEach(([chave, chaveData]) => {
+    const cartao = form.querySelector(`[data-field-card="${chave}"]`);
+    if (!cartao) return;
+    const cartaoData = form.querySelector(`[data-field-card="${chaveData}"]`);
+    const radios = Array.from(cartao.querySelectorAll(`input[type="radio"][name="${chave}"]`));
+    const blocos = Array.from(cartao.querySelectorAll(".matrix-hint, .flag-list, .severity-groups"));
+    const alvos = [...blocos, ...(cartaoData ? [cartaoData] : [])];
+    const campos = alvos.flatMap((el) => Array.from(el.querySelectorAll("input")));
+    let guardado = null;
+    const aplicar = () => {
+      const nao = radios.some((r) => r.checked && r.value === "2");
+      const escondido = alvos[0] && alvos[0].style.display === "none";
+      if (nao && !escondido) {
+        guardado = campos.map((c) => (c.type === "checkbox" ? c.checked : c.value));
+        campos.forEach((c) => { if (c.type === "checkbox") c.checked = false; else c.value = ""; });
+        alvos.forEach((el) => { el.style.display = "none"; });
+      } else if (!nao && escondido) {
+        alvos.forEach((el) => { el.style.display = ""; });
+        if (guardado) campos.forEach((c, i) => { if (c.type === "checkbox") c.checked = guardado[i]; else c.value = guardado[i]; });
+        guardado = null;
+      }
+    };
+    radios.forEach((r) => r.addEventListener("change", aplicar));
+    aplicar();
+  });
+
   form.dataset.ready = "true";
   showStep(0);
+
+  // Erro devolvido pelo servidor: abre a etapa do campo, destaca o cartão, mostra a mensagem ali e foca no campo.
+  const campoComErro = form.dataset.errorField;
+  if (campoComErro) {
+    const controle = form.querySelector(`[name="${window.CSS && CSS.escape ? CSS.escape(campoComErro) : campoComErro}"]`);
+    const painel = controle && controle.closest("[data-step-panel]");
+    if (controle && painel) {
+      const indice = Number(painel.dataset.stepPanel || 0);
+      visited.add(indice);
+      showStep(indice);
+      const cartao = controle.closest("[data-field-card]");
+      if (cartao) {
+        cartao.classList.add("has-error");
+        const aviso = document.createElement("p");
+        aviso.className = "field-error";
+        aviso.setAttribute("role", "alert");
+        aviso.textContent = form.dataset.errorMessage || "Confira este campo.";
+        cartao.appendChild(aviso);
+        const limpar = () => { cartao.classList.remove("has-error"); aviso.remove(); };
+        cartao.addEventListener("input", limpar, { once: true });
+        cartao.addEventListener("change", limpar, { once: true });
+      }
+      window.setTimeout(() => {
+        controle.focus({ preventScroll: true });
+        (cartao || controle).scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+    }
+  }
 })();

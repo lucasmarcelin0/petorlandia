@@ -199,14 +199,22 @@ def carregar_esquema_pre_t0() -> dict:
             "definitions": raw.get("definicoes", []), "sections": sections}
 
 
+class CampoInvalido(ValueError):
+    """ValueError que também diz qual campo (atributo name do input) precisa de correção."""
+
+    def __init__(self, mensagem: str, campo: str = ""):
+        super().__init__(mensagem)
+        self.campo = campo
+
+
 def _field_text(form, name: str, maximum: int, *, required: bool = False, numeric: bool = False, uppercase: bool = False) -> str:
     value = str(form.get(name) or "").strip()
     if required and not value:
-        raise ValueError("Preencha os campos obrigatórios indicados antes de enviar.")
+        raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", name)
     if len(value) > maximum:
-        raise ValueError("Um dos campos ultrapassou o limite de caracteres.")
+        raise CampoInvalido("Um dos campos ultrapassou o limite de caracteres.", name)
     if numeric and value and not re.fullmatch(r"\d+", value):
-        raise ValueError("Confira os campos numéricos. Use somente números.")
+        raise CampoInvalido("Confira os campos numéricos. Use somente números.", name)
     if uppercase:
         value = value.upper()
     return value
@@ -216,21 +224,21 @@ def _field_date(form, name: str, *, required: bool = False) -> str:
     value = str(form.get(name) or "").strip()
     if not value:
         if required:
-            raise ValueError("Preencha os campos obrigatórios indicados antes de enviar.")
+            raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", name)
         return ""
     try:
         return datetime.strptime(value, "%Y-%m-%d").strftime("%d/%m/%Y")
     except ValueError as exc:
-        raise ValueError("Confira as datas informadas.") from exc
+        raise CampoInvalido("Confira as datas informadas.", name) from exc
 
 
 def _field_choice(form, name: str, choices: list[dict[str, str]], *, required: bool = False) -> str:
     value = str(form.get(name) or "").strip()
     allowed = {item["value"] for item in choices}
     if required and not value:
-        raise ValueError("Preencha os campos obrigatórios indicados antes de enviar.")
+        raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", name)
     if value and value not in allowed:
-        raise ValueError("Uma das opções enviadas não pertence a esta ficha.")
+        raise CampoInvalido("Uma das opções enviadas não pertence a esta ficha.", name)
     return value
 
 
@@ -242,7 +250,7 @@ def _answer_field(form, field: dict) -> object:
         value = _field_text(form, key, field.get("maxlength", 160), required=field.get("required", False),
                             numeric=field.get("numeric", False), uppercase=field.get("uppercase", False))
         if field.get("minlength") and len(value) < field["minlength"]:
-            raise ValueError("Informe o número da ficha SINAN com pelo menos cinco dígitos.")
+            raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", key)
         return value
     if kind == "paired_text":
         return {
@@ -257,7 +265,7 @@ def _answer_field(form, field: dict) -> object:
         value = _field_text(form, "idade_valor", 7, numeric=True)
         unit = _field_choice(form, "idade_unidade", field["units"])
         if value and not unit:
-            raise ValueError("Selecione a unidade da idade informada.")
+            raise CampoInvalido("Selecione a unidade da idade informada.", "idade_unidade")
         return {"valor": value, "unidade": unit}
     if kind == "matrix":
         answers = {}
@@ -335,7 +343,7 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
     ficha = str(answers.get("ficha_sinan") or "").strip()
     ficha_digits = re.sub(r"\D", "", ficha)
     if len(ficha_digits) < 5:
-        raise ValueError("Informe o número da ficha SINAN com pelo menos cinco dígitos.")
+        raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", "ficha_sinan")
     dedup_key = f"FICHA-{ficha_digits}"
     full_key = "formulario_pre_t0"
 

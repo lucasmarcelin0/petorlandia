@@ -76,6 +76,8 @@ h1 em { color: #f2c780; font-style: normal; }
 .form-alert > span { display: grid; place-items: center; flex: 0 0 23px; height: 23px; border-radius: 50%; color: white; background: var(--danger); font-weight: 800; }
 .form-alert strong { color: #7f3229; font-size: 13px; }
 .form-alert p { margin: 3px 0 0; color: #79574f; font-size: 12px; line-height: 1.5; }
+.field-card.has-error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(178,58,44,.14); }
+.field-error { margin: 10px 0 0; color: #7f3229; font-size: 12px; font-weight: 700; line-height: 1.45; }
 
 .journey-card { margin-top: 15px; padding: 17px 21px 14px; }
 .journey-top { display: flex; align-items: end; justify-content: space-between; gap: 15px; }

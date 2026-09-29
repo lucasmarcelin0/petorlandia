@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#103f46">
   <title>Ficha SINAN antes do T0 · SFA Orlândia</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260929a">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260929b">
 </head>
 <body>
   <main class="pre-t0-shell">
@@ -54,7 +54,7 @@
       </nav>
     </section>
 
-    <form action="{{ form_action }}" method="post" novalidate data-step-form>
+    <form action="{{ form_action }}" method="post" novalidate data-step-form data-error-field="{{ error_field|default('') }}" data-error-message="{{ error }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <datalist id="sugestoes-municipio">
         <option value="Orlândia" data-codigo="3534708" data-uf="SP">Orlândia/SP · 3534708</option>
@@ -171,6 +171,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929g" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929i" defer></script>
 </body>
 </html>
