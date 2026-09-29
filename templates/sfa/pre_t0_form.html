@@ -61,6 +61,17 @@
         <option value="São Paulo" data-codigo="3550308" data-uf="SP">São Paulo/SP · 3550308</option>
       </datalist>
       <datalist id="sugestoes-uf"><option value="SP"></datalist>
+      <datalist id="sugestoes-unidade">
+        <option value="Hospital Beneficente Santo Antônio" data-codigo="2745798" data-telefone="(16) 3820-4200">CNES 2745798 · Rua 3, 941, Centro</option>
+        <option value="CAPS I Sebastião Boschin" data-codigo="6746012" data-telefone="(16) 3820-8244">CNES 6746012 · Rua 3, 1635, Jardim Nova Orlândia</option>
+        <option value="UBS I Américo Alves" data-codigo="2746115" data-telefone="(16) 3826-7333">CNES 2746115 · Rua Seis, 1200, Jardim Siena</option>
+        <option value="UBS II José Marchi" data-codigo="2746123">CNES 2746123</option>
+        <option value="UBS III Waldemar Graner" data-codigo="2746131">CNES 2746131</option>
+        <option value="CS II Dr. Miguel Vitaliano" data-codigo="2745690">CNES 2745690</option>
+      </datalist>
+      <datalist id="sugestoes-hospital">
+        <option value="Hospital Beneficente Santo Antônio" data-codigo="2745798" data-telefone="(16) 3820-4200">CNES 2745798 · Rua 3, 941, Centro</option>
+      </datalist>
       {% if simulacao %}{% include "sfa/_simulacao_campos.html" %}{% endif %}
       <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
 
@@ -87,7 +98,7 @@
 
             {% elif field.type == 'paired_text' %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <div class="paired-text-row"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-municipio-sugerido data-codigo-alvo="input-{{ field.extra_key }}"{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
+              <div class="paired-text-row"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'unidade_notificante' %} list="sugestoes-unidade" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'nome_hospital' %} list="sugestoes-hospital" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}" data-telefone-alvo="input-telefone_hospital"{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
 
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
@@ -154,6 +165,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929a" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929b" defer></script>
 </body>
 </html>
