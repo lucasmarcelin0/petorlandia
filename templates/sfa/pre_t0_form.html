@@ -56,6 +56,11 @@
 
     <form action="{{ form_action }}" method="post" novalidate data-step-form>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <datalist id="sugestoes-municipio">
+        <option value="Orlândia" data-codigo="3534708" data-uf="SP">Orlândia/SP · 3534708</option>
+        <option value="São Paulo" data-codigo="3550308" data-uf="SP">São Paulo/SP · 3550308</option>
+      </datalist>
+      <datalist id="sugestoes-uf"><option value="SP"></datalist>
       {% if simulacao %}{% include "sfa/_simulacao_campos.html" %}{% endif %}
       <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
 
@@ -82,11 +87,11 @@
 
             {% elif field.type == 'paired_text' %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <div class="paired-text-row"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
+              <div class="paired-text-row"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-municipio-sugerido data-codigo-alvo="input-{{ field.extra_key }}"{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
 
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric"{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}>
+              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric"{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}>
 
             {% elif field.type == 'radio' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -149,6 +154,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260928a" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929a" defer></script>
 </body>
 </html>

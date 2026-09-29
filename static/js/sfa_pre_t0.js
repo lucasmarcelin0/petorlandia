@@ -75,6 +75,21 @@
     }
   });
 
+  // Sugestões de município: ao escolher uma opção da lista, completa o código IBGE e a UF
+  // apenas se estiverem vazios. A digitação livre continua valendo.
+  const sugestoes = Array.from(document.querySelectorAll("#sugestoes-municipio option"));
+  form.querySelectorAll("[data-municipio-sugerido]").forEach((campo) => {
+    campo.addEventListener("change", () => {
+      const escolhida = sugestoes.find((o) => o.value.toLowerCase() === campo.value.trim().toLowerCase());
+      if (!escolhida) return;
+      campo.value = escolhida.value;
+      const codigo = document.getElementById(campo.dataset.codigoAlvo);
+      if (codigo && !codigo.value.trim()) codigo.value = escolhida.dataset.codigo;
+      const uf = form.querySelector(`[name="${campo.name.replace("municipio_", "uf_")}"]`);
+      if (uf && !uf.value.trim()) uf.value = escolhida.dataset.uf;
+    });
+  });
+
   form.dataset.ready = "true";
   showStep(0);
 })();
