@@ -464,7 +464,10 @@ def coletar_etapa(etapa: str, schema: dict, form, participante) -> tuple[dict, d
         try:
             return coletar_respostas_pre_t0(form, schema), {}
         except ValueError as exc:
-            return {}, {"__all__": str(exc)}
+            erro = {"__all__": str(exc)}
+            if getattr(exc, "campo", ""):
+                erro["__campo__"] = exc.campo
+            return {}, erro
     from services import sfa_service
 
     coletor = {"t0": sfa_service.coletar_resposta_t0_nativa,
@@ -545,6 +548,8 @@ def acumular_erros(valor_anterior: str, erros: dict[str, str]) -> str:
     tentativas = _tentativas_validas(valor_anterior)
     atual = []
     for chave, mensagem in erros.items():
+        if chave == "__campo__":  # só indica onde focar na tela; não é um erro a mais
+            continue
         atual.append(str(mensagem if chave == "__all__" else chave)[:160])
     if atual:
         tentativas.append(sorted(atual))

@@ -295,6 +295,7 @@ def register(bp, require_access):
         acao = url_for("sfa_routes.simulacao_etapa", token=participante.token, etapa=etapa)
         if etapa == "sinan":
             corpo = render_template("sfa/pre_t0_form.html", schema=schema, error=(erros or {}).get("__all__", ""),
+                                    error_field=(erros or {}).get("__campo__", ""),
                                     submitted=submetido if submetido is not None else MultiDict(),
                                     form_action=acao, simulacao=simulacao)
         else:

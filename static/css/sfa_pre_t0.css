@@ -76,6 +76,8 @@ h1 em { color: #f2c780; font-style: normal; }
 .form-alert > span { display: grid; place-items: center; flex: 0 0 23px; height: 23px; border-radius: 50%; color: white; background: var(--danger); font-weight: 800; }
 .form-alert strong { color: #7f3229; font-size: 13px; }
 .form-alert p { margin: 3px 0 0; color: #79574f; font-size: 12px; line-height: 1.5; }
+.field-card.has-error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(178,58,44,.14); }
+.field-error { margin: 10px 0 0; color: #7f3229; font-size: 12px; font-weight: 700; line-height: 1.45; }
 
 .journey-card { margin-top: 15px; padding: 17px 21px 14px; }
 .journey-top { display: flex; align-items: end; justify-content: space-between; gap: 15px; }
@@ -139,9 +141,14 @@ form { margin-top: 15px; }
 .matrix-item { font-size: 12px; line-height: 1.4; }
 .matrix-answer { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .matrix-choice { position: relative; display: grid; place-items: center; min-width: 35px; min-height: 35px; border-radius: 9px; cursor: pointer; }
+.matrix-toggle { position: relative; display: inline-grid; flex: 0 0 auto; place-items: center; min-width: 58px; min-height: 35px; cursor: pointer; }
+.matrix-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: pointer; }
+.matrix-toggle > span { display: grid; place-items: center; min-width: 52px; height: 30px; padding: 0 12px; border: 1px solid #d9e2dd; border-radius: 9px; color: #617973; background: #fff; font-size: 12px; font-weight: 700; transition: all .15s ease; }
+.matrix-toggle:has(input:checked) > span { border-color: var(--teal); color: #fff; background: var(--teal); box-shadow: 0 3px 8px rgba(13,105,113,.17); }
+.matrix-toggle input:focus-visible + span { outline: 3px solid rgba(13,105,113,.32); outline-offset: 3px; }
 .matrix-choice:hover { background: #f1f7f3; }
 .matrix-choice input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; cursor: pointer; }
-.matrix-choice > span:first-of-type { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #d9e2dd; border-radius: 8px; color: #617973; background: #fff; font-size: 11px; font-weight: 700; transition: all .15s ease; }
+.matrix-choice > span:first-of-type { display: grid; place-items: center; min-width: 28px; padding: 0 6px; height: 28px; border: 1px solid #d9e2dd; border-radius: 8px; color: #617973; background: #fff; font-size: 11px; font-weight: 700; transition: all .15s ease; }
 .matrix-choice:has(input:checked) > span:first-of-type { border-color: var(--teal); color: #fff; background: var(--teal); box-shadow: 0 3px 8px rgba(13,105,113,.17); }
 .field-hint { margin: -3px 0 11px; color: var(--muted); font-size: 11px; }
 .matrix-hint { margin: 12px 0 7px; }
@@ -224,7 +231,7 @@ form { margin-top: 15px; }
   .matrix-item { font-size: 11px; }
   .flag-list { grid-template-columns: 1fr; }
   .matrix-choice { min-width: 31px; min-height: 32px; }
-  .matrix-choice > span:first-of-type { width: 25px; height: 25px; }
+  .matrix-choice > span:first-of-type { min-width: 25px; height: 25px; }
   .choice-grid { grid-template-columns: 1fr; }
   .age-row { grid-template-columns: minmax(80px,.7fr) minmax(150px,1.3fr); }
   .investigator-grid { grid-template-columns: 1fr; }

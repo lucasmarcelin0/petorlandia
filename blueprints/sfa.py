@@ -1923,6 +1923,7 @@ def pre_t0_ficha():
 
     schema = carregar_esquema_pre_t0()
     error = ""
+    error_field = ""
 
     def page_response(template_name: str, **context):
         response = current_app.make_response(render_template(template_name, **context))
@@ -1943,6 +1944,7 @@ def pre_t0_ficha():
             return page_response("sfa/pre_t0_submitted.html")
         except ValueError as exc:
             error = str(exc)
+            error_field = getattr(exc, "campo", "")
         except RuntimeError as exc:
             error = str(exc)
 
@@ -1950,6 +1952,7 @@ def pre_t0_ficha():
         "sfa/pre_t0_form.html",
         schema=schema,
         error=error,
+        error_field=error_field,
         submitted=request.form,
         form_action=url_for("sfa_routes.pre_t0_ficha"),
     )
