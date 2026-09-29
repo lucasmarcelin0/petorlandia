@@ -1,0 +1,12 @@
+<script>
+  document.querySelectorAll('[data-copiar]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      var campo = document.getElementById(botao.getAttribute('data-copiar'));
+      var original = botao.textContent;
+      var pronto = function () { botao.textContent = 'Copiado!'; setTimeout(function () { botao.textContent = original; }, 1600); };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(campo.value).then(pronto, function () { campo.select(); });
+      } else { campo.select(); document.execCommand('copy'); pronto(); }
+    });
+  });
+</script>

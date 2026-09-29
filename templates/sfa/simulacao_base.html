@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#103f46">
+  <title>{% block title %}Simulação · SFA Orlândia{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_simulacao.css') }}?v=20260929b">
+</head>
+<body>
+  <main class="sim-shell">
+    <header class="sim-brand">
+      <span class="sim-mark" aria-hidden="true">S</span>
+      <span><strong>SFA Orlândia</strong><small>Simulação dos formulários</small></span>
+      <span class="sim-badge">MODO TESTE</span>
+    </header>
+    {% block content %}{% endblock %}
+    <footer class="sim-footer">Ambiente de simulação: as respostas não entram na pesquisa municipal.<br>Este espaço não é acompanhado como atendimento de saúde.</footer>
+  </main>
+  <script>
+    document.querySelectorAll('[data-copiar]').forEach(function (botao) {
+      botao.addEventListener('click', function () {
+        var campo = document.getElementById(botao.getAttribute('data-copiar'));
+        var original = botao.textContent;
+        var pronto = function () { botao.textContent = 'Copiado!'; setTimeout(function () { botao.textContent = original; }, 1600); };
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(campo.value).then(pronto, function () { campo.select(); });
+        } else { campo.select(); document.execCommand('copy'); pronto(); }
+      });
+    });
+    document.querySelectorAll('form[data-envio-unico]').forEach(function (form) {
+      form.addEventListener('submit', function (evento) {
+        var botao = evento.submitter;
+        if (botao && botao.name) {
+          var espelho = document.createElement('input');
+          espelho.type = 'hidden'; espelho.name = botao.name; espelho.value = botao.value;
+          form.appendChild(espelho);
+        }
+        form.querySelectorAll('button[type=submit]').forEach(function (b) { b.disabled = true; });
+      });
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

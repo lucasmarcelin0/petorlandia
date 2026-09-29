@@ -1,0 +1,85 @@
+{% extends "sfa/simulacao_base.html" %}
+{% block title %}Minha simulação · {{ grupo.nome }}{% endblock %}
+{% block content %}
+{% set total = calendario.etapas|length %}
+<section class="sim-hero">
+  <span class="sim-eyebrow">{{ grupo.nome|upper }}</span>
+  <h1>Olá, {{ participante.apelido or participante.codigo }}!</h1>
+  <p>Seu código nesta simulação é <strong>{{ participante.codigo }}</strong>. Você concluiu {{ calendario.respondidas }} de {{ total }} etapas.</p>
+  <div class="sim-progress" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="{{ calendario.respondidas }}"><span style="width: {{ (100 * calendario.respondidas / total)|round|int if total else 0 }}%"></span></div>
+</section>
+
+{% if novo %}
+<section class="sim-card sim-card-ok" role="status">
+  <h2>Guarde este link</h2>
+  <p>É por ele que você volta para as próximas etapas, inclusive em outro aparelho. Salve nos favoritos ou envie para você mesmo(a).</p>
+  <div class="sim-link"><input id="meu-link" value="{{ link }}" readonly aria-label="Seu link pessoal da simulação" onclick="this.select()"><button type="button" class="sim-btn sim-btn-sec" data-copiar="meu-link">Copiar link</button></div>
+  <img class="sim-qr" src="{{ url_for('sfa_routes.simulacao_painel_qrcode', token=participante.token) }}" alt="QR code do seu link pessoal" width="168" height="168">
+</section>
+{% endif %}
+
+{% if feito %}
+<section class="sim-card sim-card-ok" role="status">
+  <h2>{{ ETAPA_ROTULOS[feito] }} registrad{{ 'a' if feito == 'sinan' else 'o' }}. Obrigado!</h2>
+  <p>{% if calendario.concluido %}Essa era a última etapa.{% elif calendario.proxima %}Quando quiser, siga para a próxima etapa.{% else %}A próxima etapa ainda não abriu. Volte por este link na data indicada.{% endif %}</p>
+</section>
+{% endif %}
+
+{% if calendario.concluido %}
+<section class="sim-card sim-card-ok">
+  <h2>Simulação concluída 🎉</h2>
+  <p>Você respondeu a todas as etapas. Suas respostas e avaliações já estão com a equipe. Obrigado por ajudar a melhorar os formulários!</p>
+</section>
+{% elif calendario.proxima %}
+<section class="sim-card">
+  <h2>Próxima etapa: {{ calendario.proxima.rotulo }}</h2>
+  <p>{{ calendario.proxima.descricao }}</p>
+  <a class="sim-btn sim-btn-grande" href="{{ url_for('sfa_routes.simulacao_etapa', token=participante.token, etapa=calendario.proxima.etapa) }}">Responder {{ calendario.proxima.rotulo }} →</a>
+</section>
+{% endif %}
+
+<section class="sim-card">
+  <h2>Suas etapas</h2>
+  <ol class="sim-steps">
+    {% for item in calendario.etapas %}
+    <li class="sim-step is-{{ item.status }}">
+      <span class="sim-step-dot">{% if item.status == 'respondida' %}✓{% else %}{{ loop.index }}{% endif %}</span>
+      <span class="sim-step-body">
+        <strong>{{ item.rotulo }}</strong>
+        <span>{{ item.descricao }}</span>
+        <span class="sim-step-status">
+          {% if item.status == 'respondida' %}Respondida em {{ fmt_dt(item.resposta.enviado_em) }}{% if item.resposta.duracao_segundos is not none %} · {{ fmt_dur(item.resposta.duracao_segundos) }}{% endif %}
+          {% elif item.status == 'disponivel' %}Disponível agora
+          {% else %}{{ item.motivo }}{% endif %}
+        </span>
+      </span>
+      {% if item.status == 'disponivel' %}
+      <a class="sim-btn" href="{{ url_for('sfa_routes.simulacao_etapa', token=participante.token, etapa=item.etapa) }}">Responder</a>
+      {% elif item.status == 'respondida' and not sim.carregar_avaliacao(item.resposta).get('registrada_em') %}
+      <a class="sim-btn sim-btn-sec" href="{{ url_for('sfa_routes.simulacao_avaliacao', token=participante.token, etapa=item.etapa) }}">Avaliar</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if calendario.inicio %}<p class="sim-help" style="margin-top:12px">Início dos sintomas considerado: {{ calendario.inicio.strftime('%d/%m/%Y') }} ({{ calendario.inicio_fonte }}).</p>{% endif %}
+</section>
+
+{% if cenarios %}
+<details class="sim-detalhes" {% if not calendario.respondidas %}open{% endif %}>
+  <summary>Caso fictício deste grupo</summary>
+  <div class="sim-cenario">
+    {% if cenarios.geral %}<strong>O caso</strong><span>{{ cenarios.geral }}</span>{% endif %}
+    {% for item in calendario.etapas %}{% if cenarios[item.etapa] %}<strong>{{ item.rotulo }}</strong><span>{{ cenarios[item.etapa] }}</span>{% endif %}{% endfor %}
+  </div>
+</details>
+{% endif %}
+
+{% if not novo %}
+<details class="sim-detalhes">
+  <summary>Meu link pessoal</summary>
+  <p class="sim-help" style="margin-top:10px">Use este link para voltar depois ou continuar em outro aparelho. Não compartilhe: ele dá acesso às suas etapas.</p>
+  <div class="sim-link"><input id="meu-link" value="{{ link }}" readonly aria-label="Seu link pessoal da simulação" onclick="this.select()"><button type="button" class="sim-btn sim-btn-sec" data-copiar="meu-link">Copiar link</button></div>
+  <img class="sim-qr" src="{{ url_for('sfa_routes.simulacao_painel_qrcode', token=participante.token) }}" alt="QR code do seu link pessoal" width="168" height="168" loading="lazy">
+</details>
+{% endif %}
+{% endblock %}

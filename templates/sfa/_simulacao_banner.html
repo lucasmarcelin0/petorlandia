@@ -1,0 +1,33 @@
+{# Faixa exibida no topo dos formulários reais quando abertos por uma simulação. #}
+<style>
+  .sim-faixa { margin: 0 0 18px; padding: 16px 18px; border: 1px solid #f0cf9f; border-radius: 18px; background: #fff8ec; color: #4a3413; font: 14px/1.55 "DM Sans", "Segoe UI", sans-serif; box-shadow: 0 10px 26px rgba(120, 76, 20, .07); }
+  .sim-faixa-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .sim-faixa-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #b8641a; color: #fff; font-weight: 800; font-size: 11px; letter-spacing: .08em; }
+  .sim-faixa-grupo { font-weight: 700; color: #3b2a10; }
+  .sim-faixa-painel { margin-left: auto; color: #8a4a12; font-weight: 700; text-decoration: none; }
+  .sim-faixa-painel:hover { text-decoration: underline; }
+  .sim-faixa p { margin: 8px 0 0; }
+  .sim-faixa details { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid #f3dcb9; }
+  .sim-faixa summary { cursor: pointer; font-weight: 700; color: #7a4210; }
+  .sim-faixa .sim-cenario { margin-top: 8px; color: #3b2a10; }
+  .sim-faixa .sim-cenario span { display: block; white-space: pre-line; }
+  .sim-faixa .sim-cenario strong { display: block; margin-top: 6px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #9a5a1c; }
+  @media (max-width: 560px) { .sim-faixa-painel { margin-left: 0; width: 100%; } }
+</style>
+<aside class="sim-faixa" role="note" aria-label="Aviso de simulação">
+  <div class="sim-faixa-topo">
+    <span class="sim-faixa-chip">SIMULAÇÃO</span>
+    <span class="sim-faixa-grupo">{{ simulacao.grupo.nome }} · {{ simulacao.participante.codigo }} · {{ simulacao.etapa_rotulo }}</span>
+    <a class="sim-faixa-painel" href="{{ simulacao.painel_url }}">← Meu painel da simulação</a>
+  </div>
+  <p>Este é o formulário real, aberto em modo de teste. <strong>Use somente dados fictícios</strong>: nome, telefone, endereço e cartão SUS não são guardados, e nada é enviado ao SINAN nem à pesquisa municipal.</p>
+  {% if simulacao.cenario_geral or simulacao.cenario_etapa %}
+  <details {% if simulacao.cenario_etapa %}open{% endif %}>
+    <summary>Caso fictício para responder</summary>
+    <div class="sim-cenario">
+      {% if simulacao.cenario_geral %}<strong>O caso</strong><span>{{ simulacao.cenario_geral }}</span>{% endif %}
+      {% if simulacao.cenario_etapa %}<strong>Nesta etapa ({{ simulacao.etapa_rotulo }})</strong><span>{{ simulacao.cenario_etapa }}</span>{% endif %}
+    </div>
+  </details>
+  {% endif %}
+</aside>

@@ -1,0 +1,92 @@
+{% extends "sfa/simulacao_base.html" %}
+{% block title %}{{ grupo.nome }} · Simulação SFA{% endblock %}
+{% block content %}
+<section class="sim-hero">
+  <span class="sim-eyebrow">CONVITE PARA SIMULAÇÃO</span>
+  <h1>{{ grupo.nome }}</h1>
+  <p>{{ grupo.descricao or "Você foi convidado(a) a testar os formulários do estudo de síndromes febris agudas de Orlândia, respondendo como se estivesse vivendo um caso fictício." }}</p>
+</section>
+
+{% if existente %}
+<section class="sim-card sim-card-ok">
+  <h2>Você já está neste grupo como {{ existente.codigo }}{% if existente.apelido %} ({{ existente.apelido }}){% endif %}</h2>
+  <p>Este navegador guardou o seu acesso. Continue de onde parou.</p>
+  <a class="sim-btn sim-btn-grande" href="{{ url_for('sfa_routes.simulacao_painel', token=existente.token) }}">Continuar minha simulação →</a>
+  <p class="sim-help" style="margin-top:12px">Não é você? Use o formulário abaixo para entrar como um novo participante.</p>
+</section>
+{% endif %}
+
+<section class="sim-card">
+  <h2>Como funciona</h2>
+  <p>Você vai responder, em sequência, aos formulários reais do estudo. Leva poucos minutos por etapa, e ao final de cada uma há uma avaliação rápida e opcional.</p>
+  <ol class="sim-steps">
+    {% for etapa in etapas %}
+    <li class="sim-step">
+      <span class="sim-step-dot">{{ loop.index }}</span>
+      <span class="sim-step-body"><strong>{{ ETAPA_ROTULOS[etapa] }}</strong><span>{{ sim.ETAPA_DESCRICOES[etapa] }}</span></span>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="sim-help" style="margin-top:14px">
+    {% if grupo.agenda == 'protocolo' %}
+    As etapas seguem o calendário do estudo: o T7 abre no 7º dia e o T30 no 30º dia depois do início dos sintomas informado no T0. Guarde o seu link pessoal para voltar nessas datas.
+    {% else %}
+    Cada etapa abre assim que você termina a anterior. Pode fazer tudo de uma vez ou voltar depois pelo seu link pessoal.
+    {% endif %}
+  </p>
+</section>
+
+{% if cenarios.geral %}
+<section class="sim-card sim-card-alerta">
+  <h2>O caso fictício</h2>
+  <div class="sim-cenario"><span>{{ cenarios.geral }}</span></div>
+  <p class="sim-help" style="margin-top:10px">Responda como se você fosse essa pessoa (ou quem atende essa pessoa, na ficha SINAN). O caso fica visível em todas as etapas.</p>
+</section>
+{% endif %}
+
+{% if grupo.status != 'aberto' %}
+<section class="sim-card sim-card-alerta" role="status">
+  <h2>Este grupo foi encerrado</h2>
+  <p>A equipe encerrou esta simulação e não está recebendo novos participantes. Obrigado pelo interesse!</p>
+</section>
+{% else %}
+<section class="sim-card">
+  <h2>Entrar na simulação</h2>
+  <p>Não pedimos seu nome. Você recebe um código (P01, P02…) e um link pessoal para continuar depois.</p>
+  {% if erro %}<div class="sim-card sim-card-erro" role="alert">{{ erro }}</div>{% endif %}
+  <form method="post" data-envio-unico>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="sim-honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+    <div class="sim-field">
+      <label for="apelido">Como quer aparecer para a equipe? <span class="sim-help">(opcional: um apelido ou as iniciais)</span></label>
+      <input id="apelido" name="apelido" type="text" maxlength="60" autocomplete="off" value="{{ form.get('apelido', '') }}">
+    </div>
+    <div class="sim-field">
+      <fieldset>
+        <legend>Qual destas opções descreve melhor a sua atuação?</legend>
+        <div class="sim-opcoes">
+          {% for opcao in sim.PERFIS %}
+          <label class="sim-opcao"><input type="radio" name="perfil" value="{{ opcao }}" {% if form.get('perfil') == opcao %}checked{% endif %}><span>{{ opcao }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    <div class="sim-field">
+      <fieldset>
+        <legend>Qual é a sua experiência com a ficha de notificação SINAN?</legend>
+        <div class="sim-opcoes">
+          {% for opcao in sim.EXPERIENCIAS_SINAN %}
+          <label class="sim-opcao"><input type="radio" name="experiencia" value="{{ opcao }}" {% if form.get('experiencia') == opcao %}checked{% endif %}><span>{{ opcao }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    <label class="sim-check">
+      <input type="checkbox" name="ciente" value="sim" required {% if form.get('ciente') == 'sim' %}checked{% endif %}>
+      <span>Entendi que é uma <strong>simulação</strong>: vou usar apenas dados fictícios e minhas respostas não entram na pesquisa real.</span>
+    </label>
+    <div class="sim-acoes"><button class="sim-btn sim-btn-grande" type="submit">Entrar na simulação →</button></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
