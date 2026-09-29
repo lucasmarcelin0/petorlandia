@@ -61,6 +61,39 @@
     .priority-Baixa { color: #198754; }
     .sfa-brand { font-size: 1.15rem; font-weight: 700; padding: 1rem 1.25rem .5rem; letter-spacing: .5px; }
     .table-sm td, .table-sm th { vertical-align: middle; }
+    .sfa-main { min-width: 0; }
+    .sfa-menu-toggle, .sfa-menu-overlay { display: none; }
+
+    /* Celular e tablet: o menu vira uma gaveta aberta pelo botão do cabeçalho e o conteúdo usa a tela toda. */
+    @media (max-width: 991.98px) {
+      .sfa-sidebar {
+        width: min(280px, 85vw);
+        transform: translateX(-100%);
+        transition: transform .2s ease;
+        z-index: 1040;
+        box-shadow: none;
+      }
+      body.sfa-menu-aberto .sfa-sidebar { transform: translateX(0); box-shadow: 0 0 24px rgba(0,0,0,.35); }
+      .sfa-main { margin-left: 0; padding: 1rem; }
+      .sfa-header { margin-left: 0; padding: .6rem 1rem; gap: .75rem; }
+      .sfa-header h6 { min-width: 0; overflow-wrap: anywhere; }
+      .sfa-menu-toggle {
+        display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+        width: 40px; height: 40px; border: 1px solid #cfd8dc; border-radius: .5rem;
+        background: #fff; color: var(--sfa-teal); font-size: 1.1rem; cursor: pointer;
+      }
+      .sfa-menu-icone {
+        display: block; width: 18px; height: 14px;
+        background: linear-gradient(currentColor 0 0) 0 0 / 100% 2px no-repeat,
+                    linear-gradient(currentColor 0 0) 0 50% / 100% 2px no-repeat,
+                    linear-gradient(currentColor 0 0) 0 100% / 100% 2px no-repeat;
+      }
+      .sfa-menu-overlay {
+        position: fixed; inset: 0; z-index: 1030; background: rgba(0,0,0,.45);
+      }
+      body.sfa-menu-aberto .sfa-menu-overlay { display: block; }
+      body.sfa-menu-aberto { overflow: hidden; }
+    }
   </style>
 
   {% block head %}{% endblock %}
@@ -68,7 +101,7 @@
 <body>
 
 <!-- Sidebar -->
-<nav class="sfa-sidebar d-flex flex-column">
+<nav class="sfa-sidebar d-flex flex-column" id="sfa-sidebar" aria-label="Menu do SFA">
   <div class="sfa-brand">
     <i class="fas fa-virus-covid me-2"></i>SFA Orlândia
   </div>
@@ -190,9 +223,13 @@
 </nav>
 
 <!-- Top header -->
+<div class="sfa-menu-overlay" data-sfa-menu-fechar></div>
 <div class="sfa-header d-flex align-items-center justify-content-between">
-  <h6 class="mb-0 fw-semibold">{% block page_title %}SFA{% endblock %}</h6>
-  <small class="text-muted">Estudo de Síndromes Febris Agudas — Orlândia/SP</small>
+  <button type="button" class="sfa-menu-toggle" data-sfa-menu-toggle aria-controls="sfa-sidebar" aria-expanded="false" aria-label="Abrir menu">
+    <span class="sfa-menu-icone" aria-hidden="true"></span>
+  </button>
+  <h6 class="mb-0 fw-semibold me-auto">{% block page_title %}SFA{% endblock %}</h6>
+  <small class="text-muted d-none d-md-inline">Estudo de Síndromes Febris Agudas — Orlândia/SP</small>
 </div>
 
 <!-- Main content -->
@@ -209,6 +246,22 @@
   {% block content %}{% endblock %}
 </main>
 
+<script>
+  (function () {
+    var corpo = document.body;
+    var botao = document.querySelector('[data-sfa-menu-toggle]');
+    if (!botao) return;
+    function definir(aberto) {
+      corpo.classList.toggle('sfa-menu-aberto', aberto);
+      botao.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+      botao.setAttribute('aria-label', aberto ? 'Fechar menu' : 'Abrir menu');
+    }
+    botao.addEventListener('click', function () { definir(!corpo.classList.contains('sfa-menu-aberto')); });
+    document.querySelector('[data-sfa-menu-fechar]').addEventListener('click', function () { definir(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') definir(false); });
+    window.addEventListener('resize', function () { if (window.innerWidth >= 992) definir(false); });
+  })();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
