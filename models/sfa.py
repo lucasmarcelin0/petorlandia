@@ -33,6 +33,15 @@ class SfaPilotResponse(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class SfaPreenchimentoPadrao(db.Model):
+    """O que se repete em toda ficha SINAN de quem preenche: unidade,
+    município e investigador. A assinatura fica de fora de propósito."""
+    __tablename__ = 'sfa_preenchimento_padrao'
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    dados_json = db.Column(db.Text, nullable=False, default='{}')
+    atualizado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class SfaSimulacaoGrupo(db.Model):
     """Grupo de voluntários que simula o percurso SINAN → T0 → T7 → T30.
 

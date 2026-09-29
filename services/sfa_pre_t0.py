@@ -193,6 +193,63 @@ NENHUM_EXAME = "nenhum"
 NAO_REALIZADO = "4"
 
 
+# Campos que se repetem em toda ficha de quem preenche. Ficam salvos na conta
+# para vir preenchidos na próxima ficha. A assinatura do investigador fica de
+# fora: ela atesta cada ficha e precisa ser digitada a cada vez.
+CAMPOS_LEMBRADOS = {
+    "uf_notificacao": 2,
+    "municipio_notificacao": 120,
+    "codigo_municipio_notificacao": 7,
+    "unidade_notificante": 180,
+    "codigo_unidade_notificante": 12,
+    "investigador__municipio_unidade": 180,
+    "investigador__codigo_unidade": 30,
+    "investigador__nome": 160,
+    "investigador__funcao": 120,
+}
+
+
+def carregar_padrao_usuario(user_id) -> dict[str, str]:
+    from extensions import db
+    from models.sfa import SfaPreenchimentoPadrao
+
+    if not user_id:
+        return {}
+    registro = db.session.get(SfaPreenchimentoPadrao, user_id)
+    try:
+        dados = json.loads(registro.dados_json) if registro else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return {chave: str(dados[chave]) for chave in CAMPOS_LEMBRADOS if str(dados.get(chave) or "").strip()}         if isinstance(dados, dict) else {}
+
+
+def salvar_padrao_usuario(user_id, form) -> dict[str, str]:
+    """Guarda o que foi enviado na ficha; campo vazio não apaga o que já havia."""
+    from extensions import db
+    from models.sfa import SfaPreenchimentoPadrao
+
+    dados = carregar_padrao_usuario(user_id)
+    for chave, limite in CAMPOS_LEMBRADOS.items():
+        valor = str(form.get(chave) or "").strip()[:limite]
+        if valor:
+            dados[chave] = valor.upper() if chave == "uf_notificacao" else valor
+    registro = db.session.get(SfaPreenchimentoPadrao, user_id) or SfaPreenchimentoPadrao(user_id=user_id)
+    registro.dados_json = json.dumps(dados, ensure_ascii=False, sort_keys=True)
+    db.session.add(registro)
+    db.session.commit()
+    return dados
+
+
+def apagar_padrao_usuario(user_id) -> None:
+    from extensions import db
+    from models.sfa import SfaPreenchimentoPadrao
+
+    registro = db.session.get(SfaPreenchimentoPadrao, user_id)
+    if registro is not None:
+        db.session.delete(registro)
+        db.session.commit()
+
+
 def carregar_esquema_pre_t0() -> dict:
     """Combina a redação da ficha fonte com os controles eletrônicos."""
     try:
@@ -224,6 +281,9 @@ def _field_text(form, name: str, maximum: int, *, required: bool = False, numeri
     value = str(form.get(name) or "").strip()
     if required and not value:
         raise ValueError("Preencha os campos obrigatórios indicados antes de enviar.")
+    if numeric and value:
+        # CEP e cartão SUS costumam ser digitados com hífen, ponto ou espaço.
+        value = re.sub(r"[\s.\-/]", "", value)
     if len(value) > maximum:
         raise ValueError("Um dos campos ultrapassou o limite de caracteres.")
     if numeric and value and not re.fullmatch(r"\d+", value):

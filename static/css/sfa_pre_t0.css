@@ -150,6 +150,11 @@ form { margin-top: 15px; }
 .matrix-ignorado { margin-top: 10px; border-style: dashed; }
 .exames-card { border-color: #cfe3dd; background: #f7fbf9; }
 .field-card[hidden] { display: none !important; }
+.saved-note { margin: 18px 0; padding: 14px 18px; border: 1px solid #bfdccf; border-radius: 16px; color: #1f5245; background: #eef7f2; font-size: 13px; line-height: 1.5; }
+.saved-note p { margin: 4px 0 0; }
+.lembrar-padrao { margin-top: 16px; font-size: 12px; }
+.cep-status.is-ok { color: #1f6b52; font-weight: 700; }
+.cep-status.is-erro { color: var(--danger); font-weight: 700; }
 .step-dot.has-pending span { border-color: #c8741d; box-shadow: 0 0 0 3px #fbe5c8; }
 .step-dot.has-pending::before { content: ""; position: absolute; top: -3px; left: calc(50% + 6px); z-index: 2; width: 8px; height: 8px; border: 2px solid #fff; border-radius: 50%; background: #c8741d; }
 .flag-choice { display: flex; align-items: flex-start; gap: 9px; min-height: 40px; padding: 10px 11px; border: 1px solid #e7ece9; border-radius: 9px; color: #40595d; background: #fff; font-size: 11px; line-height: 1.4; cursor: pointer; transition: all .15s ease; }

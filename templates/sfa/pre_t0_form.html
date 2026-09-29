@@ -11,7 +11,7 @@
      scripts das telas usam window.PetDateBR já durante o carregamento. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
   <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260929a">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260929b">
 </head>
 <body>
   <main class="pre-t0-shell">
@@ -47,6 +47,7 @@
     </details>
 
     {% if error %}<div class="form-alert" role="alert"><span aria-hidden="true">!</span><div><strong>Confira antes de continuar</strong><p>{{ error }}</p></div></div>{% endif %}
+    {% if padrao_aplicado %}<div class="saved-note" role="status"><strong>Dados salvos da sua conta</strong><p>Unidade notificadora, município e investigador já vieram preenchidos. Confira antes de enviar; a assinatura é sempre digitada.</p></div>{% endif %}
 
     <section class="journey-card" aria-label="Progresso do formulário">
       <div class="journey-top"><div><span class="eyebrow">SUA JORNADA</span><strong data-step-label>Etapa 1 de {{ schema.sections|length }}</strong></div><span class="journey-percent" data-progress-label>0%</span></div>
@@ -58,7 +59,7 @@
       </nav>
     </section>
 
-    <form action="{{ form_action }}" method="post" novalidate data-step-form>
+    <form action="{{ form_action }}" method="post" novalidate data-step-form data-cep-url="{{ url_for('sfa_routes.consultar_cep', cep='00000000') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% if simulacao %}{% include "sfa/_simulacao_campos.html" %}{% endif %}
       <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
@@ -85,7 +86,8 @@
             <div class="flag-list">{% for exame in schema.exames %}<label class="flag-choice"><input type="checkbox" name="exames_realizados" value="{{ exame.id }}" {% if exame.id in exames_marcados %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ exame.rotulo }}</span></label>{% endfor %}<label class="flag-choice"><input type="checkbox" name="exames_realizados" value="{{ schema.nenhum_exame }}" data-exame-nenhum {% if schema.nenhum_exame in exames_marcados %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>Nenhum exame até agora</span></label></div>
           </article>
           {% endif %}
-          {% for field in section.fields %}
+          {# O CEP vem primeiro na residência: com ele, UF, município, bairro e rua se preenchem sozinhos. #}
+          {% for field in (section.fields|selectattr('key', 'equalto', 'cep')|list) + (section.fields|rejectattr('key', 'equalto', 'cep')|list) %}
           <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}" data-field-card="{{ field.key }}"{% if field.exames %} data-exames="{{ field.exames|join(' ') }}"{% endif %}>
             {% if field.type == 'fixed' %}
               {{ question_label(field) }}
@@ -99,6 +101,7 @@
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
               <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric"{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}>
+              {% if field.key == 'cep' %}<p class="field-hint cep-status" data-cep-status aria-live="polite">Comece pelo CEP: UF, município, bairro e rua são preenchidos sozinhos. Confira depois.</p>{% endif %}
 
             {% elif field.type == 'radio' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -150,6 +153,9 @@
           </article>
           {% endfor %}
         </div>
+        {% if loop.last and pode_lembrar %}
+        <label class="flag-choice lembrar-padrao"><input type="checkbox" name="lembrar_padrao" value="1" {% if lembrar_padrao %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span><strong>Lembrar unidade, município e investigador na minha conta</strong><br>Na próxima ficha eles já vêm preenchidos. A assinatura não é guardada. Desmarque para apagar os dados salvos.</span></label>
+        {% endif %}
       </fieldset>
       {% endfor %}
 
@@ -164,6 +170,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929a" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260929b" defer></script>
 </body>
 </html>

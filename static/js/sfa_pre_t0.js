@@ -115,6 +115,62 @@
     aplicarExames();
   }
 
+  // CEP: busca UF, município (com código IBGE), bairro e rua no servidor, que
+  // consulta o ViaCEP. Só preenche campos vazios ou preenchidos pela busca
+  // anterior, para nunca apagar o que a pessoa digitou.
+  const cep = form.querySelector('[name="cep"]');
+  const cepStatus = form.querySelector("[data-cep-status]");
+  const cepUrl = form.dataset.cepUrl;
+  if (cep && cepUrl) {
+    let ultimoCep = "";
+    const destinos = {
+      uf: "uf_residencia",
+      municipio: "municipio_residencia",
+      codigo_ibge: "codigo_municipio_residencia",
+      bairro: "bairro",
+      logradouro: "logradouro",
+    };
+    const avisar = (texto, classe) => {
+      if (!cepStatus) return;
+      cepStatus.textContent = texto;
+      cepStatus.classList.toggle("is-ok", classe === "ok");
+      cepStatus.classList.toggle("is-erro", classe === "erro");
+    };
+    const buscarCep = async () => {
+      const digitos = cep.value.replace(/\D/g, "");
+      if (digitos.length !== 8 || digitos === ultimoCep) return;
+      ultimoCep = digitos;
+      avisar("Buscando o endereço do CEP…");
+      try {
+        const resposta = await fetch(cepUrl.replace("00000000", digitos), { headers: { Accept: "application/json" } });
+        const dados = await resposta.json();
+        if (!dados.ok) {
+          avisar(dados.motivo || "CEP não encontrado.", "erro");
+          return;
+        }
+        const preenchidos = [];
+        Object.entries(destinos).forEach(([origem, nome]) => {
+          const campo = form.querySelector(`[name="${nome}"]`);
+          const valor = dados.endereco[origem] || "";
+          if (!campo || !valor) return;
+          if (campo.value.trim() && campo.value !== campo.dataset.cepValor) return;
+          campo.value = valor;
+          campo.dataset.cepValor = valor;
+          campo.dispatchEvent(new Event("input", { bubbles: true }));
+          preenchidos.push(nome);
+        });
+        avisar(preenchidos.length
+          ? "Endereço preenchido pelo CEP. Confira e complete o número."
+          : "CEP encontrado; os campos de endereço já estavam preenchidos.", "ok");
+      } catch (erro) {
+        ultimoCep = "";
+        avisar("Não foi possível consultar o CEP agora. Preencha o endereço à mão.", "erro");
+      }
+    };
+    cep.addEventListener("input", buscarCep);
+    cep.addEventListener("change", buscarCep);
+  }
+
   form.dataset.ready = "true";
   showStep(0);
   marcarPendencias();

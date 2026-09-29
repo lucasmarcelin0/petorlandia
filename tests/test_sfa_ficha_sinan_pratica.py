@@ -144,3 +144,132 @@ def test_toda_pagina_do_sfa_com_formulario_mostra_datas_em_dd_mm_aaaa():
         if "js/date_br.js" not in texto(documento(rel)):
             faltando.append(f"{rel} (layout {documento(rel)})")
     assert not faltando, "Página do SFA sem static/js/date_br.js: " + ", ".join(faltando)
+
+
+# ---------------------------------------------------------------------------
+# Dados de preenchimento salvos na conta
+# ---------------------------------------------------------------------------
+
+def _login(client, user_id):
+    with client.session_transaction() as sess:
+        sess.clear()
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+
+
+def _ficha_real(numero, **extra):
+    dados = {
+        "ficha_sinan": numero, "tipo_notificacao": "2", "agravo": "1", "data_notificacao": "2026-09-22",
+        "data_inicio_sintomas": "2026-09-20", "nome": "Paciente Fictício",
+        "uf_notificacao": "sp", "municipio_notificacao": "Orlândia", "codigo_municipio_notificacao": "3534302",
+        "unidade_notificante": "UBS Central", "codigo_unidade_notificante": "1234",
+        "investigador__municipio_unidade": "Orlândia / UBS Central", "investigador__codigo_unidade": "01",
+        "investigador__nome": "Enfermeira Teste", "investigador__funcao": "Enfermeira",
+        "investigador__assinatura": "Enfermeira Teste",
+    }
+    dados.update(extra)
+    return dados
+
+
+def test_unidade_municipio_e_investigador_ficam_salvos_na_conta(app, client):
+    from extensions import db
+    from models import User
+    from services.sfa_pre_t0 import carregar_padrao_usuario
+
+    usuario = User(name="Enfermeira", email="enf-sfa@test", password_hash="x", role="admin")
+    db.session.add(usuario)
+    db.session.commit()
+    _login(client, usuario.id)
+
+    primeira = client.get("/sfa/pre-t0").get_data(as_text=True)
+    assert 'name="lembrar_padrao" value="1" checked' in primeira
+    assert "Dados salvos da sua conta" not in primeira
+
+    assert client.post("/sfa/pre-t0", data=_ficha_real("5550001", lembrar_padrao="1")).status_code == 200
+    salvos = carregar_padrao_usuario(usuario.id)
+    assert salvos["unidade_notificante"] == "UBS Central" and salvos["uf_notificacao"] == "SP"
+    assert salvos["investigador__nome"] == "Enfermeira Teste"
+    assert "investigador__assinatura" not in salvos and "nome" not in salvos
+
+    segunda = client.get("/sfa/pre-t0").get_data(as_text=True)
+    assert "Dados salvos da sua conta" in segunda
+    assert 'value="UBS Central"' in segunda and 'value="3534302"' in segunda
+    # A assinatura é sempre digitada: o campo volta vazio.
+    assert re.search(r'name="investigador__assinatura"[^>]*value=""', segunda)
+    assert 'value="Enfermeira Teste"' in segunda  # nome do investigador, este sim salvo
+
+    # Desmarcar a opção apaga os dados salvos.
+    assert client.post("/sfa/pre-t0", data=_ficha_real("5550002")).status_code == 200
+    assert carregar_padrao_usuario(usuario.id) == {}
+
+
+def test_sem_conta_logada_nao_oferece_lembrar(client):
+    assert 'name="lembrar_padrao"' not in client.get("/sfa/pre-t0").get_data(as_text=True)
+
+
+# ---------------------------------------------------------------------------
+# CEP preenchendo o endereço
+# ---------------------------------------------------------------------------
+
+class _RespostaFalsa:
+    def __init__(self, status_code, dados):
+        self.status_code, self._dados = status_code, dados
+
+    def json(self):
+        return self._dados
+
+
+@pytest.fixture
+def viacep(monkeypatch):
+    import requests
+    from services import sfa_cep
+
+    sfa_cep._cache.clear()
+    chamadas, respostas = [], {}
+
+    def falso_get(url, **kwargs):
+        chamadas.append(url)
+        resposta = respostas.get(url)
+        if isinstance(resposta, Exception):
+            raise resposta
+        return resposta or _RespostaFalsa(200, {"erro": "true"})
+
+    monkeypatch.setattr(requests, "get", falso_get)
+    return chamadas, respostas
+
+
+def test_cep_preenche_endereco_e_so_o_cep_sai_do_servidor(client, viacep):
+    import requests
+
+    chamadas, respostas = viacep
+    respostas["https://viacep.com.br/ws/14620000/json/"] = _RespostaFalsa(200, {
+        "cep": "14620-000", "logradouro": "Rua Um", "bairro": "Centro", "localidade": "Orlândia",
+        "uf": "SP", "ibge": "3534302"})
+    resposta = client.get("/sfa/cep/14620-000.json")
+    assert resposta.status_code == 200
+    assert resposta.get_json()["endereco"] == {
+        "cep": "14620000", "uf": "SP", "municipio": "Orlândia", "codigo_ibge": "3534302",
+        "bairro": "Centro", "logradouro": "Rua Um"}
+    client.get("/sfa/cep/14620000.json")
+    assert chamadas == ["https://viacep.com.br/ws/14620000/json/"]  # a segunda veio do cache
+
+    assert client.get("/sfa/cep/123.json").status_code == 400
+    assert client.get("/sfa/cep/99999999.json").status_code == 404
+    respostas["https://viacep.com.br/ws/11111111/json/"] = requests.ConnectionError("sem rede")
+    fora_do_ar = client.get("/sfa/cep/11111111.json")
+    assert fora_do_ar.status_code == 503 and "à mão" in fora_do_ar.get_json()["motivo"]
+
+
+def test_ficha_pede_o_cep_antes_do_endereco(client):
+    texto = client.get("/sfa/pre-t0").get_data(as_text=True)
+    assert 'data-cep-url="/sfa/cep/00000000.json"' in texto
+    assert "data-cep-status" in texto
+    assert texto.index('data-field-card="cep"') < texto.index('data-field-card="logradouro"')
+    assert texto.index('data-field-card="cep"') < texto.index('data-field-card="uf_residencia"')
+
+
+def test_cep_e_cartao_sus_aceitam_hifen_ponto_e_espaco(schema):
+    respostas = coletar_respostas_pre_t0(_base(cep="14620-000", cartao_sus="123 4567 8901 2345"), schema)
+    assert respostas["cep"] == "14620000" and respostas["cartao_sus"] == "123456789012345"
+    with pytest.raises(ValueError):
+        coletar_respostas_pre_t0(_base(cep="1462A-000"), schema)

@@ -26,7 +26,7 @@ import os
 import re
 from functools import wraps
 
-from extensions import csrf
+from extensions import csrf, limiter
 from flask import (
     Blueprint,
     abort,
@@ -86,6 +86,13 @@ def _usuario_admin_autenticado() -> bool:
         current_user.is_authenticated
         and (getattr(current_user, "role", "") or "").lower() == "admin"
     )
+
+
+def _id_usuario_logado():
+    """Conta logada, ou None no acesso por token (ou num app sem login configurado)."""
+    if not hasattr(current_app, "login_manager"):
+        return None
+    return current_user.id if current_user.is_authenticated else None
 
 
 def _token_admin_informado() -> str:
@@ -1915,14 +1922,21 @@ def revisao_links():
 @require_sfa_internal_access
 def pre_t0_ficha():
     """Ficha SINAN compartilhável, preenchida antes do questionário T0."""
+    from werkzeug.datastructures import MultiDict
     from services.sfa_pre_t0 import (
+        apagar_padrao_usuario,
         carregar_esquema_pre_t0,
+        carregar_padrao_usuario,
         coletar_respostas_pre_t0,
         salvar_ficha_pre_t0,
+        salvar_padrao_usuario,
     )
 
     schema = carregar_esquema_pre_t0()
     error = ""
+    # Unidade, município e investigador ficam salvos na conta de quem preenche.
+    user_id = _id_usuario_logado()
+    padrao = carregar_padrao_usuario(user_id) if user_id else {}
 
     def page_response(template_name: str, **context):
         response = current_app.make_response(render_template(template_name, **context))
@@ -1940,19 +1954,51 @@ def pre_t0_ficha():
         try:
             answers = coletar_respostas_pre_t0(request.form, schema)
             salvar_ficha_pre_t0(answers)
-            return page_response("sfa/pre_t0_submitted.html")
         except ValueError as exc:
             error = str(exc)
         except RuntimeError as exc:
             error = str(exc)
+        else:
+            if user_id:
+                try:
+                    if request.form.get("lembrar_padrao") == "1":
+                        salvar_padrao_usuario(user_id, request.form)
+                    else:
+                        apagar_padrao_usuario(user_id)
+                except Exception:  # noqa: BLE001 - a ficha já foi gravada
+                    current_app.logger.exception("Falha ao salvar os dados de preenchimento do usuário.")
+            return page_response("sfa/pre_t0_submitted.html")
 
     return page_response(
         "sfa/pre_t0_form.html",
         schema=schema,
         error=error,
-        submitted=request.form,
+        submitted=request.form if request.method == "POST" else MultiDict(padrao),
         form_action=url_for("sfa_routes.pre_t0_ficha"),
+        padrao_aplicado=request.method == "GET" and bool(padrao),
+        pode_lembrar=bool(user_id),
+        lembrar_padrao=request.form.get("lembrar_padrao") == "1" if request.method == "POST" else True,
     )
+
+
+@bp.route("/cep/<cep>.json")
+@limiter.limit("40 per minute")
+def consultar_cep(cep: str):
+    """Endereço pelo CEP para a ficha SINAN (real e simulação). Só o CEP sai do servidor."""
+    from services.sfa_cep import CepIndisponivel, buscar_cep
+
+    try:
+        endereco = buscar_cep(cep)
+    except ValueError as exc:
+        return jsonify(ok=False, motivo=str(exc)), 400
+    except CepIndisponivel:
+        current_app.logger.warning("Consulta de CEP indisponível.")
+        return jsonify(ok=False, motivo="Não foi possível consultar o CEP agora. Preencha o endereço à mão."), 503
+    if endereco is None:
+        return jsonify(ok=False, motivo="CEP não encontrado. Confira os números ou preencha à mão."), 404
+    response = jsonify(ok=True, endereco=endereco)
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
 
 
 @bp.route("/pre-t0/qrcode.png")
@@ -2153,8 +2199,8 @@ def paciente_detail(id_estudo: str):
     def _summary_currency(stage, instrument_version, payload, resposta) -> str:
         if stage == "t0":
             candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
-        elif instrument_version in {"collective-v2", "collective-v3-disease-clock"}:
-            # No instrumento essencial, custo_outros representa o gasto total
+        elif instrument_version.startswith("collective-"):
+            # No instrumento essencial (collective-v2 em diante), custo_outros representa o gasto total
             # incremental. A propriedade do modelo permanece como fallback
             # para respostas persistidas antes desta leitura versionada.
             candidates = [payload.get("custo_outros"), getattr(resposta, "custo_total", "")]
