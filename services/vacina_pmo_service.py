@@ -259,7 +259,10 @@ def _strip_accents(value: str) -> str:
 
 
 def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+    text = str(value or "")
+    if text.isdigit():
+        return text
+    return "".join([c for c in text if c.isdigit()])
 
 
 def _parse_count(value: Any) -> int:
@@ -337,7 +340,7 @@ def _normalize_shift(value: Any) -> str:
 def _pmo_is_master_sheet(title: Any) -> bool:
     """True quando o título é a aba mestre de status — o app não deve escrever nela."""
     def _norm(value: Any) -> str:
-        return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+        return " ".join(_strip_accents(_normalize_text(value)).lower().split())
 
     return bool(_normalize_text(title)) and _norm(title) == _norm(PMO_MASTER_SHEET_TITLE)
 
@@ -1238,7 +1241,7 @@ def _provisional_email(phone: str, visit_id: int | None = None) -> str:
 
 
 def _normalize_person_name(value: Any) -> str:
-    return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+    return " ".join(_strip_accents(_normalize_text(value)).lower().split())
 
 
 _NAME_PARTICLES = {"da", "das", "de", "do", "dos", "e", "d"}
@@ -2311,12 +2314,12 @@ def _pmo_visit_has_field_record(visit: PmoVaccinationVisit) -> bool:
 
 def _pmo_animal_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return "".join([c for c in text if c.isalnum()])
 
 
 def _pmo_address_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return "".join([c for c in text if c.isalnum()])
 
 
 def _pmo_visit_phones(visit: PmoVaccinationVisit) -> set[str]:
@@ -4395,8 +4398,7 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
 
 def _pmo_normalize_title(value: Any) -> str:
     """Normaliza um título de aba: sem acento, minúsculo, espaços colapsados."""
-    text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"\s+", " ", text).strip()
+    return " ".join(_strip_accents(_normalize_text(value)).lower().split())
 
 
 def _pmo_match_sheet_title(titles: list[str], wanted: str) -> str:
@@ -6582,7 +6584,7 @@ def _request_row_identity(row: list[Any]) -> str:
         if user_id not in {"", "0"}:
             return f"user:{user_id}"
 
-    phone = re.sub(r"\D+", "", _cell(row, PMO_REQUEST_PHONE_INDEX))
+    phone = _digits(_cell(row, PMO_REQUEST_PHONE_INDEX))
     name = _pmo_normalize_title(_cell(row, PMO_REQUEST_TUTOR_INDEX))
     if name and len(phone) >= 8:
         return f"nome+fone:{name}|{phone[-11:]}"
@@ -6599,7 +6601,7 @@ def _request_row_key(row: list[str]) -> tuple[str, str, str]:
 
     def cell(index: int) -> str:
         value = row[index] if index < len(row) else ""
-        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+        return " ".join(str(value or "").split()).lower()
 
     return (
         cell(PMO_REQUEST_TIMESTAMP_INDEX),
