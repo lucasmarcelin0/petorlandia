@@ -59,11 +59,20 @@ def test_resultado_de_exame_invalido_aponta_o_campo(app):
     assert erro.value.campo == "prnt_resultado__res__s1"
 
 
-def test_ficha_nao_mostra_sua_jornada_e_traz_resultados_por_exame(app):
+def test_hifen_no_codigo_do_logradouro_nao_trava_o_envio(app):
+    with app.app_context():
+        respostas = coletar_respostas_pre_t0(_form(logradouro="Rua Três", codigo_logradouro="12-345", cep="14620-000"))
+    assert respostas["logradouro"] == {"valor": "Rua Três", "codigo": "12345"}
+    assert respostas["cep"] == "14620000"
+
+
+def test_ficha_mantem_o_cartao_de_progresso_sem_o_texto_sua_jornada(app):
     schema = carregar_esquema_pre_t0()
     with app.test_request_context("/x"):
         html = render_template("sfa/pre_t0_form.html", schema=schema, error="", submitted=MultiDict(), form_action="/x")
-    assert "SUA JORNADA" not in html and "journey-card" not in html
+    assert "SUA JORNADA" not in html
+    assert 'class="journey-card"' in html and "data-step-label" in html and "data-progress-fill" in html
+    assert html.count("data-step-target=") == len(schema["sections"])
     assert "ETAPA 01 DE 13" in html
     for exame in ("s1", "s2", "prnt"):
         assert f'name="prnt_resultado__res__{exame}"' in html

@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#103f46">
   <title>Ficha SINAN antes do T0 · SFA Orlândia</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260930a">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260930b">
 </head>
 <body>
   <main class="pre-t0-shell">
@@ -43,6 +43,16 @@
     </details>
 
     {% if error %}<div class="form-alert" role="alert"><span aria-hidden="true">!</span><div><strong>Confira antes de continuar</strong><p>{{ error }}</p></div></div>{% endif %}
+
+    <section class="journey-card" aria-label="Progresso do formulário">
+      <div class="journey-top"><div><strong data-step-label>Etapa 1 de {{ schema.sections|length }}</strong></div><span class="journey-percent" data-progress-label>0%</span></div>
+      <div class="progress-track" role="progressbar" aria-label="Progresso pelas etapas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-track><span data-progress-fill></span></div>
+      <nav class="stepper" aria-label="Etapas da ficha" data-stepper>
+        {% for section in schema.sections %}
+        <button type="button" class="step-dot{% if loop.first %} is-current{% endif %}" data-step-target="{{ loop.index0 }}" aria-label="Etapa {{ loop.index }}: {{ section.title }}" aria-current="{% if loop.first %}step{% else %}false{% endif %}"><span>{{ loop.index }}</span></button>
+        {% endfor %}
+      </nav>
+    </section>
 
     <form action="{{ form_action }}" method="post" novalidate data-step-form data-error-field="{{ error_field|default('') }}" data-error-message="{{ error }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -168,6 +178,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260930a" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260930b" defer></script>
 </body>
 </html>
