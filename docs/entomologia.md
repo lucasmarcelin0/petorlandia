@@ -155,3 +155,48 @@ node tests/test_sfa_map_layers.js
 ```
 
 O atlas é a visão inicial. Equipe, Planejamento, Entomologia, Censo e atualização de dados permanecem disponíveis. Camadas enviadas pela equipe podem ser ativadas no atlas e continuam na visão de visitas. O território é servido pela mesma autorização do painel, com cache privado e no-referrer.
+
+
+## Camadas operacionais e fonte Arboviroses (30/09/2026)
+
+O painel de camadas do atlas consulta sob demanda um projeto completo KML/KMZ,
+enviado em **Atualizar dados → Projeto completo do Google Earth**, com prévia,
+confirmação, autoria, auditoria e opção de desfazer. A fotografia redigida fica
+no banco `EntomologiaImportacao`, tipo `atlas_earth`; nunca no Git ou no HTML
+inicial. A última fotografia ativa vence; desfazê-la restaura a anterior.
+As quadras continuam na base territorial validada separadamente.
+
+As camadas Rotina, Mutirão, Casos Dengue, Larvas e Atendimentos têm controles
+independentes, enquadramento, subcamadas e filtro de mês das pastas. Nomes de
+marcadores e descrições livres são descartados; permanecem geometria original,
+categoria operacional, mês, rótulo da pasta, identificador técnico e eventual
+número SINAN explicitamente rotulado. O mês não é uma data exata de ocorrência.
+Novas alterações no Earth exigem uma nova exportação e envio; a data visível é
+de importação, não de atualização automática do projeto remoto.
+
+Pontos próximos de todas as fontes ativas são agrupados pelo espaço disponível
+na tela. A posição do agrupamento é um ponto original, sem média geográfica ou
+deslocamento dos dados. Os anéis mostram a proporção das camadas, e o clique
+abre a composição e os elementos; duplo clique aproxima. Agrupamentos e rótulos
+de quadra reservam espaço entre si. Contagens são elementos do arquivo, não
+pessoas, imóveis ou visitas únicos; fontes não são deduplicadas por proximidade.
+
+A planilha fornecida (`15UdUxNhuL3VUNpJr_iEiiWTVM-rlKtVcGPeY9jSFJ_E`,
+gid `1339975360`) é lida pelo servidor com as credenciais Google existentes do
+SFA, escopo somente leitura, ao ativar **Registros da planilha**. A consulta tem
+cache de 90 segundos e atualização manual. O gid, os cabeçalhos utilizados e o
+limite de 10 mil linhas são conferidos antes da leitura. Essa consulta não
+executa a sincronização SINAN nem cria pacientes, ações ou notificações.
+
+O atlas recebe somente linha de origem, chave SINAN, agravo, datas de notificação
+e sintomas, exame, resultado, resultado final e classificação. Nome, endereço,
+telefone, nascimento e campos livres não são enviados ao atlas. Uma geometria
+só é atribuída se houver exatamente uma linha e um ponto clínico do Earth com
+o mesmo SINAN explícito. Duplicatas e ausência de chave ficam sem posição, em
+lista filtrável com acesso a todas as linhas e link para a fonte. Não há
+geocodificação de endereços ou correspondência por nome.
+
+Todas as rotas são internas, com `private, no-store` e `no-referrer`.
+Casos Dengue e a consulta da planilha exigem o acesso completo já existente do
+SFA. O papel adicional Combate à dengue recebe somente as camadas operacionais.
+A indisponibilidade de uma fonte não remove as outras camadas ou o território.

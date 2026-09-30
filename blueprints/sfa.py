@@ -195,6 +195,12 @@ def entomologia():
     dataset['territory_url'] = url_for('sfa_routes.entomologia_territorio',
                                        token=_token_admin_informado() or None)
     acesso_completo = _acesso_interno_sfa_liberado()
+    dataset['atlas_urls'] = {
+        'catalog': url_for('sfa_routes.entomologia_atlas_catalogo', token=_token_admin_informado() or None),
+        'layer': url_for('sfa_routes.entomologia_atlas_camada', layer='LAYER', token=_token_admin_informado() or None),
+        'sinan': url_for('sfa_routes.entomologia_atlas_sinan', token=_token_admin_informado() or None),
+        'clinical_allowed': acesso_completo,
+    }
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
@@ -204,6 +210,49 @@ def entomologia():
         "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
         acesso_completo=acesso_completo, pode_alterar=usuario_pode_alterar(),
     ))
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@bp.route('/entomologia/atlas/camadas')
+@require_entomologia_access
+def entomologia_atlas_catalogo():
+    from services.entomologia_atlas import active_earth, catalog
+    response = jsonify(catalog(active_earth(), _acesso_interno_sfa_liberado()))
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@bp.route('/entomologia/atlas/camadas/<layer>')
+@require_entomologia_access
+def entomologia_atlas_camada(layer):
+    from services.entomologia_atlas import active_earth, layer_id, is_case
+    data = active_earth()
+    features = [f for f in data['features'] if layer_id(f['properties']['layer']) == layer]
+    if not features:
+        abort(404)
+    if any(is_case(f['properties']['layer']) for f in features) and not _acesso_interno_sfa_liberado():
+        return _bloquear_acesso_interno()
+    response = jsonify({'type': 'FeatureCollection', 'features': features, 'source': data['source']})
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@bp.route('/entomologia/atlas/sinan')
+@require_sfa_internal_access
+def entomologia_atlas_sinan():
+    from services.entomologia_atlas import active_earth, live_sheet
+    try:
+        data = live_sheet(active_earth(), force=request.args.get('refresh') == '1')
+    except Exception as exc:
+        current_app.logger.warning('Atlas: fonte Sheets indisponível (%s)', type(exc).__name__)
+        response = jsonify({'error': 'Não foi possível consultar a planilha. Tente atualizar a fonte.'})
+        response.status_code = 503
+    else:
+        response = jsonify(data)
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response

@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20260930-2') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
@@ -166,6 +167,23 @@
         <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
         <aside class="field-rail" aria-label="Camadas e informações do território">
           <section><div class="ento-eyebrow">VISUALIZAÇÃO</div><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></section>
+          <section class="atlas-controls" aria-labelledby="atlas-layers-title">
+            <div class="atlas-header"><div><div class="ento-eyebrow">FONTES INTEGRADAS</div><h3 id="atlas-layers-title">Camadas do território</h3></div></div>
+            <p id="atlas-active-count" class="atlas-active" role="status">Preparando camadas…</p>
+            <div class="atlas-presets"><button type="button" id="atlas-show-field">Campo</button><button type="button" id="atlas-show-all">Mostrar todas</button><button type="button" id="atlas-hide-all">Ocultar extras</button></div>
+            <details class="atlas-source-group" open><summary>Google Earth</summary><div id="atlas-earth-list"></div><p id="atlas-earth-source" class="atlas-source-note"></p><p class="atlas-source-note">Cópia do arquivo; alterações no Earth exigem novo envio. <a href="https://earth.google.com/earth/d/1eruMbx5QcW6rK2vn5WRtG1h1036Tq4ha" target="_blank" rel="noopener noreferrer">Abrir projeto ↗</a> · <a href="{{ url_for('sfa_routes.entomologia_atualizar', token=token) }}#enviar-atlas">Atualizar KML</a></p></details>
+            <details id="atlas-uploads" class="atlas-source-group" hidden><summary>Outras camadas enviadas</summary><div id="atlas-upload-list"></div></details>
+            <details class="atlas-source-group" open><summary>Planilha · Arboviroses</summary><div class="atlas-sinan-row"><label><input type="checkbox" id="atlas-sinan"><span><strong>Registros da planilha</strong><small id="atlas-sheet-count">Ative para consultar a fonte</small></span></label></div><p id="atlas-sheet-source" class="atlas-source-note">Resultados, datas e classificação da aba original. Sem coordenadas inventadas.</p><button type="button" id="atlas-refresh" class="atlas-small-button">Atualizar consulta</button><details id="atlas-unlocated" class="atlas-unlocated" hidden><summary id="atlas-unlocated-count">Registros sem posição</summary><p class="atlas-source-note">Sem um vínculo SINAN explícito e único no Earth, o registro continua consultável na lista.</p><div id="atlas-unlocated-list" class="atlas-unlocated-list"></div><button type="button" id="atlas-more-unlocated" class="atlas-small-button" hidden>Mostrar mais registros</button></details></details>
+            <details class="atlas-source-group"><summary>Filtrar os dados das camadas</summary><div class="atlas-filter-grid">
+              <div class="atlas-full"><label for="atlas-month">Mês (pastas Earth / data da planilha)</label><select id="atlas-month"><option value="">Todos os meses</option>{% for n, month in [(1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),(5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),(9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')] %}<option value="{{ '%02d'|format(n) }}">{{ month }}</option>{% endfor %}<option value="unknown">Sem mês informado</option></select></div>
+              <div class="atlas-full"><label for="atlas-date-field">Data da planilha usada no filtro</label><select id="atlas-date-field"><option value="notification_date">Notificação</option><option value="symptoms_date">Início dos sintomas</option></select></div>
+              <div><label for="atlas-start">A partir de</label><input id="atlas-start" type="date"></div><div><label for="atlas-end">Até</label><input id="atlas-end" type="date"></div>
+              <div class="atlas-full"><label for="atlas-result">Resultado do exame (planilha)</label><select id="atlas-result"><option value="">Todos os resultados</option><option value="positive">Positivo</option><option value="negative">Negativo</option><option value="pending">Pendente / suspeito</option><option value="unknown">Sem resultado reconhecido</option></select></div>
+              <div class="atlas-full"><label for="atlas-final-result">Resultado final (planilha)</label><select id="atlas-final-result"><option value="">Todos os resultados finais</option><option value="missing">Sem resultado final informado</option></select></div>
+              <div class="atlas-full"><label for="atlas-classification">Classificação do caso (planilha)</label><select id="atlas-classification"><option value="">Todas as classificações</option></select></div><button id="atlas-clear-filters" type="button" class="atlas-small-button atlas-full">Limpar filtros das camadas</button>
+            </div><p class="atlas-source-note">O mês do Earth vem das pastas. Datas exatas e resultados filtram somente os registros da planilha. Quadras permanecem como referência.</p></details>
+            <p class="atlas-point-help">Círculos numerados agrupam pontos próximos. As cores do anel mostram suas camadas; clique para ver a composição ou dê duplo clique para aproximar. Os registros das fontes permanecem distintos.</p><div id="atlas-notice" class="atlas-notice" role="alert" hidden></div>
+          </section>
           <section id="field-selection" aria-live="polite"><div class="ento-eyebrow">CONSULTA DO TERRITÓRIO</div><h3>Escolha uma quadra</h3><p>Clique em um contorno para consultar seu número, setor e área de campo.</p></section>
           <section><div class="ento-eyebrow">ÁREAS DE CAMPO</div><div id="field-area-legend" class="field-area-legend"></div></section>
         </aside>
@@ -186,6 +204,8 @@
 <script src="{{ url_for('static', filename='js/sfa_entomologia_model.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_map_layers.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20260930') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20260930-2') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20260930-2') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20260930-2') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}

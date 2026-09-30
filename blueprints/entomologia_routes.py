@@ -148,7 +148,8 @@ def register(bp, require_access):
         tipo = request.form.get('tipo', service.TIPO_VISITAS)
         arquivo = request.files.get('arquivo')
         try:
-            if tipo not in (service.TIPO_VISITAS, service.TIPO_CAMADA):
+            from services.entomologia_atlas import TIPO_ATLAS
+            if tipo not in (service.TIPO_VISITAS, service.TIPO_CAMADA, TIPO_ATLAS):
                 raise ValueError('Tipo de arquivo inválido.')
             if not arquivo or not arquivo.filename:
                 raise ValueError('Escolha um arquivo para enviar.')
@@ -170,7 +171,13 @@ def register(bp, require_access):
                                                                    separators=(',', ':'), allow_nan=False),
                     resumo_json=json.dumps(resumo, ensure_ascii=False))
             else:
-                lido = service.ler_camada(blob, nome)
+                if tipo == TIPO_ATLAS:
+                    from services.entomologia_atlas import read_earth
+                    atlas = read_earth(blob, nome)
+                    lido = {'geojson': atlas, 'sha256': atlas['source']['sha256'],
+                            'titulo': atlas['source']['title'], 'pastas': list(atlas['source']['counts'])}
+                else:
+                    lido = service.ler_camada(blob, nome)
                 titulo = str(request.form.get('titulo') or '').strip()[:200] or lido['titulo'] or nome
                 features = lido['geojson']['features']
                 resumo = {'elementos': len(features), 'pastas': lido['pastas'][:50],
@@ -222,7 +229,7 @@ def register(bp, require_access):
             flash(f'Base atualizada: {registro.linhas} registros de {registro.inicio:%d/%m/%Y} a {registro.fim:%d/%m/%Y}. '
                   'Os painéis já usam os novos dados.', 'success')
         else:
-            flash(f'Camada “{registro.titulo}” disponível no mapa da aba Entomologia.', 'success')
+            flash(f'Camada “{registro.titulo}” disponível no atlas (projeto completo) ou na aba Entomologia (camada avulsa).', 'success')
         return redirect(url_for('sfa_routes.entomologia_atualizar', token=request.args.get('token') or None))
 
     @bp.route('/entomologia/envios/<int:envio_id>/desfazer', methods=['POST'])

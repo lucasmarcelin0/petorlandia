@@ -115,7 +115,7 @@
         priority:item.priority || (selected?.id === item.feature.id ? 1000 : 0)};
     });
     const mapRect = $('field-map').getBoundingClientRect();
-    const reserved = [...$('field-workspace').querySelectorAll('.field-map-caption > span, #field-map .leaflet-control')].map(element => {
+    const reserved = [...$('field-workspace').querySelectorAll('.field-map-caption > span, #field-map .leaflet-control, #field-map .atlas-cluster')].map(element => {
       const r = element.getBoundingClientRect();
       return {left:r.left-mapRect.left-3, right:r.right-mapRect.left+3, top:r.top-mapRect.top-3, bottom:r.bottom-mapRect.top+3};
     });
@@ -136,7 +136,7 @@
   function setup() {
     if (!window.L) throw Error('Biblioteca de mapas indisponível.');
     map = L.map('field-map', {scrollWheelZoom:false, minZoom:11, maxZoom:21}).setView([-20.72,-47.88],14);
-    for (const [name,z] of [['field-uploads',405],['field-census',410],['field-blocks',420],['field-selection',430],['field-labels',620]]) {
+    for (const [name,z] of [['field-events',610],['field-event-labels',630],['field-census',410],['field-blocks',420],['field-selection',430],['field-labels',620]]) {
       map.createPane(name).style.zIndex = z;
       if (name === 'field-labels') map.getPane(name).style.pointerEvents = 'none';
     }
@@ -145,22 +145,7 @@
     $('field-basemap').value = basemap.getMode();
     labelLayer = L.layerGroup().addTo(map);
     censusLayer = L.geoJSON(dataset.census, {pane:'field-census', interactive:false, style:{color:'#8fc9ff', weight:2, dashArray:'6 5', fillOpacity:0}});
-    const uploaded = $('field-uploaded-layers');
-    (dataset.layers || []).forEach((item, index) => {
-      const color = colors[index % colors.length];
-      const layer = L.geoJSON(item.geojson, {
-        pane:'field-uploads', style:() => ({color, weight:2, fillOpacity:.12}),
-        pointToLayer:(feature, point) => L.circleMarker(point, {pane:'field-uploads', radius:6, color:'#fff', weight:1.5, fillColor:color, fillOpacity:.95}),
-        onEachFeature:(feature, target) => {
-          const p = feature.properties || {};
-          target.bindPopup(`<strong>${escape(p.name || 'Sem nome')}</strong>${p.folder ? `<br>${escape(p.folder)}` : ''}${p.description ? `<br>${escape(p.description)}` : ''}`);
-        }
-      });
-      const label = document.createElement('label'), input = document.createElement('input'), text = document.createElement('span');
-      input.type = 'checkbox'; text.textContent = item.title || 'Camada da equipe';
-      input.onchange = () => {input.checked ? layer.addTo(map) : layer.remove();};
-      label.append(input, text); uploaded.append(label); uploaded.hidden = false;
-    });
+    window.SfaAtlasLayers.attach(map,dataset);
     districts = [...new Set(territory.features.map(f => f.properties.district))];
     $('field-district').replaceChildren(new Option('Todas as áreas', ''), ...districts.map(d => new Option(areaName(d),d)));
     updateSectors();
@@ -168,7 +153,7 @@
     $('field-area-legend').innerHTML = districts.map(d => `<button type="button" data-district="${escape(d)}"><i style="background:${areaColor(d)}"></i><span>${escape(areaName(d))}</span></button>`).join('');
     $('field-provenance').textContent = `Fonte: ${territory.source.file}, camada Quadras. ${territory.source.blocks} geometrias em ${territory.source.districts} áreas e ${territory.source.sectors} códigos SC. ${territory.source.invalid_geometries} geometria irregular e ${territory.source.duplicate_keys} chave setor/quadra repetida, sinalizadas na consulta. Coordenadas originais preservadas; posições dos rótulos calculadas no interior dos polígonos. As folhas em papel não foram georreferenciadas. Hash SHA-256: ${territory.source.sha256}.`;
     map.attributionControl.addAttribution('Quadras: referência municipal · IBGE 2022 (camada opcional)');
-    map.on('zoomend moveend resize', scheduleLabels);
+    map.on('zoomend moveend resize atlaslayerschange', scheduleLabels);
     $('field-filters').onsubmit = e => {e.preventDefault(); clearTimeout(searchTimer); draw(true);};
     $('field-search').oninput = () => {clearTimeout(searchTimer); searchTimer = setTimeout(() => draw(true),250);};
     $('field-district').onchange = () => {updateSectors(); draw(true);};
