@@ -44,12 +44,125 @@
     }
   }
 
+  // ---- Conferência por etapa: erros aparecem no cartão do campo e num aviso no topo da etapa ----
+  const campoEscondido = (el) => {
+    for (let n = el; n && n !== form; n = n.parentElement) if (n.style && n.style.display === "none") return true;
+    return false;
+  };
+  const nomeDoCampo = (cartao) => {
+    const titulo = cartao.querySelector(".question-title > span:not(.question-number):not(.required-mark)");
+    return titulo ? titulo.textContent.trim() : "Campo";
+  };
+
+  function errosDoCartao(cartao) {
+    const erros = [];
+    const gruposVistos = new Set();
+    cartao.querySelectorAll("input, select, textarea").forEach((c) => {
+      if (c.type === "hidden" || c.disabled || c.type === "checkbox") return;
+      if (c.type === "radio") {
+        if (gruposVistos.has(c.name)) return;
+        gruposVistos.add(c.name);
+        const grupo = Array.from(cartao.querySelectorAll(`input[type="radio"]`)).filter((r) => r.name === c.name);
+        if (grupo.some((r) => r.required) && !grupo.some((r) => r.checked)) erros.push({ controle: c, mensagem: "Escolha uma das opções." });
+        return;
+      }
+      const valor = c.value.trim();
+      if (c.type === "date" && !valor && c.validity && c.validity.badInput) { erros.push({ controle: c, mensagem: "Data inválida." }); return; }
+      if (c.required && !valor) { erros.push({ controle: c, mensagem: "Preencha este campo." }); return; }
+      if (!valor) return;
+      if (c.hasAttribute("data-numeric") && !/^\d+$/.test(valor)) erros.push({ controle: c, mensagem: "Use somente números." });
+      else if (c.minLength > 0 && valor.length < c.minLength) erros.push({ controle: c, mensagem: `Informe pelo menos ${c.minLength} dígitos.` });
+    });
+    const idade = cartao.querySelector("#input-idade_valor");
+    const unidade = cartao.querySelector("#input-idade_unidade");
+    if (idade && unidade && idade.value.trim() && !unidade.value) erros.push({ controle: unidade, mensagem: "Selecione a unidade da idade." });
+    return erros;
+  }
+
+  function errosDaEtapa(indice) {
+    const erros = [];
+    panels[indice].querySelectorAll("[data-field-card]").forEach((cartao) => {
+      if (campoEscondido(cartao)) return;
+      errosDoCartao(cartao).forEach((erro) => erros.push({ ...erro, cartao }));
+    });
+    return erros;
+  }
+
+  function limparErros(painel) {
+    painel.querySelectorAll(".has-error").forEach((c) => c.classList.remove("has-error"));
+    painel.querySelectorAll(".field-error, .step-alert").forEach((e) => e.remove());
+  }
+
+  function conferirEtapa(indice) {
+    const painel = panels[indice];
+    limparErros(painel);
+    const erros = errosDaEtapa(indice);
+    if (!erros.length) return true;
+    erros.forEach(({ cartao, mensagem }) => {
+      cartao.classList.add("has-error");
+      if (cartao.querySelector(".field-error")) return;
+      const aviso = document.createElement("p");
+      aviso.className = "field-error";
+      aviso.setAttribute("role", "alert");
+      aviso.textContent = mensagem;
+      cartao.appendChild(aviso);
+    });
+    const alerta = document.createElement("div");
+    alerta.className = "step-alert";
+    alerta.setAttribute("role", "alert");
+    const titulo = document.createElement("strong");
+    titulo.textContent = erros.length === 1 ? "Falta corrigir 1 campo nesta etapa" : `Faltam corrigir ${erros.length} campos nesta etapa`;
+    const lista = document.createElement("ul");
+    erros.forEach(({ cartao, mensagem }) => {
+      const item = document.createElement("li");
+      item.textContent = `${nomeDoCampo(cartao)}: ${mensagem}`;
+      lista.appendChild(item);
+    });
+    alerta.append(titulo, lista);
+    const cabecalho = painel.querySelector(".section-heading");
+    if (cabecalho) cabecalho.insertAdjacentElement("afterend", alerta); else painel.prepend(alerta);
+    const primeiro = erros[0];
+    window.setTimeout(() => {
+      primeiro.controle.focus({ preventScroll: true });
+      primeiro.cartao.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+    return false;
+  }
+
+  // Corrigiu o campo: o aviso dele some (e o aviso da etapa some quando não sobra nenhum).
+  const aoEditar = (evento) => {
+    const cartao = evento.target.closest && evento.target.closest("[data-field-card]");
+    if (!cartao || !cartao.classList.contains("has-error")) return;
+    cartao.classList.remove("has-error");
+    cartao.querySelectorAll(".field-error").forEach((e) => e.remove());
+    const painel = cartao.closest("[data-step-panel]");
+    if (painel && !painel.querySelector(".has-error")) painel.querySelectorAll(".step-alert").forEach((e) => e.remove());
+  };
+  form.addEventListener("input", aoEditar);
+  form.addEventListener("change", aoEditar);
+
+  // Campos numéricos: separadores (traço, ponto, espaço, barra, parênteses) inseridos pelo preenchimento
+  // automático ou pela digitação são descartados na hora, em vez de travar a etapa.
+  form.querySelectorAll("[data-numeric]").forEach((campo) => {
+    const limpar = () => {
+      const limpo = campo.value.replace(/[\s.\-–—/()]/g, "");
+      if (limpo !== campo.value) campo.value = limpo;
+    };
+    ["input", "change", "blur"].forEach((tipo) => campo.addEventListener(tipo, limpar));
+    limpar();
+  });
+
   previous?.addEventListener("click", () => showStep(current - 1, true));
+  const notaEtapa = form.querySelector(".step-actions-note");
+  const notaPadrao = notaEtapa ? notaEtapa.textContent : "";
   next?.addEventListener("click", () => {
+    if (!conferirEtapa(current)) return;
+    if (notaEtapa) notaEtapa.textContent = `✓ Etapa ${current + 1} conferida`;
     visited.add(current);
     visited.add(current + 1);
     showStep(current + 1, true);
   });
+  previous?.addEventListener("click", () => { if (notaEtapa) notaEtapa.textContent = notaPadrao; });
   dots.forEach((dot) => dot.addEventListener("click", () => {
     const target = Number(dot.dataset.stepTarget);
     if (Number.isInteger(target)) {
@@ -59,14 +172,12 @@
   }));
 
   form.addEventListener("submit", (event) => {
-    const invalid = Array.from(form.elements).find((control) => control.willValidate && !control.checkValidity());
-    if (invalid) {
+    const primeiraComErro = panels.findIndex((_painel, indice) => errosDaEtapa(indice).length > 0);
+    if (primeiraComErro >= 0) {
       event.preventDefault();
-      const panel = invalid.closest("[data-step-panel]");
-      const index = Number(panel?.dataset.stepPanel || 0);
-      visited.add(index);
-      showStep(index, true);
-      window.setTimeout(() => invalid.reportValidity(), 180);
+      visited.add(primeiraComErro);
+      showStep(primeiraComErro);
+      conferirEtapa(primeiraComErro);
       return;
     }
     if (submit) {
@@ -228,33 +339,37 @@
     autoctone.forEach((r) => r.addEventListener("change", copiarResidencia));
   }
 
-  // Sinais de alarme / dengue grave: com resposta "Não" (2), esconde a lista de sinais e a data de início.
-  // O que estava marcado é guardado e limpo (nada contraditório é enviado) e volta se a resposta mudar.
-  [["sinais_alarme", "data_inicio_sinais_alarme"], ["dengue_grave", "data_inicio_sinais_gravidade"]].forEach(([chave, chaveData]) => {
-    const cartao = form.querySelector(`[data-field-card="${chave}"]`);
-    if (!cartao) return;
-    const cartaoData = form.querySelector(`[data-field-card="${chaveData}"]`);
-    const radios = Array.from(cartao.querySelectorAll(`input[type="radio"][name="${chave}"]`));
-    const blocos = Array.from(cartao.querySelectorAll(".matrix-hint, .flag-list, .severity-groups"));
-    const alvos = [...blocos, ...(cartaoData ? [cartaoData] : [])];
-    const campos = alvos.flatMap((el) => Array.from(el.querySelectorAll("input")));
+  // Perguntas que só valem para certas respostas. Ao esconder, o que estava preenchido é guardado e limpo
+  // (nada contraditório é enviado); se a resposta mudar, o conteúdo volta.
+  function esconderQuando(nomeRadio, valoresQueEscondem, alvos) {
+    const radios = Array.from(form.querySelectorAll(`input[type="radio"][name="${nomeRadio}"]`));
+    alvos = alvos.filter(Boolean);
+    if (!radios.length || !alvos.length) return;
+    const campos = alvos.flatMap((el) => Array.from(el.querySelectorAll("input, select, textarea")));
+    const marcavel = (c) => c.type === "checkbox" || c.type === "radio";
     let guardado = null;
     const aplicar = () => {
-      const nao = radios.some((r) => r.checked && r.value === "2");
-      const escondido = alvos[0] && alvos[0].style.display === "none";
-      if (nao && !escondido) {
-        guardado = campos.map((c) => (c.type === "checkbox" ? c.checked : c.value));
-        campos.forEach((c) => { if (c.type === "checkbox") c.checked = false; else c.value = ""; });
+      const deve = radios.some((r) => r.checked && valoresQueEscondem.includes(r.value));
+      const escondido = alvos[0].style.display === "none";
+      if (deve && !escondido) {
+        guardado = campos.map((c) => (marcavel(c) ? c.checked : c.value));
+        campos.forEach((c) => { if (marcavel(c)) c.checked = false; else c.value = ""; });
         alvos.forEach((el) => { el.style.display = "none"; });
-      } else if (!nao && escondido) {
+      } else if (!deve && escondido) {
         alvos.forEach((el) => { el.style.display = ""; });
-        if (guardado) campos.forEach((c, i) => { if (c.type === "checkbox") c.checked = guardado[i]; else c.value = guardado[i]; });
+        if (guardado) campos.forEach((c, i) => { if (marcavel(c)) c.checked = guardado[i]; else c.value = guardado[i]; });
         guardado = null;
       }
     };
     radios.forEach((r) => r.addEventListener("change", aplicar));
     aplicar();
-  });
+  }
+  const cartaoDe = (chave) => form.querySelector(`[data-field-card="${chave}"]`);
+  const partesDe = (chave, seletor) => Array.from((cartaoDe(chave) || document.createElement("div")).querySelectorAll(seletor));
+  esconderQuando("sinais_alarme", ["2"], [...partesDe("sinais_alarme", ".matrix-hint, .flag-list"), cartaoDe("data_inicio_sinais_alarme")]);
+  esconderQuando("dengue_grave", ["2"], [...partesDe("dengue_grave", ".severity-groups"), cartaoDe("data_inicio_sinais_gravidade")]);
+  esconderQuando("hospitalizacao", ["2"], ["data_internacao", "uf_hospital", "municipio_hospital", "nome_hospital", "telefone_hospital"].map(cartaoDe));
+  esconderQuando("evolucao_caso", ["1"], [cartaoDe("data_obito")]);
 
   form.dataset.ready = "true";
   showStep(0);
