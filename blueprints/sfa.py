@@ -192,6 +192,8 @@ def entomologia():
                                token=_token_admin_informado() or None))
         for item in load_reference_maps()
     ]
+    dataset['territory_url'] = url_for('sfa_routes.entomologia_territorio',
+                                       token=_token_admin_informado() or None)
     acesso_completo = _acesso_interno_sfa_liberado()
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
     publicacao = publicacao_vigente()
@@ -202,6 +204,16 @@ def entomologia():
         "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
         acesso_completo=acesso_completo, pode_alterar=usuario_pode_alterar(),
     ))
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@bp.route('/entomologia/territorio.json')
+@require_entomologia_access
+def entomologia_territorio():
+    from services.entomologia_service import load_field_territory
+    response = jsonify(load_field_territory())
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response

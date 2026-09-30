@@ -68,7 +68,7 @@ contêm; a fotografia abaixo continua sendo a base e não é alterada pelo servi
 A fotografia versionada não depende do banco. `services/data/entomologia/snapshot.json`
 e `maps/` acompanham o código; as rotas protegidas servem os dados e as imagens.
 Nenhum download externo é feito pelo servidor em cada acesso. O navegador usa
-OpenStreetMap para o fundo de ruas; os limites e indicadores funcionam sem esse
+Esri World Street Map para o fundo de ruas; os limites e indicadores funcionam sem esse
 fundo. Leaflet e o código dos gráficos são locais.
 
 Para substituir a exportação, use o ambiente de desenvolvimento com `pyshp`:
@@ -105,3 +105,53 @@ A aba inicial Planejamento permite janelas inclusivas de 7, 14 e 28 dias, ancora
 Há listas separadas de focos registrados, dificuldades de acesso e incompletude, por setor ou pela chave área–setor–quarteirão. A tela exibe até 20 candidatos; o CSV inclui todos os candidatos e as datas de ambas as janelas. A lista não estima risco nem informa se a ocorrência continua pendente. O botão “Ver registros” abre o recorte correspondente em Entomologia.
 
 O estudo [plano_vigilancia_orlandia.md](plano_vigilancia_orlandia.md) documenta os achados, programas sugeridos, indicadores e integrações necessárias. A [auditoria reproduzível](analises/planejamento_orlandia.ipynb) confere as contagens em Python, independentemente do modelo JavaScript. Suas cinco células foram executadas sequencialmente e salvas com saída, usando Python sem kernel Jupyter; o formato recebeu verificações estruturais locais. Para reexecutar em Jupyter, abra o notebook na raiz do projeto ou em seu diretório.
+
+
+## Atlas integrado de campo (30/09/2026)
+
+A visão inicial **Mapa integrado** reúne as 946 geometrias de quadras da camada
+Quadras de `Copy of Cópia de 2026.kml`, organizadas em 72 códigos SC e nove áreas.
+O GeoJSON versionado fica em `services/data/entomologia/territory.json`, servido
+pela rota interna `/sfa/entomologia/territorio.json`. O arquivo bruto não é
+publicado: apenas polígonos, códigos, áreas, IDs de origem e informações de
+conferência. Pontos de casos, descrições, HTML e outras camadas são excluídos.
+
+As coordenadas são preservadas sem simplificação, deslocamento ou ajuste ao
+satélite. Shapely é usado somente na preparação para calcular rótulos no interior
+dos polígonos. Uma geometria irregular e uma chave setor/quadra repetida são
+sinalizadas; não se corrige nem se descarta a geometria original. A grafia
+SC 0102 da fonte é preservada. Quadras com sufixos (899A–F, 900A–F) permanecem
+distintas. A correspondência com as 14 folhas em papel e com a malha IBGE exige
+conferência municipal; não houve georreferenciamento das imagens nem levantamento
+cadastral. Nenhuma precisão métrica é presumida da imagem de satélite.
+
+A busca aceita código exato de quadra, SC ou nome da área. No zoom da cidade,
+rótulos mostram setores; no zoom 16 ou maior, mostram quadras. A posição usa um
+ponto interior e uma verificação de colisão em pixels, recalculada ao mover,
+ampliar ou redimensionar. A seleção de uma quadra apresenta apenas registros
+candidatos com os mesmos códigos, sem validar o vínculo ou atribuir visitas
+automaticamente. A camada IBGE é separada e opcional. Os mapas originais continuam
+na própria visão, em uma seção recolhível com 14 miniaturas e zoom.
+
+O atlas usa Esri World Imagery por padrão e Esri World Street Map como alternativa
+de ruas. Após três erros na camada ativa, remove o fundo antes de tentar a
+alternativa; se ambas falham, mantém quadras, números e controles sobre base limpa.
+A base de ruas foi conferida visualmente: a alternativa CARTO exigia chave
+e exibia uma marca d’água, conforme a [regra atual do provedor](https://carto.com/basemaps/apikey/),
+e foi substituída por Esri World Street Map.
+Não há chamadas a tile.openstreetmap.org: a política no-referrer do painel
+conflitava com a [exigência de Referer daquele serviço](https://operations.osmfoundation.org/policies/tiles/). A política de privacidade
+do painel e das imagens internas permanece no-referrer. As atribuições dos
+provedores e escala métrica são exibidas. Entomologia e Censo também usam o novo
+fundo de ruas. Leaflet, geometrias e rótulos são locais; imagens de fundo exigem
+conectividade e disponibilidade dos provedores.
+
+Preparar uma nova versão (Shapely é dependência de preparação, não do servidor):
+
+```powershell
+python scripts/prepare_entomologia_territory.py "C:/caminho/copia-do-mapa.kml"
+node tests/test_field_map_model.js
+node tests/test_sfa_map_layers.js
+```
+
+O atlas é a visão inicial. Equipe, Planejamento, Entomologia, Censo e atualização de dados permanecem disponíveis. Camadas enviadas pela equipe podem ser ativadas no atlas e continuam na visão de visitas. O território é servido pela mesma autorização do painel, com cache privado e no-referrer.

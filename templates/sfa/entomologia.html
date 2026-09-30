@@ -4,13 +4,14 @@
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
   <header class="ento-hero">
     <div><div class="ento-eyebrow">ORLÂNDIA / SÃO PAULO</div>
-      <h1>Um olhar sobre o território</h1>
-      <p>Organize o trabalho de campo com os sinais entomológicos, as dificuldades de acesso e o contexto da cidade.</p>
+      <h1>Orlândia, quadra por quadra</h1>
+      <p>Um atlas para orientar o campo: quadras sobre o satélite, números legíveis e os mapas originais sempre à mão.</p>
     </div>
     <div class="ento-source-chip"><span class="ento-dot"></span> Vigilância entomológica<br><strong id="source-period">Carregando período…</strong><small id="source-updated">Base importada • Censo de referência: 2022</small>
       <div class="ento-hero-actions"><a class="btn btn-sm btn-primary" href="{{ url_for('sfa_routes.entomologia_atualizar', token=token) }}"><i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados</a>{% set publica = entomologia_url_publica() %}{% if publica %}<a class="btn btn-sm btn-outline-secondary" href="{{ publica }}" target="_blank" rel="noopener"><i class="fas fa-bullhorn" aria-hidden="true"></i> Página pública</a>{% endif %}</div></div>
@@ -18,14 +19,14 @@
   <noscript><div class="alert alert-warning">Ative o JavaScript para usar o mapa e os filtros.</div></noscript>
   <div id="ento-error" class="alert alert-danger" role="alert" hidden></div>
   <div class="ento-tabs" role="tablist" aria-label="Visões dos dados">
-    <button type="button" role="tab" id="tab-team" aria-selected="true" aria-controls="panel-team" data-view="team">Equipe</button>
+    <button type="button" role="tab" id="tab-reference" aria-selected="true" aria-controls="panel-reference" data-view="reference">Mapa de campo</button>
+    <button type="button" role="tab" id="tab-team" aria-selected="false" aria-controls="panel-team" tabindex="-1" data-view="team">Equipe</button>
     <button type="button" role="tab" id="tab-planning" aria-selected="false" aria-controls="panel-planning" tabindex="-1" data-view="planning">Planejamento</button>
     <button type="button" role="tab" id="tab-visits" aria-selected="false" aria-controls="panel-visits" tabindex="-1" data-view="visits">Entomologia</button>
     <button type="button" role="tab" id="tab-census" aria-selected="false" aria-controls="panel-census" tabindex="-1" data-view="census">Censo 2022</button>
-    <button type="button" role="tab" id="tab-reference" aria-selected="false" aria-controls="panel-reference" tabindex="-1" data-view="reference">Mapas de campo</button>
   </div>
 
-  <section id="panel-team" role="tabpanel" aria-labelledby="tab-team">
+  <section id="panel-team" role="tabpanel" aria-labelledby="tab-team" hidden>
     <div class="ento-panel-title"><div><h2>Como a equipe está nesta semana</h2><p>Metas comparadas com a própria equipe: a média das últimas quatro semanas com registro. Nenhum agente é identificado ou ranqueado.</p></div></div>
     <p id="team-headline" class="ento-headline" role="status"></p>
     <section class="ento-panel" aria-labelledby="team-next-title"><div class="ento-eyebrow">PRÓXIMOS PASSOS</div><h2 id="team-next-title">O que fazer agora</h2><ul id="team-next" class="ento-next"></ul></section>
@@ -151,9 +152,30 @@
     <section class="ento-panel mt-3"><h2>Setores selecionados</h2><div class="ento-table-wrap"><table class="table table-sm"><thead><tr><th>Setor</th><th>Situação</th><th>População</th><th>Domicílios totais</th><th>Particulares ocupados</th><th>Área (km²)</th><th>Hab./km²</th></tr></thead><tbody id="census-rows"></tbody></table></div></section>
   </section>
 
-  <section id="panel-reference" role="tabpanel" aria-labelledby="tab-reference" hidden>
-    <div class="ento-notice">Mapas operacionais recebidos em Dados.zip. A numeração de áreas de campo não foi convertida em setores do IBGE. Estas imagens são referências e não mudam com os filtros de visitas.</div>
-    <section class="ento-panel"><div class="ento-panel-title"><div><h2>Mapas da equipe de campo</h2><p>Use o zoom e arraste para examinar quarteirões e anotações.</p></div><label class="visually-hidden" for="reference-select">Mapa de campo</label><select id="reference-select"></select></div><div id="reference-map" class="ento-map ento-reference-map" role="region" aria-label="Mapa operacional com zoom"></div></section>
+  <section id="panel-reference" role="tabpanel" aria-labelledby="tab-reference">
+    <div class="field-heading"><div><div class="ento-eyebrow">ATLAS DE CAMPO</div><h2>A cidade em uma única visão</h2><p>Satélite, quadras e referências da equipe. Aproxime para ler cada número.</p></div><div id="field-inventory" class="field-inventory" aria-live="polite">Carregando território…</div></div>
+    <section id="field-workspace" class="field-workspace" aria-label="Atlas integrado de Orlândia">
+      <form id="field-filters" class="field-toolbar" role="search">
+        <div class="field-search"><label for="field-search">Localizar no território</label><input id="field-search" type="search" placeholder="Quadra 436, SC 023 ou Teixeira" autocomplete="off"></div>
+        <div><label for="field-district">Área de campo</label><select id="field-district"><option value="">Todas as áreas</option></select></div>
+        <div><label for="field-sector">Setor de campo</label><select id="field-sector"><option value="">Todos os setores</option></select></div>
+        <button id="field-reset" type="button" class="field-tool-button" title="Limpar filtros e enquadrar todas as quadras">Ver cidade</button>
+        <button id="field-fullscreen" type="button" class="field-tool-button" aria-pressed="false">Expandir mapa</button>
+      </form>
+      <div class="field-body">
+        <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
+        <aside class="field-rail" aria-label="Camadas e informações do território">
+          <section><div class="ento-eyebrow">VISUALIZAÇÃO</div><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></section>
+          <section id="field-selection" aria-live="polite"><div class="ento-eyebrow">CONSULTA DO TERRITÓRIO</div><h3>Escolha uma quadra</h3><p>Clique em um contorno para consultar seu número, setor e área de campo.</p></section>
+          <section><div class="ento-eyebrow">ÁREAS DE CAMPO</div><div id="field-area-legend" class="field-area-legend"></div></section>
+        </aside>
+      </div>
+      <div class="field-status-line"><span id="field-count" role="status">Preparando camadas…</span><span id="field-base-status" role="status"></span></div>
+    </section>
+    <p class="field-source-note">Quadras: referência operacional da cópia do Google Earth, com coordenadas preservadas. Correspondência com os mapas em papel e limites censitários a conferir. A imagem de satélite não é uma medição cadastral.</p>
+    <div id="field-error" class="ento-notice" role="alert" hidden></div>
+    <details id="field-originals" class="ento-panel field-originals"><summary><span>Mapas originais da equipe</span><small>14 referências para conferir números e anotações</small></summary><p>Consulte as folhas originais para conferir o atlas. As imagens em papel ainda não têm pontos de controle para alinhamento geográfico no satélite.</p><div id="field-original-grid" class="field-original-grid"></div><div class="field-original-viewer"><label for="reference-select">Mapa original em consulta</label><select id="reference-select"></select><div id="reference-map" class="ento-map ento-reference-map" role="region" aria-label="Mapa original da equipe com zoom"></div></div></details>
+    <details class="ento-panel field-method"><summary>Origem e conferência territorial</summary><p id="field-provenance"></p><p>Os agrupamentos SC e áreas seguem a organização do arquivo operacional. A malha IBGE pode ser ligada separadamente. Registros com os mesmos códigos são candidatos para consulta; o mapa não comprova vínculo territorial, visitas executadas nem ausência de focos.</p></details>
   </section>
   <details class="ento-panel ento-method"><summary>Fontes e critérios de leitura</summary><p><strong>Visitas:</strong> {{ dataset.source.file }}, recebido em Dados.zip. Período disponível indicado no cabeçalho. Nenhum registro foi descartado por semelhança; a fonte não fornece um identificador único confiável de visita. Nomes e logins de agentes não compõem este painel.</p><p><strong>Censo:</strong> <a href="{{ dataset.source.census_url }}" target="_blank" rel="noopener noreferrer">IBGE, malha de setores com atributos do Censo 2022 (SP)</a>. População: V0001; domicílios totais: V0002; domicílios particulares ocupados: V0007. Densidade: população dividida pela área do setor. <a href="https://ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios/malha_com_atributos/Dicionario_de_dados_malha_agregados.xlsx" target="_blank" rel="noopener noreferrer">Dicionário de dados</a>.</p><p><strong>Compatibilidade territorial:</strong> códigos ausentes da malha permanecem nos gráficos, totais e tabela, mas não recebem uma localização estimada. A coincidência de códigos não comprova que os limites operacionais sejam os mesmos do Censo. População e domicílios não são usados como denominadores das visitas.</p><p><strong>Preenchimento de larvas:</strong> percentual de registros com valor em IM. LARVA. Não representa a proporção de imóveis examinados. Não se calcula IIP ou índice de Breteau sem validar o universo inspecionado e a completude dos resultados.</p><p><strong>Referências de campo:</strong> PDF “MAPA VETORES 2018” e 13 imagens do ZIP, preservadas visualmente em versões de consulta. Base carregada como uma fotografia dos arquivos, sem sincronização automática.</p></details>
 </div>
@@ -162,5 +184,8 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia_model.js') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_entomologia.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_map_layers.js', v='20260930') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20260930') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}
