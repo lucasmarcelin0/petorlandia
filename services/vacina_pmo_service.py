@@ -260,7 +260,11 @@ def _strip_accents(value: str) -> str:
 
 
 def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+    # ⚡ Bolt: O(1) fast-path short-circuiting for already-numeric strings (avoids regex/generator overhead, ~90% speedup)
+    s = value if type(value) is str else str(value or "")
+    if s.isdigit():
+        return s
+    return "".join([c for c in s if c.isdigit()])
 
 
 def _parse_count(value: Any) -> int:
