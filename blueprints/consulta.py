@@ -1,3 +1,4 @@
+from app import _sanitize_login_next_url
 """Views do domínio consulta_routes (migrado do app.py)."""
 from flask import Blueprint
 import json, os, re, unicodedata, uuid
@@ -1607,7 +1608,7 @@ def criar_prescricao(consulta_id):
 
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem adicionar prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     medicamento = request.form.get('medicamento')
     dosagem = request.form.get('dosagem')
@@ -1626,7 +1627,7 @@ def criar_prescricao(consulta_id):
 
     if not medicamento:
         flash('É necessário informar o nome do medicamento.', 'warning')
-        return redirect(request.referrer)
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('consulta_direct', animal_id=consulta.animal_id)))
 
     nova_prescricao = Prescricao(
         consulta_id=consulta.id,
@@ -1659,7 +1660,7 @@ def deletar_prescricao(prescricao_id):
 
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     db.session.delete(prescricao)
     db.session.commit()
@@ -2516,7 +2517,7 @@ def deletar_bloco_prescricao(bloco_id):
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir prescrições.'), 403
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     animal_id = bloco.animal_id
     clinic_id = bloco.clinica_id
@@ -2771,7 +2772,7 @@ def ativar_acompanhamento_tratamento(bloco_id):
         ensure_clinic_access(bloco.clinica_id)
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem ativar o acompanhamento.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     acompanhamento = bloco.acompanhamento
     if acompanhamento is None:
@@ -3599,7 +3600,7 @@ def deletar_bloco_exames(bloco_id):
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir blocos de exames.'), 403
         flash('Apenas veterinários podem excluir blocos de exames.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     animal_id = bloco.animal_id
     db.session.delete(bloco)
