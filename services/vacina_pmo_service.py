@@ -260,7 +260,10 @@ def _strip_accents(value: str) -> str:
 
 
 def _digits(value: Any) -> str:
-    return re.sub(r"\D+", "", str(value or ""))
+    s = str(value or "")
+    if s.isdigit():
+        return s
+    return "".join([c for c in s if c.isdigit()])
 
 
 def _parse_count(value: Any) -> int:
@@ -2320,12 +2323,12 @@ def _pmo_visit_has_field_record(visit: PmoVaccinationVisit) -> bool:
 
 def _pmo_animal_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return "".join([c for c in text if c.isalnum()])
 
 
 def _pmo_address_slug(value: Any) -> str:
     text = _strip_accents(_normalize_text(value)).lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return "".join([c for c in text if c.isalnum()])
 
 
 def _pmo_visit_phones(visit: PmoVaccinationVisit) -> set[str]:
@@ -6775,7 +6778,7 @@ def _request_row_identity(row: list[Any]) -> str:
         if user_id not in {"", "0"}:
             return f"user:{user_id}"
 
-    phone = re.sub(r"\D+", "", _cell(row, PMO_REQUEST_PHONE_INDEX))
+    phone = _digits(_cell(row, PMO_REQUEST_PHONE_INDEX))
     name = _pmo_normalize_title(_cell(row, PMO_REQUEST_TUTOR_INDEX))
     if name and len(phone) >= 8:
         return f"nome+fone:{name}|{phone[-11:]}"
@@ -7142,7 +7145,7 @@ def _pmo_format_phone_wa(raw: str | None) -> str | None:
     """Retorna número limpo para wa.me (55XXXXXXXXXXX) ou None."""
     if not raw:
         return None
-    digits = "".join(c for c in raw if c.isdigit())
+    digits = _digits(raw)
     if not digits:
         return None
     if digits.startswith("0"):
