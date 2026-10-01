@@ -5,7 +5,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20260930-2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261001-editor') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
@@ -166,6 +167,8 @@
       <div class="field-body">
         <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
         <aside class="field-rail" aria-label="Camadas e informações do território">
+          <section class="atlas-place-search"><div class="ento-eyebrow">ENDEREÇOS E LOCAIS</div><label for="atlas-place-query">Rua, equipamento ou endereço cadastrado</label><input id="atlas-place-query" type="search" maxlength="240" placeholder="Rua 2, escola ou endereço" autocomplete="off"><div class="editor-buttons"><button type="button" id="atlas-place-search" class="field-tool-button">Pesquisar</button><button type="button" id="atlas-place-clear" class="field-tool-button">Limpar</button></div><p id="atlas-place-status" role="status"></p><div id="atlas-place-results" class="atlas-place-results"></div></section>
+          {% include 'sfa/_atlas_editor.html' %}
           <section><div class="ento-eyebrow">VISUALIZAÇÃO</div><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></section>
           <section class="atlas-controls" aria-labelledby="atlas-layers-title">
             <div class="atlas-header"><div><div class="ento-eyebrow">FONTES INTEGRADAS</div><h3 id="atlas-layers-title">Camadas do território</h3></div></div>
@@ -188,10 +191,12 @@
           <section><div class="ento-eyebrow">ÁREAS DE CAMPO</div><div id="field-area-legend" class="field-area-legend"></div></section>
         </aside>
       </div>
+      {% include 'sfa/_atlas_editor_panel.html' %}
       <div class="field-status-line"><span id="field-count" role="status">Preparando camadas…</span><span id="field-base-status" role="status"></span></div>
     </section>
     <p class="field-source-note">Quadras: referência operacional da cópia do Google Earth, com coordenadas preservadas. Correspondência com os mapas em papel e limites censitários a conferir. A imagem de satélite não é uma medição cadastral.</p>
     <div id="field-error" class="ento-notice" role="alert" hidden></div>
+    <details class="ento-panel field-originals" open><summary>Mapas municipais de apoio<small>Imóveis públicos de 2017/2018 e base urbana de 2025</small></summary><p>Referências para conferir equipamentos, praças e expansão urbana. As folhas ainda não têm alinhamento geográfico validado com o satélite.</p><div id="atlas-documents" class="atlas-document-grid"></div></details>
     <details id="field-originals" class="ento-panel field-originals"><summary><span>Mapas originais da equipe</span><small>14 referências para conferir números e anotações</small></summary><p>Consulte as folhas originais para conferir o atlas. As imagens em papel ainda não têm pontos de controle para alinhamento geográfico no satélite.</p><div id="field-original-grid" class="field-original-grid"></div><div class="field-original-viewer"><label for="reference-select">Mapa original em consulta</label><select id="reference-select"></select><div id="reference-map" class="ento-map ento-reference-map" role="region" aria-label="Mapa original da equipe com zoom"></div></div></details>
     <details class="ento-panel field-method"><summary>Origem e conferência territorial</summary><p id="field-provenance"></p><p>Os agrupamentos SC e áreas seguem a organização do arquivo operacional. A malha IBGE pode ser ligada separadamente. Registros com os mesmos códigos são candidatos para consulta; o mapa não comprova vínculo territorial, visitas executadas nem ausência de focos.</p></details>
   </section>
@@ -204,8 +209,9 @@
 <script src="{{ url_for('static', filename='js/sfa_entomologia_model.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_map_layers.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20260930-2') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20260930-2') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20260930-2') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261001-editor') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261001-editor') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261001') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261001-editor') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}

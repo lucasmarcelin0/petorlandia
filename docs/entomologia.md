@@ -200,3 +200,50 @@ Todas as rotas são internas, com `private, no-store` e `no-referrer`.
 Casos Dengue e a consulta da planilha exigem o acesso completo já existente do
 SFA. O papel adicional Combate à dengue recebe somente as camadas operacionais.
 A indisponibilidade de uma fonte não remove as outras camadas ou o território.
+
+
+## Editor compartilhado do atlas (1º de outubro de 2026)
+
+O botão **Editar atlas** abre a tabela da camada selecionada. A equipe pode
+criar, duplicar e renomear camadas, escolher sua cor, cadastrar e corrigir
+registros, mover pontos, desenhar trajetos e polígonos, excluir dados incorretos
+e exportar a tabela CSV ou a geometria GeoJSON. Registros sem posição confirmada
+ficam na tabela, sem receber coordenadas estimadas.
+
+As edições usam o banco do atlas. Não escrevem na planilha Google nem no projeto
+Earth. O comando **Copiar planilha**, exclusivo de administradores identificados,
+cria uma fotografia dos campos estruturados da consulta (sem nomes, telefones,
+datas de nascimento ou endereços pessoais da fonte). Essa cópia pode ser editada
+e posicionada no atlas; a consulta ao vivo da fonte continua separada.
+
+Cada gravação registra a conta, o horário, o motivo e a versão anterior em
+`entomologia_importacao`, tipo `atlas_edit`, e na auditoria SFA. A exclusão é
+recuperável. Restaurar uma versão cria outra revisão e preserva a atual. O
+histórico exibe as 100 revisões mais recentes; as demais continuam no banco.
+As fontes originais permanecem intactas. Alterações locais em camadas Earth
+prevalecem sobre novas importações até restaurar a fonte original.
+
+Escritas exigem conta identificada, CSRF e o papel já existente de administrador
+ou Combate à dengue. Camadas clínicas só podem ser editadas por administradores.
+Um token de consulta não autoriza gravações. A versão enviada pelo formulário
+deve coincidir com a atual; conflito retorna 409, preservando o formulário.
+Um bloqueio transacional PostgreSQL serializa gravações, inclusive a primeira
+edição de uma camada da fonte, entre threads e dynos. O histórico do editor não
+pode ser alterado pelas rotas antigas de confirmação/desfazer importação.
+
+A busca consulta somente o atlas e a referência urbana local OpenStreetMap.
+Nenhum termo de busca ou endereço é transmitido a um geocodificador externo.
+Nomes numéricos e por extenso são conciliados (Rua 2 / Rua Dois); trechos da mesma
+via são reunidos para consulta. Um trecho de rua não localiza automaticamente
+o número de um imóvel. Endereços e entradas precisam ser conferidos no campo.
+O recorte OSM de 1º/10/2026 tem 1.197 geometrias de vias nomeadas e 69 equipamentos
+ou parques. Cobertura e nomes seguem a fonte; não constituem cadastro oficial
+completo. Licença ODbL e atribuição OpenStreetMap aparecem no mapa.
+
+Os dois PDFs fornecidos ficam em rotas protegidas de consulta, preservados byte
+por byte e identificados pelo SHA-256 no manifesto. O mapa de imóveis públicos
+traz referência 2017/2018; o arquivo da base urbana foi atualizado em 2025, com
+escala 1:10.000. A medida de desenho `/RL` do PDF urbano não é uma transformação
+geográfica. Nenhuma folha foi esticada ou sobreposta ao satélite sem validação
+de pontos de controle. A base das quadras e os limites IBGE permanecem referências
+territoriais separadas do editor de registros.

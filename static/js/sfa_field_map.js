@@ -146,6 +146,7 @@
     labelLayer = L.layerGroup().addTo(map);
     censusLayer = L.geoJSON(dataset.census, {pane:'field-census', interactive:false, style:{color:'#8fc9ff', weight:2, dashArray:'6 5', fillOpacity:0}});
     window.SfaAtlasLayers.attach(map,dataset);
+    window.SfaAtlasEditor.attach(map,dataset);
     districts = [...new Set(territory.features.map(f => f.properties.district))];
     $('field-district').replaceChildren(new Option('Todas as áreas', ''), ...districts.map(d => new Option(areaName(d),d)));
     updateSectors();

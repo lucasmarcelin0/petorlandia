@@ -19,13 +19,14 @@
     function notice(text){$('atlas-notice').textContent=text;$('atlas-notice').hidden=!text;}
     function popup(feature,title){
       const p=feature.properties||{}, row=p.sheet;
+      if(p.__atlas_layer && (p.name||p.address||p.notes||p.precision))return `<div class="atlas-popup"><strong>${escape(p.name||p.label||title)}</strong><p>${escape(title)} · ${escape(p.category||'Cadastro')}</p>${p.address?'<p>'+escape(p.address)+'</p>':''}${p.date?'<p>'+day(p.date)+'</p>':''}${p.notes?'<p>'+escape(p.notes)+'</p>':''}${p.precision?'<small>'+escape(p.precision)+'</small>':''}<p><button type="button" data-atlas-layer="${escape(p.__atlas_layer)}" data-atlas-feature="${escape(feature.id)}">Consultar / editar registro</button></p></div>`;
       return row ? `<div class="atlas-popup"><strong>Planilha · linha ${row.source_row}</strong><p>${escape(row.disease || 'Agravo não informado')}</p><dl><dt>SINAN</dt><dd>${escape(row.sinan || 'Não informado')}</dd><dt>Notificação</dt><dd>${day(row.notification_date)}</dd><dt>Sintomas</dt><dd>${day(row.symptoms_date)}</dd><dt>Exame</dt><dd>${escape(row.exam || 'Não informado')}</dd><dt>Resultado</dt><dd>${escape(row.exam_result || 'Não informado')}</dd><dt>Resultado final</dt><dd>${escape(row.final_result || 'Não informado')}</dd><dt>Classificação</dt><dd>${escape(row.classification || 'Não informada')}</dd></dl><p>Posição vinculada por um número SINAN explícito e único no Earth.</p><a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${row.source_row}:T${row.source_row}">Consultar linha de origem ↗</a></div>`
-        : `<div class="atlas-popup"><strong>${escape(title)}</strong><p>${escape(p.category || 'Referência operacional')}${p.month?' · mês '+p.month+' na pasta':''}</p>${p.folder_status?'<p>Rótulo da pasta: '+escape(p.folder_status)+'. A classificação da planilha é consultada separadamente.</p>':''}<p>Elemento do arquivo Earth; não representa necessariamente pessoa, imóvel ou visita únicos.</p><small>Origem: ${escape(p.source_id || feature.id || 'camada enviada')}</small></div>`;
+        : `<div class="atlas-popup"><strong>${escape(title)}</strong><p>${escape(p.category || 'Referência operacional')}${p.month?' · mês '+p.month+' na pasta':''}</p>${p.folder_status?'<p>Rótulo da pasta: '+escape(p.folder_status)+'. A classificação da planilha é consultada separadamente.</p>':''}<p>Elemento do arquivo Earth; não representa necessariamente pessoa, imóvel ou visita únicos.</p><small>Origem: ${escape(p.source_id || feature.id || 'camada enviada')}</small>${p.__atlas_layer?'<p><button type="button" data-atlas-layer="'+escape(p.__atlas_layer)+'" data-atlas-feature="'+escape(feature.id)+'">Consultar / editar registro</button></p>':''}</div>`;
     }
     function render(entry,features){
       entry.group.clearLayers();
       if(!entry.enabled)return;
-      const points=features.filter(f=>f.geometry.type==='Point'), other=features.filter(f=>f.geometry.type!=='Point');
+      const points=features.filter(f=>f.geometry?.type==='Point'), other=features.filter(f=>f.geometry && f.geometry.type!=='Point');
       L.geoJSON(other,{pane:'field-events',renderer,style:{color:entry.color,weight:2,fillOpacity:.13},
         onEachFeature:(f,target)=>target.bindPopup(popup(f,entry.title))}).addTo(entry.group);
       points.forEach(feature=>pointFeatures.push({...feature,atlasEntry:entry}));
@@ -58,10 +59,18 @@
         marker.addTo(pointLayer);
       });
     }
+    function filteredRows(entry,current){
+      const features=entry.features||[];
+      if(entry.origin?.type!=='sheet_snapshot')return M.earthFilter(features,current.month,entry.categories);
+      return M.sheetFilter(features.map(f=>{
+        const p=f.properties, result=String(p.exam_result||'').toLowerCase();
+        return {...p,result_group:/\bnegativo\b/.test(result)?'negative':/\bpositivo\b/.test(result)?'positive':/suspeito|aguard|pendente/.test(result)?'pending':'unknown',feature:f};
+      }),current).map(row=>row.feature);
+    }
     function redraw(){
       const current=filters();let visible=0, enabled=0;pointFeatures=[];
       entries.forEach(entry=>{
-        const rows=M.earthFilter(entry.features||[],current.month,entry.categories);
+        const rows=filteredRows(entry,current);
         render(entry,rows);visible+=entry.enabled?rows.length:0;enabled+=Number(entry.enabled);
         if(entry.counter)entry.counter.textContent=entry.enabled?`${rows.length} nos filtros`:`${entry.count ?? 'Restrito'} ${entry.count==null?'':'elementos'}`;
       });
@@ -108,7 +117,7 @@
       configureCategories();
       async function load(){
         if(entry.features)return;
-        if(!entry.loading)entry.loading=fetchJson(dataset.atlas_urls.layer.replace('LAYER',item.id)).then(data=>{entry.features=data.features;}).catch(error=>{entry.loading=null;throw error;});
+        if(!entry.loading)entry.loading=fetchJson(dataset.atlas_urls.layer.replace('LAYER',item.id)).then(data=>{entry.features=data.features.map(f=>({...f,properties:{...f.properties,__atlas_layer:item.id}}));}).catch(error=>{entry.loading=null;throw error;});
         await entry.loading;configureCategories();
       }
       input.onchange=async()=>{
@@ -158,22 +167,20 @@
     $('atlas-show-field').onclick=()=>preset('field');$('atlas-show-all').onclick=()=>preset('all');$('atlas-hide-all').onclick=()=>preset('none');
     $('atlas-show-all').addEventListener('click',()=>{if(!$('atlas-sinan').disabled){$('atlas-sinan').checked=true;$('atlas-sinan').onchange();}});
     map.on('zoomend moveend',redraw);
-    // Existing uploads are grouped by the first source folder instead of one huge switch.
-    (dataset.layers||[]).forEach(upload=>{
-      const groups=new Map();(upload.geojson.features||[]).forEach(f=>{
-        const parts=(f.properties?.folder||'').split(' / '), title=parts[0]||upload.title;
-        if(!groups.has(title))groups.set(title,[]);
-        const monthNames=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-        const month=monthNames.indexOf(parts.find(p=>monthNames.includes(p.toLowerCase()))?.toLowerCase());
-        groups.get(title).push({...f,properties:{layer:title,category:parts.slice(1).join(' / '),month:month<0?'':String(month+1).padStart(2,'0'),label:title}});
-      });
-      groups.forEach((features,title)=>{const created=makeEntry({title,color:'#aec7ec',count:features.length,allowed:true},features);entries.push(created.entry);$('atlas-upload-list').append(created.wrapper);$('atlas-uploads').hidden=false;});
-    });
-    fetchJson(dataset.atlas_urls.catalog).then(data=>{
+    async function refreshCatalog(activate=null){
+      const data=await fetchJson(dataset.atlas_urls.catalog), enabled=new Set(entries.filter(e=>e.enabled).map(e=>e.id));
+      entries.forEach(e=>map.removeLayer(e.group));entries=[];
+      $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();
       source=data.source;
-      $('atlas-earth-source').textContent=source.imported_at ? `${source.title || 'Google Earth'} · cópia importada em ${new Date(source.imported_at).toLocaleDateString('pt-BR')}. Mês conforme as pastas do arquivo.` : 'Importe o projeto completo em Atualizar dados para disponibilizar suas camadas.';
-      data.layers.forEach(item=>{const created=makeEntry(item);entries.push(created.entry);$('atlas-earth-list').append(created.wrapper);});redraw();
-    }).catch(error=>{notice(error.message+' Quadras e mapas originais continuam disponíveis.');});
+      $('atlas-earth-source').textContent=source.imported_at ? `${source.title || 'Google Earth'} · cópia importada em ${new Date(source.imported_at).toLocaleDateString('pt-BR')}. Edições da equipe ficam no atlas.` : 'Importe o projeto completo em Atualizar dados para disponibilizar suas camadas.';
+      const loading=[];
+      data.layers.forEach(item=>{const created=makeEntry(item);entries.push(created.entry);
+        $(item.origin?.type==='earth'?'atlas-earth-list':'atlas-local-list').append(created.wrapper);
+        if(enabled.has(item.id)||activate===item.id){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
+      });await Promise.allSettled(loading);redraw();
+    }
+    window.SfaAtlasLayers.refresh=refreshCatalog;
+    refreshCatalog().catch(error=>{notice(error.message+' Quadras e mapas originais continuam disponíveis.');});
     redraw();
   }};
 })();

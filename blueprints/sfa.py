@@ -201,6 +201,13 @@ def entomologia():
         'sinan': url_for('sfa_routes.entomologia_atlas_sinan', token=_token_admin_informado() or None),
         'clinical_allowed': acesso_completo,
     }
+    dataset['editor_urls'] = {
+        'catalog':url_for('sfa_routes.atlas_editor_catalog',token=_token_admin_informado() or None),
+        'layer':url_for('sfa_routes.atlas_editor_layer',key='KEY',token=_token_admin_informado() or None),
+        'history':url_for('sfa_routes.atlas_editor_history',key='KEY',token=_token_admin_informado() or None),
+        'search':url_for('sfa_routes.atlas_place_search',token=_token_admin_informado() or None),
+        'documents':url_for('sfa_routes.atlas_documents',token=_token_admin_informado() or None),
+    }
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
@@ -218,8 +225,15 @@ def entomologia():
 @bp.route('/entomologia/atlas/camadas')
 @require_entomologia_access
 def entomologia_atlas_catalogo():
-    from services.entomologia_atlas import active_earth, catalog
-    response = jsonify(catalog(active_earth(), _acesso_interno_sfa_liberado()))
+    from services.entomologia_atlas import active_earth
+    from services.entomologia_atlas_editor import catalog
+    from services.entomologia_atlas import layer_id
+    response = jsonify({'source': active_earth()['source'], 'layers':[
+        ({**item,'allowed':True} if not item['clinical'] or _acesso_interno_sfa_liberado() else
+         {'id':item['id'],'title':'Casos Dengue' if item['id']=='earth-'+layer_id('Casos Dengue') else 'Camada de saúde restrita',
+          'clinical':True,'allowed':False,'count':None,'color':item['color']})
+        for item in catalog(True)
+    ]})
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response
@@ -228,14 +242,12 @@ def entomologia_atlas_catalogo():
 @bp.route('/entomologia/atlas/camadas/<layer>')
 @require_entomologia_access
 def entomologia_atlas_camada(layer):
-    from services.entomologia_atlas import active_earth, layer_id, is_case
-    data = active_earth()
-    features = [f for f in data['features'] if layer_id(f['properties']['layer']) == layer]
-    if not features:
+    from services.entomologia_atlas_editor import layers
+    available=layers(_acesso_interno_sfa_liberado())
+    data=available.get(layer) or available.get('earth-'+layer)
+    if not data:
         abort(404)
-    if any(is_case(f['properties']['layer']) for f in features) and not _acesso_interno_sfa_liberado():
-        return _bloquear_acesso_interno()
-    response = jsonify({'type': 'FeatureCollection', 'features': features, 'source': data['source']})
+    response = jsonify({'type':'FeatureCollection','features':data['features'],'source':data['origin']})
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response
@@ -2870,3 +2882,6 @@ _register_pilot_routes(bp, require_sfa_internal_access, _review_schema_loader)
 
 from blueprints.sfa_simulacao import register as _register_simulacao_routes
 _register_simulacao_routes(bp, require_sfa_internal_access)
+
+from blueprints.entomologia_atlas_editor_routes import register as _register_atlas_editor
+_register_atlas_editor(bp, require_entomologia_access, _acesso_interno_sfa_liberado)

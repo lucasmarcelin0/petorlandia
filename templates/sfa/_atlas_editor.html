@@ -1,0 +1,5 @@
+<section id="atlas-collaboration" class="atlas-collaboration" data-csrf="{{ csrf_token() }}" data-editor="{{ 1 if pode_alterar else 0 }}" data-clinical-editor="{{ 1 if pode_alterar and acesso_completo else 0 }}">
+  <div class="atlas-editor-actions"><button type="button" id="atlas-open-editor" class="field-tool-button">{% if pode_alterar %}Editar atlas{% else %}Consultar tabela{% endif %}</button><button type="button" id="atlas-reload" class="field-tool-button">Atualizar camadas</button></div>
+  <p>Cadastros compartilhados com a equipe. {% if pode_alterar %}Inclua registros, ajuste posições e consulte o histórico.{% endif %}</p>
+  <details class="atlas-source-group"><summary>Ruas, equipamentos e cadastros</summary><div id="atlas-local-list"></div><p class="atlas-source-note">Ruas e locais: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, ODbL. Referência para busca; confirmar endereços no campo.</p></details>
+</section>

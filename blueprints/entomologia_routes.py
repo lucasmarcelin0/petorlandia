@@ -120,7 +120,7 @@ def register(bp, require_access):
         previa_id = request.args.get('previa', type=int)
         if previa_id:
             previa = EntomologiaImportacao.query.filter_by(id=previa_id, status='PREVIA').first()
-        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA') \
+        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA', EntomologiaImportacao.tipo != 'atlas_edit') \
             .order_by(EntomologiaImportacao.id.desc()).limit(60).all()
         from services.entomologia_acesso import eh_admin, membros_ativos
         publicacoes = EntomologiaPublicacao.query.order_by(EntomologiaPublicacao.id.desc()).limit(12).all()
@@ -210,7 +210,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.status != 'PREVIA':
+        if not registro or registro.tipo == 'atlas_edit' or registro.status != 'PREVIA':
             abort(404)
         try:
             responsavel = _responsavel()
@@ -242,7 +242,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.status not in ('PREVIA', 'ATIVA'):
+        if not registro or registro.tipo == 'atlas_edit' or registro.status not in ('PREVIA', 'ATIVA'):
             abort(404)
         if registro.status == 'PREVIA':
             db.session.delete(registro)
