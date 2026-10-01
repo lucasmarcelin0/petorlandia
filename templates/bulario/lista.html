@@ -205,10 +205,10 @@
               {% endif %}
               {% set esp = especies_por_med.get(med.id, []) %}
               {% if 'CAES' in esp or 'AMBOS' in esp %}
-              <span class="bulario-badge bd-esp-badge" title="Para cães"><i class="fas fa-dog"></i></span>
+              <span class="bulario-badge bd-esp-badge" title="Para cães" aria-label="Para cães"><i class="fas fa-dog" aria-hidden="true"></i></span>
               {% endif %}
               {% if 'GATOS' in esp or 'AMBOS' in esp %}
-              <span class="bulario-badge bd-esp-badge" title="Para gatos"><i class="fas fa-cat"></i></span>
+              <span class="bulario-badge bd-esp-badge" title="Para gatos" aria-label="Para gatos"><i class="fas fa-cat" aria-hidden="true"></i></span>
               {% endif %}
             </div>
           </div>

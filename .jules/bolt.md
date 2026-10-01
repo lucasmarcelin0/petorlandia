@@ -39,7 +39,14 @@
 **Learning:** `SiteFlag.get` and `SiteText.get` were called repeatedly per request across `context_processors.py`, layout templates, and views (10-20 duplicate SQL queries per page load for home and navbar flags). Caching lookups in Flask `g` (`_site_flag_cache` and `_site_text_cache`) when `has_request_context()` is active eliminates redundant SQL queries within a single request lifecycle, yielding an instant response for repetitive config reads.
 **Action:** Use request-scoped `g` dictionary caches for frequently read system/site config lookups to prevent repeated database queries during request rendering.
 
-## 2026-10-25 - split/join vs re.sub for whitespace reduction
-**Learning:** In `services/sfa_service.py`, `normalizar_nome_chave` used `re.sub(r"\s+", " ", s)` which executes relatively slowly inside hot loops comparing text fields. Replacing this with `" ".join(s.split())` acts exactly the same for reducing arbitrary whitespace gaps into single spaces but avoids the regex engine entirely. Combined with short-circuiting `.isascii()` on pure ascii strings (bypassing `unicodedata`), execution time decreased by ~90% for pure ascii inputs and ~40% for strings requiring unicode translation.
-**Action:** For reducing arbitrary whitespace characters into single spaces, prefer `" ".join(string.split())` over `re.sub(r"\s+", " ", string)` in hot paths.
+## 2026-09-24 - Deferring Full-Table Appointment Aggregations in Animal Search
+**Learning:** In `services/animal_search.py`, joining `_build_last_appointment_subquery(clinic_scope)` upfront triggered a full-table `GROUP BY` across all appointments in the clinic on every animal search query. Deferring the last appointment query until after filtering and paginating animals (for non-`recent_attended` sorts) and querying only the resulting 50 animal IDs eliminates heavy aggregations on typing and autocompletion.
+**Action:** When filtering and paginating a primary entity, defer secondary aggregated metric queries until after the primary entity collection is bounded by limit/pagination.
 
+## 2026-09-24 - Batch Pre-fetching in Plantão Pending Notifications
+**Learning:** `_ensure_pending_plantao_notifications` in `services/finance.py` queried `ClinicNotification` individually inside an iteration loop over pending payments, resulting in N+1 database queries. Pre-fetching all existing notifications for the clinic and month into a dictionary indexed by `payment_id` eliminates all single queries and allows in-memory resolution of stale notices.
+**Action:** Pre-load existing notification records into an in-memory dictionary indexed by parent record ID prior to processing pending payment notification loops.
+
+## 2026-09-30 - Safe Fast-Path `.isdigit()` and List Comprehension for Digit Stripping
+**Learning:** Calling `filter(str.isdigit, ...)` or `re.sub(r"\D+", "", ...)` incurs unnecessary iterator and regex engine overhead on strings that are already numeric (e.g. phones or IDs). Checking `.isdigit()` on string representations short-circuits pure numeric strings in O(1) time, while list comprehension `"".join([c for c in s if c.isdigit()])` eliminates iterator overhead for mixed strings. Caution: Always coerce to string first or check types so integers (`0`, `123`) or `None` do not cause `AttributeError` or false-empty outputs.
+**Action:** When extracting digits from string or primitive inputs, safely handle non-string types and use `.isdigit()` fast-path before list comprehension filtering.

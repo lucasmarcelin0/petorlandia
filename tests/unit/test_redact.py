@@ -40,6 +40,20 @@ def test_chave_nfe_44_digitos_eh_redigida():
     assert redact_sensitive_text(f"chave {chave} ok") == "chave *** ok"
 
 
+def test_email_eh_redigido():
+    assert redact_sensitive_text("contato com cliente joao.silva@exemplo.com.br confirmado") == "contato com cliente ***@*** confirmado"
+    assert redact_sensitive_text("erro: email user@test.io invalido") == "erro: email ***@*** invalido"
+
+
+def test_gateway_dict_string_eh_redigido():
+    payload_str = "{'payer': {'email': 'lucas@gmail.com', 'identification': {'type': 'CPF', 'number': '12345678901'}}}"
+    redacted = redact_sensitive_text(payload_str)
+    assert "lucas@gmail.com" not in redacted
+    assert "12345678901" not in redacted
+    assert "***@***" in redacted
+    assert "***" in redacted
+
+
 def test_numero_curto_nao_eh_redigido():
     # "Pedido 12345" não é CPF/CNPJ — não tocar.
     assert redact_sensitive_text("Pedido 12345 aguardando") == "Pedido 12345 aguardando"

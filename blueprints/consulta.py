@@ -54,9 +54,11 @@ from template_filters import PAYER_TYPE_LABELS, default_payer_type_for_consulta,
 from time_utils import BR_TZ, coerce_to_brazil_tz, now_in_brazil, utcnow
 from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
+from security.redact import redact_sensitive_text
 
 # Helpers ainda hospedados no app.py (realocação em fases futuras).
 from app import (  # noqa: E402
+    _sanitize_login_next_url,
     ORCAMENTO_PAYMENT_STATUS_LABELS,
     ORCAMENTO_PAYMENT_STATUS_STYLES,
     ORCAMENTO_STATUS_LABELS,
@@ -1607,7 +1609,7 @@ def criar_prescricao(consulta_id):
 
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem adicionar prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     medicamento = request.form.get('medicamento')
     dosagem = request.form.get('dosagem')
@@ -1626,7 +1628,7 @@ def criar_prescricao(consulta_id):
 
     if not medicamento:
         flash('É necessário informar o nome do medicamento.', 'warning')
-        return redirect(request.referrer)
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('consulta_direct', animal_id=consulta.animal_id)))
 
     nova_prescricao = Prescricao(
         consulta_id=consulta.id,
@@ -1659,7 +1661,7 @@ def deletar_prescricao(prescricao_id):
 
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     db.session.delete(prescricao)
     db.session.commit()
@@ -2516,7 +2518,7 @@ def deletar_bloco_prescricao(bloco_id):
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir prescrições.'), 403
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     animal_id = bloco.animal_id
     clinic_id = bloco.clinica_id
@@ -2771,7 +2773,7 @@ def ativar_acompanhamento_tratamento(bloco_id):
         ensure_clinic_access(bloco.clinica_id)
     if not is_veterinarian(current_user):
         flash('Apenas veterinários podem ativar o acompanhamento.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     acompanhamento = bloco.acompanhamento
     if acompanhamento is None:
@@ -3599,7 +3601,7 @@ def deletar_bloco_exames(bloco_id):
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir blocos de exames.'), 403
         flash('Apenas veterinários podem excluir blocos de exames.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(_sanitize_login_next_url(request.referrer, fallback=url_for('index')))
 
     animal_id = bloco.animal_id
     db.session.delete(bloco)
@@ -4255,7 +4257,7 @@ def pagar_consulta_orcamento(consulta_id):
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
     if resp.get('status') != 201:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 

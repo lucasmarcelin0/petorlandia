@@ -11,6 +11,7 @@ from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
 from security.url_safe import is_url_ssrf_safe
+from security.redact import redact_sensitive_text
 from models import (
     Animal,
     Appointment,
@@ -425,7 +426,7 @@ def veterinarian_membership_checkout():
         return redirect(url_for('veterinarian_membership'))
 
     if resp.get('status') not in {200, 201}:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         db.session.rollback()
         if attempt:
             mark_subscription_attempt_failed(

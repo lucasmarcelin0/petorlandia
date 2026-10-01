@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import wraps
 from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
+from security.redact import redact_sensitive_text
 
 # Tests and factory imports may load this module through either name. Keep both
 # aliases pointed at the same module so runtime monkeypatches and configuration
@@ -7503,29 +7504,34 @@ def _integration_extract_pdf_file_reference(payload: dict) -> dict | None:
 
 
 def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
+    from security.url_safe import (
+        ExternalFetchError,
+        ExternalResponseTooLarge,
+        UnsafeExternalURL,
+        safe_fetch_url,
+    )
+
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
+    if parsed.scheme != 'https' or not parsed.netloc:
         raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo-chatgpt.pdf').strip()
     safe_name = secure_filename(original_name) or 'laudo-chatgpt.pdf'
     try:
-        response = requests.get(download_url, timeout=20, stream=True)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        fetch_res = safe_fetch_url(
+            download_url,
+            timeout=20,
+            max_bytes=MAX_MCP_LAUDO_FILE_BYTES,
+        )
+    except ExternalResponseTooLarge as exc:
+        raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.') from exc
+    except UnsafeExternalURL as exc:
+        raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.') from exc
+    except ExternalFetchError as exc:
         raise ValueError('Nao foi possivel baixar o arquivo autorizado pelo ChatGPT. Cole o texto integral do laudo e tente novamente.') from exc
 
-    content = BytesIO()
-    total = 0
-    for chunk in response.iter_content(chunk_size=1024 * 1024):
-        if not chunk:
-            continue
-        total += len(chunk)
-        if total > MAX_MCP_LAUDO_FILE_BYTES:
-            raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.')
-        content.write(chunk)
-    content.seek(0)
+    content = BytesIO(fetch_res.content)
 
     storage = FileStorage(
         stream=content,
@@ -7540,9 +7546,16 @@ def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | No
 
 def _integration_download_and_store_carteirinha_file(file_ref: dict) -> tuple[str, str]:
     """Baixa e preserva uma foto autorizada pelo ChatGPT para auditoria."""
+    from security.url_safe import (
+        ExternalFetchError,
+        ExternalResponseTooLarge,
+        UnsafeExternalURL,
+        safe_fetch_url,
+    )
+
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
-    if parsed.scheme != 'https' or not parsed.netloc or not is_url_ssrf_safe(download_url):
+    if parsed.scheme != 'https' or not parsed.netloc:
         raise ValueError('A foto da carteirinha precisa ter uma URL HTTPS autorizada pelo ChatGPT.')
 
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'carteirinha.jpg').strip()
@@ -7551,23 +7564,21 @@ def _integration_download_and_store_carteirinha_file(file_ref: dict) -> tuple[st
     if declared_type and not (declared_type.startswith('image/') or declared_type == 'application/pdf'):
         raise ValueError('Envie imagens ou PDF da carteirinha.')
     try:
-        response = requests.get(download_url, timeout=20, stream=True)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        fetch_res = safe_fetch_url(
+            download_url,
+            timeout=20,
+            max_bytes=12 * 1024 * 1024,
+        )
+    except ExternalResponseTooLarge as exc:
+        raise ValueError('Cada arquivo da carteirinha deve ter no maximo 12 MB.') from exc
+    except UnsafeExternalURL as exc:
+        raise ValueError('A foto da carteirinha precisa ter uma URL HTTPS autorizada pelo ChatGPT.') from exc
+    except ExternalFetchError as exc:
         raise ValueError('Nao foi possivel baixar a foto autorizada pelo ChatGPT. Tente enviar novamente.') from exc
 
-    content = BytesIO()
-    total = 0
-    for chunk in response.iter_content(chunk_size=1024 * 1024):
-        if not chunk:
-            continue
-        total += len(chunk)
-        if total > 12 * 1024 * 1024:
-            raise ValueError('Cada arquivo da carteirinha deve ter no maximo 12 MB.')
-        content.write(chunk)
-    content.seek(0)
-
-    content_type = declared_type or response.headers.get('Content-Type', 'application/octet-stream').split(';', 1)[0]
+    content = BytesIO(fetch_res.content)
+    raw_content_type = fetch_res.headers.get('Content-Type') or fetch_res.headers.get('content-type') or 'application/octet-stream'
+    content_type = declared_type or raw_content_type.split(';', 1)[0].lower()
     if not (content_type.startswith('image/') or content_type == 'application/pdf'):
         raise ValueError('O arquivo da carteirinha nao parece ser uma imagem ou PDF valido.')
     storage = FileStorage(stream=content, filename=safe_name, content_type=content_type)
@@ -11662,7 +11673,7 @@ def _run_whatsapp_batch_selenium(batch_items, warmup_only=False):
         input_path.write_text(json.dumps({"items": batch_items}, ensure_ascii=False), encoding="utf-8")
 
         command = [
-            r"C:\edb\languagepack\v3\Python-3.10\python.exe",
+            sys.executable or "python3",
             str(script_path),
             "--input",
             str(input_path),
@@ -12470,11 +12481,11 @@ def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
     try:
         resp = mp_sdk().preference().create(preference_data)
     except Exception as exc:  # noqa: BLE001
-        current_app.logger.exception('Erro de conexão com Mercado Pago: %s', exc)
+        current_app.logger.exception('Erro de conexão com Mercado Pago: %s', redact_sensitive_text(str(exc)))
         raise PaymentPreferenceError('Falha ao conectar com Mercado Pago.', status_code=502) from exc
 
     if resp.get('status') != 201:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), redact_sensitive_text(str(resp)))
         raise PaymentPreferenceError('Erro ao iniciar pagamento.', status_code=502)
 
     pref = resp.get('response') or {}

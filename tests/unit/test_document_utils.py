@@ -50,3 +50,15 @@ def test_only_digits_with_integers_or_floats():
 def test_only_digits_with_zero():
     assert only_digits(0) == ""
     assert only_digits("0") == "0"
+
+
+def test_digits_only_template_filter():
+    from template_filters import digits_only
+    assert digits_only(None) == ""
+    assert digits_only("") == ""
+    assert digits_only(0) == ""
+    assert digits_only("0") == "0"
+    assert digits_only("12345") == "12345"
+    assert digits_only("12.345-67") == "1234567"
+    assert digits_only(12345) == "12345"
+

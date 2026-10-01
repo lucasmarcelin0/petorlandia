@@ -42,3 +42,15 @@
 **Learning:** Icon-only action buttons (e.g. edit, delete, photo cropper controls) rely solely on the `title` attribute for accessibility. However, `title` attributes are not reliably announced by all screen readers and do not provide robust accessible names. Additionally, nested icon elements can create redundant or confusing announcements if not hidden.
 **Action:** Always provide an explicit `aria-label` attribute on icon-only interactive elements (like buttons and links), wrap toolbar action groups with `role="group"` and `aria-label`, and always add `aria-hidden="true"` to decorative child icon elements to ensure clear and reliable announcements for screen reader users.
 
+## 2026-09-24 - Dynamic ARIA Expanded State Synchronization on Collapsible Drawers
+**Learning:** Collapsible sections and drawer toggles without explicit `aria-expanded` and `aria-controls` bindings prevent assistive technology users from perceiving when content is expanded or collapsed.
+**Action:** Always bind toggle buttons to collapsible containers via `aria-controls` and `aria-expanded`, and update `aria-expanded` dynamically in JS event handlers whenever visibility is toggled.
+
+## 2026-09-28 - Store Search Form Accessibility and Inline Quick Clear
+**Learning:** In search forms with multi-dimensional filtering (category, seller, sorting), input controls require explicit `aria-label` attributes (`aria-label="Buscar produtos no catálogo"`) and a dedicated inline search clear button (`js-clear-search-btn`) with `aria-label="Limpar busca"`. This enables screen reader and keyboard users to clear specifically the search term without resetting active seller or category filter parameters.
+**Action:** Always pair multi-filter search inputs with explicit `aria-label` attributes and an inline clear button that resets the query parameter while preserving active contextual filters.
+
+## 2026-09-30 - Accessible Clinical Panel Controls and Form Label Associations
+**Learning:** Interactive controls in clinical suggestions panels (such as dismissal and search clear buttons) require explicit `aria-label`s and `aria-hidden="true"` on nested icons to avoid silent or confusing screen reader navigation. Furthermore, all form inputs in tutor/patient details must have matching `<label for="id">` and `<input id="id">` attributes to maintain full WCAG 1.3.1 compliance.
+**Action:** Ensure every icon button in clinical and modal workflows has an explicit `aria-label`, hide decorative icon elements, and bind all form labels with matching input IDs.
+

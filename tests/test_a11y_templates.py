@@ -181,3 +181,72 @@ def test_management_icon_buttons_a11y_attributes():
         clinic_content = f.read()
     assert 'aria-label="Excluir horário de {{ h.dia_semana }}"' in clinic_content
 
+
+def test_falecimento_modal_and_bulario_a11y():
+    with open("templates/partials/falecimento_modal.html", "r", encoding="utf-8") as f:
+        falecimento_content = f.read()
+    assert 'role="dialog"' in falecimento_content
+    assert 'aria-modal="true"' in falecimento_content
+    assert 'i class="fas fa-check me-1" aria-hidden="true"' in falecimento_content
+    assert 'i class="fas fa-calendar-check me-1" aria-hidden="true"' in falecimento_content
+
+    with open("templates/bulario/lista.html", "r", encoding="utf-8") as f:
+        bulario_content = f.read()
+    assert 'aria-label="Para cães"' in bulario_content
+    assert 'aria-label="Para gatos"' in bulario_content
+    assert 'i class="fas fa-dog" aria-hidden="true"' in bulario_content
+    assert 'i class="fas fa-cat" aria-hidden="true"' in bulario_content
+
+    with open("templates/bulario/detalhe.html", "r", encoding="utf-8") as f:
+        detalhe_content = f.read()
+    assert 'aria-label="Copiar para prescrição"' in detalhe_content
+    assert 'aria-live="polite"' in detalhe_content
+
+
+def test_tutor_detail_and_store_a11y():
+    with open("templates/animais/tutor_detail.html", "r", encoding="utf-8") as f:
+        tutor_content = f.read()
+    assert 'for="tutor-name"' in tutor_content
+    assert 'id="tutor-name"' in tutor_content
+    assert 'for="tutor-email"' in tutor_content
+    assert 'id="tutor-email"' in tutor_content
+    assert 'for="tutor-phone"' in tutor_content
+    assert 'id="tutor-phone"' in tutor_content
+    assert 'aria-label="Buscar animal por nome"' in tutor_content
+
+    with open("templates/loja/loja.html", "r", encoding="utf-8") as f:
+        loja_content = f.read()
+    assert 'id="store-search-input"' in loja_content
+    assert 'aria-label="Buscar produtos no catálogo"' in loja_content
+    assert 'js-clear-search-btn' in loja_content
+    assert 'aria-label="Limpar busca"' in loja_content
+    assert 'aria-label="Filtrar ou ordenar produtos por"' in loja_content
+
+
+def test_historico_and_documentos_a11y():
+    with open("templates/partials/documentos.html", "r", encoding="utf-8") as f:
+        doc_content = f.read()
+    assert 'aria-expanded="false"' in doc_content
+    assert 'aria-controls="termos-container-' in doc_content
+    assert 'aria-label="Abrir {{ d.filename }}"' in doc_content
+    assert 'aria-label="Excluir {{ d.filename }}"' in doc_content
+
+    with open("templates/partials/orcamento_form.html", "r", encoding="utf-8") as f:
+        orcamento_content = f.read()
+    assert 'aria-expanded="false"' in orcamento_content
+    assert 'aria-controls="novo-servico-container"' in orcamento_content
+
+    with open("templates/partials/historico_orcamentos.html", "r", encoding="utf-8") as f:
+        hist_orc_content = f.read()
+    assert 'aria-label="Excluir orçamento de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_orc_content
+    assert 'aria-label="Imprimir orçamento de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_orc_content
+    assert 'aria-label="Editar orçamento de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_orc_content
+    assert 'aria-label="Enviar orçamento para tutor por WhatsApp"' in hist_orc_content
+
+    with open("templates/partials/historico_prescricoes.html", "r", encoding="utf-8") as f:
+        hist_presc_content = f.read()
+    assert 'aria-label="Excluir prescrição de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_presc_content
+    assert 'aria-label="Imprimir prescrição de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_presc_content
+    assert 'aria-label="Editar prescrição de {{ bloco.data_criacao|format_datetime_brazil(\'%d/%m/%Y %H:%M\') }}"' in hist_presc_content
+
+

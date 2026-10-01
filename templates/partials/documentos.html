@@ -13,7 +13,7 @@
 
 {% if is_active_veterinarian %}
 <div class="mb-3">
-  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
+  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}" aria-expanded="false" aria-controls="termos-container-{{ animal.id }}">Ver termos</button>
   <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
@@ -30,7 +30,9 @@
 document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click', function() {
   const container = document.getElementById('termos-container-{{ animal.id }}');
   container.classList.toggle('d-none');
-  this.textContent = container.classList.contains('d-none') ? 'Ver termos' : 'Ocultar termos';
+  const isHidden = container.classList.contains('d-none');
+  this.textContent = isHidden ? 'Ver termos' : 'Ocultar termos';
+  this.setAttribute('aria-expanded', (!isHidden).toString());
 });
 </script>
 {% endif %}
@@ -41,14 +43,14 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
           <div class="d-flex flex-column flex-md-row gap-2 align-items-start align-items-md-center">
             <span class="text-break flex-grow-1">{{ d.filename }}</span>
             <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-md-end mt-2 mt-md-0 ms-md-auto">
-              <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+              <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary" aria-label="Abrir {{ d.filename }}">Abrir</a>
               {% if tutor.phone %}
-                <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
+                <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success" aria-label="Enviar {{ d.filename }} por WhatsApp">WhatsApp</a>
               {% endif %}
               {% if current_user.role == 'admin' or (is_active_veterinarian and current_user.id == d.veterinario_id) %}
               <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')" aria-label="Excluir {{ d.filename }}">Excluir</button>
               </form>
               {% endif %}
             </div>

@@ -85,10 +85,10 @@
       <div class="d-flex flex-wrap gap-2 mt-3">
         <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="#historico-orcamentos"{% if consulta is defined %} data-target-endpoint="{{ url_for('historico_orcamentos_partial', consulta_id=consulta.id) }}"{% endif %} data-confirm="Deseja mesmo excluir este orçamento?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger btn-sm"><i class="fas fa-trash-alt me-1"></i>Excluir</button>
+          <button class="btn btn-danger btn-sm" aria-label="Excluir orçamento de {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}"><i class="fas fa-trash-alt me-1" aria-hidden="true"></i>Excluir</button>
         </form>
-        <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank"><i class="fas fa-print me-1"></i>Imprimir</a>
-        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit me-1"></i>Editar</a>
+        <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank" aria-label="Imprimir orçamento de {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}"><i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir</a>
+        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm" aria-label="Editar orçamento de {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}"><i class="fas fa-edit me-1" aria-hidden="true"></i>Editar</a>
         {% if consulta is defined and bloco.orcamento_id %}
           {# Link to pre-filled NFS-e preview with correct orcamento_id #}
           {% set particular_items = bloco.itens | selectattr('payer_type', 'equalto', 'particular') | list %}
@@ -108,7 +108,7 @@
           </a>
           {% endif %}
         {% endif %}
-        <button type="button" class="btn btn-outline-success btn-sm" data-pagamento-btn onclick="enviarBlocoParaPagamento({{ bloco.id }}, this)"><i class="fas fa-paper-plane me-1"></i>Enviar para tutor</button>
+        <button type="button" class="btn btn-outline-success btn-sm" data-pagamento-btn onclick="enviarBlocoParaPagamento({{ bloco.id }}, this)" aria-label="Enviar orçamento para tutor por WhatsApp"><i class="fas fa-paper-plane me-1" aria-hidden="true"></i>Enviar para tutor</button>
         {% if bloco.payment_link %}
         {% set pay_status = bloco.payment_status or 'pending' %}
         {% set is_overdue = pay_status == 'failed' %}

@@ -57,7 +57,7 @@
 
 <div class="border rounded p-3 mb-4 bg-light">
 <div class="d-flex justify-content-end mb-2">
-  <button id="toggle-novo-servico-btn" type="button" class="btn btn-outline-primary btn-sm" onclick="toggleNovoServico()">
+  <button id="toggle-novo-servico-btn" type="button" class="btn btn-outline-primary btn-sm" onclick="toggleNovoServico()" aria-expanded="false" aria-controls="novo-servico-container">
     ➕ Novo item de tabela
   </button>
 </div>
@@ -215,11 +215,12 @@ let isSyncingDiscounts = false;
 function toggleNovoServico() {
   const container = document.getElementById('novo-servico-container');
   const button = document.getElementById('toggle-novo-servico-btn');
-  container.classList.toggle('d-none');
+  const isHidden = container.classList.toggle('d-none');
   if (button) {
-    button.textContent = container.classList.contains('d-none')
+    button.textContent = isHidden
       ? '➕ Novo item de tabela'
       : '➖ Fechar cadastro';
+    button.setAttribute('aria-expanded', (!isHidden).toString());
   }
 }
 

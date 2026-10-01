@@ -23,4 +23,24 @@
 **Learning:** `_sanitize_login_next_url` should safely accept same-origin full URLs matching `request.host` while converting them to local paths, and log statements for external gateway payloads must redact customer PII (`redact_sensitive_text`).
 **Prevention:** Always sanitize redirect parameters with `_sanitize_login_next_url(..., fallback=...)` before rendering or redirecting, and never log raw customer payload objects in payment gateway flows.
 
+## 2026-09-25 - Email and Gateway Payload Sanitization in Logs
+**Vulnerability:** `redact_sensitive_text` only looked for digits (`_DIGIT_RE`), missing plain email addresses logged in payment gateway requests and responses.
+**Learning:** Checking `[\d@]` triggers email redaction via `_PII_TEXT_PATTERNS`, and wrapping Mercado Pago error/response payloads in `redact_sensitive_text(str(...))` prevents PII leakage into application logs.
+**Prevention:** Always ensure email patterns are included in `security.redact` and wrap all gateway error logging in `redact_sensitive_text`.
+
+## 2026-09-27 - Portable Subprocess Binary Execution
+**Vulnerability:** Hardcoded local interpreter paths (e.g. `C:\edb\...\python.exe`) cause failures when running subprocess scripts across different operating systems, containers, or developer machines.
+**Learning:** Using `sys.executable or "python3"` ensures the subprocess uses the currently running Python environment portably and securely.
+**Prevention:** Never hardcode absolute executable paths; always resolve executables via `sys.executable` or environment PATH.
+
+## 2026-09-29 - TOCTOU DNS Rebinding Prevention via `safe_fetch_url`
+**Vulnerability:** Calling `is_url_ssrf_safe(url)` followed by `requests.get(url)` is vulnerable to Time-of-Check to Time-of-Use (TOCTOU) DNS rebinding attacks where the host resolves to a public IP on check but private IP on fetch.
+**Learning:** `security.url_safe.safe_fetch_url` binds the connection socket directly to the validated IP address, neutralizing DNS rebinding.
+**Prevention:** For outbound fetching of dynamic external URLs, use `safe_fetch_url` instead of separate check-and-fetch calls.
+
+## 2026-09-30 - Open Redirect Mitigation in Prescription Referrer Redirects
+**Vulnerability:** `request.referrer` was passed directly to `redirect()` in prescription management handlers, allowing open redirect if the Referer header is tampered with by an attacker.
+**Learning:** Pass `request.referrer` through `_sanitize_login_next_url(request.referrer, fallback=...)` with an in-domain fallback to guarantee safe redirection.
+**Prevention:** Never pass raw `request.referrer` to `redirect()`.
+
 

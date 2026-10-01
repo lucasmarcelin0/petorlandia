@@ -2,7 +2,17 @@
 
 
 def only_digits(value) -> str:
-    return "".join(filter(str.isdigit, str(value or "")))
+    """Extrai apenas os dígitos de um valor com fast-path seguro para números e strings."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        if value.isdigit():
+            return value
+        return "".join([c for c in value if c.isdigit()])
+    s = str(value)
+    if s.isdigit():
+        return s
+    return "".join([c for c in s if c.isdigit()])
 
 
 def format_cnpj(value) -> str:

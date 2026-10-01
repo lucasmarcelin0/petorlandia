@@ -137,15 +137,16 @@ rápida em Orlândia.' %}
   <div class="col-12 col-lg-7">
     <div class="input-group input-elevated">
       <span class="input-group-text">
-        <i class="fa-solid fa-magnifying-glass"></i>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
       </span>
-      <input type="text" name="q" value="{{ search_term }}" class="form-control" placeholder="Buscar produtos...">
+      <input type="text" name="q" id="store-search-input" value="{{ search_term }}" class="form-control" placeholder="Buscar produtos..." aria-label="Buscar produtos no catálogo">
+      <button class="btn btn-outline-secondary js-clear-search-btn {% if not search_term %}d-none{% endif %}" type="button" aria-label="Limpar busca" title="Limpar busca"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       <button class="btn btn-primary" type="submit">Buscar</button>
     </div>
   </div>
 
   <div class="col-12 col-sm-6 col-lg-3">
-    <select class="form-select" name="filter" onchange="this.form.submit()">
+    <select class="form-select" name="filter" id="store-filter-select" aria-label="Filtrar ou ordenar produtos por" onchange="this.form.submit()">
       <option value="all" {% if selected_filter=='all' %}selected{% endif %}>Todos os produtos</option>
       <option value="new" {% if selected_filter=='new' %}selected{% endif %}>Novos produtos</option>
       <option value="priceLow" {% if selected_filter=='priceLow' %}selected{% endif %}>Preço: menor → maior</option>

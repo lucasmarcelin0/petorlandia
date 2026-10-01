@@ -50,7 +50,7 @@ SENSITIVE_TAGS: frozenset[str] = frozenset({
 })
 
 
-_DIGIT_RE: re.Pattern[str] = re.compile(r"\d")
+_PII_TRIGGER_RE: re.Pattern[str] = re.compile(r"[\d@]")
 
 
 # Regexes de PII em TEXTO LIVRE (aparecem dentro de tags não-sensíveis
@@ -58,6 +58,8 @@ _DIGIT_RE: re.Pattern[str] = re.compile(r"\d")
 # para não serem destruídos pelos \d{11}/\d{14} que capturariam "789" do
 # meio de "123.456.789-00" deixando lixo.
 _PII_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Email: user@domain.tld
+    (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "***@***"),
     # CNPJ mascarado: 12.345.678/0001-90
     (re.compile(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b"), "***"),
     # CPF mascarado: 123.456.789-00
@@ -72,10 +74,10 @@ _PII_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 
 
 def redact_sensitive_text(text: str) -> str:
-    """Mascara CPF/CNPJ/chave em texto solto (útil pra logs puros e
+    """Mascara CPF/CNPJ/chave/email em texto solto (útil pra logs puros e
     pra sanitizar cada text-node do XML). Idempotente: já redatado
     permanece redatado."""
-    if not text or not _DIGIT_RE.search(text):
+    if not text or not _PII_TRIGGER_RE.search(text):
         return text
     redacted = text
     for pattern, replacement in _PII_TEXT_PATTERNS:

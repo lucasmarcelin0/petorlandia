@@ -216,6 +216,27 @@ function initDynamicProducts(){
       });
   };
 
+  const clearSearchBtn = form.querySelector('.js-clear-search-btn');
+  const searchInput = form.querySelector('input[name="q"]');
+  if (clearSearchBtn && searchInput) {
+    searchInput.addEventListener('input', () => {
+      if (searchInput.value.trim().length > 0) {
+        clearSearchBtn.classList.remove('d-none');
+      } else {
+        clearSearchBtn.classList.add('d-none');
+      }
+    });
+    clearSearchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      searchInput.value = '';
+      clearSearchBtn.classList.add('d-none');
+      const params = new URLSearchParams(new FormData(form));
+      params.delete('q');
+      params.set('page', 1);
+      fetchProducts(params);
+    });
+  }
+
   form.addEventListener('submit', e => {
     e.preventDefault();
     const params = new URLSearchParams(new FormData(form));
