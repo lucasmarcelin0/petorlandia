@@ -10,11 +10,12 @@ imunizado o mesmo animal em outras listas.
 Um ``imunizado`` só se sustenta se:
   - a observação da visita registra o desfecho para esse animal (marcado à mão
     pelo vacinador, com a data da carteirinha), ou
-  - existe, em outra visita da mesma casa, o mesmo animal (mesmo cadastro,
-    mesmo nome ou nome com uma letra de diferença, sem conflito de espécie)
-    vacinado ou já imunizado de forma sustentada, com a dose na mesma data
-    (um dia de folga por causa do fuso) — uma dose aplicada depois não
-    prova a data antiga.
+  - a mesma casa tem, em outra visita, animal vacinado ou já imunizado de
+    forma sustentada com a dose na mesma data (um dia de folga por causa do
+    fuso). O nome do animal não é exigido: listas antigas gravaram todos os
+    nomes num campo só ("Lua.flokinho.palito"), e uma dose real da casa
+    naquele dia basta para não desfazer o registro. Dose aplicada em outra
+    data não prova a data antiga.
 
 A sustentação é calculada a partir dos vacinados, em ponto fixo, para que dois
 registros contaminados da mesma casa não se sustentem um ao outro. O que sobra
@@ -41,11 +42,8 @@ from models import PmoVaccinationAnimal, PmoVaccinationVisit
 from services.vacina_pmo_service import (
     PMO_STATUS_ALREADY_IMMUNE,
     _pmo_address_slug,
-    _pmo_animal_slug,
-    _pmo_close_slugs,
     _pmo_dose_date,
     _pmo_same_household,
-    _pmo_species_match,
     _pmo_visit_phones,
     _strip_accents,
 )
@@ -55,15 +53,6 @@ def _note_records(visit, animal) -> bool:
     note = _strip_accents(visit.note or "").casefold()
     name = _strip_accents(animal.name or "").casefold().strip()
     return bool(name) and f"{name}: ja imunizado" in note
-
-
-def _same_animal(left, right) -> bool:
-    if left.animal_id and left.animal_id == right.animal_id:
-        return True
-    if _pmo_species_match(left.species, right.species) == "conflito":
-        return False
-    a, b = _pmo_animal_slug(left.name), _pmo_animal_slug(right.name)
-    return bool(a) and (a == b or _pmo_close_slugs(a, b))
 
 
 def _same_date(left, right) -> bool:
@@ -123,7 +112,6 @@ def main() -> None:
                 if any(
                     other_animal.id in grounded
                     and _same_date(animal.immune_since, dose_dates.get(other_animal.id))
-                    and _same_animal(animal, other_animal)
                     for other in households
                     for other_animal in other.animals
                 ):
