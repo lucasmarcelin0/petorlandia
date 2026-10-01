@@ -50,7 +50,7 @@
     }
     function focus(f){
       if(!f.geometry){message('Este registro ainda não tem posição confirmada. Marque o local no mapa para posicioná-lo.');return;}
-      const geo=L.geoJSON(f);map.fitBounds(geo.getBounds(),{padding:[40,40],maxZoom:18});
+      const geo=L.geoJSON(f);map.fitBounds(geo.getBounds(),{padding:[40,40],maxZoom:window.SfaCondominiosModel.isHouse({...f,atlasEntry:layer})?20:18});
     }
     function geometryValue(){
       const kind=$('editor-geometry-kind').value;

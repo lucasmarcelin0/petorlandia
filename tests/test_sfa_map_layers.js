@@ -8,6 +8,8 @@ const L = {tileLayer:(url,options)=>{
 const window = {};
 vm.runInNewContext(fs.readFileSync('static/js/sfa_map_layers.js','utf8'),{window,L});
 const control = window.SfaMapLayers.attach(map,{status:t=>statuses.push(t)});
+assert.equal(layers[0].options.maxNativeZoom,18,'Aproximar casas amplia os tiles disponíveis em vez de solicitar a imagem vazia do nível 19.');
+assert.equal(layers[0].options.maxZoom,21);
 assert.equal(control.getMode(),'satellite');
 layers[0].error();layers[0].error();assert.equal(control.getMode(),'satellite');
 layers[0].error();assert.equal(control.getMode(),'streets');

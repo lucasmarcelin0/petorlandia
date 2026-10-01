@@ -115,7 +115,7 @@
         priority:item.priority || (selected?.id === item.feature.id ? 1000 : 0)};
     });
     const mapRect = $('field-map').getBoundingClientRect();
-    const reserved = [...$('field-workspace').querySelectorAll('.field-map-caption > span, #field-map .leaflet-control, #field-map .atlas-cluster')].map(element => {
+    const reserved = [...$('field-workspace').querySelectorAll('.field-map-caption > span, #field-map .leaflet-control, #field-map .atlas-cluster, #field-map .atlas-house-label, #field-map .atlas-condo-overview, #field-map .atlas-condo-street')].map(element => {
       const r = element.getBoundingClientRect();
       return {left:r.left-mapRect.left-3, right:r.right-mapRect.left+3, top:r.top-mapRect.top-3, bottom:r.bottom-mapRect.top+3};
     });
@@ -135,7 +135,7 @@
   }
   function setup() {
     if (!window.L) throw Error('Biblioteca de mapas indisponível.');
-    map = L.map('field-map', {scrollWheelZoom:false, minZoom:11, maxZoom:21}).setView([-20.72,-47.88],14);
+    map = L.map('field-map', {scrollWheelZoom:true, minZoom:11, maxZoom:21}).setView([-20.72,-47.88],14);
     for (const [name,z] of [['field-events',610],['field-event-labels',630],['field-census',410],['field-blocks',420],['field-selection',430],['field-labels',620]]) {
       map.createPane(name).style.zIndex = z;
       if (name === 'field-labels') map.getPane(name).style.pointerEvents = 'none';

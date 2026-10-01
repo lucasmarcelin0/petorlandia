@@ -36,6 +36,10 @@ def dumps(value):
 def references():
     return json.loads((DATA/'lugares.json').read_text(encoding='utf-8'))
 
+@lru_cache(maxsize=1)
+def condominiums():
+    return json.loads((DATA/'condominios.json').read_text(encoding='utf-8'))
+
 def documents():
     return json.loads((DATA/'documentos.json').read_text(encoding='utf-8'))
 
@@ -50,6 +54,9 @@ def source_layers():
             if key not in groups:
                 groups[key]={'id':key,'title':name,'color':PALETTE.get(normalize(name),'#65bdd2'),
                              'clinical':is_case(name),'deleted':False,'origin':origin,'features':[], 'revision':0}
+            if origin['type']=='condominium':
+                groups[key]['default_visible']=True
+                groups[key]['color']=f['properties']['color']
             item=deepcopy(f)
             item['id']=str(item.get('id') or key+'-'+str(index+1))
             groups[key]['features'].append(item)
@@ -58,6 +65,8 @@ def source_layers():
                                   'title':'Cópia Google Earth'})
     ref=references()
     add(ref['features'],'ref-',{'type':'reference','title':'OpenStreetMap','data_at':ref['source']['data_at']})
+    add(condominiums()['features'],'condo-',{'type':'condominium','title':'Croqui de condomínio + quadras',
+        'note':condominiums()['source']['method']})
     from services.entomologia_service import dataset_atual
     for upload in dataset_atual().get('layers',[]):
         key='upload-'+str(upload['id'])
@@ -281,6 +290,7 @@ def search_text(value):
         value=re.sub(r'\b(rua|avenida|alameda|travessa) '+word+r'\b',lambda m:m[1]+' '+str(n),value)
     for n,word in {16:'dezesseis',17:'dezessete',18:'dezoito',19:'dezenove',20:'vinte',30:'trinta',100:'cem',102:'cento e dois'}.items():
         value=re.sub(r'\b(rua|avenida|alameda|travessa) '+word+r'\b',lambda m:m[1]+' '+str(n),value)
+    value=re.sub(r'\b(rua|avenida|alameda|travessa|casa) 0*(\d+)\b',lambda m:m[1]+' '+str(int(m[2])),value)
     return value
 
 def search(query, allowed_clinical):
@@ -288,14 +298,17 @@ def search(query, allowed_clinical):
     q=search_text(query)
     if not q or len(q)>240: return []
     q=re.sub(r'\bav\.?\s','avenida ',q)
-    tokens=q.replace(',',' ').split()
+    pattern=r'\b(?:rua|avenida|alameda|travessa|casa) \d+[a-z]?\b'
+    phrases=re.findall(pattern,q)
+    tokens=re.sub(pattern,' ',q).replace(',',' ').split()
     result=[]
     grouped={}
     for layer in layers(allowed_clinical).values():
         for f in layer['features']:
             p=f['properties']
             hay=search_text(' '.join(str(p.get(k,'')) for k in ('name','label','address','category')))
-            if all(re.search(r'(?<!\d)'+re.escape(t)+r'(?!\d)',hay) if t.isdigit() else t in hay for t in tokens):
+            if all(re.search(r'(?<!\w)'+re.escape(t)+r'(?!\w)',hay) for t in phrases) and all(
+                    re.search(r'(?<!\d)'+re.escape(t)+r'(?!\d)',hay) if t.isdigit() else t in hay for t in tokens):
                 identity=(layer['id'],normalize(p.get('name') or p.get('label')))
                 if layer['origin']['type']=='reference' and identity in grouped:
                     base=grouped[identity]['feature']

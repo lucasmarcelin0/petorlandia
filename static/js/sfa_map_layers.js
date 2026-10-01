@@ -6,7 +6,8 @@
     attach(map, {status = () => {}, mode = 'satellite'} = {}) {
       const definitions = {
         satellite: ['Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          'Imagens &copy; Esri, Maxar, Earthstar Geographics e comunidade GIS', 19],
+          // Level 19 returns placeholder tiles around the condominiums. Overzoom level 18.
+          'Imagens &copy; Esri, Maxar, Earthstar Geographics e comunidade GIS', 18],
         streets: ['Ruas', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
           'Mapa &copy; Esri, HERE, Garmin, OpenStreetMap e comunidade GIS', 19]
       };

@@ -249,3 +249,37 @@ escala 1:10.000. A medida de desenho `/RL` do PDF urbano não é uma transforma�
 geográfica. Nenhuma folha foi esticada ou sobreposta ao satélite sem validação
 de pontos de controle. A base das quadras e os limites IBGE permanecem referências
 territoriais separadas do editor de registros.
+
+
+## Casas dos condomínios e zoom com mouse (1º de outubro de 2026)
+
+A roda do mouse controla o zoom do atlas, inclusive em tela cheia. Duas camadas
+operacionais iniciam ativas: Casas · Condomínio Quebec e Casas · Condomínio Torino.
+Cada uma contém as casas 1 a 197 e as alamedas 01 a 07 transcritas dos croquis
+`mapa-07.jpg` e `mapa-08.jpg`. O endereço é interno ao condomínio; não representa
+numeração de portaria nem endereço postal oficial. Não há dados de moradores.
+
+Os pontos são estimativas cartográficas interpoladas nas quadras 899A–F/SC103
+e 900A–F/SC104 do território operacional. Cada registro informa essa precisão,
+a quadra e o arquivo de origem. Conferir o imóvel e a entrada em campo antes de
+usá-los como coordenadas exatas. A equipe pode corrigir endereço, nome e posição
+pelo editor já existente, com revisão, auditoria e restauração.
+
+Em zoom distante, um cartão por condomínio permite aproximar. A partir de zoom
+18 aparecem pontos e números, com seleção por espaço disponível para evitar
+sobreposição. A aproximação revela os demais números. Alamedas recebem rótulos
+quando houver espaço; clicar ou passar o mouse numa casa mostra seu endereço.
+Os atalhos Quebec/Torino enquadram cada condomínio. Essas camadas podem ser
+ocultadas e filtradas por alameda; não usam os filtros clínicos de mês.
+A busca reconhece “Quebec, Alameda 02, Casa 01” sem confundir o número da casa
+com o número da alameda.
+
+A fonte gerada fica em `atlas-referencias/condominios.json`, incluindo hashes dos
+dois croquis e do território usado. Regeneração:
+`python scripts/prepare_entomologia_condominios.py --data services/data/entomologia --output services/data/entomologia/atlas-referencias/condominios.json`.
+Testes conferem transcrição completa, pontos dentro das quadras, procedência,
+busca, edições compartilhadas e colisões dos rótulos.
+
+A base satélite utiliza imagens até o nível nativo 18, ampliadas nos zooms
+19–21: o nível 19 do provedor devolvia tiles com “Map data not yet available”
+nessa região. O zoom continua até 21, com os rótulos e pontos em resolução de tela.

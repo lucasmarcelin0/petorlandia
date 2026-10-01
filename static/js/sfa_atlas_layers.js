@@ -6,7 +6,7 @@
   const resultNames={positive:'Positivo',negative:'Negativo',pending:'Pendente / suspeito',unknown:'Sem resultado reconhecido'};
   const resultColors={positive:'#dd7587',negative:'#69bfce',pending:'#edbb6f',unknown:'#bbc3d0'};
   window.SfaAtlasLayers={attach(map,dataset){
-    let entries=[], sheet=null, sheetPromise=null, source=null, sequence=0, unlocatedLimit=50;
+    let entries=[], sheet=null, sheetPromise=null, source=null, sequence=0, unlocatedLimit=50, catalogInitialized=false;
     const renderer=L.canvas({padding:.3,pane:'field-events'}), pointLayer=L.layerGroup().addTo(map);
     let pointFeatures=[];
     const fetchJson=async url=>{
@@ -23,6 +23,8 @@
       return row ? `<div class="atlas-popup"><strong>Planilha · linha ${row.source_row}</strong><p>${escape(row.disease || 'Agravo não informado')}</p><dl><dt>SINAN</dt><dd>${escape(row.sinan || 'Não informado')}</dd><dt>Notificação</dt><dd>${day(row.notification_date)}</dd><dt>Sintomas</dt><dd>${day(row.symptoms_date)}</dd><dt>Exame</dt><dd>${escape(row.exam || 'Não informado')}</dd><dt>Resultado</dt><dd>${escape(row.exam_result || 'Não informado')}</dd><dt>Resultado final</dt><dd>${escape(row.final_result || 'Não informado')}</dd><dt>Classificação</dt><dd>${escape(row.classification || 'Não informada')}</dd></dl><p>Posição vinculada por um número SINAN explícito e único no Earth.</p><a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${row.source_row}:T${row.source_row}">Consultar linha de origem ↗</a></div>`
         : `<div class="atlas-popup"><strong>${escape(title)}</strong><p>${escape(p.category || 'Referência operacional')}${p.month?' · mês '+p.month+' na pasta':''}</p>${p.folder_status?'<p>Rótulo da pasta: '+escape(p.folder_status)+'. A classificação da planilha é consultada separadamente.</p>':''}<p>Elemento do arquivo Earth; não representa necessariamente pessoa, imóvel ou visita únicos.</p><small>Origem: ${escape(p.source_id || feature.id || 'camada enviada')}</small>${p.__atlas_layer?'<p><button type="button" data-atlas-layer="'+escape(p.__atlas_layer)+'" data-atlas-feature="'+escape(feature.id)+'">Consultar / editar registro</button></p>':''}</div>`;
     }
+    const houses=window.SfaCondominios.attach(map,{popup});
+    const isHouse=window.SfaCondominiosModel.isHouse;
     function render(entry,features){
       entry.group.clearLayers();
       if(!entry.enabled)return;
@@ -33,7 +35,7 @@
     }
     function renderPoints(){
       pointLayer.clearLayers();
-      const visible=pointFeatures.filter(f=>map.getBounds().pad(.1).contains([f.geometry.coordinates[1],f.geometry.coordinates[0]]));
+      const visible=pointFeatures.filter(f=>!isHouse(f)&&map.getBounds().pad(.1).contains([f.geometry.coordinates[1],f.geometry.coordinates[0]]));
       const groups=M.clusters(visible,coords=>map.latLngToContainerPoint([coords[1],coords[0]]),map.getZoom()>=17?38:48);
       groups.forEach(c=>{
         const sources=new Map();
@@ -58,9 +60,11 @@
         }
         marker.addTo(pointLayer);
       });
+      houses.render(pointFeatures.filter(isHouse));
     }
     function filteredRows(entry,current){
       const features=entry.features||[];
+      if(entry.origin?.type==='condominium')return M.earthFilter(features,'',entry.categories);
       if(entry.origin?.type!=='sheet_snapshot')return M.earthFilter(features,current.month,entry.categories);
       return M.sheetFilter(features.map(f=>{
         const p=f.properties, result=String(p.exam_result||'').toLowerCase();
@@ -124,7 +128,8 @@
         entry.enabled=input.checked;small.textContent='Carregando…';
         try{if(entry.enabled)await load();redraw();notice('');}catch(error){entry.enabled=false;input.checked=false;redraw();notice(error.message+' As outras camadas continuam disponíveis.');}
       };
-      focus.onclick=async()=>{input.checked=true;await input.onchange();const rows=M.earthFilter(entry.features||[],filters().month,entry.categories);if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[28,28],maxZoom:17});};
+      focus.onclick=async()=>{input.checked=true;await input.onchange();const rows=filteredRows(entry,filters());if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[28,28],maxZoom:entry.origin?.type==='condominium'?19:17});};
+      entry.focus=focus.onclick;
       return {entry,wrapper};
     }
     async function loadSheet(force=false){
@@ -176,8 +181,13 @@
       const loading=[];
       data.layers.forEach(item=>{const created=makeEntry(item);entries.push(created.entry);
         $(item.origin?.type==='earth'?'atlas-earth-list':'atlas-local-list').append(created.wrapper);
-        if(enabled.has(item.id)||activate===item.id){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
-      });await Promise.allSettled(loading);redraw();
+        if(enabled.has(item.id)||activate===item.id||!catalogInitialized&&item.default_visible){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
+      });catalogInitialized=true;
+      document.querySelectorAll('[data-atlas-condo]').forEach(button=>{
+        const entry=entries.find(e=>e.origin?.type==='condominium'&&e.title.includes(button.dataset.atlasCondo));
+        button.disabled=!entry||entry.input.disabled;button.onclick=()=>entry?.focus();
+      });
+      await Promise.allSettled(loading);redraw();
     }
     window.SfaAtlasLayers.refresh=refreshCatalog;
     refreshCatalog().catch(error=>{notice(error.message+' Quadras e mapas originais continuam disponíveis.');});
