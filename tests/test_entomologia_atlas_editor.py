@@ -144,3 +144,20 @@ def test_sheet_copy_is_editable_without_writing_google(client,app,monkeypatch):
     # Import-upload undo must not bypass editor permissions/concurrency.
     r=client.post('/sfa/entomologia/envios/'+str(r.json['revision'])+'/desfazer',data={'responsavel':'Equipe'})
     assert r.status_code==404
+
+
+def test_editor_page_renews_csrf_and_signed_write_succeeds(client,app):
+    login(client);app.config['WTF_CSRF_ENABLED']=True
+    response=client.get('/sfa/entomologia')
+    assert response.status_code==200
+    html=response.get_data(as_text=True)
+    assert '<meta name="csrf-token"' in html and 'csrf_fetch.js' in html
+    token=client.get('/csrf-token').json['csrf_token']
+    # HTTPS validation requires the same origin as well as a signed token.
+    refused=client.post(BASE,json=command('create_layer',title='Sem origem',color='#087f81'),
+                        headers={'X-CSRFToken':token},base_url='https://localhost')
+    assert refused.status_code==400
+    response=client.post(BASE,json=command('create_layer',title='Cadastro conferido',color='#087f81'),
+                         headers={'X-CSRFToken':token,'Referer':'https://localhost/'},base_url='https://localhost')
+    assert response.status_code==200,response.get_data(as_text=True)
+    assert response.json['revision']>0

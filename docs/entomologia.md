@@ -225,7 +225,9 @@ prevalecem sobre novas importações até restaurar a fonte original.
 
 Escritas exigem conta identificada, CSRF e o papel já existente de administrador
 ou Combate à dengue. Camadas clínicas só podem ser editadas por administradores.
-Um token de consulta não autoriza gravações. A versão enviada pelo formulário
+Um token de consulta não autoriza gravações. O atlas usa a renovação CSRF já
+existente; gravações HTTPS enviam somente a origem do site como referência,
+sem dados da URL, mantendo a validação estrita de mesma origem. A versão enviada pelo formulário
 deve coincidir com a atual; conflito retorna 409, preservando o formulário.
 Um bloqueio transacional PostgreSQL serializa gravações, inclusive a primeira
 edição de uma camada da fonte, entre threads e dynos. O histórico do editor não

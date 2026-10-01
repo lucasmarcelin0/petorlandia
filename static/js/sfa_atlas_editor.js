@@ -10,7 +10,7 @@
     const url=key=>key?urls.layer.replace('KEY',encodeURIComponent(key)):urls.catalog;
     const api=async(target,body)=>{
       const response=await fetch(target,{credentials:'same-origin',cache:'no-store',method:body?'POST':'GET',
-        ...(body?{headers:{'Content-Type':'application/json','X-CSRFToken':$('atlas-collaboration').dataset.csrf},body:JSON.stringify(body)}:{})});
+        ...(body?{referrerPolicy:'strict-origin',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||$('atlas-collaboration').dataset.csrf},body:JSON.stringify(body)}:{})});
       if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Sessão encerrada ou acesso indisponível. Entre novamente antes de salvar.');
       const data=await response.json();if(!response.ok)throw Error(data.error||'Não foi possível concluir a operação.');return data;
     };
@@ -96,6 +96,7 @@
       try{
         const updated=await api(url(key),{revision:key?layer.revision:0,...command});
         message('Alteração salva e compartilhada com a equipe.');layer=updated;
+        if($('editor-layer-form'))$('editor-layer-form').hidden=true;
         await reloadCatalog(updated.id);await loadLayer(updated.id);await window.SfaAtlasLayers.refresh(updated.id);
         return updated;
       }catch(error){message(error.message,true);throw error;}

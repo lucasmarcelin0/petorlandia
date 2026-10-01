@@ -2,6 +2,8 @@
 {% block title %}Dados entomológicos e censitários — Orlândia{% endblock %}
 {% block page_title %}Território e vigilância{% endblock %}
 {% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script src="{{ url_for('static', filename='csrf_fetch.js', v='20261001-atlas') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
@@ -211,7 +213,7 @@
 <script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261001-editor') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261001-editor') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261001') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261001-csrf') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261001-editor') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}
