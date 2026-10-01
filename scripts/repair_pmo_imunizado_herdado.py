@@ -12,7 +12,9 @@ Um ``imunizado`` só se sustenta se:
     pelo vacinador, com a data da carteirinha), ou
   - existe, em outra visita da mesma casa, o mesmo animal (mesmo cadastro,
     mesmo nome ou nome com uma letra de diferença, sem conflito de espécie)
-    vacinado ou já imunizado de forma sustentada.
+    vacinado ou já imunizado de forma sustentada, com a dose na mesma data
+    (um dia de folga por causa do fuso) — uma dose aplicada depois não
+    prova a data antiga.
 
 A sustentação é calculada a partir dos vacinados, em ponto fixo, para que dois
 registros contaminados da mesma casa não se sustentem um ao outro. O que sobra
@@ -41,6 +43,7 @@ from services.vacina_pmo_service import (
     _pmo_address_slug,
     _pmo_animal_slug,
     _pmo_close_slugs,
+    _pmo_dose_date,
     _pmo_same_household,
     _pmo_species_match,
     _pmo_visit_phones,
@@ -61,6 +64,10 @@ def _same_animal(left, right) -> bool:
         return False
     a, b = _pmo_animal_slug(left.name), _pmo_animal_slug(right.name)
     return bool(a) and (a == b or _pmo_close_slugs(a, b))
+
+
+def _same_date(left, right) -> bool:
+    return bool(left and right) and abs((left - right).days) <= 1
 
 
 def main() -> None:
@@ -91,6 +98,11 @@ def main() -> None:
             found.discard(visit)
             return [other for other in found if _pmo_same_household(visit, other)]
 
+        dose_dates = {
+            animal.id: _pmo_dose_date(animal, visit)
+            for visit in visits
+            for animal in visit.animals
+        }
         grounded: set[int] = set()
         pending: list[tuple] = []
         for visit in visits:
@@ -109,7 +121,9 @@ def main() -> None:
             still = []
             for visit, animal, households in pending:
                 if any(
-                    other_animal.id in grounded and _same_animal(animal, other_animal)
+                    other_animal.id in grounded
+                    and _same_date(animal.immune_since, dose_dates.get(other_animal.id))
+                    and _same_animal(animal, other_animal)
                     for other in households
                     for other_animal in other.animals
                 ):
