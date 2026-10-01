@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261001-editor') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_condominios.css', v='20261001-casas') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_folders.css', v='20261001-arvore') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
@@ -168,7 +169,7 @@
         <button id="field-fullscreen" type="button" class="field-tool-button" aria-pressed="false">Expandir mapa</button>
       </form>
       <div class="field-body">
-        <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
+        <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div id="editor-map-tools" class="editor-map-tools" hidden><span>Arraste o marcador para ajustar a entrada. A posição só será gravada ao salvar o registro.</span><button type="button" id="editor-finish-position">Voltar ao formulário</button></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
         <aside class="field-rail" aria-label="Camadas e informações do território">
           <section class="atlas-place-search"><div class="ento-eyebrow">ENDEREÇOS E LOCAIS</div><label for="atlas-place-query">Rua, equipamento ou endereço cadastrado</label><input id="atlas-place-query" type="search" maxlength="240" placeholder="Rua 2, escola ou endereço" autocomplete="off"><div class="editor-buttons"><button type="button" id="atlas-place-search" class="field-tool-button">Pesquisar</button><button type="button" id="atlas-place-clear" class="field-tool-button">Limpar</button></div><p id="atlas-place-status" role="status"></p><div id="atlas-place-results" class="atlas-place-results"></div></section>
           {% include 'sfa/_atlas_editor.html' %}
@@ -181,13 +182,14 @@
             <details id="atlas-uploads" class="atlas-source-group" hidden><summary>Outras camadas enviadas</summary><div id="atlas-upload-list"></div></details>
             <details class="atlas-source-group" open><summary>Planilha · Arboviroses</summary><div class="atlas-sinan-row"><label><input type="checkbox" id="atlas-sinan"><span><strong>Registros da planilha</strong><small id="atlas-sheet-count">Ative para consultar a fonte</small></span></label></div><p id="atlas-sheet-source" class="atlas-source-note">Resultados, datas e classificação da aba original. Sem coordenadas inventadas.</p><button type="button" id="atlas-refresh" class="atlas-small-button">Atualizar consulta</button><details id="atlas-unlocated" class="atlas-unlocated" hidden><summary id="atlas-unlocated-count">Registros sem posição</summary><p class="atlas-source-note">Sem um vínculo SINAN explícito e único no Earth, o registro continua consultável na lista.</p><div id="atlas-unlocated-list" class="atlas-unlocated-list"></div><button type="button" id="atlas-more-unlocated" class="atlas-small-button" hidden>Mostrar mais registros</button></details></details>
             <details class="atlas-source-group"><summary>Filtrar os dados das camadas</summary><div class="atlas-filter-grid">
-              <div class="atlas-full"><label for="atlas-month">Mês (pastas Earth / data da planilha)</label><select id="atlas-month"><option value="">Todos os meses</option>{% for n, month in [(1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),(5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),(9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')] %}<option value="{{ '%02d'|format(n) }}">{{ month }}</option>{% endfor %}<option value="unknown">Sem mês informado</option></select></div>
+              <div class="atlas-full"><label for="atlas-month">Mês da pasta Earth / data da planilha</label><select id="atlas-month"><option value="">Todos os meses</option>{% for n, month in [(1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),(5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),(9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')] %}<option value="{{ '%02d'|format(n) }}">{{ month }}</option>{% endfor %}<option value="unknown">Sem mês informado</option></select></div>
+              <div class="atlas-full"><label for="atlas-year">Ano</label><select id="atlas-year"><option value="">Todos os anos</option></select></div>
               <div class="atlas-full"><label for="atlas-date-field">Data da planilha usada no filtro</label><select id="atlas-date-field"><option value="notification_date">Notificação</option><option value="symptoms_date">Início dos sintomas</option></select></div>
               <div><label for="atlas-start">A partir de</label><input id="atlas-start" type="date"></div><div><label for="atlas-end">Até</label><input id="atlas-end" type="date"></div>
               <div class="atlas-full"><label for="atlas-result">Resultado do exame (planilha)</label><select id="atlas-result"><option value="">Todos os resultados</option><option value="positive">Positivo</option><option value="negative">Negativo</option><option value="pending">Pendente / suspeito</option><option value="unknown">Sem resultado reconhecido</option></select></div>
               <div class="atlas-full"><label for="atlas-final-result">Resultado final (planilha)</label><select id="atlas-final-result"><option value="">Todos os resultados finais</option><option value="missing">Sem resultado final informado</option></select></div>
               <div class="atlas-full"><label for="atlas-classification">Classificação do caso (planilha)</label><select id="atlas-classification"><option value="">Todas as classificações</option></select></div><button id="atlas-clear-filters" type="button" class="atlas-small-button atlas-full">Limpar filtros das camadas</button>
-            </div><p class="atlas-source-note">O mês do Earth vem das pastas. Datas exatas e resultados filtram somente os registros da planilha. Quadras permanecem como referência.</p></details>
+            </div><p class="atlas-source-note">O mês do Earth vem das pastas. Ano e intervalo usam as datas explícitas dos registros; registros sem dia continuam selecionáveis por pasta, mês e ano. Resultados filtram a planilha. Ruas, casas e quadras permanecem como referência.</p></details>
             <p class="atlas-point-help">Círculos numerados agrupam pontos próximos. As cores do anel mostram suas camadas; clique para ver a composição ou dê duplo clique para aproximar. Os registros das fontes permanecem distintos.</p><div id="atlas-notice" class="atlas-notice" role="alert" hidden></div>
           </section>
           <section id="field-selection" aria-live="polite"><div class="ento-eyebrow">CONSULTA DO TERRITÓRIO</div><h3>Escolha uma quadra</h3><p>Clique em um contorno para consultar seu número, setor e área de campo.</p></section>
@@ -214,9 +216,11 @@
 <script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_condominios_model.js', v='20261001-casas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_condominios.js', v='20261001-casas') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261001-editor') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261001-casas') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261001-casas') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_folders_model.js', v='20261001-arvore') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_folders.js', v='20261001-arvore') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261001-arvore') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261001-arvore') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261001-arvore') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261001-casas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}

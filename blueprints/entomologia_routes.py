@@ -187,7 +187,9 @@ def register(bp, require_access):
                     linhas=resumo['elementos'], dados_json=json.dumps(lido['geojson'], ensure_ascii=False,
                                                                       separators=(',', ':'), allow_nan=False),
                     resumo_json=json.dumps(resumo, ensure_ascii=False))
-            repetido = EntomologiaImportacao.query.filter_by(sha256=registro.sha256, status='ATIVA').first()
+            repetido = EntomologiaImportacao.query.filter_by(tipo=registro.tipo, sha256=registro.sha256, status='ATIVA').order_by(EntomologiaImportacao.id.desc()).first()
+            if repetido and tipo==TIPO_ATLAS and json.loads(repetido.dados_json).get('schema_version',1)<atlas.get('schema_version',1):
+                repetido=None  # Same file can recover folder/address metadata lost by the old importer.
             if repetido:
                 raise ValueError(f'Este conteúdo já está em uso (envio #{repetido.id}). Nada foi alterado.')
             registro.responsavel, registro.ator, registro.status = responsavel, _ator(), 'PREVIA'

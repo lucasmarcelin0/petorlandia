@@ -58,8 +58,21 @@ def result_group(value):
     return 'unknown'
 
 
+def address_text(value):
+    """Only a street-address fragment, never a full person title or description."""
+    from services.entomologia_service import _texto_simples
+    value=_texto_simples(value).replace('\r','\n')
+    match=re.search(r'\b(?:rua|avenida|av\.?|alameda|travessa|estrada|rodovia|praça|praca)\s+[^;|\n<>]{1,220}',value,re.I)
+    if not match:return ''
+    address=match[0]
+    address=re.split(r'\b(?:SINAN|CPF|telefone|celular|paciente|morador|nome|observações|diagnóstico|data)\s*[:#-]',address,flags=re.I)[0]
+    address=re.split(r'\s+[-–]\s+',address)[0]
+    number=re.search(r'(?:\b(?:n[º°o.]|número|numero|num\.?)[º°.:\s]*|,\s*)(\d+[A-Za-z]?)',address,re.I)
+    if number:address=address[:number.end()]
+    return address.strip(' ,.:')[:240]
+
 def read_earth(blob, filename):
-    """Keep geometry, folder categories and explicit SINAN keys; drop names/text."""
+    """Keep geometry, complete folders and bounded addresses/dates; discard personal text."""
     from defusedxml import ElementTree as ET
     from services.entomologia_service import LIMITE_ENVIO, LIMITE_COORDENADAS, LIMITE_FEICOES, _membro_zip, _texto_simples
 
@@ -78,7 +91,10 @@ def read_earth(blob, filename):
     if root.tag != '{http://www.opengis.net/kml/2.2}kml':
         raise ValueError('O arquivo não é um KML.')
     ns = {'k': 'http://www.opengis.net/kml/2.2'}
-    features, total_coordinates = [], 0
+    features, folder_nodes, total_coordinates = [], [], 0
+    title=root.findtext('k:Document/k:name','',ns)[:200]
+    years=re.findall(r'\b(?:19|20)\d{2}\b',title)
+    project_year=years[0] if len(set(years))==1 else ''
     def direct(el, name):
         return el.findtext('k:' + name, '', ns).strip()
     def coordinates(el):
@@ -123,11 +139,18 @@ def read_earth(blob, filename):
             geometries = [g for child in el if (g := geometry(child)) is not None]
             return {'type': 'GeometryCollection', 'geometries': geometries} if geometries else None
         return None
-    def walk(el, folders):
-        for child in el:
+    def walk(el, folders, folder_ids):
+        if len(folders)>12:raise ValueError('O projeto tem níveis de pasta demais.')
+        for index,child in enumerate(el):
             kind = child.tag.rsplit('}', 1)[-1]
             if kind in ('Document', 'Folder'):
-                walk(child, folders + ([direct(child, 'name')] if kind == 'Folder' else []))
+                if kind=='Document':walk(child,folders,folder_ids);continue
+                name=direct(child,'name')[:120] or 'Pasta sem título'
+                key='earth-folder-'+hashlib.sha256((child.get('id') or '/'.join(folder_ids)+'/'+str(index)+'/'+name).encode()).hexdigest()[:24]
+                folder_nodes.append({'id':key,'source_id':child.get('id',''),'name':name,
+                    'parent_id':folder_ids[-1] if len(folder_ids)>1 else '',
+                    'layer':folders[0] if folders else name,'depth':len(folders)+1})
+                walk(child,folders+[name],folder_ids+[key])
             elif kind == 'Placemark':
                 if len(features) >= LIMITE_FEICOES:
                     raise ValueError('O arquivo tem elementos demais.')
@@ -141,19 +164,37 @@ def read_earth(blob, filename):
                 # Only explicitly labelled SINAN numbers can link a clinical row.
                 description = _texto_simples(direct(child, 'description'))
                 keys = sorted({identifier(m) for m in re.findall(r'\bSINAN\s*[:#\-]?\s*(\d+)\b', description, re.I)} - {''})
+                address=address_text(direct(child,'address')) or address_text(direct(child,'name')) or address_text(description)
+                stamp=child.findtext('k:TimeStamp/k:when','',ns).split('T')[0]
+                explicit=date_iso(stamp)
+                dates={date_iso(d) for d in re.findall(r'\b\d{1,2}/\d{1,2}/\d{4}\b',description)}-{''}
+                if not explicit and len(dates)==1:explicit=dates.pop()
+                year=explicit[:4] or next((f for f in folders if re.fullmatch(r'(?:19|20)\d{2}',f)),project_year)
+                sector=next((re.sub(r'\D','',f).lstrip('0') or '0' for f in reversed(folders) if re.fullmatch(r'SC\s*\d+',f,re.I)),'')
                 features.append({'type': 'Feature', 'id': child.get('id') or f'earth-{len(features)+1}',
                     'geometry': geoms[0] if len(geoms) == 1 else {'type': 'GeometryCollection', 'geometries': geoms},
                     'properties': {'layer': layer, 'category': category, 'month': month,
                         'folder_status': status, 'sinan': keys[0] if len(keys) == 1 else '',
-                        'source_id': child.get('id') or '', 'label': f'{layer} · marcador {len(features)+1}'}})
-    walk(root, [])
+                        'source_id': child.get('id') or '', 'label': address or f'{layer} · marcador {len(features)+1}',
+                        'name':address or f'{layer} · marcador {len(features)+1}', 'address':address,
+                        'address_origin':'Título/endereço do marcador Earth' if address else '',
+                        'folder_id':folder_ids[-1] if len(folder_ids)>1 else '', 'folder_path':folders,
+                        'source_month':month,'period_year':year,'sector':sector,'date':explicit,
+                        'date_origin':'Data explícita no Earth' if explicit else '',
+                        'position_status':'imported',
+                        'source_coordinates':geoms[0]['coordinates'] if len(geoms)==1 and geoms[0]['type']=='Point' else None,
+                        'precision':'Coordenada original do Earth. Endereço e entrada ainda precisam de conferência.'}})
+    walk(root, [], [])
     if not features:
         raise ValueError('Nenhuma geometria encontrada.')
     title = root.findtext('k:Document/k:name', '', ns)[:200]
     counts = Counter(f['properties']['layer'] for f in features)
-    return {'type': 'FeatureCollection', 'features': features, 'source': {
+    if len({n['id'] for n in folder_nodes})!=len(folder_nodes):raise ValueError('Identificadores de pastas repetidos no KML.')
+    return {'type': 'FeatureCollection', 'features': features, 'folders':folder_nodes, 'schema_version':2, 'source': {
         'title': title, 'file': filename[:200], 'sha256': hashlib.sha256(raw).hexdigest(),
-        'url': EARTH_URL, 'counts': dict(counts), 'coordinates_preserved': True}}
+        'url': EARTH_URL, 'counts': dict(counts), 'coordinates_preserved': True,
+        'folder_count':len(folder_nodes),'addresses':sum(bool(f['properties']['address']) for f in features),
+        'exact_dates':sum(bool(f['properties']['date']) for f in features),'period_year':project_year}}
 
 
 def active_earth():

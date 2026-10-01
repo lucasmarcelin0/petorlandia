@@ -17,6 +17,7 @@ import threading
 import uuid
 
 from services import entomologia_atlas as atlas
+from services import entomologia_folders as folders
 from services.entomologia_atlas import layer_id, is_case, normalize, PALETTE
 
 TIPO = 'atlas_edit'
@@ -24,7 +25,8 @@ DATA = Path(__file__).parent/'data'/'entomologia'/'atlas-referencias'
 _write_lock = threading.RLock()
 FIELDS = {'name':200,'address':240,'category':120,'notes':2000,'date':10,'status':120,
           'sinan':40,'disease':120,'notification_date':10,'symptoms_date':10,'exam':120,
-          'exam_result':160,'final_result':160,'classification':120,'precision':240}
+          'exam_result':160,'final_result':160,'classification':120,'precision':240,
+          'folder_id':100,'position_status':30,'period_year':4}
 
 class Conflict(ValueError):
     pass
@@ -60,9 +62,16 @@ def source_layers():
             item=deepcopy(f)
             item['id']=str(item.get('id') or key+'-'+str(index+1))
             groups[key]['features'].append(item)
+            if any(is_case(part) for part in item['properties'].get('folder_path',[])):groups[key]['clinical']=True
     earth=atlas.active_earth()
     add(earth['features'],'earth-',{'type':'earth','import_id':earth.get('source',{}).get('import_id'),
                                   'title':'Cópia Google Earth'})
+    for node in earth.get('folders',[]):
+        if node.get('depth',1)==1:continue
+        group=groups.get('earth-'+layer_id(node['layer']))
+        if group:
+            group.setdefault('folders',[]).append({k:v for k,v in node.items() if k in ('id','name','parent_id','source_id')})
+            if is_case(node['name']):group['clinical']=True
     ref=references()
     add(ref['features'],'ref-',{'type':'reference','title':'OpenStreetMap','data_at':ref['source']['data_at']})
     add(condominiums()['features'],'condo-',{'type':'condominium','title':'Croqui de condomínio + quadras',
@@ -79,7 +88,7 @@ def source_layers():
             f['id']=str(f.get('id') or key+'-'+str(index+1))
         groups[key]={'id':key,'title':upload['title'],'color':'#aec7ec','clinical':is_case(upload['title']),
                      'deleted':False,'origin':{'type':'upload','title':'Camada enviada'},'features':items,'revision':0}
-    return groups
+    return {key:folders.ensure(layer) for key,layer in groups.items()}
 
 def revision_rows(key=None):
     from models.entomologia import EntomologiaImportacao as E
@@ -94,13 +103,15 @@ def layers(clinical_allowed, include_deleted=False):
         layer=json.loads(row.dados_json)
         layer['revision']=row.id
         layer['updated_at']=row.confirmado_em.isoformat()
-        result[layer['id']]=layer
+        result[layer['id']]=folders.upgrade_revision(layer,result.get(layer['id']))
     return {key:item for key,item in result.items() if (clinical_allowed or not item['clinical'])
             and (include_deleted or not item['deleted'])}
 
 def catalog(clinical_allowed, include_deleted=False):
     return [{k:v for k,v in layer.items() if k!='features'} | {'count':len(layer['features']),
-            'unlocated':sum(f.get('geometry') is None for f in layer['features'])}
+            'unlocated':sum(f.get('geometry') is None for f in layer['features']),
+            'folders':folders.folder_counts(layer),
+            'period_years':sorted({f['properties'].get('period_year') or f['properties'].get('date','')[:4] for f in layer['features']} - {''})}
             for layer in layers(clinical_allowed,include_deleted).values()]
 
 def text(value, field, required=False):
@@ -165,13 +176,14 @@ def clean_feature(payload, previous=None):
             if props[field]:
                 try: date.fromisoformat(props[field])
                 except ValueError as exc: raise ValueError('Data inválida: '+field) from exc
+    if props.get('period_year') and not re.fullmatch(r'(?:19|20)\d{2}',props['period_year']):raise ValueError('Ano inválido.')
     if not props.get('name'): props['name']=props.get('label') or 'Registro sem título'
     props['label']=props['name']
     if props.get('sinan'):
         number=atlas.identifier(props['sinan'])
         if not number: raise ValueError('Use somente números no campo SINAN.')
         props['sinan']=number
-    if props.get('date'): props['month']=props['date'][5:7]
+    if props.get('date'): props['month']=props['date'][5:7];props['period_year']=props['date'][:4]
     elif previous and previous.get('properties',{}).get('date'): props['month']=''
     return {'type':'Feature','id':str(previous['id']) if previous else 'point-'+uuid.uuid4().hex,
             'geometry':geometry(payload.get('geometry')), 'properties':props}
@@ -210,7 +222,7 @@ def save(key, command, allowed_clinical, actor):
             if action=='copy_layer':
                 original=layers(allowed_clinical).get(command.get('copy_from'))
                 if not original: raise LookupError('Camada de origem não encontrada.')
-                current.update(features=deepcopy(original['features']),clinical=original['clinical'],
+                current.update(features=deepcopy(original['features']),folders=deepcopy(original.get('folders',[])),clinical=original['clinical'],
                                origin={'type':'copy','title':'Cópia de '+original['title']})
             elif action=='copy_sheet':
                 if not allowed_clinical: raise PermissionError('A planilha exige acesso SFA completo.')
@@ -224,7 +236,7 @@ def save(key, command, allowed_clinical, actor):
         try: revision=int(command.get('revision',-1))
         except (TypeError,ValueError) as exc: raise ValueError('Versão inválida.') from exc
         if revision!=current['revision']: raise Conflict('Outra pessoa alterou esta camada. Recarregue antes de salvar; seu formulário foi preservado.')
-        layer=deepcopy(current)
+        layer=folders.ensure(deepcopy(current))
         if action in ('create_layer','update_layer','copy_layer','copy_sheet'):
             layer['title']=text(command.get('title',''),'name',True)
             color=command.get('color','#65bdd2')
@@ -233,6 +245,8 @@ def save(key, command, allowed_clinical, actor):
             clinical=layer['clinical'] or bool(command.get('clinical')) or is_case(layer['title'])
             if clinical and not allowed_clinical: raise PermissionError('Camadas de saúde exigem acesso SFA completo.')
             layer['clinical']=clinical
+        elif action in ('create_folder','update_folder','delete_folder','move_features'):
+            folders.apply(layer,command,text,allowed_clinical,is_case)
         elif action=='delete_layer': layer['deleted']=True
         elif action=='restore':
             try: rid=int(command.get('restore_revision'))
@@ -244,7 +258,7 @@ def save(key, command, allowed_clinical, actor):
             else:
                 old=revision_rows(key).filter_by(id=rid).first()
                 if not old: raise ValueError('Revisão não pertence à camada.')
-                layer=json.loads(old.dados_json)
+                layer=folders.upgrade_revision(json.loads(old.dados_json),source_layers().get(key))
             layer['clinical']=layer['clinical'] or current['clinical']
         elif action in ('create_feature','update_feature','delete_feature'):
             if layer['deleted']: raise ValueError('Restaure a camada antes de editar os registros.')
@@ -258,9 +272,16 @@ def save(key, command, allowed_clinical, actor):
             elif action=='update_feature':
                 items[items.index(previous)]=clean_feature(command.get('feature'),previous)
             else: items.remove(previous)
+            if action!='delete_feature':
+                changed=items[-1] if action=='create_feature' else next(f for f in items if str(f['id'])==fid)
+                folders.validate_feature_folder(changed,layer)
+                if previous and previous.get('geometry')!=changed.get('geometry') and (changed['properties'].get('position_status')=='imported' or changed['properties'].get('position_status')=='verified' and command.get('confirm_position') is not True):
+                    changed['properties']['position_status']='to_review'
+            folders.ensure(layer)
         else: raise ValueError('Ação inválida.')
         if len({str(f['id']) for f in layer['features']})!=len(layer['features']):
             raise ValueError('Há identificadores repetidos. Confira a fonte.')
+        folders.ensure(layer)
         layer.pop('revision',None);layer.pop('updated_at',None)
         encoded=dumps(layer)
         if len(encoded.encode())>15_000_000: raise ValueError('Camada maior que 15 MB.')

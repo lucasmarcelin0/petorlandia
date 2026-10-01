@@ -8,6 +8,7 @@
         && (!filters.result || r.result_group===filters.result)
         && (!filters.finalResult || (filters.finalResult==='missing' ? !r.final_result : r.final_result===filters.finalResult))
         && (!filters.classification || (r.classification || '')===filters.classification)
+        && (!filters.year || (filters.year==='unknown' ? !date : date && date.slice(0,4)===filters.year))
         && (!filters.month || (filters.month==='unknown' ? !date : date && date.slice(5,7)===filters.month));
     });
   }

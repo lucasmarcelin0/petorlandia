@@ -23,8 +23,8 @@ def main():
     from models.entomologia import EntomologiaImportacao as E
     from time_utils import utcnow
     with create_app().app_context():
-        existing = E.query.filter_by(tipo=TIPO_ATLAS, sha256=data['source']['sha256'], status='ATIVA').first()
-        if existing:
+        existing = E.query.filter_by(tipo=TIPO_ATLAS, sha256=data['source']['sha256'], status='ATIVA').order_by(E.id.desc()).first()
+        if existing and json.loads(existing.dados_json).get('schema_version',1)>=data.get('schema_version',1):
             print(f'Atlas já importado: #{existing.id}. Nenhuma alteração.')
             return
         entry = E(tipo=TIPO_ATLAS, status='ATIVA', nome_arquivo=data['source']['file'], titulo=data['source']['title'],

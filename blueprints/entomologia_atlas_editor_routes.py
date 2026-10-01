@@ -47,6 +47,28 @@ def register(bp, require_access, clinical_access):
         try: return reply({'revisions':service.history(key,clinical_access())})
         except LookupError: abort(404)
 
+    @bp.route('/entomologia/atlas/editor/<key>/conferencia',methods=['GET','POST'])
+    @require_access
+    def atlas_editor_spatial_review(key):
+        from services.entomologia_georeference import review,assess
+        from services.entomologia_folders import validate_feature_folder
+        available=service.layers(clinical_access());layer=available.get(key)
+        if not layer:abort(404)
+        houses=[f for item in available.values() if item['origin']['type']=='condominium' for f in item['features']]
+        try:
+            if request.method=='POST':
+                if request.content_length and request.content_length>32_000:return reply({'error':'Registro maior que 32 KB.'},413)
+                command=request.get_json(silent=True)
+                if not isinstance(command,dict):raise ValueError('Registro inválido.')
+                previous=next((f for f in layer['features'] if str(f['id'])==str(command.get('feature_id',''))),None)
+                if command.get('feature_id') and not previous:raise LookupError('Registro não encontrado.')
+                feature=service.clean_feature(command.get('feature'),previous)
+                validate_feature_folder(feature,layer)
+                return reply({'records':[assess(feature,houses)]})
+            return reply(review(layer,request.args.get('feature_id'),houses))
+        except LookupError:abort(404)
+        except ValueError as exc:return reply({'error':str(exc)},400)
+
     @bp.route('/entomologia/atlas/busca')
     @require_access
     def atlas_place_search():

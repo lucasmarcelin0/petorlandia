@@ -283,3 +283,39 @@ busca, edições compartilhadas e colisões dos rótulos.
 A base satélite utiliza imagens até o nível nativo 18, ampliadas nos zooms
 19–21: o nível 19 do provedor devolvia tiles com “Map data not yet available”
 nessa região. O zoom continua até 21, com os rótulos e pontos em resolução de tela.
+
+
+## Pastas, períodos e conferência de posições (1º de outubro de 2026)
+
+O importador Earth v2 preserva a árvore completa, inclusive pastas vazias,
+com identificadores e coordenadas originais. A cópia de 2026 de 1º de outubro
+contém 2.350 elementos, 214 pastas, 1.015 endereços reconhecíveis e 1.005 datas
+explícitas. Endereços são fragmentos limitados de logradouro e número; nomes
+de pessoas, telefones e texto clínico livre dos marcadores não são importados.
+O ano da pasta/projeto é informado separadamente quando não há dia. Um intervalo
+de datas exclui os registros sem data, sem inventar uma visita no primeiro dia
+do mês. As referências permanentes e casas não seguem o filtro temporal.
+
+Cada ramo tem expansão, seleção parcial, contagem e enquadramento. No editor
+pode-se criar, renomear ou mover pastas, com até 12 níveis, e mover até 500
+registros entre pastas da mesma camada por operação. A movimentação conserva
+endereço, datas e geometria. Pastas só podem ser excluídas vazias; versões e
+exclusões continuam recuperáveis no histórico. Ciclos, pastas de outra camada
+e gravações com revisão antiga são rejeitados. Pastas clínicas mantêm o controle
+de acesso da camada. Reimportações e revisões antigas recuperam metadados
+compatíveis por identificador, sem desfazer posições corrigidas ou exclusões.
+
+A conferência usa apenas as ruas OSM locais, quadras operacionais e as casas
+atuais cadastradas nos condomínios, incluindo correções da equipe. Ela sinaliza
+endereço ausente, falta de correspondência do logradouro, distância de mais de
+60 m da rua declarada, ponto fora do entorno e divergência entre setor da pasta
+e quadra. Distância da via não determina número de casa ou entrada. A equipe
+pode filtrar pendências, abrir o registro, arrastar um marcador visível no mapa,
+consultar a referência e salvar a correção com motivo. A adoção de uma referência
+de casa exige conferência; nenhum ponto é deslocado automaticamente.
+
+A situação distingue posição importada, estimada, a conferir, entrada conferida
+e sem posição. Alterar coordenadas invalida a conferência anterior até a equipe
+confirmá-la. Consultas de conferência, inclusive rascunhos, não alteram o banco
+nem enviam endereços a terceiros. CSRF estrito, autorização, bloqueio de escrita,
+auditoria e histórico são os mesmos do editor compartilhado.

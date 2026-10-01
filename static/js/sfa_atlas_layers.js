@@ -15,11 +15,11 @@
       return response.json();
     };
     const filters=()=>({month:$('atlas-month').value,start:$('atlas-start').value,end:$('atlas-end').value,
-      dateField:$('atlas-date-field').value,result:$('atlas-result').value,finalResult:$('atlas-final-result').value,classification:$('atlas-classification').value});
+      year:$('atlas-year').value,dateField:$('atlas-date-field').value,result:$('atlas-result').value,finalResult:$('atlas-final-result').value,classification:$('atlas-classification').value});
     function notice(text){$('atlas-notice').textContent=text;$('atlas-notice').hidden=!text;}
     function popup(feature,title){
       const p=feature.properties||{}, row=p.sheet;
-      if(p.__atlas_layer && (p.name||p.address||p.notes||p.precision))return `<div class="atlas-popup"><strong>${escape(p.name||p.label||title)}</strong><p>${escape(title)} · ${escape(p.category||'Cadastro')}</p>${p.address?'<p>'+escape(p.address)+'</p>':''}${p.date?'<p>'+day(p.date)+'</p>':''}${p.notes?'<p>'+escape(p.notes)+'</p>':''}${p.precision?'<small>'+escape(p.precision)+'</small>':''}<p><button type="button" data-atlas-layer="${escape(p.__atlas_layer)}" data-atlas-feature="${escape(feature.id)}">Consultar / editar registro</button></p></div>`;
+      if(p.__atlas_layer && (p.name||p.address||p.notes||p.precision))return `<div class="atlas-popup"><strong>${escape(p.name||p.label||title)}</strong><p class="atlas-popup-path">${escape((p.folder_path||[title,p.category||'Cadastro']).join(' › '))}</p>${p.address?'<p>'+escape(p.address)+'</p>':''}${p.date?'<p>'+day(p.date)+'</p>':p.period_year?'<p>Mês da pasta: '+escape(p.month||'não informado')+' / '+escape(p.period_year)+' · sem dia informado</p>':''}${p.notes?'<p>'+escape(p.notes)+'</p>':''}${p.precision?'<small>'+escape(p.precision)+'</small>':''}${p.position_status?'<small class="editor-point-state">'+escape({imported:'Posição do Earth · a conferir',estimated:'Posição estimada',to_review:'Posição a conferir',verified:'Conferida pela equipe',unlocated:'Sem posição'}[p.position_status]||p.position_status)+'</small>':''}<p><button type="button" data-atlas-layer="${escape(p.__atlas_layer)}" data-atlas-feature="${escape(feature.id)}">Consultar / editar registro</button></p></div>`;
       return row ? `<div class="atlas-popup"><strong>Planilha · linha ${row.source_row}</strong><p>${escape(row.disease || 'Agravo não informado')}</p><dl><dt>SINAN</dt><dd>${escape(row.sinan || 'Não informado')}</dd><dt>Notificação</dt><dd>${day(row.notification_date)}</dd><dt>Sintomas</dt><dd>${day(row.symptoms_date)}</dd><dt>Exame</dt><dd>${escape(row.exam || 'Não informado')}</dd><dt>Resultado</dt><dd>${escape(row.exam_result || 'Não informado')}</dd><dt>Resultado final</dt><dd>${escape(row.final_result || 'Não informado')}</dd><dt>Classificação</dt><dd>${escape(row.classification || 'Não informada')}</dd></dl><p>Posição vinculada por um número SINAN explícito e único no Earth.</p><a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${row.source_row}:T${row.source_row}">Consultar linha de origem ↗</a></div>`
         : `<div class="atlas-popup"><strong>${escape(title)}</strong><p>${escape(p.category || 'Referência operacional')}${p.month?' · mês '+p.month+' na pasta':''}</p>${p.folder_status?'<p>Rótulo da pasta: '+escape(p.folder_status)+'. A classificação da planilha é consultada separadamente.</p>':''}<p>Elemento do arquivo Earth; não representa necessariamente pessoa, imóvel ou visita únicos.</p><small>Origem: ${escape(p.source_id || feature.id || 'camada enviada')}</small>${p.__atlas_layer?'<p><button type="button" data-atlas-layer="'+escape(p.__atlas_layer)+'" data-atlas-feature="'+escape(feature.id)+'">Consultar / editar registro</button></p>':''}</div>`;
     }
@@ -64,9 +64,8 @@
     }
     function filteredRows(entry,current){
       const features=entry.features||[];
-      if(entry.origin?.type==='condominium')return M.earthFilter(features,'',entry.categories);
-      if(entry.origin?.type!=='sheet_snapshot')return M.earthFilter(features,current.month,entry.categories);
-      return M.sheetFilter(features.map(f=>{
+      if(entry.origin?.type!=='sheet_snapshot')return window.SfaAtlasFoldersModel.filter(features,current,entry.selectedFolders,['condominium','reference'].includes(entry.origin?.type));
+      return M.sheetFilter(features.filter(f=>!entry.selectedFolders||entry.selectedFolders.has(f.properties.folder_id||'')).map(f=>{
         const p=f.properties, result=String(p.exam_result||'').toLowerCase();
         return {...p,result_group:/\bnegativo\b/.test(result)?'negative':/\bpositivo\b/.test(result)?'positive':/suspeito|aguard|pendente/.test(result)?'pending':'unknown',feature:f};
       }),current).map(row=>row.feature);
@@ -76,6 +75,7 @@
       entries.forEach(entry=>{
         const rows=filteredRows(entry,current);
         render(entry,rows);visible+=entry.enabled?rows.length:0;enabled+=Number(entry.enabled);
+        entry.folderWidget?.refresh(rows);
         if(entry.counter)entry.counter.textContent=entry.enabled?`${rows.length} nos filtros`:`${entry.count ?? 'Restrito'} ${entry.count==null?'':'elementos'}`;
       });
       const active=$('atlas-sinan').checked && sheet;
@@ -94,8 +94,12 @@
       renderPoints();map.fire('atlaslayerschange');
       $('atlas-active-count').textContent=`${enabled} ${enabled===1?'camada ativa':'camadas ativas'} · ${visible} elementos filtrados`;
     }
-    function makeEntry(item,features=null){
-      const entry={...item,features,enabled:false,group:L.layerGroup().addTo(map),loading:null};
+    function makeEntry(item,features=null,previous=null){
+      const entry={...item,features,enabled:false,group:L.layerGroup().addTo(map),loading:null,selectedFolders:previous?.selectedFolders,openFolders:previous?.openFolders};
+      if(previous){
+        const all=['',...(previous.folders||[]).map(n=>n.id)].every(id=>previous.selectedFolders?.has(id));
+        if(all)entry.selectedFolders=new Set(['',...(item.folders||[]).map(n=>n.id)]);
+      }
       const wrapper=document.createElement('div');wrapper.className='atlas-layer-row';
       const label=document.createElement('label'), input=document.createElement('input'), info=document.createElement('span'), dot=document.createElement('i'), name=document.createElement('strong'), small=document.createElement('small');
       input.type='checkbox';input.disabled=item.allowed===false;input.setAttribute('aria-label',item.title);
@@ -103,26 +107,15 @@
       info.append(name,small);label.append(input,dot,info);wrapper.append(label);
       const focus=document.createElement('button');focus.type='button';focus.className='atlas-focus';focus.textContent='↗';focus.title='Enquadrar '+item.title;focus.setAttribute('aria-label','Enquadrar '+item.title);focus.disabled=input.disabled;
       wrapper.append(focus);entry.input=input;entry.counter=small;
-      function configureCategories(){
-        if(entry.categories || !entry.features)return;
-        const counts=new Map();entry.features.forEach(f=>{const name=f.properties?.category || '';counts.set(name,(counts.get(name)||0)+1);});
-        entry.categories=new Set(counts.keys());entry.categoryInputs=[];
-        if(counts.size<2)return;
-        const details=document.createElement('details'), summary=document.createElement('summary');
-        details.className='atlas-subcategories';summary.textContent=`${counts.size} subcamadas`;details.append(summary);
-        counts.forEach((count,name)=>{
-          const label=document.createElement('label'), toggle=document.createElement('input'), text=document.createElement('span');
-          toggle.type='checkbox';toggle.checked=true;text.textContent=`${name || 'Sem subcategoria'} · ${count}`;
-          toggle.setAttribute('aria-label',item.title+' · '+(name || 'Sem subcategoria'));
-          toggle.onchange=()=>{if(toggle.checked)entry.categories.add(name);else entry.categories.delete(name);entry.enabled=true;entry.input.checked=true;redraw();};
-          entry.categoryInputs.push({input:toggle,name});label.append(toggle,text);details.append(label);
-        });wrapper.append(details);
-      }
-      configureCategories();
+      entry.folderWidget=window.SfaAtlasFolders.attach(entry,wrapper,{change:()=>input.onchange(),focus:async node=>{
+        if(!entry.enabled)entry.selectedFolders=new Set(node.ids);
+        input.checked=true;await input.onchange();const rows=filteredRows(entry,filters()).filter(f=>node.ids.has(f.properties.folder_id||''));
+        if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[30,30],maxZoom:18});
+      }});
       async function load(){
         if(entry.features)return;
         if(!entry.loading)entry.loading=fetchJson(dataset.atlas_urls.layer.replace('LAYER',item.id)).then(data=>{entry.features=data.features.map(f=>({...f,properties:{...f.properties,__atlas_layer:item.id}}));}).catch(error=>{entry.loading=null;throw error;});
-        await entry.loading;configureCategories();
+        await entry.loading;
       }
       input.onchange=async()=>{
         entry.enabled=input.checked;small.textContent='Carregando…';
@@ -131,6 +124,12 @@
       focus.onclick=async()=>{input.checked=true;await input.onchange();const rows=filteredRows(entry,filters());if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[28,28],maxZoom:entry.origin?.type==='condominium'?19:17});};
       entry.focus=focus.onclick;
       return {entry,wrapper};
+    }
+    function rebuildYears(){
+      const current=$('atlas-year').value,years=new Set(entries.flatMap(e=>e.period_years||[]));
+      sheet?.records.forEach(r=>{['notification_date','symptoms_date'].forEach(k=>{if(r[k])years.add(r[k].slice(0,4));});});
+      $('atlas-year').replaceChildren(new Option('Todos os anos',''),...[...years].sort().map(y=>new Option(y,y)),new Option('Sem ano informado','unknown'));
+      if(years.has(current)||current==='unknown')$('atlas-year').value=current;
     }
     async function loadSheet(force=false){
       if(sheet && !force)return sheet;
@@ -143,7 +142,7 @@
         const finalPrevious=$('atlas-final-result').value, finalValues=[...new Set(sheet.records.map(r=>r.final_result).filter(Boolean))].sort();
         $('atlas-final-result').replaceChildren(new Option('Todos os resultados finais',''),new Option('Sem resultado final informado','missing'),...finalValues.map(v=>new Option(v,v)));
         if(finalValues.includes(finalPrevious)||finalPrevious==='missing')$('atlas-final-result').value=finalPrevious;
-        $('atlas-sheet-source').textContent='Planilha consultada em '+new Date(data.source.read_at).toLocaleString('pt-BR')+'. '+data.source.note;
+        rebuildYears();$('atlas-sheet-source').textContent='Planilha consultada em '+new Date(data.source.read_at).toLocaleString('pt-BR')+'. '+data.source.note;
         return sheet;
       }).catch(error=>{sheetPromise=null;throw error;});
       return sheetPromise;
@@ -153,17 +152,17 @@
     if($('atlas-sinan').disabled)$('atlas-sheet-count').textContent='Acesso interno SFA necessário';
     $('atlas-sinan').onchange=async()=>{try{if($('atlas-sinan').checked){$('atlas-sheet-count').textContent='Consultando planilha…';await loadSheet();}redraw();notice('');}catch(error){$('atlas-sinan').checked=false;$('atlas-sheet-count').textContent='Planilha indisponível';notice(error.message+' Tente atualizar a fonte.');}};
     $('atlas-refresh').onclick=async()=>{try{ $('atlas-refresh').disabled=true;await loadSheet(true);redraw();notice('');}catch(error){notice(error.message);}finally{$('atlas-refresh').disabled=false;}};
-    ['atlas-month','atlas-start','atlas-end','atlas-date-field','atlas-result','atlas-final-result','atlas-classification'].forEach(id=>$(id).onchange=()=>{
+    ['atlas-month','atlas-year','atlas-start','atlas-end','atlas-date-field','atlas-result','atlas-final-result','atlas-classification'].forEach(id=>$(id).onchange=()=>{
       if($('atlas-start').value && $('atlas-end').value && $('atlas-start').value>$('atlas-end').value){notice('A data inicial deve vir antes da final.');return;}notice('');redraw();
     });
     $('atlas-more-unlocated').onclick=()=>{unlocatedLimit+=50;redraw();};
-    $('atlas-clear-filters').onclick=()=>{['atlas-month','atlas-start','atlas-end','atlas-result','atlas-final-result','atlas-classification'].forEach(id=>$(id).value='');redraw();notice('');};
+    $('atlas-clear-filters').onclick=()=>{['atlas-month','atlas-year','atlas-start','atlas-end','atlas-result','atlas-final-result','atlas-classification'].forEach(id=>$(id).value='');redraw();notice('');};
     async function preset(mode){
       const run=++sequence;
       const tasks=entries.filter(e=>!e.input.disabled).map(async entry=>{
         entry.input.checked=mode==='all'||mode==='field'&&!entry.clinical;entry.enabled=entry.input.checked;
         await entry.input.onchange();
-        if(entry.enabled){entry.categoryInputs?.forEach(c=>{c.input.checked=true;entry.categories.add(c.name);});redraw();}
+        if(entry.enabled){entry.selectedFolders=new Set(['',...(entry.folders||[]).map(n=>n.id)]);redraw();}
         if(run!==sequence){entry.enabled=entry.input.checked;redraw();}
       });
       if(mode!=='all'){$('atlas-sinan').checked=false;redraw();}
@@ -173,16 +172,16 @@
     $('atlas-show-all').addEventListener('click',()=>{if(!$('atlas-sinan').disabled){$('atlas-sinan').checked=true;$('atlas-sinan').onchange();}});
     map.on('zoomend moveend',redraw);
     async function refreshCatalog(activate=null){
-      const data=await fetchJson(dataset.atlas_urls.catalog), enabled=new Set(entries.filter(e=>e.enabled).map(e=>e.id));
+      const data=await fetchJson(dataset.atlas_urls.catalog), previous=new Map(entries.map(e=>[e.id,e])), enabled=new Set(entries.filter(e=>e.enabled).map(e=>e.id));
       entries.forEach(e=>map.removeLayer(e.group));entries=[];
       $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();
       source=data.source;
       $('atlas-earth-source').textContent=source.imported_at ? `${source.title || 'Google Earth'} · cópia importada em ${new Date(source.imported_at).toLocaleDateString('pt-BR')}. Edições da equipe ficam no atlas.` : 'Importe o projeto completo em Atualizar dados para disponibilizar suas camadas.';
       const loading=[];
-      data.layers.forEach(item=>{const created=makeEntry(item);entries.push(created.entry);
+      data.layers.forEach(item=>{const created=makeEntry(item,null,previous.get(item.id));entries.push(created.entry);
         $(item.origin?.type==='earth'?'atlas-earth-list':'atlas-local-list').append(created.wrapper);
         if(enabled.has(item.id)||activate===item.id||!catalogInitialized&&item.default_visible){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
-      });catalogInitialized=true;
+      });catalogInitialized=true;rebuildYears();
       document.querySelectorAll('[data-atlas-condo]').forEach(button=>{
         const entry=entries.find(e=>e.origin?.type==='condominium'&&e.title.includes(button.dataset.atlasCondo));
         button.disabled=!entry||entry.input.disabled;button.onclick=()=>entry?.focus();
