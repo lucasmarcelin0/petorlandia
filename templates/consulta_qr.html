@@ -555,37 +555,66 @@ document.addEventListener("DOMContentLoaded", function () {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  const nomeAnimal = {{ (animal.name if animal is defined and animal else '')|tojson }};
   const overlay = document.createElement('div');
   overlay.id = 'image-overlay';
-  overlay.className = 'position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-none justify-content-center align-items-center';
-  overlay.style.zIndex = '1080';
-
-  const img = document.createElement('img');
-  img.id = 'image-overlay-img';
-  img.className = 'img-fluid';
-  overlay.appendChild(img);
+  overlay.className = 'photo-lightbox';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Visualização da foto');
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
-  closeBtn.className = 'btn-close position-absolute top-0 end-0 m-3';
+  closeBtn.className = 'photo-lightbox__close';
   closeBtn.setAttribute('aria-label', 'Fechar');
-  overlay.appendChild(closeBtn);
+  closeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
 
+  const frame = document.createElement('div');
+  frame.className = 'photo-lightbox__frame';
+  const img = document.createElement('img');
+  img.id = 'image-overlay-img';
+  img.className = 'photo-lightbox__img';
+  img.alt = nomeAnimal ? 'Foto de ' + nomeAnimal : 'Foto';
+  frame.appendChild(img);
+
+  const caption = document.createElement('p');
+  caption.className = 'photo-lightbox__caption';
+  caption.textContent = nomeAnimal;
+  caption.hidden = !nomeAnimal;
+
+  const actions = document.createElement('div');
+  actions.className = 'photo-lightbox__actions';
+  const openOriginal = document.createElement('a');
+  openOriginal.className = 'btn btn-light btn-sm';
+  openOriginal.target = '_blank';
+  openOriginal.rel = 'noopener';
+  openOriginal.innerHTML = '<i class="fa-solid fa-up-right-from-square me-1" aria-hidden="true"></i>Abrir original';
+  actions.appendChild(openOriginal);
+
+  overlay.append(closeBtn, frame, caption, actions);
   document.body.appendChild(overlay);
 
   function showOverlay(src) {
     img.src = src;
-    overlay.classList.remove('d-none');
+    openOriginal.hidden = src.indexOf('data:') === 0;
+    openOriginal.href = src;
+    overlay.classList.add('is-open');
+    closeBtn.focus({ preventScroll: true });
   }
 
   function hideOverlay() {
-    overlay.classList.add('d-none');
-    img.src = '';
+    overlay.classList.remove('is-open');
+    img.removeAttribute('src');
   }
 
   closeBtn.addEventListener('click', hideOverlay);
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) {
+      hideOverlay();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
       hideOverlay();
     }
   });

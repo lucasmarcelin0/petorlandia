@@ -6475,3 +6475,76 @@ main.container {
   font-size: .95rem;
   resize: vertical;
 }
+
+/* === Documentos do prontuário: cartões polidos === */
+.doc-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.doc-card {
+  display: flex; flex-direction: column; gap: 0.85rem;
+  padding: 1rem; background: #fff;
+  border: 1px solid rgba(100, 116, 139, 0.2); border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.doc-card:hover { border-color: rgba(219, 39, 119, 0.35); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); }
+.doc-card__main { display: flex; gap: 0.85rem; align-items: flex-start; min-width: 0; }
+.doc-card__icon {
+  flex: 0 0 auto; width: 2.9rem; height: 2.9rem; border-radius: 0.85rem;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem;
+  background: rgba(100, 116, 139, 0.12); color: #475569;
+}
+.doc-card__icon--pdf { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+.doc-card__icon--img { background: rgba(5, 150, 105, 0.1); color: #059669; }
+.doc-card__icon--doc { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.doc-card__icon--xls { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+.doc-card__info { min-width: 0; flex: 1 1 auto; }
+.doc-card__name {
+  margin: 0 0 0.3rem; font-weight: 700; color: #132238; line-height: 1.3;
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.doc-card__meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.85rem; align-items: center; font-size: 0.8rem; color: #64748b; }
+.doc-card__badge {
+  padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 800;
+  letter-spacing: 0.04em; background: rgba(219, 39, 119, 0.1); color: #be185d;
+}
+.doc-card__desc { margin-top: 0.4rem; font-size: 0.85rem; color: #475569; }
+.doc-card__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.85rem; border-top: 1px solid rgba(100, 116, 139, 0.14); }
+.doc-card__actions .btn { border-radius: 0.7rem; font-weight: 600; }
+.doc-empty {
+  display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 1.5rem 1rem;
+  border: 1.5px dashed rgba(100, 116, 139, 0.35); border-radius: 1rem; color: #64748b; background: rgba(248, 250, 252, 0.7);
+}
+.doc-empty i { font-size: 1.4rem; }
+.doc-upload { padding: 1rem; border: 1px solid rgba(100, 116, 139, 0.2); border-radius: 1rem; background: rgba(248, 250, 252, 0.8); }
+.doc-upload__title { font-weight: 700; color: #132238; margin-bottom: 0.9rem; }
+.doc-upload .btn { border-radius: 0.8rem; font-weight: 700; width: 100%; }
+@media (min-width: 576px) {
+  .doc-card { flex-direction: row; align-items: center; justify-content: space-between; }
+  .doc-card__actions { border-top: 0; padding-top: 0; flex: 0 0 auto; flex-wrap: nowrap; }
+  .doc-upload .btn { width: auto; }
+}
+
+/* === Visualizador de foto (prontuário) === */
+.photo-lightbox {
+  position: fixed; inset: 0; z-index: 1080; display: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+  padding: 4rem 1rem 1.5rem; background: rgba(15, 23, 42, 0.88);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.photo-lightbox.is-open { display: flex; animation: photo-lightbox-in .18s ease-out; }
+.photo-lightbox__frame {
+  max-width: min(100%, 900px); max-height: calc(100vh - 11rem); padding: 0.5rem;
+  background: #fff; border-radius: 1.1rem; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.photo-lightbox__img {
+  display: block; max-width: 100%; max-height: calc(100vh - 12rem);
+  width: auto; height: auto; object-fit: contain; border-radius: 0.75rem;
+}
+.photo-lightbox__caption { margin: 0; color: #e2e8f0; font-weight: 600; text-align: center; }
+.photo-lightbox__actions { display: flex; gap: 0.6rem; }
+.photo-lightbox__actions .btn { border-radius: 999px; font-weight: 600; }
+.photo-lightbox__close {
+  position: absolute; top: 1rem; right: 1rem; width: 2.6rem; height: 2.6rem; border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 1.1rem; cursor: pointer;
+}
+.photo-lightbox__close:hover, .photo-lightbox__close:focus-visible { background: rgba(255, 255, 255, 0.3); outline: none; }
+@keyframes photo-lightbox-in { from { opacity: 0; } to { opacity: 1; } }
