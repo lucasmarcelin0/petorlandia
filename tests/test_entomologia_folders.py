@@ -159,3 +159,11 @@ def test_legacy_revision_preserves_clinical_source_restriction():
     source={'id':'earth-x','title':'Rotina','clinical':True,'features':[],'folders':[]}
     old={'id':'earth-x','title':'Rotina','clinical':False,'origin':{'type':'earth'},'features':[]}
     assert folders.upgrade_revision(old,source)['clinical'] is True
+
+
+def test_area_review_preserves_contour_without_requiring_home_address():
+    from services.entomologia_georeference import assess
+    feature={'id':'area','properties':{'name':'Área de visita'},'geometry':{'type':'Polygon','coordinates':[[[-47.88,-20.72],[-47.881,-20.72],[-47.881,-20.721],[-47.88,-20.72]]]}}
+    result=assess(feature)
+    assert result['issues']==[] and result['house_candidate'] is None
+    assert 'contorno' in result['geometry_note']

@@ -58,9 +58,12 @@ def assess(feature,houses=None):
     output={'id':str(feature['id']),'name':p.get('name') or p.get('label',''),'address':p.get('address',''),
             'position_status':p.get('position_status','imported'),'issues':issues,'nearest_road':None,
             'declared_road':None,'blocks':[],'house_candidate':None}
-    if not output['address']:issues.append('Endereço não informado')
-    if not g:issues.append('Sem posição');return output
+    if not g:
+        issues.append('Sem posição')
+        if not output['address']:issues.append('Endereço não informado')
+        return output
     if g['type']!='Point':output['geometry_note']='Área ou trajeto: confira o contorno no satélite';return output
+    if not output['address']:issues.append('Endereço não informado')
     point=g['coordinates'];index=reference_index();x,y=math.floor(point[0]/CELL),math.floor(point[1]/CELL)
     nearby=set(i for dx in range(-3,4) for dy in range(-3,4) for i in index['grid'].get((x+dx,y+dy),[]))
     if nearby:
