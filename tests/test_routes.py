@@ -3753,3 +3753,111 @@ def test_atualizar_status_orcamento_sem_acesso_retorna_403(app):
     # Em respostas JSON o error handler sanitiza 403 -> 404 para não vazar a
     # existência de recursos de outra clínica (defense in depth).
     assert resp.status_code == 404
+
+
+def _setup_document_view_fixture(file_url='https://bucket-teste.s3.amazonaws.com/documentos/res.pdf', filename='res.pdf'):
+    db.drop_all()
+    db.create_all()
+    tutor = User(id=1, name='Tutor', email='t@t')
+    tutor.set_password('x')
+    vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+    vet.set_password('x')
+    animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=vet.id)
+    doc = AnimalDocumento(id=1, animal_id=animal.id, veterinario_id=vet.id, filename=filename, file_url=file_url)
+    db.session.add_all([tutor, vet, animal, doc])
+    db.session.commit()
+    return SimpleNamespace(animal_id=animal.id, doc_id=doc.id, vet_id=vet.id, tutor_id=tutor.id)
+
+
+class _FakeUpstream:
+    def __init__(self, status_code=200, body=b'%PDF-1.4 fake', headers=None):
+        self.status_code = status_code
+        self._body = body
+        self.headers = headers if headers is not None else {'Content-Type': 'binary/octet-stream'}
+
+    def iter_content(self, chunk_size=65536):
+        yield self._body
+
+    def close(self):
+        pass
+
+
+def test_view_document_file_streams_pdf_for_staff(app, monkeypatch):
+    import requests
+    import flask_login.utils as login_utils
+    with app.app_context():
+        data = _setup_document_view_fixture()
+        ids = (data.animal_id, data.doc_id, data.vet_id)
+    monkeypatch.setattr(app_module, 'BUCKET', 'bucket-teste')
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(ids[2]))
+    calls = []
+    monkeypatch.setattr(requests, 'get', lambda url, **kw: calls.append(url) or _FakeUpstream())
+
+    resp = app.test_client().get(f'/animal/{ids[0]}/documentos/{ids[1]}/arquivo')
+
+    assert resp.status_code == 200
+    assert resp.mimetype == 'application/pdf'
+    assert resp.headers['Content-Disposition'].startswith('inline;')
+    assert resp.data.startswith(b'%PDF')
+    assert calls == ['https://bucket-teste.s3.amazonaws.com/documentos/res.pdf']
+
+
+def test_view_document_file_denies_tutor(app, monkeypatch):
+    import requests
+    import flask_login.utils as login_utils
+    with app.app_context():
+        data = _setup_document_view_fixture()
+        ids = (data.animal_id, data.doc_id, data.tutor_id)
+    monkeypatch.setattr(app_module, 'BUCKET', 'bucket-teste')
+    monkeypatch.setattr(app_module, 'is_veterinarian', lambda *a, **k: False)
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(ids[2]))
+    monkeypatch.setattr(requests, 'get', lambda *a, **k: pytest.fail('nao deve buscar o arquivo'))
+
+    resp = app.test_client().get(f'/animal/{ids[0]}/documentos/{ids[1]}/arquivo')
+
+    # 403 pela regra da rota ou 404 pelo filtro anterior que esconde o recurso do
+    # tutor; o essencial e que o arquivo nao seja entregue nem buscado no S3.
+    assert resp.status_code in (403, 404)
+
+
+def test_view_document_file_rejects_foreign_host(app, monkeypatch):
+    import requests
+    import flask_login.utils as login_utils
+    with app.app_context():
+        data = _setup_document_view_fixture(file_url='https://evil.example.com/x.pdf')
+        ids = (data.animal_id, data.doc_id, data.vet_id)
+    monkeypatch.setattr(app_module, 'BUCKET', 'bucket-teste')
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(ids[2]))
+    monkeypatch.setattr(requests, 'get', lambda *a, **k: pytest.fail('host fora do bucket nao pode ser buscado'))
+
+    resp = app.test_client().get(f'/animal/{ids[0]}/documentos/{ids[1]}/arquivo')
+
+    assert resp.status_code == 404
+
+
+def test_view_document_file_local_upload_redirects(app, monkeypatch):
+    import flask_login.utils as login_utils
+    with app.app_context():
+        data = _setup_document_view_fixture(file_url='/static/uploads/documentos/res.pdf')
+        ids = (data.animal_id, data.doc_id, data.vet_id)
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(ids[2]))
+
+    resp = app.test_client().get(f'/animal/{ids[0]}/documentos/{ids[1]}/arquivo')
+
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/static/uploads/documentos/res.pdf')
+
+
+def test_view_document_file_upstream_missing_is_404(app, monkeypatch):
+    import requests
+    import flask_login.utils as login_utils
+    with app.app_context():
+        data = _setup_document_view_fixture()
+        ids = (data.animal_id, data.doc_id, data.vet_id)
+    monkeypatch.setattr(app_module, 'BUCKET', 'bucket-teste')
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(ids[2]))
+    monkeypatch.setattr(requests, 'get', lambda *a, **k: _FakeUpstream(status_code=403))
+
+    resp = app.test_client().get(f'/animal/{ids[0]}/documentos/{ids[1]}/arquivo')
+
+    assert resp.status_code == 404

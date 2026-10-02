@@ -1077,6 +1077,78 @@ def delete_document(animal_id, doc_id):
     return redirect(request.referrer or url_for('ficha_animal', animal_id=animal_id))
 
 
+_DOCUMENT_VIEW_MAX_BYTES = 25 * 1024 * 1024
+
+
+@bp.route('/animal/<int:animal_id>/documentos/<int:doc_id>/arquivo')
+@login_required
+def view_document_file(animal_id, doc_id):
+    """Entrega o arquivo do documento pela própria origem do app.
+
+    O visualizador em camada (pdf.js) não pode ler direto do S3: a CSP só
+    permite o próprio site e o bucket não garante CORS. Servir daqui mantém a
+    CSP intacta e ainda confere quem pode ver o documento. Só atende URLs do
+    bucket configurado ou do upload local, nunca um host arbitrário.
+    """
+    import app as app_module
+    import requests
+
+    animal = get_animal_or_404(animal_id)
+    documento = AnimalDocumento.query.filter_by(id=doc_id, animal_id=animal.id).first_or_404()
+
+    # Mesma regra da lista de documentos na ficha: só equipe da clínica.
+    if not (
+        current_user.role == 'admin'
+        or current_user.worker in ('veterinario', 'colaborador')
+        or is_veterinarian(current_user)
+    ):
+        abort(403)
+
+    file_url = documento.file_url or ''
+    if file_url.startswith('/static/uploads/'):
+        return redirect(file_url)
+
+    bucket = getattr(app_module, 'BUCKET', None)
+    bucket = bucket() if callable(bucket) else bucket
+    prefix = f"https://{bucket}.s3.amazonaws.com/" if bucket else None
+    if not prefix or not file_url.startswith(prefix):
+        abort(404)
+
+    try:
+        upstream = requests.get(file_url, stream=True, timeout=(5, 30))
+    except requests.RequestException as exc:
+        current_app.logger.warning('Falha ao buscar documento %s no S3: %s', doc_id, exc)
+        abort(502)
+    if upstream.status_code != 200:
+        upstream.close()
+        abort(404 if upstream.status_code in (403, 404) else 502)
+
+    declared = upstream.headers.get('Content-Length')
+    if declared and declared.isdigit() and int(declared) > _DOCUMENT_VIEW_MAX_BYTES:
+        upstream.close()
+        abort(413)
+
+    filename = documento.filename or 'documento'
+    mimetype = upstream.headers.get('Content-Type') or 'application/octet-stream'
+    if filename.lower().endswith('.pdf'):
+        mimetype = 'application/pdf'
+
+    def _stream():
+        try:
+            for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    response = current_app.response_class(_stream(), mimetype=mimetype)
+    response.headers['Content-Disposition'] = f'inline; filename="{secure_filename(filename) or "documento"}"'
+    response.headers['Cache-Control'] = 'private, max-age=300'
+    if declared:
+        response.headers['Content-Length'] = declared
+    return response
+
+
 @bp.route('/animal/<int:animal_id>/editar_ficha', methods=['GET', 'POST'])
 @login_required
 def editar_ficha_animal(animal_id):
