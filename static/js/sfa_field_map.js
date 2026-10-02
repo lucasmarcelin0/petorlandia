@@ -15,7 +15,7 @@
   let loading = null, selected = null, shown = [], districts = [], labelFrame = null, searchTimer;
   const areaName = district => areaNames[district] || district;
   const areaColor = district => colors[Math.max(0, districts.indexOf(district)) % colors.length];
-  const filterValues = () => ({district:$('field-district').value, sector:$('field-sector').value, search:$('field-search').value});
+  const filterValues = () => ({district:$('field-district').value, sector:$('field-sector').value, search:''});
   const latLng = f => [f.properties.label[1], f.properties.label[0]];
   function message(text) { $('field-error').textContent = text; $('field-error').hidden = !text; }
   function fit(items) {
@@ -78,7 +78,7 @@
     if (!shown.length) message('Nenhuma quadra corresponde à busca. Use o número exato, como “436”, ou um setor, como “SC 023”.');
     else message('');
     if (enframe && shown.length) fit(shown);
-    if (shown.length === 1 && $('field-search').value.trim()) select(shown[0]);
+
     scheduleLabels();
   }
   function groupLabels(key, prefix) {
@@ -136,7 +136,7 @@
   function setup() {
     if (!window.L) throw Error('Biblioteca de mapas indisponível.');
     map = L.map('field-map', {scrollWheelZoom:true, minZoom:11, maxZoom:21}).setView([-20.72,-47.88],14);
-    for (const [name,z] of [['field-events',610],['field-event-labels',630],['field-census',410],['field-blocks',420],['field-selection',430],['field-labels',620]]) {
+    for (const [name,z] of [['field-events',610],['field-event-labels',630],['field-census',410],['field-blocks',420],['field-hotspots',425],['field-selection',430],['field-labels',620]]) {
       map.createPane(name).style.zIndex = z;
       if (name === 'field-labels') map.getPane(name).style.pointerEvents = 'none';
     }
@@ -145,7 +145,7 @@
     $('field-basemap').value = basemap.getMode();
     labelLayer = L.layerGroup().addTo(map);
     censusLayer = L.geoJSON(dataset.census, {pane:'field-census', interactive:false, style:{color:'#8fc9ff', weight:2, dashArray:'6 5', fillOpacity:0}});
-    window.SfaAtlasLayers.attach(map,dataset);
+    window.SfaAtlasLayers.attach(map,dataset,territory);
     window.SfaAtlasEditor.attach(map,dataset);
     districts = [...new Set(territory.features.map(f => f.properties.district))];
     $('field-district').replaceChildren(new Option('Todas as áreas', ''), ...districts.map(d => new Option(areaName(d),d)));
@@ -155,16 +155,25 @@
     $('field-provenance').textContent = `Fonte: ${territory.source.file}, camada Quadras. ${territory.source.blocks} geometrias em ${territory.source.districts} áreas e ${territory.source.sectors} códigos SC. ${territory.source.invalid_geometries} geometria irregular e ${territory.source.duplicate_keys} chave setor/quadra repetida, sinalizadas na consulta. Coordenadas originais preservadas; posições dos rótulos calculadas no interior dos polígonos. As folhas em papel não foram georreferenciadas. Hash SHA-256: ${territory.source.sha256}.`;
     map.attributionControl.addAttribution('Quadras: referência municipal · IBGE 2022 (camada opcional)');
     map.on('zoomend moveend resize atlaslayerschange', scheduleLabels);
-    $('field-filters').onsubmit = e => {e.preventDefault(); clearTimeout(searchTimer); draw(true);};
-    $('field-search').oninput = () => {clearTimeout(searchTimer); searchTimer = setTimeout(() => draw(true),250);};
+    const atlasRoute=window.SfaAtlasRoute?.attach(map,dataset);
+    const atlasSearch=window.SfaAtlasSearch.attach(map,dataset,territory,{select,fit,areaName,addStop:atlasRoute?.addStop});
     $('field-district').onchange = () => {updateSectors(); draw(true);};
     $('field-sector').onchange = () => draw(true);
-    $('field-area-legend').onclick = e => {const button = e.target.closest('[data-district]'); if (!button) return; $('field-district').value = button.dataset.district; $('field-search').value = ''; updateSectors(); $('field-sector').value = ''; draw(true);};
+    $('field-area-legend').onclick = e => {const button = e.target.closest('[data-district]'); if (!button) return; $('field-district').value = button.dataset.district; atlasSearch.clear(); updateSectors(); $('field-sector').value = ''; draw(true);};
     $('field-basemap').onchange = () => basemap.setMode($('field-basemap').value);
     $('field-blocks').onchange = () => {$('field-blocks').checked ? blockLayer.addTo(map) : blockLayer.remove();};
     $('field-numbers').onchange = scheduleLabels;
     $('field-census').onchange = () => {$('field-census').checked ? censusLayer.addTo(map) : censusLayer.remove();};
-    $('field-reset').onclick = () => {clearTimeout(searchTimer); $('field-search').value = ''; $('field-district').value = ''; $('field-sector').value = ''; updateSectors(); clearSelection(); draw(true);};
+    $('field-reset').onclick = () => {clearTimeout(searchTimer); atlasSearch.clear(); $('field-district').value = ''; $('field-sector').value = ''; updateSectors(); clearSelection(); draw(true);};
+    document.querySelectorAll('[data-atlas-panel]').forEach(button=>button.onclick=()=>{
+      const target=$(button.dataset.atlasPanel),rail=button.closest('.field-rail');
+      if(!target)return;
+      if(rail&&rail.scrollHeight>rail.clientHeight+1){
+        rail.scrollTo({top:rail.scrollTop+target.getBoundingClientRect().top-rail.getBoundingClientRect().top-48,behavior:'auto'});
+        const toolbarTop=$('field-filters').getBoundingClientRect().top;
+        if(toolbarTop<60)window.scrollBy({top:toolbarTop-65,left:0,behavior:'auto'});
+      }else target.scrollIntoView({block:'nearest',behavior:'auto'});
+    });
     draw(true);
   }
   $('field-fullscreen').onclick = () => {

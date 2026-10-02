@@ -1,12 +1,12 @@
 (function(){
   'use strict';
   const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fields=['name','address','category','date','status','notes','precision','sinan','disease','notification_date','symptoms_date','exam','exam_result','final_result','classification','folder_id','position_status','period_year'];
+  const fields=['name','house_number','address','category','date','status','notes','precision','sinan','disease','notification_date','symptoms_date','exam','exam_result','final_result','classification','folder_id','position_status','period_year'];
   const normalize=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   window.SfaAtlasEditor={attach(map,dataset){
     const urls=dataset.editor_urls, editable=$('atlas-collaboration').dataset.editor==='1',clinicalEditor=$('atlas-collaboration').dataset.clinicalEditor==='1';
     let catalog=[],layer=null,feature=null,page=0,selected=new Set(),quality=null,folderAction='create_folder',positioning=false,qualityRun=0,layerAction='create_layer',drawing=false,vertices=[],busy=false,canEdit=false;
-    const preview=L.layerGroup().addTo(map), searchPreview=L.layerGroup().addTo(map);
+    const preview=L.layerGroup().addTo(map);
     const dragIcon=()=>L.divIcon({className:'editor-drag-marker',html:'<span></span>',iconSize:[30,38],iconAnchor:[15,36],tooltipAnchor:[0,-31]});
     const url=key=>key?urls.layer.replace('KEY',encodeURIComponent(key)):urls.catalog;
     const api=async(target,body)=>{
@@ -104,7 +104,8 @@
       fields.forEach(k=>{if($('editor-'+k))$('editor-'+k).value=f?.properties?.[k]||(k==='name'?f?.properties?.label||'':'');});
       $('editor-folder_id').value=f?.properties.folder_id||$('editor-folder-filter').value||'';$('editor-position_status').value=f?.properties.position_status||'to_review';
       $('editor-reason').value=f?'Correção do cadastro':'Cadastro de registro';
-      $('editor-feature-heading').textContent=f?'Editar registro':'Novo registro';$('editor-clinical-fields').hidden=!layer.clinical;
+      $('editor-feature-heading').textContent=f?'Editar registro':'Novo registro';
+      const cad=$('editor-cadastre-reference');cad.hidden=!f?.properties.cadastre_ref;cad.onclick=()=>window.SfaCadastreViewer.open(dataset,f.properties.cadastre_ref,layer.id,f.id);$('editor-clinical-fields').hidden=!layer.clinical;
       const geo=f?.geometry;
       $('editor-geometry-kind').value=!geo?(f?'none':'Point'):['Point','LineString','Polygon'].includes(geo.type)?geo.type:'custom';
       $('editor-lat').value=geo?.type==='Point'?geo.coordinates[1]:'';$('editor-lng').value=geo?.type==='Point'?geo.coordinates[0]:'';
@@ -227,21 +228,6 @@
       show();try{await reloadCatalog(b.dataset.atlasLayer);await loadLayer(b.dataset.atlasLayer);openFeature(layer.features.find(f=>String(f.id)===b.dataset.atlasFeature));}catch(e){message(e.message,true);}
     });
     $('atlas-reload').onclick=()=>window.SfaAtlasLayers.refresh().catch(e=>message(e.message,true));
-    // Street/address search uses the local snapshot and current shared registrations.
-    let searchSequence=0;
-    async function placeSearch(){
-      const query=$('atlas-place-query').value.trim(),run=++searchSequence;if(!query)return;
-      $('atlas-place-status').textContent='Buscando…';$('atlas-place-results').replaceChildren();searchPreview.clearLayers();
-      try{
-        const data=await api(urls.search+(urls.search.includes('?')?'&':'?')+'q='+encodeURIComponent(query));if(run!==searchSequence)return;
-        const items=data.results;$('atlas-place-status').textContent=items.length?`${items.length} correspondências. Ruas indicam o trecho, sem estimar o número do imóvel.`:'Nenhum local cadastrado corresponde à busca. Tente o nome da rua sem o número ou confira os PDFs.';
-        items.forEach(item=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<strong>${esc(item.feature.properties.name||item.feature.properties.label)}</strong><small>${esc(item.feature.properties.address||item.layer_title)} · ${item.located?'Referência no mapa':'Sem posição'}</small>`;
-          b.onclick=()=>{searchPreview.clearLayers();if(item.feature.geometry){L.geoJSON(item.feature,{style:{color:'#fff',weight:5,fillOpacity:.2},pointToLayer:(_,p)=>L.circleMarker(p,{radius:10,color:'#fff',fillColor:'#087f81',fillOpacity:1})}).addTo(searchPreview);focus(item.feature);}else $('atlas-place-status').textContent='Registro disponível na tabela, ainda sem posição confirmada.';};$('atlas-place-results').append(b);
-        });
-      }catch(e){$('atlas-place-status').textContent=e.message;}
-    }
-    $('atlas-place-search').onclick=placeSearch;$('atlas-place-query').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();placeSearch();}};
-    $('atlas-place-clear').onclick=()=>{searchSequence++;searchPreview.clearLayers();$('atlas-place-query').value='';$('atlas-place-status').textContent='';$('atlas-place-results').replaceChildren();};
     api(urls.documents).then(data=>{
       $('atlas-documents').innerHTML=data.documents.map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(d.image_url)}" alt="" loading="lazy"><span><strong>${esc(d.title)}</strong><small>${esc(d.note)} Abrir PDF ↗</small></span></a>`).join('');
     }).catch(e=>$('atlas-documents').textContent=e.message);

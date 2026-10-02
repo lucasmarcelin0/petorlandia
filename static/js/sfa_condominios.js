@@ -20,16 +20,17 @@
       if(!visible.length)return;
       const zoom=map.getZoom(),size=map.getSize();
       if(zoom<18){
-        let groups=M.overview(all), merged=[];
+        let groups=M.overview(visible), merged=[];
         // Nearby condominiums share one overview card until the map has room.
         groups.forEach(g=>{const p=project(g.coordinates),same=merged.find(m=>Math.abs(project(m.coordinates).x-p.x)<145&&Math.abs(project(m.coordinates).y-p.y)<45);
           if(same){same.names.push(g.name);same.items.push(...g.items);same.coordinates=M.overview(same.items.map(f=>({...f,atlasEntry:{...f.atlasEntry,id:'merged'}})))[0].coordinates;}
           else merged.push({...g,names:[g.name]});});
         const cards=merged.map(g=>{const p=project(g.coordinates);return {...g,x:p.x,y:p.y,width:g.names.length>1?154:128,height:40};});
         F.placeLabels(cards,size.x,size.y,3,reserve()).forEach(g=>{
-          const title=g.names.join(' · ');
+          const title=g.names.join(' · '),census=g.items.some(f=>f.atlasEntry.origin?.type==='cnefe');
+          const caption=census&&g.names.length>1?g.names.length+' localidades próximas':title;
           L.marker([g.coordinates[1],g.coordinates[0]],{pane,keyboard:true,title:'Aproximar '+title,icon:L.divIcon({className:'atlas-condo-overview',
-            iconSize:[g.width,40],iconAnchor:[g.width/2,20],html:`<span style="--condo-color:${g.color}"><b>${esc(title)}</b><small>${g.items.length} casas · aproximar</small></span>`})})
+            iconSize:[g.width,40],iconAnchor:[g.width/2,20],html:`<span style="--condo-color:${g.color}"><b>${esc(caption)}</b><small>${g.items.length} ${census?'números':'casas'} · aproximar</small></span>`})})
             .on('click',()=>focus(g.items)).addTo(labels);
         });
         return;

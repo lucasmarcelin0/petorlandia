@@ -1,0 +1,61 @@
+/* Rota de campo no atlas (static/js/sfa_atlas_route.js) */
+
+/* Botão "＋ Rota" ao lado de cada resultado da busca */
+#atlas-search-results .atlas-result-row{display:flex;align-items:stretch;border-bottom:1px solid #edf2ef;background:#fff}
+#atlas-search-results .atlas-result-row>button:first-child{flex:1;min-width:0;border-bottom:0}
+#atlas-search-results .atlas-result-row>.atlas-result-route{flex:none;width:auto;min-width:74px;padding:0 12px;border:0;border-left:1px solid #edf2ef;background:#f3f9f6;color:#0b6b73;font-size:.7rem;font-weight:700;text-align:center;cursor:pointer;transition:background .15s ease,color .15s ease}
+#atlas-search-results .atlas-result-row>.atlas-result-route:hover,#atlas-search-results .atlas-result-row>.atlas-result-route:focus-visible{background:#0b7285;color:#fff;outline:0}
+#atlas-search-results .atlas-result-row>.atlas-result-route:disabled{background:#e4f2ec;color:#2f7d5b;cursor:default}
+
+/* Painel */
+.atlas-route{padding-bottom:6px}
+.atlas-route h3{font-size:.98rem;margin:0 0 6px}
+.atlas-route-empty{margin:10px 0;padding:14px;border:1.5px dashed #b6d2cd;border-radius:9px;background:#f6fbf9;font-size:.76rem;line-height:1.55;color:#4d7279;text-align:center}
+.atlas-route-list{list-style:none;margin:10px 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+.atlas-route-stop{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px 8px 8px 9px;border:1px solid #d3e4e0;border-radius:10px;background:#fff;animation:atlas-route-in .28s cubic-bezier(.16,1,.3,1) backwards}
+.atlas-route-stop.is-gps{background:#f1f8ff;border-color:#bcd7ee}
+.atlas-route-number{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#0b7285;color:#fff;font-size:.74rem;font-weight:800;font-variant-numeric:tabular-nums}
+.atlas-route-stop.is-gps .atlas-route-number{background:#1c7ed6}
+.atlas-route-text{min-width:0}
+.atlas-route-text strong{display:block;font-size:.78rem;line-height:1.35;color:#173b43;overflow-wrap:anywhere}
+.atlas-route-text small{display:block;font-size:.67rem;line-height:1.45;color:#607d84;overflow-wrap:anywhere}
+.atlas-route-text .atlas-route-leg{margin-top:2px;color:#0b7285;font-weight:650}
+.atlas-route-text .atlas-route-leg.is-straight{color:#c2410c}
+.atlas-route-tools{display:flex;gap:3px}
+.atlas-route-tools button{width:30px;height:30px;padding:0;border:1px solid #d3e4e0;border-radius:7px;background:#f6fbf9;color:#245e65;font-size:.82rem;line-height:1;cursor:pointer;transition:background .15s ease,transform .15s ease}
+.atlas-route-tools button:hover:not(:disabled),.atlas-route-tools button:focus-visible{background:#dff1ea;outline:0}
+.atlas-route-tools button:active:not(:disabled){transform:scale(.9)}
+.atlas-route-tools button:disabled{opacity:.35;cursor:default}
+.atlas-route-tools button[data-tool^="del-"]:hover:not(:disabled){background:#fde8e8;color:#b42318;border-color:#f3b6b0}
+.atlas-route-summary{margin:8px 0;padding:10px 12px;border-radius:9px;background:#e8f5f1;border:1px solid #bfe0d7;font-size:.74rem;line-height:1.6;color:#1b5e5a}
+.atlas-route-summary strong{font-size:.95rem;color:#0b5c66}
+.atlas-route-summary em{display:block;margin-top:5px;font-style:normal;font-size:.7rem;color:#b45309}
+.atlas-route-notice{margin:6px 0;padding:7px 10px;border-radius:8px;background:#eef6ff;font-size:.72rem;line-height:1.5;color:#1d4e89}
+.atlas-route-notice.is-error{background:#fff1ef;color:#b42318}
+.atlas-route-mode{display:flex;gap:0;margin:8px 0}
+.atlas-route-mode button{flex:1;min-height:32px;border:1px solid #b9cdd1;background:#fff;color:#21525a;font-size:.72rem;font-weight:650;cursor:pointer}
+.atlas-route-mode button:first-child{border-radius:7px 0 0 7px}.atlas-route-mode button:last-child{border-radius:0 7px 7px 0;border-left:0}
+.atlas-route-mode button.is-on{background:#0b7285;border-color:#0b7285;color:#fff}
+.atlas-route-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.atlas-route-actions button{flex:1 1 calc(50% - 6px);min-height:36px;padding:6px 8px;border:1px solid #b9cdd1;border-radius:7px;background:#fff;color:#21525a;font-size:.72rem;font-weight:650;cursor:pointer;transition:background .15s ease}
+.atlas-route-actions button:hover:not(:disabled),.atlas-route-actions button:focus-visible{background:#e9f5ef;outline:0}
+.atlas-route-actions button:disabled{opacity:.45;cursor:default}
+.atlas-route-actions #atlas-route-optimize{background:#0b7285;border-color:#0b7285;color:#fff}
+.atlas-route-actions #atlas-route-optimize:disabled{background:#8fb9c0;border-color:#8fb9c0}
+.atlas-route-actions #atlas-route-clear{color:#b42318}
+.atlas-route-links{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.atlas-route-linkhead{flex:1 0 100%;margin:0;font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#547a7f}
+.atlas-route-link{padding:7px 12px;border-radius:999px;background:#e8f1fe;color:#1c5fb0;font-size:.72rem;font-weight:700;text-decoration:none}
+.atlas-route-link:hover,.atlas-route-link:focus-visible{background:#d4e6fc;outline:0}
+.atlas-route-links small{flex:1 0 100%;font-size:.64rem;line-height:1.45;color:#64777d}
+
+/* Pinos numerados e atalho sobre o mapa */
+.atlas-route-pin{background:none;border:0}
+.atlas-route-pin span{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#0b7285;border:3px solid #fff;box-shadow:0 2px 8px #0006;color:#fff;font:800 .8rem/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.atlas-route-pin.is-gps span{background:#1c7ed6;animation:atlas-route-pulse 2s ease-out infinite}
+.leaflet-control.atlas-route-chip{margin:10px;padding:8px 13px;border:0;border-radius:999px;background:#0b7285;color:#fff;font:700 .76rem/1.2 system-ui,sans-serif;box-shadow:0 4px 14px #0004;cursor:pointer;transition:transform .15s ease,background .15s ease}
+.leaflet-control.atlas-route-chip:hover,.leaflet-control.atlas-route-chip:focus-visible{background:#095d6c;transform:translateY(-1px);outline:0}
+
+@keyframes atlas-route-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes atlas-route-pulse{0%{box-shadow:0 2px 8px #0006,0 0 0 0 #1c7ed688}70%{box-shadow:0 2px 8px #0006,0 0 0 14px #1c7ed600}100%{box-shadow:0 2px 8px #0006,0 0 0 0 #1c7ed600}}
+@media (prefers-reduced-motion:reduce){.atlas-route-stop,.atlas-route-pin.is-gps span{animation:none}.atlas-route-tools button,.atlas-route-actions button{transition:none}}

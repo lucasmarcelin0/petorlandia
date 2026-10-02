@@ -26,7 +26,7 @@ _write_lock = threading.RLock()
 FIELDS = {'name':200,'address':240,'category':120,'notes':2000,'date':10,'status':120,
           'sinan':40,'disease':120,'notification_date':10,'symptoms_date':10,'exam':120,
           'exam_result':160,'final_result':160,'classification':120,'precision':240,
-          'folder_id':100,'position_status':30,'period_year':4}
+          'folder_id':100,'position_status':30,'period_year':4,'house_number':30}
 
 class Conflict(ValueError):
     pass
@@ -57,12 +57,18 @@ def source_layers():
                 groups[key]={'id':key,'title':name,'color':PALETTE.get(normalize(name),'#65bdd2'),
                              'clinical':is_case(name),'deleted':False,'origin':origin,'features':[], 'revision':0}
             if origin['type']=='condominium':
-                groups[key]['default_visible']=True
+                groups[key]['default_visible']=not has_address_source
                 groups[key]['color']=f['properties']['color']
             item=deepcopy(f)
             item['id']=str(item.get('id') or key+'-'+str(index+1))
             groups[key]['features'].append(item)
             if any(is_case(part) for part in item['properties'].get('folder_path',[])):groups[key]['clinical']=True
+    from services.entomologia_cadastre import source_layers as cadastral_layers
+    groups.update(cadastral_layers())
+    from services.entomologia_cnefe import source_layers as address_layers
+    addresses=address_layers()
+    groups.update(addresses)
+    has_address_source=bool(addresses)
     earth=atlas.active_earth()
     add(earth['features'],'earth-',{'type':'earth','import_id':earth.get('source',{}).get('import_id'),
                                   'title':'Cópia Google Earth'})
@@ -177,6 +183,17 @@ def clean_feature(payload, previous=None):
                 try: date.fromisoformat(props[field])
                 except ValueError as exc: raise ValueError('Data inválida: '+field) from exc
     if props.get('period_year') and not re.fullmatch(r'(?:19|20)\d{2}',props['period_year']):raise ValueError('Ano inválido.')
+    if 'house_number' in raw:
+        if props['house_number'] and not re.fullmatch(r'[0-9]{1,7}[A-Za-z]{0,2}(?:[-/][0-9]{1,7}[A-Za-z]{0,2})?',props['house_number']):raise ValueError('Confira o número do imóvel.')
+        old=previous.get('properties',{}) if previous else {}
+        if previous and props['house_number']!=old.get('house_number'):
+            props['number_edited']=True
+            if old.get('cnefe_id'):
+                old_prefix=old.get('street','')+', '+(old.get('house_number') or 'sem número')
+                new_prefix=old.get('street','')+', '+(props['house_number'] or 'sem número')
+                for key in ('name','address'):
+                    if props.get(key)==old.get(key) and props.get(key,'').startswith(old_prefix):
+                        props[key]=new_prefix+props[key][len(old_prefix):]
     if not props.get('name'): props['name']=props.get('label') or 'Registro sem título'
     props['label']=props['name']
     if props.get('sinan'):
@@ -315,30 +332,10 @@ def search_text(value):
     return value
 
 def search(query, allowed_clinical):
-    """Local data only: no query, patient address or identifier sent to a provider."""
-    q=search_text(query)
-    if not q or len(q)>240: return []
-    q=re.sub(r'\bav\.?\s','avenida ',q)
-    pattern=r'\b(?:rua|avenida|alameda|travessa|casa) \d+[a-z]?\b'
-    phrases=re.findall(pattern,q)
-    tokens=re.sub(pattern,' ',q).replace(',',' ').split()
-    result=[]
-    grouped={}
-    for layer in layers(allowed_clinical).values():
-        for f in layer['features']:
-            p=f['properties']
-            hay=search_text(' '.join(str(p.get(k,'')) for k in ('name','label','address','category')))
-            if all(re.search(r'(?<!\w)'+re.escape(t)+r'(?!\w)',hay) for t in phrases) and all(
-                    re.search(r'(?<!\d)'+re.escape(t)+r'(?!\d)',hay) if t.isdigit() else t in hay for t in tokens):
-                identity=(layer['id'],normalize(p.get('name') or p.get('label')))
-                if layer['origin']['type']=='reference' and identity in grouped:
-                    base=grouped[identity]['feature']
-                    if base['geometry']['type']!='GeometryCollection':
-                        base['geometry']={'type':'GeometryCollection','geometries':[base['geometry']]}
-                    base['geometry']['geometries'].append(deepcopy(f['geometry']))
-                    continue
-                item={'layer_id':layer['id'],'layer_title':layer['title'],'feature':deepcopy(f),
-                               'located':f.get('geometry') is not None}
-                grouped[identity]=item
-                result.append(item)
-    return result[:80]
+    """Local data only: no query, patient address or identifier sent to a provider.
+
+    O casamento mora em ``entomologia_atlas_search``: o texto normalizado de cada
+    feição é calculado uma vez e reaproveitado, em vez de refeito a cada consulta.
+    """
+    from services import entomologia_atlas_search
+    return entomologia_atlas_search.search(query, allowed_clinical)

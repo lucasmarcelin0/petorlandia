@@ -14,5 +14,21 @@
     "file": "MAPA_Orlandia_Cidade_ESC_1-10.000_atualizado_2025-06-27 (1).pdf",
     "sha256": "63344b615acdac0c2f365ee97abc642a229940ccc885d7edf245c6952db27add",
     "note": "Sem referência geográfica validada. Consulta em papel; não alinhado ao satélite."
+  },
+  {
+    "id": "logradouros",
+    "title": "Logradouros e CEP · relação municipal de 2025",
+    "year": "2025",
+    "file": "ORLANDIA_Logradouros_ATUAL-OUTUBRO-2025-10-30_CEP.pdf",
+    "sha256": "d27e5f17aeac309d57d24ebf3a5e4d326b19307073efd735e11fb8b1cd43e5f1",
+    "note": "391 referências extraídas para consulta por rua, bairro e CEP. Não informa todos os números de imóveis."
+  },
+  {
+    "id": "bairros",
+    "title": "Mapa municipal de bairros · arquivo 2026",
+    "year": "2026",
+    "file": "MAPA_Orlandia_Bairros_Lei_4449-2026_ESC_1-10.000.pdf",
+    "sha256": "b90c5df956a1a876dd36aa9e8c555c1c0095d449de3640f3f1408e713a97810d",
+    "note": "Referência cartográfica para bairros e expansão urbana. Sem alinhamento geográfico validado com o satélite."
   }
 ]

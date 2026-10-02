@@ -1,0 +1,47 @@
+"""Tela do atlas: o JS de busca e de rota só pode usar elementos que o template realmente tem."""
+import re
+from pathlib import Path
+
+from tests.test_entomologia_atualizacao import login
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _page(client):
+    login(client)
+    response = client.get('/sfa/entomologia')
+    assert response.status_code == 200
+    return response.get_data(as_text=True)
+
+
+def test_painel_de_rota_e_scripts_estao_na_tela(client):
+    html = _page(client)
+    for marker in ('id="atlas-route"', 'data-atlas-panel="atlas-route"', 'sfa_atlas_route_model.js',
+                   'sfa_atlas_route.js', 'sfa_atlas_search_model.js', 'sfa_atlas_route.css'):
+        assert marker in html, marker
+    # Os modelos precisam carregar antes de quem os usa.
+    assert html.index('sfa_atlas_route_model.js') < html.index('sfa_atlas_route.js') < html.index('sfa_field_map.js')
+    assert html.index('sfa_atlas_search_model.js') < html.index('sfa_atlas_search.js') < html.index('sfa_field_map.js')
+
+
+def test_todo_id_usado_pelo_js_existe_no_template(client):
+    html = _page(client)
+    for script in ('sfa_atlas_route.js', 'sfa_atlas_search.js'):
+        source = (ROOT / 'static' / 'js' / script).read_text(encoding='utf-8')
+        used = set(re.findall(r"\$\('([a-z0-9-]+)'\)", source))
+        missing = sorted(i for i in used if f'id="{i}"' not in html)
+        assert not missing, f'{script} usa ids que o template não tem: {missing}'
+
+
+def test_dataset_traz_as_urls_novas(client):
+    html = _page(client)
+    for name in ('search_index', 'search_place', 'street_network'):
+        assert f'"{name}"' in html, name
+    assert '/atlas/busca/indice' in html and '/atlas/malha' in html
+
+
+def test_versoes_dos_arquivos_alterados_foram_trocadas_no_template(client):
+    """Os estáticos têm cache de 1 ano por versão: sem trocar o ?v= o navegador não baixa o novo."""
+    html = _page(client)
+    for name, version in (('sfa_atlas_search.js', '20261002-busca'), ('sfa_field_map.js', '20261002-rota')):
+        assert re.search(re.escape(name) + r'\?v=' + re.escape(version), html), name

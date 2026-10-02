@@ -20,3 +20,9 @@ assert.ok(crowded.length>20&&crowded.length<394,'Zoom distante reduz números se
 assert.equal(M.streets(features,project).length,14);
 assert.equal(M.isHouse({properties:{},atlasEntry:{origin:{type:'earth'}}}),false);
 console.log('Condomínios: 394 casas, alamedas, edição do número e rótulos sem sobreposição verificados.');
+
+const censusHouse={geometry:{type:'Point',coordinates:[-47.9,-20.7]},properties:{kind:'cnefe_house',house_number:'1963',name:'Rua 24, 1963'},atlasEntry:{origin:{type:'cnefe'}}};
+assert.equal(M.isHouse(censusHouse),true);
+assert.equal(M.shortLabel(censusHouse),'1963');
+assert.equal(M.number({...censusHouse,properties:{...censusHouse.properties,house_number:'1963A',number_edited:true}}),'1963A');
+assert.equal(M.isHouse({...censusHouse,properties:{kind:'cnefe_address',house_number:'1963',cnefe_building_type:'101',position_status:'unlocated'}}),false);
