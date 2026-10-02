@@ -1,3 +1,4 @@
+from app import _sanitize_login_next_url
 """Views do domínio consulta_routes (migrado do app.py)."""
 from flask import Blueprint
 import json, os, re, unicodedata, uuid
