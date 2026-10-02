@@ -175,6 +175,17 @@ FIELD_SPECS: dict[str, dict] = {
 }
 
 
+def _mover_agravo_para_primeira_pagina(sections: list[dict]) -> None:
+    """Dengue x Chikungunya (campo 2) é a primeira escolha da ficha: sobe para a página do número da notificação."""
+    if not sections:
+        return
+    for section in sections[1:]:
+        for position, field in enumerate(section["fields"]):
+            if field.get("key") == "agravo":
+                sections[0]["fields"].append(section["fields"].pop(position))
+                return
+
+
 def carregar_esquema_pre_t0() -> dict:
     """Combina a redação da ficha fonte com os controles eletrônicos."""
     try:
@@ -195,6 +206,7 @@ def carregar_esquema_pre_t0() -> dict:
                 raise RuntimeError(f"Campo SINAN sem controle eletrônico definido: {number or label}")
             section["fields"].append({**source_field, **spec, "number": number})
         sections.append(section)
+    _mover_agravo_para_primeira_pagina(sections)
     return {"title": raw.get("titulo", "Ficha de Investigação"), "version": raw.get("versao", ""),
             "definitions": raw.get("definicoes", []), "sections": sections}
 
@@ -207,8 +219,15 @@ class CampoInvalido(ValueError):
         self.campo = campo
 
 
+_SEPARADORES_NUMERICOS = re.compile(r"[\s.\-–—/()]")
+
+
 def _field_text(form, name: str, maximum: int, *, required: bool = False, numeric: bool = False, uppercase: bool = False) -> str:
     value = str(form.get(name) or "").strip()
+    if numeric:
+        # CEP "14620-000", cartão SUS com espaços etc.: o preenchimento automático do navegador
+        # insere separadores; eles são descartados em vez de travar o envio.
+        value = _SEPARADORES_NUMERICOS.sub("", value)
     if required and not value:
         raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", name)
     if len(value) > maximum:
@@ -275,15 +294,26 @@ def _answer_field(form, field: dict) -> object:
                 answers[item_key] = value
         return answers
     if kind == "test_result":
+        # Um resultado por exame (S1, S2, PRNT). "amostras" e "resultado" seguem existindo para
+        # fichas e análises antigas: amostras = exames com resultado; resultado = o do exame mais conclusivo.
+        resultados = {}
+        for sample_key, _label in field["samples"]:
+            value = _field_choice(form, f"{key}__res__{sample_key}", field["options"])
+            if value:
+                resultados[sample_key] = value
+        if resultados:
+            amostras = [sample_key for sample_key, _label in field["samples"] if sample_key in resultados]
+            principal = next((resultados[k] for k in ("prnt", "s2", "s1") if k in resultados), "")
+            return {"amostras": amostras, "resultado": principal, "resultados": resultados}
         samples = []
         for sample_key, _label in field["samples"]:
             value = str(form.get(f"{key}__{sample_key}") or "").strip()
             if value not in {"", "1"}:
-                raise ValueError("Uma das opções enviadas não pertence a esta ficha.")
+                raise CampoInvalido("Uma das opções enviadas não pertence a esta ficha.", f"{key}__{sample_key}")
             if value == "1":
                 samples.append(sample_key)
         result = _field_choice(form, key, field["options"])
-        return {"amostras": samples, "resultado": result}
+        return {"amostras": samples, "resultado": result, "resultados": {}}
     if kind == "flag_matrix":
         status = _field_choice(form, key, field["options"])
         items = []
@@ -535,6 +565,10 @@ def obter_ficha_pre_t0(id_estudo: str) -> dict | None:
             if kind == "test_result":
                 value = value if isinstance(value, dict) else {}
                 samples = dict(field["samples"])
+                por_exame = value.get("resultados") if isinstance(value.get("resultados"), dict) else {}
+                if por_exame:
+                    return "; ".join(f"{label}: {option_text(field['options'], por_exame[key_])}"
+                                     for key_, label in field["samples"] if key_ in por_exame)
                 marked = [samples[item] for item in value.get("amostras", []) if item in samples]
                 result = option_text(field["options"], value.get("resultado"))
                 return (", ".join(marked) + " · " if marked else "") + result

@@ -170,3 +170,20 @@ def test_comando_de_linha_concede_lista_e_revoga_sem_imprimir_email(app):
     g.pop('_entomologia_membro', None)
     assert not membro_equipe(pessoa)
     assert SfaAuditoria.query.filter_by(categoria='ENTOMOLOGIA').count() == 2
+
+
+def test_team_reads_operational_atlas_but_not_clinical_sources(client, membro, monkeypatch):
+    from services import entomologia_atlas as atlas
+    point={'type':'Point','coordinates':[-47.88,-20.72]}
+    earth={'type':'FeatureCollection','source':{'title':'Atlas'},'features':[
+        {'type':'Feature','geometry':point,'properties':{'layer':'Rotina','category':'IE','month':'01'}},
+        {'type':'Feature','geometry':point,'properties':{'layer':'Casos Dengue','category':'Positivo','sinan':'123'}}]}
+    monkeypatch.setattr(atlas,'active_earth',lambda:earth)
+    monkeypatch.setattr(atlas,'live_sheet',lambda *args,**kwargs:pytest.fail('Team must not consult the clinical sheet'))
+    catalog=client.get('/sfa/entomologia/atlas/camadas',**HTTPS)
+    assert catalog.status_code==200
+    clinical=next(layer for layer in catalog.json['layers'] if layer['title']=='Casos Dengue')
+    assert clinical['allowed'] is False and clinical['count'] is None
+    assert client.get('/sfa/entomologia/atlas/camadas/'+atlas.layer_id('Rotina'),**HTTPS).status_code==200
+    assert client.get('/sfa/entomologia/atlas/camadas/'+atlas.layer_id('Casos Dengue'),**HTTPS).status_code in (401,403,404)
+    assert client.get('/sfa/entomologia/atlas/sinan',**HTTPS).status_code in (401,403,404)

@@ -120,7 +120,7 @@ def register(bp, require_access):
         previa_id = request.args.get('previa', type=int)
         if previa_id:
             previa = EntomologiaImportacao.query.filter_by(id=previa_id, status='PREVIA').first()
-        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA') \
+        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA', EntomologiaImportacao.tipo != 'atlas_edit') \
             .order_by(EntomologiaImportacao.id.desc()).limit(60).all()
         from services.entomologia_acesso import eh_admin, membros_ativos
         publicacoes = EntomologiaPublicacao.query.order_by(EntomologiaPublicacao.id.desc()).limit(12).all()
@@ -148,7 +148,8 @@ def register(bp, require_access):
         tipo = request.form.get('tipo', service.TIPO_VISITAS)
         arquivo = request.files.get('arquivo')
         try:
-            if tipo not in (service.TIPO_VISITAS, service.TIPO_CAMADA):
+            from services.entomologia_atlas import TIPO_ATLAS
+            if tipo not in (service.TIPO_VISITAS, service.TIPO_CAMADA, TIPO_ATLAS):
                 raise ValueError('Tipo de arquivo inválido.')
             if not arquivo or not arquivo.filename:
                 raise ValueError('Escolha um arquivo para enviar.')
@@ -170,7 +171,13 @@ def register(bp, require_access):
                                                                    separators=(',', ':'), allow_nan=False),
                     resumo_json=json.dumps(resumo, ensure_ascii=False))
             else:
-                lido = service.ler_camada(blob, nome)
+                if tipo == TIPO_ATLAS:
+                    from services.entomologia_atlas import read_earth
+                    atlas = read_earth(blob, nome)
+                    lido = {'geojson': atlas, 'sha256': atlas['source']['sha256'],
+                            'titulo': atlas['source']['title'], 'pastas': list(atlas['source']['counts'])}
+                else:
+                    lido = service.ler_camada(blob, nome)
                 titulo = str(request.form.get('titulo') or '').strip()[:200] or lido['titulo'] or nome
                 features = lido['geojson']['features']
                 resumo = {'elementos': len(features), 'pastas': lido['pastas'][:50],
@@ -180,7 +187,9 @@ def register(bp, require_access):
                     linhas=resumo['elementos'], dados_json=json.dumps(lido['geojson'], ensure_ascii=False,
                                                                       separators=(',', ':'), allow_nan=False),
                     resumo_json=json.dumps(resumo, ensure_ascii=False))
-            repetido = EntomologiaImportacao.query.filter_by(sha256=registro.sha256, status='ATIVA').first()
+            repetido = EntomologiaImportacao.query.filter_by(tipo=registro.tipo, sha256=registro.sha256, status='ATIVA').order_by(EntomologiaImportacao.id.desc()).first()
+            if repetido and tipo==TIPO_ATLAS and json.loads(repetido.dados_json).get('schema_version',1)<atlas.get('schema_version',1):
+                repetido=None  # Same file can recover folder/address metadata lost by the old importer.
             if repetido:
                 raise ValueError(f'Este conteúdo já está em uso (envio #{repetido.id}). Nada foi alterado.')
             registro.responsavel, registro.ator, registro.status = responsavel, _ator(), 'PREVIA'
@@ -203,7 +212,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.status != 'PREVIA':
+        if not registro or registro.tipo == 'atlas_edit' or registro.status != 'PREVIA':
             abort(404)
         try:
             responsavel = _responsavel()
@@ -222,7 +231,7 @@ def register(bp, require_access):
             flash(f'Base atualizada: {registro.linhas} registros de {registro.inicio:%d/%m/%Y} a {registro.fim:%d/%m/%Y}. '
                   'Os painéis já usam os novos dados.', 'success')
         else:
-            flash(f'Camada “{registro.titulo}” disponível no mapa da aba Entomologia.', 'success')
+            flash(f'Camada “{registro.titulo}” disponível no atlas (projeto completo) ou na aba Entomologia (camada avulsa).', 'success')
         return redirect(url_for('sfa_routes.entomologia_atualizar', token=request.args.get('token') or None))
 
     @bp.route('/entomologia/envios/<int:envio_id>/desfazer', methods=['POST'])
@@ -235,7 +244,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.status not in ('PREVIA', 'ATIVA'):
+        if not registro or registro.tipo == 'atlas_edit' or registro.status not in ('PREVIA', 'ATIVA'):
             abort(404)
         if registro.status == 'PREVIA':
             db.session.delete(registro)

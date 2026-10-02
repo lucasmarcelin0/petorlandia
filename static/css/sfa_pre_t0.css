@@ -243,3 +243,20 @@ form { margin-top: 15px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto!important; transition-duration: .01ms!important; animation-duration: .01ms!important; animation-iteration-count: 1!important; }
 }
+
+/* Conferência por etapa */
+.step-alert { margin: 14px 0 0; padding: 13px 16px; border: 1px solid #efd3c8; border-radius: 14px; background: #fff8f5; color: #7f3229; }
+.step-alert strong { display: block; font-size: 13px; }
+.step-alert ul { margin: 7px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.5; color: #79574f; }
+
+/* Resultados por exame (campo 38) */
+.test-result-list { display: grid; gap: 12px; margin-top: 10px; }
+.test-result-row { margin: 0; padding: 11px 12px 12px; border: 1px solid #e7ece9; border-radius: 12px; background: #fbfdfc; min-width: 0; }
+.test-result-row legend { float: none; width: auto; margin: 0 0 8px; padding: 0 4px; color: var(--teal-deep, #0a4f56); font-size: 12px; font-weight: 800; }
+
+/* Campo com código ao lado: logradouro ocupa a linha toda; nos demais, o código desce em telas estreitas */
+.paired-text-row.paired-stacked { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 560px) {
+  .paired-text-row { grid-template-columns: minmax(0, 1fr); }
+}
+.test-result-row .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

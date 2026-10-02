@@ -9,7 +9,7 @@ from flask_login import LoginManager
 
 from blueprints.sfa import bp
 from scripts.import_entomologia import METRICS, number, read_visits
-from services.entomologia_service import DATA_DIR, load_entomologia, load_reference_maps
+from services.entomologia_service import DATA_DIR, load_entomologia, load_reference_maps, load_field_territory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -73,7 +73,7 @@ def test_page_renders_all_views_and_navigation(dashboard_app):
     assert response.headers['Referrer-Policy'] == 'no-referrer'
 
 
-@pytest.mark.parametrize('url', ['/sfa/entomologia','/sfa/entomologia/mapas/mapa-01.jpg'])
+@pytest.mark.parametrize('url', ['/sfa/entomologia','/sfa/entomologia/territorio.json','/sfa/entomologia/mapas/mapa-01.jpg'])
 def test_data_and_maps_require_internal_access(dashboard_app, monkeypatch, url):
     dashboard_app.config['TESTING'] = False
     monkeypatch.setenv('SFA_ALLOW_OPEN_ACCESS','0')
@@ -93,3 +93,38 @@ def test_only_manifest_maps_can_be_read(dashboard_app):
     maps = load_reference_maps()
     assert len(maps) == 14
     assert all((DATA_DIR / 'maps' / m['file']).is_file() for m in maps)
+
+
+def test_integrated_territory_is_complete_and_contains_only_field_geometry(dashboard_app):
+    data = load_field_territory()
+    assert data['source']['blocks'] == len(data['features']) == 946
+    assert data['source']['sectors'] == 72
+    assert data['source']['districts'] == 9
+    assert data['source']['invalid_geometries'] == 1
+    assert data['source']['duplicate_keys'] == 1
+    assert data['source']['coordinates_preserved']
+    allowed = {'block', 'sector', 'district', 'source_id', 'label', 'geometry_valid', 'duplicate_key'}
+    assert all(set(f['properties']) == allowed for f in data['features'])
+    assert sum(f['properties']['duplicate_key'] for f in data['features']) == 2
+    assert any(f['properties']['block'] == '899A' for f in data['features'])
+    for feature in data['features']:
+        assert feature['geometry']['type'] == 'MultiPolygon'
+        for polygon in feature['geometry']['coordinates']:
+            for ring in polygon:
+                assert len(ring) >= 4 and ring[0] == ring[-1]
+                assert all(-48 < lon < -47 and -21 < lat < -20 for lon, lat in ring)
+    response = dashboard_app.test_client().get('/sfa/entomologia/territorio.json')
+    assert response.status_code == 200
+    assert response.json == data
+    html = dashboard_app.test_client().get('/sfa/entomologia').get_data(as_text=True)
+    assert 'id="field-map"' in html and 'id="field-census"' in html
+    assert 'id="field-originals"' in html and 'sfa_field_map.js' in html
+    assert 'id="tab-reference" aria-selected="true"' in html
+
+
+def test_atlas_preserves_team_actions_and_updates(dashboard_app):
+    html = dashboard_app.test_client().get('/sfa/entomologia').get_data(as_text=True)
+    for element in ['panel-team', 'team-progress', 'acoes-territoriais', 'action-dialog', 'field-uploaded-layers']:
+        assert f'id="{element}"' in html
+    assert '/sfa/entomologia/atualizar' in html
+    assert 'territory_url' in html

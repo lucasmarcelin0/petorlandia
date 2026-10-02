@@ -68,7 +68,7 @@ contêm; a fotografia abaixo continua sendo a base e não é alterada pelo servi
 A fotografia versionada não depende do banco. `services/data/entomologia/snapshot.json`
 e `maps/` acompanham o código; as rotas protegidas servem os dados e as imagens.
 Nenhum download externo é feito pelo servidor em cada acesso. O navegador usa
-OpenStreetMap para o fundo de ruas; os limites e indicadores funcionam sem esse
+Esri World Street Map para o fundo de ruas; os limites e indicadores funcionam sem esse
 fundo. Leaflet e o código dos gráficos são locais.
 
 Para substituir a exportação, use o ambiente de desenvolvimento com `pyshp`:
@@ -105,3 +105,217 @@ A aba inicial Planejamento permite janelas inclusivas de 7, 14 e 28 dias, ancora
 Há listas separadas de focos registrados, dificuldades de acesso e incompletude, por setor ou pela chave área–setor–quarteirão. A tela exibe até 20 candidatos; o CSV inclui todos os candidatos e as datas de ambas as janelas. A lista não estima risco nem informa se a ocorrência continua pendente. O botão “Ver registros” abre o recorte correspondente em Entomologia.
 
 O estudo [plano_vigilancia_orlandia.md](plano_vigilancia_orlandia.md) documenta os achados, programas sugeridos, indicadores e integrações necessárias. A [auditoria reproduzível](analises/planejamento_orlandia.ipynb) confere as contagens em Python, independentemente do modelo JavaScript. Suas cinco células foram executadas sequencialmente e salvas com saída, usando Python sem kernel Jupyter; o formato recebeu verificações estruturais locais. Para reexecutar em Jupyter, abra o notebook na raiz do projeto ou em seu diretório.
+
+
+## Atlas integrado de campo (30/09/2026)
+
+A visão inicial **Mapa integrado** reúne as 946 geometrias de quadras da camada
+Quadras de `Copy of Cópia de 2026.kml`, organizadas em 72 códigos SC e nove áreas.
+O GeoJSON versionado fica em `services/data/entomologia/territory.json`, servido
+pela rota interna `/sfa/entomologia/territorio.json`. O arquivo bruto não é
+publicado: apenas polígonos, códigos, áreas, IDs de origem e informações de
+conferência. Pontos de casos, descrições, HTML e outras camadas são excluídos.
+
+As coordenadas são preservadas sem simplificação, deslocamento ou ajuste ao
+satélite. Shapely é usado somente na preparação para calcular rótulos no interior
+dos polígonos. Uma geometria irregular e uma chave setor/quadra repetida são
+sinalizadas; não se corrige nem se descarta a geometria original. A grafia
+SC 0102 da fonte é preservada. Quadras com sufixos (899A–F, 900A–F) permanecem
+distintas. A correspondência com as 14 folhas em papel e com a malha IBGE exige
+conferência municipal; não houve georreferenciamento das imagens nem levantamento
+cadastral. Nenhuma precisão métrica é presumida da imagem de satélite.
+
+A busca aceita código exato de quadra, SC ou nome da área. No zoom da cidade,
+rótulos mostram setores; no zoom 16 ou maior, mostram quadras. A posição usa um
+ponto interior e uma verificação de colisão em pixels, recalculada ao mover,
+ampliar ou redimensionar. A seleção de uma quadra apresenta apenas registros
+candidatos com os mesmos códigos, sem validar o vínculo ou atribuir visitas
+automaticamente. A camada IBGE é separada e opcional. Os mapas originais continuam
+na própria visão, em uma seção recolhível com 14 miniaturas e zoom.
+
+O atlas usa Esri World Imagery por padrão e Esri World Street Map como alternativa
+de ruas. Após três erros na camada ativa, remove o fundo antes de tentar a
+alternativa; se ambas falham, mantém quadras, números e controles sobre base limpa.
+A base de ruas foi conferida visualmente: a alternativa CARTO exigia chave
+e exibia uma marca d’água, conforme a [regra atual do provedor](https://carto.com/basemaps/apikey/),
+e foi substituída por Esri World Street Map.
+Não há chamadas a tile.openstreetmap.org: a política no-referrer do painel
+conflitava com a [exigência de Referer daquele serviço](https://operations.osmfoundation.org/policies/tiles/). A política de privacidade
+do painel e das imagens internas permanece no-referrer. As atribuições dos
+provedores e escala métrica são exibidas. Entomologia e Censo também usam o novo
+fundo de ruas. Leaflet, geometrias e rótulos são locais; imagens de fundo exigem
+conectividade e disponibilidade dos provedores.
+
+Preparar uma nova versão (Shapely é dependência de preparação, não do servidor):
+
+```powershell
+python scripts/prepare_entomologia_territory.py "C:/caminho/copia-do-mapa.kml"
+node tests/test_field_map_model.js
+node tests/test_sfa_map_layers.js
+```
+
+O atlas é a visão inicial. Equipe, Planejamento, Entomologia, Censo e atualização de dados permanecem disponíveis. Camadas enviadas pela equipe podem ser ativadas no atlas e continuam na visão de visitas. O território é servido pela mesma autorização do painel, com cache privado e no-referrer.
+
+
+## Camadas operacionais e fonte Arboviroses (30/09/2026)
+
+O painel de camadas do atlas consulta sob demanda um projeto completo KML/KMZ,
+enviado em **Atualizar dados → Projeto completo do Google Earth**, com prévia,
+confirmação, autoria, auditoria e opção de desfazer. A fotografia redigida fica
+no banco `EntomologiaImportacao`, tipo `atlas_earth`; nunca no Git ou no HTML
+inicial. A última fotografia ativa vence; desfazê-la restaura a anterior.
+As quadras continuam na base territorial validada separadamente.
+
+As camadas Rotina, Mutirão, Casos Dengue, Larvas e Atendimentos têm controles
+independentes, enquadramento, subcamadas e filtro de mês das pastas. Nomes de
+marcadores e descrições livres são descartados; permanecem geometria original,
+categoria operacional, mês, rótulo da pasta, identificador técnico e eventual
+número SINAN explicitamente rotulado. O mês não é uma data exata de ocorrência.
+Novas alterações no Earth exigem uma nova exportação e envio; a data visível é
+de importação, não de atualização automática do projeto remoto.
+
+Pontos próximos de todas as fontes ativas são agrupados pelo espaço disponível
+na tela. A posição do agrupamento é um ponto original, sem média geográfica ou
+deslocamento dos dados. Os anéis mostram a proporção das camadas, e o clique
+abre a composição e os elementos; duplo clique aproxima. Agrupamentos e rótulos
+de quadra reservam espaço entre si. Contagens são elementos do arquivo, não
+pessoas, imóveis ou visitas únicos; fontes não são deduplicadas por proximidade.
+
+A planilha fornecida (`15UdUxNhuL3VUNpJr_iEiiWTVM-rlKtVcGPeY9jSFJ_E`,
+gid `1339975360`) é lida pelo servidor com as credenciais Google existentes do
+SFA, escopo somente leitura, ao ativar **Registros da planilha**. A consulta tem
+cache de 90 segundos e atualização manual. O gid, os cabeçalhos utilizados e o
+limite de 10 mil linhas são conferidos antes da leitura. Essa consulta não
+executa a sincronização SINAN nem cria pacientes, ações ou notificações.
+
+O atlas recebe somente linha de origem, chave SINAN, agravo, datas de notificação
+e sintomas, exame, resultado, resultado final e classificação. Nome, endereço,
+telefone, nascimento e campos livres não são enviados ao atlas. Uma geometria
+só é atribuída se houver exatamente uma linha e um ponto clínico do Earth com
+o mesmo SINAN explícito. Duplicatas e ausência de chave ficam sem posição, em
+lista filtrável com acesso a todas as linhas e link para a fonte. Não há
+geocodificação de endereços ou correspondência por nome.
+
+Todas as rotas são internas, com `private, no-store` e `no-referrer`.
+Casos Dengue e a consulta da planilha exigem o acesso completo já existente do
+SFA. O papel adicional Combate à dengue recebe somente as camadas operacionais.
+A indisponibilidade de uma fonte não remove as outras camadas ou o território.
+
+
+## Editor compartilhado do atlas (1º de outubro de 2026)
+
+O botão **Editar atlas** abre a tabela da camada selecionada. A equipe pode
+criar, duplicar e renomear camadas, escolher sua cor, cadastrar e corrigir
+registros, mover pontos, desenhar trajetos e polígonos, excluir dados incorretos
+e exportar a tabela CSV ou a geometria GeoJSON. Registros sem posição confirmada
+ficam na tabela, sem receber coordenadas estimadas.
+
+As edições usam o banco do atlas. Não escrevem na planilha Google nem no projeto
+Earth. O comando **Copiar planilha**, exclusivo de administradores identificados,
+cria uma fotografia dos campos estruturados da consulta (sem nomes, telefones,
+datas de nascimento ou endereços pessoais da fonte). Essa cópia pode ser editada
+e posicionada no atlas; a consulta ao vivo da fonte continua separada.
+
+Cada gravação registra a conta, o horário, o motivo e a versão anterior em
+`entomologia_importacao`, tipo `atlas_edit`, e na auditoria SFA. A exclusão é
+recuperável. Restaurar uma versão cria outra revisão e preserva a atual. O
+histórico exibe as 100 revisões mais recentes; as demais continuam no banco.
+As fontes originais permanecem intactas. Alterações locais em camadas Earth
+prevalecem sobre novas importações até restaurar a fonte original.
+
+Escritas exigem conta identificada, CSRF e o papel já existente de administrador
+ou Combate à dengue. Camadas clínicas só podem ser editadas por administradores.
+Um token de consulta não autoriza gravações. O atlas usa a renovação CSRF já
+existente; gravações HTTPS enviam somente a origem do site como referência,
+sem dados da URL, mantendo a validação estrita de mesma origem. A versão enviada pelo formulário
+deve coincidir com a atual; conflito retorna 409, preservando o formulário.
+Um bloqueio transacional PostgreSQL serializa gravações, inclusive a primeira
+edição de uma camada da fonte, entre threads e dynos. O histórico do editor não
+pode ser alterado pelas rotas antigas de confirmação/desfazer importação.
+
+A busca consulta somente o atlas e a referência urbana local OpenStreetMap.
+Nenhum termo de busca ou endereço é transmitido a um geocodificador externo.
+Nomes numéricos e por extenso são conciliados (Rua 2 / Rua Dois); trechos da mesma
+via são reunidos para consulta. Um trecho de rua não localiza automaticamente
+o número de um imóvel. Endereços e entradas precisam ser conferidos no campo.
+O recorte OSM de 1º/10/2026 tem 1.197 geometrias de vias nomeadas e 69 equipamentos
+ou parques. Cobertura e nomes seguem a fonte; não constituem cadastro oficial
+completo. Licença ODbL e atribuição OpenStreetMap aparecem no mapa.
+
+Os dois PDFs fornecidos ficam em rotas protegidas de consulta, preservados byte
+por byte e identificados pelo SHA-256 no manifesto. O mapa de imóveis públicos
+traz referência 2017/2018; o arquivo da base urbana foi atualizado em 2025, com
+escala 1:10.000. A medida de desenho `/RL` do PDF urbano não é uma transformação
+geográfica. Nenhuma folha foi esticada ou sobreposta ao satélite sem validação
+de pontos de controle. A base das quadras e os limites IBGE permanecem referências
+territoriais separadas do editor de registros.
+
+
+## Casas dos condomínios e zoom com mouse (1º de outubro de 2026)
+
+A roda do mouse controla o zoom do atlas, inclusive em tela cheia. Duas camadas
+operacionais iniciam ativas: Casas · Condomínio Quebec e Casas · Condomínio Torino.
+Cada uma contém as casas 1 a 197 e as alamedas 01 a 07 transcritas dos croquis
+`mapa-07.jpg` e `mapa-08.jpg`. O endereço é interno ao condomínio; não representa
+numeração de portaria nem endereço postal oficial. Não há dados de moradores.
+
+Os pontos são estimativas cartográficas interpoladas nas quadras 899A–F/SC103
+e 900A–F/SC104 do território operacional. Cada registro informa essa precisão,
+a quadra e o arquivo de origem. Conferir o imóvel e a entrada em campo antes de
+usá-los como coordenadas exatas. A equipe pode corrigir endereço, nome e posição
+pelo editor já existente, com revisão, auditoria e restauração.
+
+Em zoom distante, um cartão por condomínio permite aproximar. A partir de zoom
+18 aparecem pontos e números, com seleção por espaço disponível para evitar
+sobreposição. A aproximação revela os demais números. Alamedas recebem rótulos
+quando houver espaço; clicar ou passar o mouse numa casa mostra seu endereço.
+Os atalhos Quebec/Torino enquadram cada condomínio. Essas camadas podem ser
+ocultadas e filtradas por alameda; não usam os filtros clínicos de mês.
+A busca reconhece “Quebec, Alameda 02, Casa 01” sem confundir o número da casa
+com o número da alameda.
+
+A fonte gerada fica em `atlas-referencias/condominios.json`, incluindo hashes dos
+dois croquis e do território usado. Regeneração:
+`python scripts/prepare_entomologia_condominios.py --data services/data/entomologia --output services/data/entomologia/atlas-referencias/condominios.json`.
+Testes conferem transcrição completa, pontos dentro das quadras, procedência,
+busca, edições compartilhadas e colisões dos rótulos.
+
+A base satélite utiliza imagens até o nível nativo 18, ampliadas nos zooms
+19–21: o nível 19 do provedor devolvia tiles com “Map data not yet available”
+nessa região. O zoom continua até 21, com os rótulos e pontos em resolução de tela.
+
+
+## Pastas, períodos e conferência de posições (1º de outubro de 2026)
+
+O importador Earth v2 preserva a árvore completa, inclusive pastas vazias,
+com identificadores e coordenadas originais. A cópia de 2026 de 1º de outubro
+contém 2.350 elementos, 214 pastas, 1.015 endereços reconhecíveis e 1.005 datas
+explícitas. Endereços são fragmentos limitados de logradouro e número; nomes
+de pessoas, telefones e texto clínico livre dos marcadores não são importados.
+O ano da pasta/projeto é informado separadamente quando não há dia. Um intervalo
+de datas exclui os registros sem data, sem inventar uma visita no primeiro dia
+do mês. As referências permanentes e casas não seguem o filtro temporal.
+
+Cada ramo tem expansão, seleção parcial, contagem e enquadramento. No editor
+pode-se criar, renomear ou mover pastas, com até 12 níveis, e mover até 500
+registros entre pastas da mesma camada por operação. A movimentação conserva
+endereço, datas e geometria. Pastas só podem ser excluídas vazias; versões e
+exclusões continuam recuperáveis no histórico. Ciclos, pastas de outra camada
+e gravações com revisão antiga são rejeitados. Pastas clínicas mantêm o controle
+de acesso da camada. Reimportações e revisões antigas recuperam metadados
+compatíveis por identificador, sem desfazer posições corrigidas ou exclusões.
+
+A conferência usa apenas as ruas OSM locais, quadras operacionais e as casas
+atuais cadastradas nos condomínios, incluindo correções da equipe. Ela sinaliza
+endereço ausente, falta de correspondência do logradouro, distância de mais de
+60 m da rua declarada, ponto fora do entorno e divergência entre setor da pasta
+e quadra. Distância da via não determina número de casa ou entrada. A equipe
+pode filtrar pendências, abrir o registro, arrastar um marcador visível no mapa,
+consultar a referência e salvar a correção com motivo. A adoção de uma referência
+de casa exige conferência; nenhum ponto é deslocado automaticamente.
+
+A situação distingue posição importada, estimada, a conferir, entrada conferida
+e sem posição. Alterar coordenadas invalida a conferência anterior até a equipe
+confirmá-la. Consultas de conferência, inclusive rascunhos, não alteram o banco
+nem enviam endereços a terceiros. CSRF estrito, autorização, bloqueio de escrita,
+auditoria e histórico são os mesmos do editor compartilhado.
