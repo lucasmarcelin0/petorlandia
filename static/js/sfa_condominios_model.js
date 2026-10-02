@@ -3,12 +3,12 @@
   else root.SfaCondominiosModel=factory();
 })(typeof self!=='undefined'?self:this,function(){
   'use strict';
-  function isHouse(f){return ['condominium_house','cadastre_house'].includes(f.properties?.kind)||f.atlasEntry?.origin?.type==='condominium';}
+  function isHouse(f){return ['condominium_house','cadastre_house','cnefe_house'].includes(f.properties?.kind)||(f.properties?.position_status==='verified'&&['101','102'].includes(f.properties?.cnefe_building_type)&&!!f.properties?.house_number)||f.atlasEntry?.origin?.type==='condominium';}
   function number(f){
     const p=f.properties||{}, edited=String(p.name||p.label||'').match(/^(?:Casa|N[ºo.]?)\s+(\d+[A-Za-z]?)(?:\s+·.*)?$/i);
-    return edited?edited[1]:String(p.house_number||'');
+    return p.number_edited||p.kind==='cnefe_house'?String(p.house_number||''):edited?edited[1]:String(p.house_number||'');
   }
-  function shortLabel(f){const value=number(f);return value?value.padStart(2,'0'):'•';}
+  function shortLabel(f){const value=number(f);return value?(f.properties?.kind==='condominium_house'?value.padStart(2,'0'):value):'•';}
   function street(f){return String(f.properties?.address||'').match(/\bAlameda\s+(\d+)/i)?.[0]||f.properties?.category||'';}
   function overview(features){
     const groups=new Map();

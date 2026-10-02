@@ -25,7 +25,7 @@
           const f=item.feature,p=f.properties;
           button(p.name||p.label||item.layer_title,[p.address,item.layer_title,item.located?(f.geometry.type==='Point'?'Ponto cadastrado':'Trecho / referência no mapa'):'Sem posição · consultar cadastro'].filter(Boolean).join(' · '),()=>{
             preview.clearLayers();
-            if(f.geometry){const layer=L.geoJSON(f,{style:{color:'#fff',weight:5,fillOpacity:.2},pointToLayer:(_,coords)=>L.circleMarker(coords,{radius:10,color:'#fff',fillColor:'#087f81',fillOpacity:1})}).addTo(preview);const bounds=layer.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[45,45],maxZoom:19});open(false);}
+            if(f.geometry){const layer=L.geoJSON(f,{style:{color:'#fff',weight:5,fillOpacity:.2},pointToLayer:(_,coords)=>L.circleMarker(coords,{radius:10,color:'#fff',fillColor:'#087f81',fillOpacity:1})}).addTo(preview);const bounds=layer.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[45,45],maxZoom:19});map.fire('atlasfocusfeature',{layerId:item.layer_id,featureId:f.id});open(false);}
             else if(p.cadastre_ref){window.SfaCadastreViewer.open(dataset,p.cadastre_ref,item.layer_id,f.id);open(false);}
             else{const b=document.createElement('button');b.type='button';b.dataset.atlasLayer=item.layer_id;b.dataset.atlasFeature=f.id;b.hidden=true;document.body.append(b);b.click();b.remove();open(false);}
           });count++;

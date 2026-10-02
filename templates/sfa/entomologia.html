@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261002-croqui') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261002-cnefe') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_condominios.css', v='20261002-atlas') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_folders.css', v='20261002-atlas') }}">
@@ -170,7 +170,7 @@
       </form>
       <div class="field-body">
         <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div id="editor-map-tools" class="editor-map-tools" hidden><span>Arraste o marcador para ajustar a entrada. A posição só será gravada ao salvar o registro.</span><button type="button" id="editor-finish-position">Voltar ao formulário</button></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
-        <aside class="field-rail" aria-label="Camadas e informações do território"><nav class="atlas-rail-nav" aria-label="Atalhos do atlas"><button type="button" data-atlas-panel="atlas-layer-controls">Camadas</button><button type="button" data-atlas-panel="atlas-hotspots">Ocorrências</button><button type="button" data-atlas-panel="atlas-cadastre-section">Cadastro</button></nav>
+        <aside class="field-rail" aria-label="Camadas e informações do território"><nav class="atlas-rail-nav" aria-label="Atalhos do atlas"><button type="button" data-atlas-panel="atlas-layer-controls">Camadas</button><button type="button" data-atlas-panel="atlas-hotspots">Ocorrências</button><button type="button" data-atlas-panel="atlas-address-section">Endereços</button></nav>
 
           <section id="atlas-hotspots" class="atlas-hotspots"><div class="ento-eyebrow">ÁREAS COM OCORRÊNCIAS</div><h3>Concentração por quadra</h3><p>Veja onde se concentram os registros no período selecionado.</p><label><input type="checkbox" id="atlas-hot-larvae"><span>Registros de larvas<small>Ocorrências da camada Larvas</small></span></label><label><input type="checkbox" id="atlas-hot-cases"><span>Dengue positivo<small>Somente registros rotulados positivos</small></span></label>            <details class="atlas-source-group"><summary>Período e resultados</summary><div class="atlas-filter-grid">
               <div class="atlas-full"><label for="atlas-month">Mês</label><select id="atlas-month"><option value="">Todos os meses</option>{% for n, month in [(1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),(5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),(9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')] %}<option value="{{ '%02d'|format(n) }}">{{ month }}</option>{% endfor %}<option value="unknown">Sem mês informado</option></select></div>
@@ -182,6 +182,7 @@
               <div class="atlas-full"><label for="atlas-classification">Classificação do caso (planilha)</label><select id="atlas-classification"><option value="">Todas as classificações</option></select></div><button id="atlas-clear-filters" type="button" class="atlas-small-button atlas-full">Limpar filtros das camadas</button>
             </div><p class="atlas-source-note">O mês do Earth vem das pastas. Ano e intervalo usam as datas explícitas dos registros; registros sem dia continuam selecionáveis por pasta, mês e ano. Resultados filtram a planilha. Ruas, casas e quadras permanecem como referência.</p></details><div id="atlas-hot-legend" hidden><small class="atlas-hot-caption">Registros por quadra</small><div class="atlas-hot-scale"><span style="--hot-color:#f5bb66">1</span><span style="--hot-color:#ee8328">2–4</span><span style="--hot-color:#a92e38">5+</span></div><p id="atlas-hot-status" role="status"></p><small>Contagem de registros da equipe; não é índice de infestação nem taxa de incidência. Pontos sem quadra única ficam fora da coloração.</small></div></section>
           {% include 'sfa/_atlas_editor.html' %}
+          <section id="atlas-address-section"><div class="ento-eyebrow">NUMERAÇÃO DOS IMÓVEIS</div><h3>Endereços no satélite</h3><label class="atlas-address-toggle"><input type="checkbox" id="atlas-address-toggle"><span>Mostrar endereços e números<small>Referência pública do IBGE · Censo 2022</small></span></label><p id="atlas-address-summary" class="atlas-source-note" role="status"></p><details class="atlas-source-group"><summary>Escolher bairros e ruas</summary><div id="atlas-address-list"></div></details><p class="atlas-source-note">Números aparecem ao aproximar. Posições originais da fonte não significam entrada conferida hoje. Coordenadas estimadas ou incompatíveis permanecem sem posição no atlas, para revisão.</p></section>
           <section id="atlas-cadastre-section"><details class="atlas-source-group"><summary>Cadastro municipal · números e CEP</summary><p class="atlas-source-note">Croquis das quadras e números de imóveis para conferência. Setores cadastrais e SC de campo usam códigos diferentes. Os números só aparecem no satélite depois de a equipe confirmar a posição.</p><p id="atlas-cadastre-summary" class="atlas-source-note" role="status"></p><div id="atlas-cadastre-list"></div></details></section>
           <section><details class="atlas-source-group"><summary>Fundo e contornos do mapa</summary><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></details></section>
           <section id="atlas-layer-controls" class="atlas-controls" aria-labelledby="atlas-layers-title">
@@ -218,16 +219,16 @@
 <script src="{{ url_for('static', filename='js/sfa_entomologia_model.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_map_layers.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map_model.js', v='20260930') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_condominios_model.js', v='20261002-atlas') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_condominios.js', v='20261002-atlas') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_condominios_model.js', v='20261002-cnefe') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_condominios.js', v='20261002-cnefe') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_folders_model.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_folders.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_hotspots_model.js', v='20261002') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_cadastre_viewer.js', v='20261002-croqui') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261002') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261002-atlas') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-atlas') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261002-cnefe') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261002-cnefe') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-cnefe') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 {% endblock %}

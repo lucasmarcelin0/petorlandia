@@ -20,7 +20,7 @@
       if(!visible.length)return;
       const zoom=map.getZoom(),size=map.getSize();
       if(zoom<18){
-        let groups=M.overview(all), merged=[];
+        let groups=M.overview(visible), merged=[];
         // Nearby condominiums share one overview card until the map has room.
         groups.forEach(g=>{const p=project(g.coordinates),same=merged.find(m=>Math.abs(project(m.coordinates).x-p.x)<145&&Math.abs(project(m.coordinates).y-p.y)<45);
           if(same){same.names.push(g.name);same.items.push(...g.items);same.coordinates=M.overview(same.items.map(f=>({...f,atlasEntry:{...f.atlasEntry,id:'merged'}})))[0].coordinates;}

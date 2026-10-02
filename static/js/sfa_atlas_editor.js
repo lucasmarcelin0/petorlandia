@@ -1,7 +1,7 @@
 (function(){
   'use strict';
   const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fields=['name','address','category','date','status','notes','precision','sinan','disease','notification_date','symptoms_date','exam','exam_result','final_result','classification','folder_id','position_status','period_year'];
+  const fields=['name','house_number','address','category','date','status','notes','precision','sinan','disease','notification_date','symptoms_date','exam','exam_result','final_result','classification','folder_id','position_status','period_year'];
   const normalize=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   window.SfaAtlasEditor={attach(map,dataset){
     const urls=dataset.editor_urls, editable=$('atlas-collaboration').dataset.editor==='1',clinicalEditor=$('atlas-collaboration').dataset.clinicalEditor==='1';

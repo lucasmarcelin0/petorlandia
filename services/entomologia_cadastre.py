@@ -2,7 +2,7 @@
 from functools import lru_cache
 import json
 TIPO='atlas_cadastre'
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)
 def decode(encoded):
     data=json.loads(encoded)
     if data.get('encoding')=='gzip-base64':
@@ -11,15 +11,17 @@ def decode(encoded):
         if hashlib.sha256(raw).hexdigest()!=data['sha256']:raise ValueError('Referência cadastral corrompida.')
         return json.loads(raw)
     return data
-def active():
+def active():return active_record(TIPO)
+
+def active_record(kind):
     from models.entomologia import EntomologiaImportacao as E
     from services.entomologia_service import consultar_sem_interromper
-    row=consultar_sem_interromper(lambda:E.query.filter_by(tipo=TIPO,status='ATIVA').with_entities(E.id,E.sha256).order_by(E.id.desc()).first())
+    row=consultar_sem_interromper(lambda:E.query.filter_by(tipo=kind,status='ATIVA').with_entities(E.id,E.sha256).order_by(E.id.desc()).first())
     if not row:return {'layers':[],'drawings':{},'source':{}}
     from flask import current_app
     return imported(row.id,row.sha256,str(current_app.config.get('SQLALCHEMY_DATABASE_URI','')))
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)
 def imported(row_id,digest,database):
     from extensions import db
     from models.entomologia import EntomologiaImportacao as E

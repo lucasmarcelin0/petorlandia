@@ -79,6 +79,11 @@ def register(bp, require_access, clinical_access):
         if not data:abort(404)
         return reply(data)
 
+    @bp.route('/entomologia/atlas/enderecos')
+    @require_access
+    def atlas_cnefe_layers():
+        return reply({'layers':[{'id':layer['id'],'features':layer['features']} for layer in service.layers(clinical_access()).values() if layer['origin']['type']=='cnefe']})
+
     @bp.route('/entomologia/atlas/busca')
     @require_access
     def atlas_place_search():
