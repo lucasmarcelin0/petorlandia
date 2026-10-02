@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261002-atlas') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261002-croqui') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_condominios.css', v='20261002-atlas') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_folders.css', v='20261002-atlas') }}">
@@ -200,7 +200,7 @@
         </aside>
       </div>
       {% include 'sfa/_atlas_editor_panel.html' %}
-      <dialog id="atlas-cadastre-dialog" class="atlas-cadastre-dialog" aria-labelledby="atlas-cadastre-title"><header><div><small>REFERÊNCIA CADASTRAL</small><h3 id="atlas-cadastre-title">Croqui da quadra</h3></div><button type="button" id="atlas-cadastre-close">Fechar</button></header><p id="atlas-cadastre-note" role="status"></p><div id="atlas-cadastre-map" role="region" aria-label="Croqui cadastral com números dos imóveis"></div><footer>Rode o mouse para aproximar. Clique em um número para consultar ou posicionar o registro no atlas. O croqui conserva as coordenadas locais do desenho e não está alinhado ao satélite.</footer></dialog>
+      <dialog id="atlas-cadastre-dialog" class="atlas-cadastre-dialog" aria-labelledby="atlas-cadastre-title"><header><div><small>REFERÊNCIA CADASTRAL</small><h3 id="atlas-cadastre-title">Croqui da quadra</h3></div><div class="editor-buttons"><button type="button" id="atlas-cadastre-fit">Ver quadra inteira</button><button type="button" id="atlas-cadastre-close">Fechar</button></div></header><p id="atlas-cadastre-note" role="status"></p><div id="atlas-cadastre-map" role="region" aria-label="Croqui cadastral com números dos imóveis"></div><footer>Rode o mouse para aproximar. Clique em um número para consultar ou posicionar o registro no atlas. O croqui conserva as coordenadas locais do desenho e não está alinhado ao satélite.</footer></dialog>
       <div class="field-status-line"><span id="field-count" role="status">Preparando camadas…</span><span id="field-base-status" role="status"></span></div>
     </section>
     <p class="field-source-note">Quadras: referência operacional da equipe, com coordenadas preservadas. Correspondência com os mapas em papel e limites censitários a conferir. A imagem de satélite não é uma medição cadastral.</p>
@@ -224,7 +224,7 @@
 <script src="{{ url_for('static', filename='js/sfa_atlas_folders.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers_model.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_hotspots_model.js', v='20261002') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_cadastre_viewer.js', v='20261002') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_cadastre_viewer.js', v='20261002-croqui') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261002') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261002-atlas') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-atlas') }}"></script>
