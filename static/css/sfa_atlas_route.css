@@ -59,3 +59,14 @@
 @keyframes atlas-route-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes atlas-route-pulse{0%{box-shadow:0 2px 8px #0006,0 0 0 0 #1c7ed688}70%{box-shadow:0 2px 8px #0006,0 0 0 14px #1c7ed600}100%{box-shadow:0 2px 8px #0006,0 0 0 0 #1c7ed600}}
 @media (prefers-reduced-motion:reduce){.atlas-route-stop,.atlas-route-pin.is-gps span{animation:none}.atlas-route-tools button,.atlas-route-actions button{transition:none}}
+
+/* Iniciar navegação */
+.atlas-route-go{display:flex;flex-direction:column;gap:7px;margin:10px 0 4px}
+.atlas-route-go button{min-height:46px;padding:8px 14px;border:1px solid #b9cdd1;border-radius:10px;background:#fff;color:#21525a;font-size:.8rem;font-weight:700;cursor:pointer;transition:background .15s ease,transform .12s ease}
+.atlas-route-go button:hover:not(:disabled),.atlas-route-go button:focus-visible{background:#e9f5ef;outline:0}
+.atlas-route-go button:active:not(:disabled){transform:scale(.98)}
+.atlas-route-go button:disabled{opacity:.45;cursor:default}
+.atlas-route-go #atlas-route-nav{min-height:52px;font-size:.92rem;background:#1c7ed6;border-color:#1c7ed6;color:#fff;box-shadow:0 4px 14px #1c7ed644}
+.atlas-route-go #atlas-route-nav:hover:not(:disabled),.atlas-route-go #atlas-route-nav:focus-visible{background:#1a6fbd}
+.atlas-route-go #atlas-route-nav:disabled{background:#9dc3e6;border-color:#9dc3e6;box-shadow:none}
+.atlas-route-go small{font-size:.66rem;line-height:1.45;color:#64777d;text-align:center}

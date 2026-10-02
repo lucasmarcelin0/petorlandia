@@ -12,7 +12,7 @@
     const panel=$('atlas-route'),Model=window.SfaAtlasRouteModel,urls=dataset.editor_urls;
     if(!panel||!Model||!urls.street_network)return {addStop(){}};
     const list=$('atlas-route-list'),empty=$('atlas-route-empty'),summary=$('atlas-route-summary'),notice=$('atlas-route-notice'),links=$('atlas-route-links');
-    const buttons={here:$('atlas-route-here'),optimize:$('atlas-route-optimize'),fit:$('atlas-route-fit'),copy:$('atlas-route-copy'),clear:$('atlas-route-clear'),foot:$('atlas-route-foot'),motor:$('atlas-route-motor')};
+    const buttons={here:$('atlas-route-here'),optimize:$('atlas-route-optimize'),fit:$('atlas-route-fit'),copy:$('atlas-route-copy'),clear:$('atlas-route-clear'),foot:$('atlas-route-foot'),motor:$('atlas-route-motor'),nav:$('atlas-route-nav'),sim:$('atlas-route-sim')};
     let stops=[],plan=null,mode='foot',graphPromise=null,run=0,focusAfter=null,computing=null;
     map.createPane('atlas-route').style.zIndex=640;
     const layer=L.layerGroup().addTo(map);
@@ -144,6 +144,8 @@
 
       const has=stops.length>0,two=stops.length>=2;
       buttons.optimize.disabled=stops.length<3;buttons.fit.disabled=!has;buttons.copy.disabled=!has;buttons.clear.disabled=!has;
+      const places=stops.filter(s=>!s.gps).length;                       // a posição de partida vem do GPS na hora de navegar
+      buttons.nav.disabled=places<1;buttons.sim.disabled=places<2;
       ['foot','motor'].forEach(m=>{buttons[m].setAttribute('aria-pressed',String(mode===m));buttons[m].classList.toggle('is-on',mode===m);});
       renderSummary(two);renderLinks(two);renderChip();
     }
@@ -249,8 +251,13 @@
     buttons.here.onclick=here;buttons.optimize.onclick=optimize;buttons.fit.onclick=fitRoute;buttons.copy.onclick=copy;buttons.clear.onclick=clearAll;
     ['foot','motor'].forEach(m=>buttons[m].onclick=()=>{mode=m;save();render();});
 
+    // Navegação em tela cheia (mapa girando, voz). A partida é a posição do aparelho; na simulação, a 1ª parada.
+    const navigation=window.SfaAtlasNav?window.SfaAtlasNav.attach(map,{graph,stops:()=>stops.filter(s=>!s.gps),mode:()=>mode,onExit:()=>render()}):null;
+    buttons.nav.onclick=()=>{if(navigation)navigation.start({simulate:false});};
+    buttons.sim.onclick=()=>{if(navigation)navigation.start({simulate:true});};
+
     restore();render();
     if(stops.length)compute();
-    return {addStop,get stops(){return stops.slice();},get plan(){return plan;},ready:()=>computing};
+    return {addStop,get stops(){return stops.slice();},get plan(){return plan;},ready:()=>computing,navigation};
   }};
 })();

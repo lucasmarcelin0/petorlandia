@@ -6,9 +6,13 @@ navegador: nenhum endereço, paciente ou ponto da rota é enviado a um serviço
 externo de rotas.
 
 Formato (inteiros em micrograus, para a resposta ficar pequena):
-    {"v": 1, "nodes": [x0, y0, x1, y1, ...], "edges": [a0, b0, a1, b1, ...]}
+    {"v": 2, "nodes": [x0, y0, x1, y1, ...], "edges": [a0, b0, a1, b1, ...],
+     "names": ["Rua Um", ...], "en": [n0, n1, ...]}
 ``nodes`` guarda longitude e latitude de cada ponto; ``edges`` guarda pares de
-índices de pontos ligados por um trecho de rua.
+índices de pontos ligados por um trecho de rua. ``names`` é a lista de nomes de
+rua sem repetição e ``en`` traz, para cada trecho (na mesma ordem de ``edges``), o
+índice do nome em ``names`` (-1 quando o trecho não tem nome, como as ligações
+curtas entre ilhas). Os nomes alimentam as instruções da navegação.
 """
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ import json
 import math
 
 MICRO = 1_000_000
+# Vias que ainda não existem para quem anda ou dirige: não entram na malha de rotas.
+NOT_BUILT = {'proposed', 'construction', 'razed', 'abandoned', 'planned'}
 # Ilhas de ruas a menos disso uma da outra são ligadas por um trecho curto: o OpenStreetMap
 # desenha muitos cruzamentos (e a ligação com rodovias) sem um ponto em comum, e sem isso a
 # rota entre duas ruas de verdade cairia em linha reta.
@@ -41,6 +47,7 @@ def _lines(geometry):
 def build(features):
     """Monta a malha a partir de feições GeoJSON; só linhas viram trechos de rua."""
     index, nodes, seen, edges = {}, [], set(), []
+    names, name_index, edge_names = [], {}, []
 
     def node(position):
         key = (round(position[0] * MICRO), round(position[1] * MICRO))
@@ -51,6 +58,11 @@ def build(features):
         return found
 
     for feature in features:
+        properties = feature.get('properties') or {}
+        if str(properties.get('category') or '').lower() in NOT_BUILT:
+            continue
+        label = str(properties.get('name') or properties.get('label') or '').strip()
+        label_id = -1
         for line in _lines(feature.get('geometry')):
             previous = None
             for position in line:
@@ -60,9 +72,17 @@ def build(features):
                     if pair not in seen:
                         seen.add(pair)
                         edges.extend(pair)
+                        if label and label_id < 0:     # o nome só entra se a feição virou trecho
+                            label_id = name_index.get(label)
+                            if label_id is None:
+                                label_id = name_index[label] = len(names)
+                                names.append(label)
+                        edge_names.append(label_id)
                 previous = current
-    edges.extend(_bridges(nodes, edges))
-    return {'v': 1, 'nodes': nodes, 'edges': edges}
+    bridges = _bridges(nodes, edges)
+    edges.extend(bridges)
+    edge_names.extend([-1] * (len(bridges) // 2))
+    return {'v': 2, 'nodes': nodes, 'edges': edges, 'names': names, 'en': edge_names}
 
 
 def _meters(nodes, a, b):

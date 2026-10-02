@@ -30,11 +30,13 @@
     for (let e = 0; e < m; e++) { start[payload.edges[2 * e] + 1]++; start[payload.edges[2 * e + 1] + 1]++; }
     for (let i = 0; i < n; i++) start[i + 1] += start[i];
     const to = new Uint32Array(2 * m), w = new Float32Array(2 * m), fill = start.slice(0, n);
+    const named = payload.names || [], label = new Int32Array(2 * m).fill(-1);   // nome da rua de cada trecho
     for (let e = 0; e < m; e++) {
       const a = payload.edges[2 * e], b = payload.edges[2 * e + 1];
       const d = distance(lat[a], lng[a], lat[b], lng[b]);
-      to[fill[a]] = b; w[fill[a]++] = d;
-      to[fill[b]] = a; w[fill[b]++] = d;
+      const nameId = payload.en && payload.en[e] !== undefined ? payload.en[e] : -1;
+      to[fill[a]] = b; label[fill[a]] = nameId; w[fill[a]++] = d;
+      to[fill[b]] = a; label[fill[b]] = nameId; w[fill[b]++] = d;
     }
     // Componentes conexos: ruas que não se ligam à malha principal não podem ser destino de rota.
     const comp = new Int32Array(n).fill(-1), sizes = [], stack = [];
@@ -59,8 +61,17 @@
       if (bucket) bucket.push(i); else grid.set(key, [i]);
     }
     const largest = Math.max(0, ...sizes);
-    return {n, m, lng, lat, start, to, w, comp, sizes, grid, usable: Math.min(USABLE_MIN, largest)};
+    return {n, m, lng, lat, start, to, w, comp, sizes, grid, names: named, label, usable: Math.min(USABLE_MIN, largest)};
   }
+
+  // Nome da rua do trecho entre dois pontos ligados ('' quando não há nome).
+  function edgeName(graph, u, v) {
+    for (let k = graph.start[u]; k < graph.start[u + 1]; k++) {
+      if (graph.to[k] === v) return graph.label[k] >= 0 ? (graph.names[graph.label[k]] || '') : '';
+    }
+    return '';
+  }
+  const degree = (graph, u) => graph.start[u + 1] - graph.start[u];
 
   function cellKey(lng, lat) {
     return Math.floor((lng + 180) / CELL) * 1000003 + Math.floor((lat + 90) / CELL);
@@ -158,7 +169,7 @@
         if (Number.isFinite(result.dist[sb.node])) {
           const nodes = pathNodes(result.prev, sa.node, sb.node);
           const path = [[a.lat, a.lng], ...nodes.map(k => [graph.lat[k], graph.lng[k]]), [b.lat, b.lng]];
-          leg = {distance: sa.distance + result.dist[sb.node] + sb.distance, path, connected: true};
+          leg = {distance: sa.distance + result.dist[sb.node] + sb.distance, path, nodes, connected: true};
         }
       }
       if (!leg) {
@@ -268,5 +279,5 @@
   }
 
   return {distance, createGraph, nearest, shortest, plan, optimizeOrder, matrix, minutes, formatDistance,
-          formatDuration, googleMapsLinks, SPEEDS, EXACT_LIMIT};
+          formatDuration, googleMapsLinks, edgeName, degree, SPEEDS, EXACT_LIMIT};
 });
