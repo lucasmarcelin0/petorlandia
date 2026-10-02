@@ -51,3 +51,20 @@ def test_versoes_dos_arquivos_alterados_foram_trocadas_no_template(client):
                           ('sfa_atlas_nav.js', '20261003-nav'), ('sfa_atlas_nav_model.js', '20261003-nav'),
                           ('sfa_atlas_nav.css', '20261003-nav'), ('sfa_atlas_route.css', '20261003-nav')):
         assert re.search(re.escape(name) + r'\?v=' + re.escape(version), html), name
+
+
+def test_menu_lateral_do_celular_nao_e_sobrescrito_pelo_css_do_atlas():
+    # Regra antiga (<=767px) deixava o menu "relative" com 180px: sobrava um vazio no topo e a gaveta aparecia cortada.
+    css = (ROOT / 'static' / 'css' / 'sfa_entomologia.css').read_text(encoding='utf-8')
+    assert not re.search(r'\.sfa-sidebar\s*\{[^}]*position\s*:\s*relative', css)
+    assert not re.search(r'\.sfa-header\s*\{[^}]*position\s*:\s*relative', css)
+
+
+def test_paineis_do_atlas_em_sanfona_estao_na_tela(client):
+    html = _page(client)
+    for marker in ('sfa_atlas_accordion.js', 'sfa_atlas_accordion.css', 'id="atlas-basemap-section"', 'id="atlas-areas-section"'):
+        assert marker in html, marker
+    assert html.index('sfa_field_map.js') < html.index('sfa_atlas_accordion.js')
+    # Cada atalho aponta para um painel que existe.
+    for target in re.findall(r'data-atlas-panel="([a-z0-9-]+)"', html):
+        assert f'id="{target}"' in html, target

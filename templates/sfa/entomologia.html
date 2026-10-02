@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_folders.css', v='20261002-atlas') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_route.css', v='20261003-nav') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_nav.css', v='20261003-nav') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_accordion.css', v='20261004-acordeao') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
@@ -172,7 +173,7 @@
       </form>
       <div class="field-body">
         <div class="field-map-stage"><div id="field-map" role="region" aria-label="Mapa de satélite com quadras e setores de campo de Orlândia"></div><div id="editor-map-tools" class="editor-map-tools" hidden><span>Arraste o marcador para ajustar a entrada. A posição só será gravada ao salvar o registro.</span><button type="button" id="editor-finish-position">Voltar ao formulário</button></div><div class="field-map-caption"><span class="field-north" aria-label="Norte para cima">↑ N</span><span id="field-zoom-note">Aproxime para ver os números das quadras</span></div></div>
-        <aside class="field-rail" aria-label="Camadas e informações do território"><nav class="atlas-rail-nav" aria-label="Atalhos do atlas"><button type="button" data-atlas-panel="atlas-route">Rota</button><button type="button" data-atlas-panel="atlas-layer-controls">Camadas</button><button type="button" data-atlas-panel="atlas-hotspots">Ocorrências</button><button type="button" data-atlas-panel="atlas-address-section">Endereços</button></nav>
+        <aside class="field-rail" aria-label="Camadas e informações do território"><nav class="atlas-rail-nav" aria-label="Atalhos do atlas"><button type="button" data-atlas-panel="atlas-route">Rota</button><button type="button" data-atlas-panel="atlas-layer-controls">Camadas</button><button type="button" data-atlas-panel="atlas-hotspots">Ocorrências</button><button type="button" data-atlas-panel="atlas-address-section">Endereços</button><button type="button" data-atlas-panel="atlas-cadastre-section">Cadastro</button><button type="button" data-atlas-panel="atlas-basemap-section">Fundo do mapa</button><button type="button" data-atlas-panel="atlas-collaboration">Editar</button><button type="button" data-atlas-panel="field-selection">Quadra</button><button type="button" data-atlas-panel="atlas-areas-section">Áreas</button></nav>
 
           <section id="atlas-route" class="atlas-route" aria-labelledby="atlas-route-title">
             <div class="ento-eyebrow">ROTA DE CAMPO</div><h3 id="atlas-route-title">Roteiro de visitas</h3>
@@ -209,7 +210,7 @@
           {% include 'sfa/_atlas_editor.html' %}
           <section id="atlas-address-section"><div class="ento-eyebrow">NUMERAÇÃO DOS IMÓVEIS</div><h3>Endereços no satélite</h3><label class="atlas-address-toggle"><input type="checkbox" id="atlas-address-toggle"><span>Mostrar endereços e números<small>Referência pública do IBGE · Censo 2022</small></span></label><p id="atlas-address-summary" class="atlas-source-note" role="status"></p><details class="atlas-source-group"><summary>Escolher bairros e ruas</summary><div id="atlas-address-list"></div></details><p class="atlas-source-note">Números aparecem ao aproximar. Posições originais da fonte não significam entrada conferida hoje. Coordenadas estimadas ou incompatíveis permanecem sem posição no atlas, para revisão.</p></section>
           <section id="atlas-cadastre-section"><details class="atlas-source-group"><summary>Cadastro municipal · números e CEP</summary><p class="atlas-source-note">Croquis das quadras e números de imóveis para conferência. Setores cadastrais e SC de campo usam códigos diferentes. Os números só aparecem no satélite depois de a equipe confirmar a posição.</p><p id="atlas-cadastre-summary" class="atlas-source-note" role="status"></p><div id="atlas-cadastre-list"></div></details></section>
-          <section><details class="atlas-source-group"><summary>Fundo e contornos do mapa</summary><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></details></section>
+          <section id="atlas-basemap-section"><details class="atlas-source-group" open><summary>Fundo e contornos do mapa</summary><label for="field-basemap">Fundo do mapa</label><select id="field-basemap"><option value="satellite">Satélite</option><option value="streets">Ruas</option><option value="none">Base limpa</option></select><fieldset class="field-layers"><legend>Camadas</legend><label><input id="field-blocks" type="checkbox" checked><span>Contornos das quadras<small>Cores por área de campo</small></span></label><label><input id="field-numbers" type="checkbox" checked><span>Números e setores<small>Posição ajustada ao zoom</small></span></label><label><input id="field-census" type="checkbox"><span>Limites do IBGE 2022<small>Referência censitária separada</small></span></label></fieldset><fieldset id="field-uploaded-layers" class="field-layers" hidden><legend>Camadas da equipe</legend></fieldset></details></section>
           <section id="atlas-layer-controls" class="atlas-controls" aria-labelledby="atlas-layers-title">
             <div class="atlas-header"><div><div class="ento-eyebrow">FONTES INTEGRADAS</div><h3 id="atlas-layers-title">Camadas do território</h3></div></div>
             <p id="atlas-active-count" class="atlas-active" role="status">Preparando camadas…</p>
@@ -222,7 +223,7 @@
           </section>
 
           <section id="field-selection" aria-live="polite"><div class="ento-eyebrow">CONSULTA DO TERRITÓRIO</div><h3>Escolha uma quadra</h3><p>Clique em um contorno para consultar seu número, setor e área de campo.</p></section>
-          <section><div class="ento-eyebrow">ÁREAS DE CAMPO</div><div id="field-area-legend" class="field-area-legend"></div></section>
+          <section id="atlas-areas-section"><div class="ento-eyebrow">ÁREAS DE CAMPO</div><div id="field-area-legend" class="field-area-legend"></div></section>
         </aside>
       </div>
       {% include 'sfa/_atlas_editor_panel.html' %}
@@ -261,4 +262,5 @@
 <script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-cnefe') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261002-rota') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_accordion.js', v='20261004-acordeao') }}"></script>
 {% endblock %}

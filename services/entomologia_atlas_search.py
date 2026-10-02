@@ -23,6 +23,7 @@ from services import entomologia_atlas_editor as editor
 from services.entomologia_atlas import normalize
 
 RESULT_LIMIT = 80
+INDEX_FORMAT = 'cep-digitos-1'  # muda quando o conteúdo do índice muda sem mudar os dados
 PHRASE_PATTERN = re.compile(r'\b(?:rua|avenida|alameda|travessa|casa) \d+[a-z]?\b')
 HAY_FIELDS = ('name', 'label', 'address', 'category', 'cep', 'neighborhood', 'cadastre_ref',
               'original_street', 'house_number')
@@ -41,6 +42,10 @@ class _Entry:
         self.layer = layer
         self.feature = feature
         hay = editor.search_text(' '.join(str(p.get(k, '')) for k in HAY_FIELDS))
+        # CEP também sem o hífen: "14620110" encontra "14620-110".
+        cep = re.sub(r'\D', '', str(p.get('cep') or ''))
+        if len(cep) == 8:
+            hay += ' ' + cep
         if p.get('kind') == 'cadastre_house':
             hay += ' ' + editor.search_text(
                 'casa ' + str(p.get('house_number', '')) + ' ' + ' '.join(p.get('folder_path', [])))
@@ -270,7 +275,7 @@ def client_index(clinical_allowed):
         rows.append(_compact(members, layer_index))
     body = json.dumps({'layers': layers, 'entries': rows}, ensure_ascii=False, separators=(',', ':'),
                       allow_nan=False)
-    etag = hashlib.sha256((repr(snap.signature) + str(variant) + body[:64]).encode()).hexdigest()[:24]
+    etag = hashlib.sha256((INDEX_FORMAT + repr(snap.signature) + str(variant) + body[:64]).encode()).hexdigest()[:24]
     payload = (body, etag if snap.signature is not None else None)
     if snap.signature is not None:
         with _lock:

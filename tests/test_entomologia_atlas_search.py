@@ -229,6 +229,20 @@ def test_regras_de_producao_cep_cadastro_ordem_e_limite(app, monkeypatch, query)
         assert [i['located'] for i in fast.search('casa', True)][:1] == [True]
 
 
+@pytest.mark.parametrize('query', ['14620010', '14620-010', '14620 010'])
+def test_cep_funciona_so_com_numeros(app, monkeypatch, query):
+    layers = _synthetic_layers()
+    monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
+        k: v for k, v in layers.items() if allowed or not v['clinical']})
+    fast.reset()
+    with app.app_context():
+        names = {i['feature']['properties']['name'] for i in fast.search(query, True)}
+        if query == '14620 010':
+            return  # separado por espaço não é CEP; só não pode quebrar
+        assert {'Casa 12', 'Casa 14'} <= names
+        assert 'Sem posição' not in names  # outro CEP (14620-999) não entra
+
+
 TEXTS = ['Rua Um', 'RUA UM, 12', 'Av. Brasil 100', 'Avenida   Sete', 'Rua vinte e um', 'Rua trinta e nove', 'Travessa Dois 0045',
          'casa 007', 'Casa 0', 'rua quinze', 'Rua Dezesseis', 'rua cem', 'rua cento e dois', 'Alameda Vinte', 'Rua Trinta',
          'São José do Rio Preto', 'AÇÚCAR e café', 'Praça 9 de Julho', 'rua 01', 'avenida 007b', 'Rua Um e Rua Dois',
