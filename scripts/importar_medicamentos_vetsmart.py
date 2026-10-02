@@ -2588,7 +2588,7 @@ def _norm(texto: str) -> str:
     colapsa espaços/quebras internas em um único espaço, strip."""
     import unicodedata
     s = unicodedata.normalize("NFKD", texto or "").encode("ASCII", "ignore").decode().lower()
-    return re.sub(r"\s+", " ", s).strip()
+    return " ".join(s.split())
 
 
 def _trunc(v, n):
