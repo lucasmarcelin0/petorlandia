@@ -164,7 +164,7 @@
     $('field-numbers').onchange = scheduleLabels;
     $('field-census').onchange = () => {$('field-census').checked ? censusLayer.addTo(map) : censusLayer.remove();};
     $('field-reset').onclick = () => {clearTimeout(searchTimer); atlasSearch.clear(); $('field-district').value = ''; $('field-sector').value = ''; updateSectors(); clearSelection(); draw(true);};
-    document.querySelectorAll('[data-atlas-panel]').forEach(button=>button.onclick=()=>{const target=$(button.dataset.atlasPanel);target?.scrollIntoView({block:'start',behavior:'smooth'});});
+    document.querySelectorAll('[data-atlas-panel]').forEach(button=>button.onclick=()=>{const target=$(button.dataset.atlasPanel);target?.scrollIntoView({block:'start',behavior:'auto'});});
     draw(true);
   }
   $('field-fullscreen').onclick = () => {

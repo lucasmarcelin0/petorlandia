@@ -5,21 +5,24 @@
     entry.selectedFolders=entry.selectedFolders||new Set(['',...(entry.folders||[]).map(n=>n.id)]);
     const container=document.createElement('div');container.className='atlas-folder-tree';wrapper.append(container);
     function add(node,parent){
-      const box=document.createElement('details'),summary=document.createElement('summary'),row=document.createElement('div');
-      row.className='atlas-folder-row';box.className='atlas-folder-node';box.dataset.folder=node.id;box.open=entry.openFolders?.has(node.id)||false;
-      box.ontoggle=()=>{entry.openFolders=entry.openFolders||new Set();if(box.open)entry.openFolders.add(node.id);else entry.openFolders.delete(node.id);};
+      const box=document.createElement('div'),row=document.createElement('div'),children=document.createElement('div'),expand=document.createElement('button');
+      row.className='atlas-folder-row';box.className='atlas-folder-node';box.dataset.folder=node.id;
+      children.className='atlas-folder-children';children.hidden=!entry.openFolders?.has(node.id);
+      expand.type='button';expand.className='atlas-folder-expand';expand.textContent=children.hidden?'▸':'▾';expand.setAttribute('aria-expanded',String(!children.hidden));expand.setAttribute('aria-label','Subpastas de '+entry.title+' / '+node.path.join(' / '));expand.disabled=entry.input.disabled;
+      expand.onclick=()=>{children.hidden=!children.hidden;expand.textContent=children.hidden?'▸':'▾';expand.setAttribute('aria-expanded',String(!children.hidden));entry.openFolders=entry.openFolders||new Set();if(children.hidden)entry.openFolders.delete(node.id);else entry.openFolders.add(node.id);};
+      if(node.children.length)row.append(expand);
       const label=document.createElement('label'),toggle=document.createElement('input'),name=document.createElement('span'),count=document.createElement('small'),button=document.createElement('button');
       toggle.type='checkbox';toggle.disabled=entry.input.disabled;toggle.setAttribute('aria-label',entry.title+' / '+node.path.join(' / '));
       name.textContent=node.name;count.textContent=String(node.count);label.append(toggle,name,count);
       button.type='button';button.className='atlas-folder-focus';button.textContent='↗';button.title='Enquadrar '+node.path.join(' / ');button.setAttribute('aria-label',button.title);button.disabled=entry.input.disabled;
-      button.onclick=e=>{e.stopPropagation();focus(node);};
+      button.onclick=()=>focus(node);
       toggle.onclick=e=>e.stopPropagation();toggle.onchange=()=>{
         if(!entry.enabled)entry.selectedFolders=new Set(toggle.checked?node.ids:[]);
         else node.ids.forEach(id=>{if(toggle.checked)entry.selectedFolders.add(id);else entry.selectedFolders.delete(id);});
         entry.input.checked=true;entry.enabled=true;change();
       };
       inputs.push({node,toggle,count});row.append(label,button);
-      if(node.children.length){summary.append(row);box.append(summary);node.children.forEach(c=>add(c,box));parent.append(box);}
+      if(node.children.length){box.append(row,children);node.children.forEach(c=>add(c,children));parent.append(box);}
       else{row.classList.add('atlas-folder-leaf');parent.append(row);}
     }
     model.roots.forEach(n=>add(n,container));

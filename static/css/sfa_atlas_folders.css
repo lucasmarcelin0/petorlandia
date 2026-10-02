@@ -5,3 +5,7 @@
 .atlas-layer-body .atlas-folder-tree label>span{font-size:.73rem;overflow-wrap:break-word}.atlas-layer-body .atlas-folder-row{min-height:34px}.atlas-layer-body .atlas-folder-tree small{font-size:.62rem}
 
 .atlas-layer-body .atlas-folder-tree label>span{font-size:.8rem}.atlas-layer-body .atlas-folder-tree small{font-size:.7rem}
+
+.atlas-folder-expand{width:22px;height:30px;border:0;background:transparent;color:#4b7679;font-size:.78rem;padding:0;flex:none;cursor:pointer}.atlas-folder-children{padding-left:13px;margin-left:10px;border-left:1px solid #d6e5df}.atlas-folder-children[hidden]{display:none!important}.atlas-folder-tree .atlas-folder-row{gap:4px}.atlas-layer-body .atlas-folder-children label>span{line-height:1.45}.atlas-folder-node>.atlas-folder-row{margin-left:0}
+
+.atlas-folder-tree input[type=checkbox]{width:16px!important;height:16px!important;min-width:16px;min-height:16px;padding:0;flex:0 0 16px}.atlas-folder-tree label{min-width:0}.atlas-folder-tree label>span{min-width:0}.atlas-folder-tree small{flex:none}
