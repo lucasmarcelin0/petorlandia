@@ -1648,7 +1648,7 @@ def _rotulo_principal_apresentacao(ap, categoria: str, unidade_pratica: str) -> 
         label = f"{label} ({volume})" if label else volume
     if not label:
         label = _normalizar_concentracao_textual(getattr(ap, 'concentracao', None))
-    return re.sub(r'\s+', ' ', label or '').strip()
+    return " ".join(str(label or "").split())
 
 
 def _rotulo_secundario_apresentacao(ap, principal: str) -> str:
