@@ -1,4 +1,6 @@
 """Views do domínio site_routes (migrado do app.py)."""
+from security.redact import redact_sensitive_text
+
 from flask import Blueprint
 import os, re, requests
 from types import SimpleNamespace
