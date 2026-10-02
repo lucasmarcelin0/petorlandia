@@ -2,7 +2,7 @@
 {% block title %}Atualizar dados do território — Orlândia{% endblock %}
 {% block page_title %}Território e vigilância{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css', v='20261004-menu') }}">
 {% endblock %}
 {% macro br(iso) %}{% if iso %}{{ iso[8:10] }}/{{ iso[5:7] }}/{{ iso[:4] }}{% else %}—{% endif %}{% endmacro %}
 {% macro responsavel(id) %}
