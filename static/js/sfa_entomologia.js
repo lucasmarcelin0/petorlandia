@@ -87,9 +87,7 @@
       $(id).innerHTML='<p class="ento-empty">Não foi possível carregar o mapa. Os indicadores e tabelas continuam disponíveis.</p>'; return null;
     }
     const map = L.map(id,{scrollWheelZoom:false}).setView([-20.720,-47.881],14);
-    const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | Setores: IBGE 2022'}).addTo(map);
-    let warned=false;
-    tiles.on('tileerror',()=>{if(!warned){warned=true; const note=document.createElement('p'); note.className='ento-footnote'; note.textContent='Fundo de ruas indisponível. Os limites censitários e dados permanecem visíveis.'; $(id).after(note);}});
+    window.SfaMapLayers.attach(map,{mode:'streets'});
     return map;
   }
   function fitCity(map) {
@@ -318,7 +316,7 @@
     if(view==='team')updateTeam();
     if(view==='planning'){updatePlanning();renderActions();}
     if(view==='census')updateCensus();
-    if(view==='reference')reference();
+    if(view==='reference')window.SfaFieldMap?.open();
     if(view==='visits')updateVisits();
     requestAnimationFrame(()=>{const map=state[{visits:'visitMap',census:'censusMap',reference:'referenceMap'}[view]];if(map)map.invalidateSize();});
   }
@@ -349,11 +347,13 @@
     const tabs=[...document.querySelectorAll('[data-view]')];
     tabs.forEach((button,index)=>{button.addEventListener('click',()=>activate(button.dataset.view));button.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].focus();activate(tabs[next].dataset.view);}});});
     $('reference-select').addEventListener('change',reference);
+    $('field-originals').addEventListener('toggle',()=>{if($('field-originals').open){reference();requestAnimationFrame(()=>state.referenceMap?.invalidateSize());}});
+    $('field-original-grid').addEventListener('click',event=>{const button=event.target.closest('[data-original-index]');if(!button)return;$('reference-select').value=button.dataset.originalIndex;reference();$('reference-select').focus();});
     $('print-planning').addEventListener('click',()=>window.print());
     $('action-cancel').addEventListener('click',()=>{if($('action-dialog').close)$('action-dialog').close();else $('action-dialog').removeAttribute('open');});
     $('action-dialog').querySelector('form').addEventListener('submit',()=>{try{localStorage.setItem('ento-responsavel',$('action-owner').value);}catch(error){/* sem armazenamento local */}});
     updatePlanning();
-    activate(location.hash==='#acao-criada'?'planning':'team');
+    activate(location.hash==='#acao-criada'?'planning':'reference');
     if(location.hash==='#acao-criada')goToActions();
   } catch(error) {
     $('ento-error').hidden=false;$('ento-error').textContent='Não foi possível inicializar o painel. Recarregue a página ou contate o administrador.';

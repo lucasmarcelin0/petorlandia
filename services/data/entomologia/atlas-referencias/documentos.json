@@ -1,0 +1,18 @@
+[
+  {
+    "id": "publicos",
+    "title": "Imóveis públicos · referência 2017/2018",
+    "year": "2017/2018",
+    "file": "Mapa de Imóveis Públicos.pdf",
+    "sha256": "59200c5ed72c89905427011bc87ea74bc9cc53c995c05938f7b9802c3dbfac52",
+    "note": "Sem referência geográfica validada. Consulta em papel; não alinhado ao satélite."
+  },
+  {
+    "id": "cidade",
+    "title": "Base urbana · arquivo atualizado em 2025",
+    "year": "2025",
+    "file": "MAPA_Orlandia_Cidade_ESC_1-10.000_atualizado_2025-06-27 (1).pdf",
+    "sha256": "63344b615acdac0c2f365ee97abc642a229940ccc885d7edf245c6952db27add",
+    "note": "Sem referência geográfica validada. Consulta em papel; não alinhado ao satélite."
+  }
+]

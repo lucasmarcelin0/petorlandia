@@ -42,6 +42,12 @@ def load_reference_maps():
         return json.load(stream)
 
 
+@lru_cache(maxsize=1)
+def load_field_territory():
+    with (DATA_DIR / 'territory.json').open(encoding='utf-8') as stream:
+        return json.load(stream)
+
+
 # ---------------------------------------------------------------------------
 # Base consolidada
 # ---------------------------------------------------------------------------

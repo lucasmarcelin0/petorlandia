@@ -2018,6 +2018,19 @@ def _clear_pmo_animal_links(animal: PmoVaccinationAnimal) -> None:
     animal.animal_id = None
     animal.vaccine_id = None
     animal.vaccinated_at = None
+    # A dose antiga que justificou "ja imunizado" e do animal que estava aqui
+    # antes. Sem limpar, o novo ocupante da linha herdava a data dela e a tela
+    # dizia "Vacinado em ..." para um animal que nunca foi vacinado. Se o novo
+    # animal tiver dose propria, resolve_animals_already_immune a encontra.
+    if animal.status == PMO_STATUS_ALREADY_IMMUNE:
+        animal.status = "pendente"
+    animal.immune_since = None
+
+
+def _reset_pmo_animal_outcome(animal: PmoVaccinationAnimal) -> None:
+    """A linha passou para outra casa: nada do que foi feito ali e dela."""
+    _clear_pmo_animal_links(animal)
+    animal.status = "pendente"
 
 
 def parse_vacina_pmo_rows(
@@ -3392,7 +3405,7 @@ def persist_vacina_pmo_rows(
         ):
             visit.tutor_user_id = None
             for pmo_animal in visit.animals:
-                _clear_pmo_animal_links(pmo_animal)
+                _reset_pmo_animal_outcome(pmo_animal)
 
         visit.sheet_title = sheet_title
         visit.tutor_name = tutor_name

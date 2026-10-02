@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),M=require('../static/js/sfa_atlas_folders_model.js');
+const nodes=[{id:'ie',name:'IE',parent_id:'',direct_count:1},{id:'jan',name:'Janeiro',parent_id:'ie',direct_count:1},{id:'sc',name:'SC 003',parent_id:'jan',direct_count:2},{id:'fev',name:'Fevereiro',parent_id:'ie',direct_count:1}];
+const model=M.tree(nodes),ie=model.byId.get('ie'),jan=model.byId.get('jan');
+assert.equal(ie.count,5);assert.deepEqual([...jan.ids],['jan','sc']);assert.deepEqual(model.byId.get('sc').path,['IE','Janeiro','SC 003']);
+assert.deepEqual(M.selection(ie,new Set(['sc']),true),{checked:false,indeterminate:true});
+assert.deepEqual(M.selection(jan,new Set(['jan','sc']),true),{checked:true,indeterminate:false});
+assert.deepEqual(M.selection(jan,new Set(['jan','sc']),false),{checked:false,indeterminate:false});
+const records=[{id:1,properties:{folder_id:'sc',date:'2026-01-20',month:'01',period_year:'2026'}},{id:2,properties:{folder_id:'jan',month:'01',period_year:'2026'}},{id:3,properties:{folder_id:'fev',date:'2025-02-01',month:'02',period_year:'2025'}}];
+assert.deepEqual(M.filter(records,{},jan.ids).map(f=>f.id),[1,2]);
+assert.deepEqual(M.filter(records,{year:'2026'}).map(f=>f.id),[1,2]);
+assert.deepEqual(M.filter(records,{start:'2026-01-10',end:'2026-01-31'}).map(f=>f.id),[1]);
+assert.deepEqual(M.filter(records,{month:'02',year:'2025'}).map(f=>f.id),[3]);
+assert.equal(M.filter(records,{start:'2026-02-01'},null,true).length,3,'Referências permanentes não desaparecem com filtros de eventos.');
+console.log('Pastas: descendentes, caminhos, seleção parcial e datas sem inventar dia passaram.');

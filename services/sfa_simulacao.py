@@ -673,6 +673,13 @@ def _variaveis_sinan(schema: dict) -> list[dict]:
                 variaveis.append(_var(chave, f"{rotulo} — resultado", titulo, "categorica", _get(chave, "resultado"), opcoes))
                 variaveis.append(_var(f"{chave}__amostras", f"{rotulo} — amostras", titulo, "multipla",
                                       _get(chave, "amostras"), campo["samples"]))
+                for amostra, amostra_rotulo in campo["samples"]:
+                    def resultado_da_amostra(payload, chave=chave, amostra=amostra):
+                        valor = payload.get(chave) if isinstance(payload.get(chave), dict) else {}
+                        por_exame = valor.get("resultados") if isinstance(valor.get("resultados"), dict) else {}
+                        return por_exame.get(amostra, "")
+                    variaveis.append(_var(f"{chave}__res__{amostra}", f"{rotulo} — resultado {amostra_rotulo}",
+                                          titulo, "categorica", resultado_da_amostra, opcoes))
             elif tipo == "severity":
                 itens = [item for _grupo, grupo_itens in campo["groups"] for item in grupo_itens]
 

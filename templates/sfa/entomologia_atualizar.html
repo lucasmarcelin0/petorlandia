@@ -48,7 +48,7 @@
     {% else %}
     <p><strong>{{ previa_resumo.elementos }}</strong> elementos: {% for tipo, n in previa_resumo.tipos.items() %}{{ n }} {{ {'Point':'pontos','LineString':'linhas','Polygon':'polígonos','GeometryCollection':'grupos'}.get(tipo, tipo) }}{{ ', ' if not loop.last }}{% endfor %}. Título: <strong>{{ previa.titulo }}</strong>.</p>
     {% if previa_resumo.pastas %}<p class="ento-footnote px-0">Pastas: {{ previa_resumo.pastas|join(' • ') }}</p>{% endif %}
-    <p class="ento-footnote px-0">A camada fica só no painel interno (aba Entomologia), nunca na página pública.</p>
+    <p class="ento-footnote px-0">O projeto completo aparece no atlas, com uma chave para cada camada. Camadas avulsas também continuam na aba Entomologia. Nada é enviado à página pública.</p>
     {% endif %}
     <div class="ento-actions-row">
       <form method="post" action="{{ url_for('sfa_routes.entomologia_confirmar', envio_id=previa.id, token=token) }}" class="ento-inline-form">
@@ -89,6 +89,8 @@
       </form>
     </section>
   </div>
+
+  <section class="ento-panel mt-3" id="enviar-atlas" aria-labelledby="enviar-atlas-title"><div class="ento-eyebrow">TODAS AS PASTAS DO PROJETO</div><h2 id="enviar-atlas-title">Atlas completo do Google Earth</h2><p>Exporte o projeto inteiro em KML/KMZ. Rotina, mutirões, larvas, atendimentos e casos viram camadas independentes. A prévia preserva a versão anterior até confirmar; desfazer restaura a cópia anterior. Nomes e descrições livres são descartados. Casos e dados da planilha permanecem no acesso interno completo do SFA.</p><form method="post" enctype="multipart/form-data" class="ento-form-stack" action="{{ url_for('sfa_routes.entomologia_enviar', token=token) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="tipo" value="atlas_earth"><div><label for="atlas-arquivo">Projeto completo (.kml / .kmz)</label><input type="file" id="atlas-arquivo" name="arquivo" accept=".kml,.kmz" required></div>{{ responsavel('atlas-responsavel') }}<button class="btn btn-primary">Enviar atlas e conferir prévia</button></form></section>
 
   <section class="ento-panel mt-3" aria-labelledby="historico-title">
     <h2 id="historico-title">Histórico de envios</h2>
