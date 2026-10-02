@@ -1,0 +1,13 @@
+/* Painéis do atlas em sanfona: um aberto por vez. Sem o script, tudo continua visível como antes. */
+.field-rail.is-accordion{display:block}
+.field-rail.is-accordion>section.is-acc-closed{display:none!important}
+.field-rail.is-accordion>section+section{border-top:0;margin-top:0;padding-top:0}
+.field-rail.is-accordion>section.is-acc-open{padding-top:14px;animation:acc-in .22s ease-out}
+.field-rail.is-accordion .atlas-rail-nav{flex-wrap:wrap;position:static;margin:-4px 0 0;padding:0 0 12px}
+.field-rail.is-accordion .atlas-rail-nav button{flex:1 1 auto;min-width:76px;padding:0 10px;transition:background-color .15s,border-color .15s,color .15s}
+.field-rail.is-accordion .atlas-rail-nav button[aria-expanded="true"]{background:#087f81;border-color:#087f81;color:#fff}
+.field-rail.is-accordion .atlas-rail-hint{margin:0;font-size:.74rem;color:#5b747a}
+.field-rail.is-accordion .atlas-rail-hint[hidden]{display:none}
+.field-originals.is-acc-open-flash{animation:acc-in .22s ease-out}
+@keyframes acc-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.field-rail.is-accordion>section.is-acc-open,.field-originals.is-acc-open-flash{animation:none}}
