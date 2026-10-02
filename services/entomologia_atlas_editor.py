@@ -332,31 +332,10 @@ def search_text(value):
     return value
 
 def search(query, allowed_clinical):
-    """Local data only: no query, patient address or identifier sent to a provider."""
-    q=search_text(query)
-    if not q or len(q)>240: return []
-    q=re.sub(r'\bav\.?\s','avenida ',q)
-    pattern=r'\b(?:rua|avenida|alameda|travessa|casa) \d+[a-z]?\b'
-    phrases=re.findall(pattern,q)
-    tokens=re.sub(pattern,' ',q).replace(',',' ').split()
-    result=[]
-    grouped={}
-    for layer in layers(allowed_clinical).values():
-        for f in layer['features']:
-            p=f['properties']
-            hay=search_text(' '.join(str(p.get(k,'')) for k in ('name','label','address','category','cep','neighborhood','cadastre_ref','original_street','house_number')))
-            if p.get('kind')=='cadastre_house':hay+=' '+search_text('casa '+str(p.get('house_number',''))+' '+' '.join(p.get('folder_path',[])))
-            if all(re.search(r'(?<!\w)'+re.escape(t)+r'(?!\w)',hay) for t in phrases) and all(
-                    re.search(r'(?<!\d)'+re.escape(t)+r'(?!\d)',hay) if t.isdigit() else t in hay for t in tokens):
-                identity=(layer['id'],normalize(p.get('name') or p.get('label')))
-                if layer['origin']['type']=='reference' and identity in grouped:
-                    base=grouped[identity]['feature']
-                    if base['geometry']['type']!='GeometryCollection':
-                        base['geometry']={'type':'GeometryCollection','geometries':[base['geometry']]}
-                    base['geometry']['geometries'].append(deepcopy(f['geometry']))
-                    continue
-                item={'layer_id':layer['id'],'layer_title':layer['title'],'feature':deepcopy(f),
-                               'located':f.get('geometry') is not None}
-                grouped[identity]=item
-                result.append(item)
-    return sorted(result,key=lambda item:not item['located'])[:80]
+    """Local data only: no query, patient address or identifier sent to a provider.
+
+    O casamento mora em ``entomologia_atlas_search``: o texto normalizado de cada
+    feição é calculado uma vez e reaproveitado, em vez de refeito a cada consulta.
+    """
+    from services import entomologia_atlas_search
+    return entomologia_atlas_search.search(query, allowed_clinical)

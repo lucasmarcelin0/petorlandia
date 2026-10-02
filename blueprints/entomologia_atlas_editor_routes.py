@@ -89,6 +89,56 @@ def register(bp, require_access, clinical_access):
     def atlas_place_search():
         return reply({'results':service.search(request.args.get('q',''),clinical_access())})
 
+    @bp.route('/entomologia/atlas/busca/indice')
+    @require_access
+    def atlas_search_index():
+        """Índice compacto: o navegador filtra sozinho, a cada tecla, sem ir ao servidor."""
+        from services import entomologia_atlas_search as search_service
+        clinical=bool(clinical_access())
+        body,etag=search_service.client_index(clinical)
+        if etag and not clinical:
+            # Só dados não clínicos podem ser revalidados pelo navegador. Com acesso
+            # clínico a regra do atlas continua valendo: nada fica guardado.
+            value=etag+'-0'
+            tag='"'+value+'"'
+            if request.if_none_match.contains(value):
+                response=current_app.response_class(status=304)
+            else:
+                response=current_app.response_class(body,mimetype='application/json')
+            response.headers['ETag']=tag
+            # `private` + `max-age` é a exceção que o filtro global de respostas
+            # autenticadas respeita (senão tudo vira no-store); max-age=0 obriga a revalidar.
+            response.headers['Cache-Control']='private, max-age=0, must-revalidate'
+            response.headers['Referrer-Policy']='no-referrer'
+            return response
+        return _sem_cache(current_app.response_class(body,mimetype='application/json'))
+
+    @bp.route('/entomologia/atlas/busca/lugar')
+    @require_access
+    def atlas_search_place():
+        """Feição completa (com a geometria) de uma entrada do índice."""
+        from services import entomologia_atlas_search as search_service
+        item=search_service.place(request.args.get('layer',''),request.args.get('feature',''),bool(clinical_access()))
+        if not item:abort(404)
+        return reply(item)
+
+    @bp.route('/entomologia/atlas/malha')
+    @require_access
+    def atlas_street_network():
+        """Malha de ruas (OpenStreetMap) para o navegador traçar rotas sem serviço externo."""
+        from services import entomologia_atlas_malha
+        body,etag=entomologia_atlas_malha.street_network()
+        if request.if_none_match.contains(etag):
+            response=current_app.response_class(status=304)
+        else:
+            response=current_app.response_class(body,mimetype='application/json')
+        response.headers['ETag']='"'+etag+'"'
+        # Dado público de referência: só muda com uma nova publicação. `private` + `max-age`
+        # é a exceção que o filtro global de respostas autenticadas respeita.
+        response.headers['Cache-Control']='private, max-age=3600'
+        response.headers['Referrer-Policy']='no-referrer'
+        return response
+
     @bp.route('/entomologia/atlas/documentos')
     @require_access
     def atlas_documents():

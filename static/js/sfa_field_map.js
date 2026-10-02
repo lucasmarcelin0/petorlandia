@@ -155,7 +155,8 @@
     $('field-provenance').textContent = `Fonte: ${territory.source.file}, camada Quadras. ${territory.source.blocks} geometrias em ${territory.source.districts} áreas e ${territory.source.sectors} códigos SC. ${territory.source.invalid_geometries} geometria irregular e ${territory.source.duplicate_keys} chave setor/quadra repetida, sinalizadas na consulta. Coordenadas originais preservadas; posições dos rótulos calculadas no interior dos polígonos. As folhas em papel não foram georreferenciadas. Hash SHA-256: ${territory.source.sha256}.`;
     map.attributionControl.addAttribution('Quadras: referência municipal · IBGE 2022 (camada opcional)');
     map.on('zoomend moveend resize atlaslayerschange', scheduleLabels);
-    const atlasSearch=window.SfaAtlasSearch.attach(map,dataset,territory,{select,fit,areaName});
+    const atlasRoute=window.SfaAtlasRoute?.attach(map,dataset);
+    const atlasSearch=window.SfaAtlasSearch.attach(map,dataset,territory,{select,fit,areaName,addStop:atlasRoute?.addStop});
     $('field-district').onchange = () => {updateSectors(); draw(true);};
     $('field-sector').onchange = () => draw(true);
     $('field-area-legend').onclick = e => {const button = e.target.closest('[data-district]'); if (!button) return; $('field-district').value = button.dataset.district; atlasSearch.clear(); updateSectors(); $('field-sector').value = ''; draw(true);};

@@ -207,6 +207,9 @@ def entomologia():
         'layer':url_for('sfa_routes.atlas_editor_layer',key='KEY',token=_token_admin_informado() or None),
         'history':url_for('sfa_routes.atlas_editor_history',key='KEY',token=_token_admin_informado() or None),
         'search':url_for('sfa_routes.atlas_place_search',token=_token_admin_informado() or None),
+        'search_index':url_for('sfa_routes.atlas_search_index',token=_token_admin_informado() or None),
+        'search_place':url_for('sfa_routes.atlas_search_place',token=_token_admin_informado() or None),
+        'street_network':url_for('sfa_routes.atlas_street_network',token=_token_admin_informado() or None),
         'cadastre':url_for('sfa_routes.atlas_cadastre_drawing',code='CODE',token=_token_admin_informado() or None),
         'documents':url_for('sfa_routes.atlas_documents',token=_token_admin_informado() or None),
     }
