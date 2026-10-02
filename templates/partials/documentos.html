@@ -37,34 +37,56 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
 </script>
 {% endif %}
 {% if animal.documentos %}
-  <ul class="list-group mb-3">
+  <div class="doc-list mb-4">
     {% for d in animal.documentos %}
-        <li class="list-group-item">
-          <div class="d-flex flex-column flex-md-row gap-2 align-items-start align-items-md-center">
-            <span class="text-break flex-grow-1">{{ d.filename }}</span>
-            <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-md-end mt-2 mt-md-0 ms-md-auto">
-              <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary" aria-label="Abrir {{ d.filename }}">Abrir</a>
-              {% if tutor.phone %}
-                <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success" aria-label="Enviar {{ d.filename }} por WhatsApp">WhatsApp</a>
-              {% endif %}
-              {% if current_user.role == 'admin' or (is_active_veterinarian and current_user.id == d.veterinario_id) %}
-              <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')" aria-label="Excluir {{ d.filename }}">Excluir</button>
-              </form>
-              {% endif %}
+      {# Uploads antigos guardam um prefixo hexadecimal de 32 caracteres no nome; escondemos so na exibicao. #}
+      {% set _partes = d.filename.split('_', 1) %}
+      {% set nome_exibido = (_partes[1] if _partes|length > 1 and _partes[0]|length == 32 else d.filename)|replace('_', ' ') %}
+      {% set ext = (d.filename.rsplit('.', 1)[-1]|lower) if '.' in d.filename else '' %}
+      {% if ext == 'pdf' %}{% set doc_icon, doc_tone = 'fa-file-pdf', 'pdf' %}
+      {% elif ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'] %}{% set doc_icon, doc_tone = 'fa-file-image', 'img' %}
+      {% elif ext in ['doc', 'docx', 'odt', 'txt'] %}{% set doc_icon, doc_tone = 'fa-file-word', 'doc' %}
+      {% elif ext in ['xls', 'xlsx', 'csv'] %}{% set doc_icon, doc_tone = 'fa-file-excel', 'xls' %}
+      {% else %}{% set doc_icon, doc_tone = 'fa-file-lines', 'other' %}{% endif %}
+      <article class="doc-card">
+        <div class="doc-card__main">
+          <span class="doc-card__icon doc-card__icon--{{ doc_tone }}" aria-hidden="true"><i class="fa-solid {{ doc_icon }}"></i></span>
+          <div class="doc-card__info">
+            <h6 class="doc-card__name" title="{{ d.filename }}">{{ nome_exibido }}</h6>
+            <div class="doc-card__meta">
+              {% if ext %}<span class="doc-card__badge">{{ ext|upper }}</span>{% endif %}
+              {% if d.uploaded_at %}<span><i class="fa-regular fa-calendar me-1" aria-hidden="true"></i>{{ d.uploaded_at.strftime('%d/%m/%Y') }}</span>{% endif %}
+              {% if d.veterinario and d.veterinario.name %}<span><i class="fa-regular fa-user me-1" aria-hidden="true"></i>{{ d.veterinario.name }}</span>{% endif %}
             </div>
+            {% if d.descricao %}<p class="doc-card__desc mb-0">{{ d.descricao }}</p>{% endif %}
           </div>
-        </li>
+        </div>
+        <div class="doc-card__actions">
+          <a href="{{ d.file_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" aria-label="Abrir {{ d.filename }}"><i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>Abrir</a>
+          {% if tutor.phone %}
+            <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" aria-label="Enviar {{ d.filename }} por WhatsApp"><i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>WhatsApp</a>
+          {% endif %}
+          {% if current_user.role == 'admin' or (is_active_veterinarian and current_user.id == d.veterinario_id) %}
+          <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline ms-sm-auto">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')" aria-label="Excluir {{ d.filename }}"><i class="fa-regular fa-trash-can me-1" aria-hidden="true"></i>Excluir</button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
     {% endfor %}
-  </ul>
+  </div>
 {% else %}
-  <p class="text-muted">Nenhum documento enviado.</p>
+  <div class="doc-empty mb-3">
+    <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+    <span>Nenhum documento enviado.</span>
+  </div>
 {% endif %}
 
 {% if is_active_veterinarian %}
-<form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
+<form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="doc-upload mt-2">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h6 class="doc-upload__title"><i class="fa-solid fa-cloud-arrow-up me-2" aria-hidden="true"></i>Enviar novos documentos</h6>
   <div class="mb-2">
     <label for="documento-{{ animal.id }}" class="form-label">Arquivos</label>
     <input id="documento-{{ animal.id }}" type="file" name="documento" class="form-control form-control-sm" multiple required>
@@ -74,6 +96,6 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
     <label for="descricao-{{ animal.id }}" class="form-label">Descrição (opcional)</label>
     <input id="descricao-{{ animal.id }}" type="text" name="descricao" class="form-control form-control-sm">
   </div>
-  <button class="btn btn-sm btn-outline-success">📤 Enviar</button>
+  <button class="btn btn-success"><i class="fa-solid fa-paper-plane me-1" aria-hidden="true"></i>Enviar</button>
 </form>
 {% endif %}
