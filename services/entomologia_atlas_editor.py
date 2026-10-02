@@ -63,6 +63,8 @@ def source_layers():
             item['id']=str(item.get('id') or key+'-'+str(index+1))
             groups[key]['features'].append(item)
             if any(is_case(part) for part in item['properties'].get('folder_path',[])):groups[key]['clinical']=True
+    from services.entomologia_cadastre import source_layers as cadastral_layers
+    groups.update(cadastral_layers())
     earth=atlas.active_earth()
     add(earth['features'],'earth-',{'type':'earth','import_id':earth.get('source',{}).get('import_id'),
                                   'title':'Cópia Google Earth'})
@@ -327,7 +329,8 @@ def search(query, allowed_clinical):
     for layer in layers(allowed_clinical).values():
         for f in layer['features']:
             p=f['properties']
-            hay=search_text(' '.join(str(p.get(k,'')) for k in ('name','label','address','category')))
+            hay=search_text(' '.join(str(p.get(k,'')) for k in ('name','label','address','category','cep','neighborhood','cadastre_ref')))
+            if p.get('kind')=='cadastre_house':hay+=' '+search_text('casa '+str(p.get('house_number',''))+' '+' '.join(p.get('folder_path',[])))
             if all(re.search(r'(?<!\w)'+re.escape(t)+r'(?!\w)',hay) for t in phrases) and all(
                     re.search(r'(?<!\d)'+re.escape(t)+r'(?!\d)',hay) if t.isdigit() else t in hay for t in tokens):
                 identity=(layer['id'],normalize(p.get('name') or p.get('label')))
@@ -341,4 +344,4 @@ def search(query, allowed_clinical):
                                'located':f.get('geometry') is not None}
                 grouped[identity]=item
                 result.append(item)
-    return result[:80]
+    return sorted(result,key=lambda item:not item['located'])[:80]

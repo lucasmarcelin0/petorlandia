@@ -69,6 +69,16 @@ def register(bp, require_access, clinical_access):
         except LookupError:abort(404)
         except ValueError as exc:return reply({'error':str(exc)},400)
 
+    @bp.route('/entomologia/atlas/croquis/<code>')
+    @require_access
+    def atlas_cadastre_drawing(code):
+        from services.entomologia_cadastre import drawing
+        import re
+        if not re.fullmatch(r'S[0-9]{1,4}Q[0-9]{1,4}',code.upper()):abort(404)
+        data=drawing(code)
+        if not data:abort(404)
+        return reply(data)
+
     @bp.route('/entomologia/atlas/busca')
     @require_access
     def atlas_place_search():

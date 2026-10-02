@@ -3,9 +3,9 @@
   else root.SfaCondominiosModel=factory();
 })(typeof self!=='undefined'?self:this,function(){
   'use strict';
-  function isHouse(f){return f.properties?.kind==='condominium_house'||f.atlasEntry?.origin?.type==='condominium';}
+  function isHouse(f){return ['condominium_house','cadastre_house'].includes(f.properties?.kind)||f.atlasEntry?.origin?.type==='condominium';}
   function number(f){
-    const p=f.properties||{}, edited=String(p.name||p.label||'').match(/^Casa\s+(\d+[A-Za-z]?)$/i);
+    const p=f.properties||{}, edited=String(p.name||p.label||'').match(/^(?:Casa|N[ºo.]?)\s+(\d+[A-Za-z]?)(?:\s+·.*)?$/i);
     return edited?edited[1]:String(p.house_number||'');
   }
   function shortLabel(f){const value=number(f);return value?value.padStart(2,'0'):'•';}

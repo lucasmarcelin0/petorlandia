@@ -206,6 +206,7 @@ def entomologia():
         'layer':url_for('sfa_routes.atlas_editor_layer',key='KEY',token=_token_admin_informado() or None),
         'history':url_for('sfa_routes.atlas_editor_history',key='KEY',token=_token_admin_informado() or None),
         'search':url_for('sfa_routes.atlas_place_search',token=_token_admin_informado() or None),
+        'cadastre':url_for('sfa_routes.atlas_cadastre_drawing',code='CODE',token=_token_admin_informado() or None),
         'documents':url_for('sfa_routes.atlas_documents',token=_token_admin_informado() or None),
     }
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
@@ -228,7 +229,8 @@ def entomologia_atlas_catalogo():
     from services.entomologia_atlas import active_earth
     from services.entomologia_atlas_editor import catalog
     from services.entomologia_atlas import layer_id
-    response = jsonify({'source': active_earth()['source'], 'layers':[
+    from services.entomologia_cadastre import active as active_cadastre
+    response = jsonify({'source': active_earth()['source'], 'cadastre_source':active_cadastre()['source'], 'layers':[
         ({**item,'allowed':True} if not item['clinical'] or _acesso_interno_sfa_liberado() else
          {'id':item['id'],'title':'Casos Dengue' if item['id']=='earth-'+layer_id('Casos Dengue') else 'Camada de saúde restrita',
           'clinical':True,'allowed':False,'count':None,'color':item['color']})

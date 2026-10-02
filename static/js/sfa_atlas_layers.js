@@ -5,7 +5,7 @@
   const day=v=>v ? v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4) : 'Não informada';
   const resultNames={positive:'Positivo',negative:'Negativo',pending:'Pendente / suspeito',unknown:'Sem resultado reconhecido'};
   const resultColors={positive:'#dd7587',negative:'#69bfce',pending:'#edbb6f',unknown:'#bbc3d0'};
-  window.SfaAtlasLayers={attach(map,dataset){
+  window.SfaAtlasLayers={attach(map,dataset,territory){
     let entries=[], sheet=null, sheetPromise=null, source=null, sequence=0, unlocatedLimit=50, catalogInitialized=false;
     const renderer=L.canvas({padding:.3,pane:'field-events'}), pointLayer=L.layerGroup().addTo(map);
     let pointFeatures=[];
@@ -64,7 +64,7 @@
     }
     function filteredRows(entry,current){
       const features=entry.features||[];
-      if(entry.origin?.type!=='sheet_snapshot')return window.SfaAtlasFoldersModel.filter(features,current,entry.selectedFolders,['condominium','reference'].includes(entry.origin?.type));
+      if(entry.origin?.type!=='sheet_snapshot')return window.SfaAtlasFoldersModel.filter(features,current,entry.selectedFolders,['condominium','reference','cadastre','street_catalog'].includes(entry.origin?.type));
       return M.sheetFilter(features.filter(f=>!entry.selectedFolders||entry.selectedFolders.has(f.properties.folder_id||'')).map(f=>{
         const p=f.properties, result=String(p.exam_result||'').toLowerCase();
         return {...p,result_group:/\bnegativo\b/.test(result)?'negative':/\bpositivo\b/.test(result)?'positive':/suspeito|aguard|pendente/.test(result)?'pending':'unknown',feature:f};
@@ -74,9 +74,10 @@
       const current=filters();let visible=0, enabled=0;pointFeatures=[];
       entries.forEach(entry=>{
         const rows=filteredRows(entry,current);
-        render(entry,rows);visible+=entry.enabled?rows.length:0;enabled+=Number(entry.enabled);
+        render(entry,rows);visible+=entry.enabled?rows.filter(f=>f.geometry).length:0;enabled+=Number(entry.enabled);
         entry.folderWidget?.refresh(rows);
-        if(entry.counter)entry.counter.textContent=entry.enabled?`${rows.length} nos filtros`:`${entry.count ?? 'Restrito'} ${entry.count==null?'':'elementos'}`;
+        entry.input.indeterminate=entry.enabled && entry.selectedFolders.size>0 && entry.selectedFolders.size < 1+(entry.folders||[]).length;
+        if(entry.counter)entry.counter.textContent=entry.origin?.type==='cadastre'?`${entry.count} números · ${entry.features?entry.features.filter(f=>f.geometry).length:entry.count-entry.unlocated} posicionados`:entry.enabled?`${rows.length} nos filtros`:`${entry.count ?? 'Restrito'} ${entry.count==null?'':'elementos'}`;
       });
       const active=$('atlas-sinan').checked && sheet;
       if(sheet){
@@ -91,8 +92,9 @@
         $('atlas-more-unlocated').textContent=`Mostrar mais ${Math.min(50,unlocated.length-unlocatedLimit)} registros`;
         visible+=active?located.length:0;enabled+=Number(!!active);
       }
-      renderPoints();map.fire('atlaslayerschange');
-      $('atlas-active-count').textContent=`${enabled} ${enabled===1?'camada ativa':'camadas ativas'} · ${visible} elementos filtrados`;
+      renderPoints();renderHotspots();map.fire('atlaslayerschange');
+      const unlocated=entries.filter(e=>e.enabled).reduce((n,e)=>n+filteredRows(e,current).filter(f=>!f.geometry).length,0);
+      $('atlas-active-count').textContent=`${enabled} ${enabled===1?'camada ativa':'camadas ativas'} · ${visible} no mapa${unlocated?' · '+unlocated+' sem posição':''}`;
     }
     function makeEntry(item,features=null,previous=null){
       const entry={...item,features,enabled:false,group:L.layerGroup().addTo(map),loading:null,selectedFolders:previous?.selectedFolders,openFolders:previous?.openFolders};
@@ -100,28 +102,36 @@
         const all=['',...(previous.folders||[]).map(n=>n.id)].every(id=>previous.selectedFolders?.has(id));
         if(all)entry.selectedFolders=new Set(['',...(item.folders||[]).map(n=>n.id)]);
       }
-      const wrapper=document.createElement('div');wrapper.className='atlas-layer-row';
+      const wrapper=document.createElement('article');wrapper.className='atlas-layer-card';
+      const header=document.createElement('div');header.className='atlas-layer-row';wrapper.append(header);
+      const body=document.createElement('div');body.className='atlas-layer-body';body.hidden=!(previous?.expanded);wrapper.append(body);
+      const expand=document.createElement('button');expand.type='button';expand.className='atlas-layer-expand';expand.textContent=body.hidden?'▸':'▾';expand.setAttribute('aria-label','Subpastas de '+item.title);expand.setAttribute('aria-expanded',String(!body.hidden));expand.disabled=item.allowed===false;
+      expand.hidden=!(item.folders?.length);header.append(expand);
+      expand.onclick=()=>{body.hidden=!body.hidden;entry.expanded=!body.hidden;expand.textContent=body.hidden?'▸':'▾';expand.setAttribute('aria-expanded',String(!body.hidden));};
       const label=document.createElement('label'), input=document.createElement('input'), info=document.createElement('span'), dot=document.createElement('i'), name=document.createElement('strong'), small=document.createElement('small');
       input.type='checkbox';input.disabled=item.allowed===false;input.setAttribute('aria-label',item.title);
       dot.style.background=item.color;name.textContent=item.title;small.textContent=input.disabled?'Acesso interno SFA necessário':`${item.count} elementos`;
-      info.append(name,small);label.append(input,dot,info);wrapper.append(label);
+      info.append(name,small);label.append(input,dot,info);header.append(label);
       const focus=document.createElement('button');focus.type='button';focus.className='atlas-focus';focus.textContent='↗';focus.title='Enquadrar '+item.title;focus.setAttribute('aria-label','Enquadrar '+item.title);focus.disabled=input.disabled;
-      wrapper.append(focus);entry.input=input;entry.counter=small;
-      entry.folderWidget=window.SfaAtlasFolders.attach(entry,wrapper,{change:()=>input.onchange(),focus:async node=>{
+      header.append(focus);entry.input=input;entry.counter=small;entry.expanded=!!previous?.expanded;
+      entry.folderWidget=window.SfaAtlasFolders.attach(entry,body,{change:()=>input.onchange(),focus:async node=>{
+        if(entry.origin?.type==='cadastre'){window.SfaCadastreViewer.open(dataset,node.id.replace(/^cad-/,''),entry.id,null);return;}
         if(!entry.enabled)entry.selectedFolders=new Set(node.ids);
         input.checked=true;await input.onchange();const rows=filteredRows(entry,filters()).filter(f=>node.ids.has(f.properties.folder_id||''));
-        if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[30,30],maxZoom:18});
+        const bounds=L.geoJSON(rows).getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[30,30],maxZoom:18});else notice('Registros sem posição: consulte os cadastros e croquis.');
       }});
       async function load(){
         if(entry.features)return;
         if(!entry.loading)entry.loading=fetchJson(dataset.atlas_urls.layer.replace('LAYER',item.id)).then(data=>{entry.features=data.features.map(f=>({...f,properties:{...f.properties,__atlas_layer:item.id}}));}).catch(error=>{entry.loading=null;throw error;});
         await entry.loading;
       }
+      entry.load=load;
+      input.onclick=()=>{if(input.checked)entry.selectedFolders=new Set(['',...(entry.folders||[]).map(n=>n.id)]);};
       input.onchange=async()=>{
         entry.enabled=input.checked;small.textContent='Carregando…';
         try{if(entry.enabled)await load();redraw();notice('');}catch(error){entry.enabled=false;input.checked=false;redraw();notice(error.message+' As outras camadas continuam disponíveis.');}
       };
-      focus.onclick=async()=>{input.checked=true;await input.onchange();const rows=filteredRows(entry,filters());if(rows.length)map.fitBounds(L.geoJSON(rows).getBounds(),{padding:[28,28],maxZoom:entry.origin?.type==='condominium'?19:17});};
+      focus.onclick=async()=>{input.checked=true;await input.onchange();const rows=filteredRows(entry,filters());const bounds=L.geoJSON(rows).getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[28,28],maxZoom:entry.origin?.type==='condominium'?19:17});else notice('Esta camada tem registros ainda sem posição. Use a busca para consultar o cadastro ou o croqui.');};
       entry.focus=focus.onclick;
       return {entry,wrapper};
     }
@@ -174,20 +184,46 @@
     async function refreshCatalog(activate=null){
       const data=await fetchJson(dataset.atlas_urls.catalog), previous=new Map(entries.map(e=>[e.id,e])), enabled=new Set(entries.filter(e=>e.enabled).map(e=>e.id));
       entries.forEach(e=>map.removeLayer(e.group));entries=[];
-      $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();
+      $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();$('atlas-cadastre-list').replaceChildren();
       source=data.source;
+      const cad=data.cadastre_source||{};$('atlas-cadastre-summary').textContent=cad.house_numbers?`${cad.house_numbers.toLocaleString('pt-BR')} rótulos de números · ${cad.readable_drawings} croquis · ${cad.street_records} referências de logradouro/CEP. ${cad.drawings_without_numbers} desenhos sem números extraídos; ${cad.unreadable.length} arquivos não lidos.`:'Referências cadastrais ainda não importadas.';
       $('atlas-earth-source').textContent=source.imported_at ? `${source.title || 'Google Earth'} · cópia importada em ${new Date(source.imported_at).toLocaleDateString('pt-BR')}. Edições da equipe ficam no atlas.` : 'Importe o projeto completo em Atualizar dados para disponibilizar suas camadas.';
       const loading=[];
       data.layers.forEach(item=>{const created=makeEntry(item,null,previous.get(item.id));entries.push(created.entry);
-        $(item.origin?.type==='earth'?'atlas-earth-list':'atlas-local-list').append(created.wrapper);
+        $(item.origin?.type==='earth'?'atlas-earth-list':['cadastre','street_catalog'].includes(item.origin?.type)?'atlas-cadastre-list':'atlas-local-list').append(created.wrapper);
         if(enabled.has(item.id)||activate===item.id||!catalogInitialized&&item.default_visible){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
       });catalogInitialized=true;rebuildYears();
       document.querySelectorAll('[data-atlas-condo]').forEach(button=>{
         const entry=entries.find(e=>e.origin?.type==='condominium'&&e.title.includes(button.dataset.atlasCondo));
         button.disabled=!entry||entry.input.disabled;button.onclick=()=>entry?.focus();
       });
-      await Promise.allSettled(loading);redraw();
+      await Promise.allSettled(loading);await loadHotspots();redraw();
     }
+    const H=window.SfaAtlasHotspotsModel, spatial=H.index(territory.features), hotLayer=L.layerGroup().addTo(map);
+    let hotKey='',hotSummary=null;
+    const hotKind=e=>H.kind(e.title), hotWanted=k=>$(k==='larvae'?'atlas-hot-larvae':'atlas-hot-cases').checked;
+    $('atlas-hot-cases').disabled=!dataset.atlas_urls.clinical_allowed;
+    async function loadHotspots(){
+      const wanted=entries.filter(e=>hotKind(e)&&hotWanted(hotKind(e))&&!e.input.disabled);
+      try{await Promise.all(wanted.map(e=>e.load()));notice('');}catch(e){notice(e.message+' A concentração inclui apenas fontes carregadas.');}
+      hotKey='';
+    }
+    function renderHotspots(){
+      const enabled=$('atlas-hot-larvae').checked||$('atlas-hot-cases').checked;
+      $('atlas-hot-legend').hidden=!enabled;
+      const rows=entries.filter(e=>hotKind(e)&&hotWanted(hotKind(e))).flatMap(e=>filteredRows(e,filters()).filter(f=>H.qualifies(f,hotKind(e))).map(f=>({feature:f,kind:hotKind(e),key:e.id+':'+f.id})));
+      const key=rows.map(r=>r.key+':'+JSON.stringify(r.feature.geometry)).join('|');
+      if(key===hotKey&&hotSummary)return;
+      hotKey=key;hotLayer.clearLayers();hotSummary=H.aggregate(rows,spatial);
+      hotSummary.blocks.forEach(row=>{
+        const p=row.block.properties,total=row.larvae+row.cases,color=total>=5?'#a92e38':total>=2?'#ee8328':'#f5bb66';
+        const shape=L.geoJSON(row.block,{pane:'field-hotspots',style:{color,weight:2,fillColor:color,fillOpacity:.48}}).addTo(hotLayer);
+        shape.bindTooltip(`<strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><br>Larvas: ${row.larvae} · Dengue positivo: ${row.cases}`,{sticky:true});
+        shape.bindPopup(`<div class="atlas-popup"><strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><p>${row.larvae} registros de larvas · ${row.cases} dengue positivo</p><small>Registros no período e nas pastas selecionadas. Eventos distintos no mesmo imóvel continuam contados separadamente.</small><details><summary>Consultar registros</summary>${row.items.map(r=>popup(r.feature,r.kind==='larvae'?'Larvas':'Dengue positivo')).join('<hr>')}</details></div>`);
+      });
+      $('atlas-hot-status').textContent=`${hotSummary.blocks.length} quadras · ${hotSummary.located} registros incluídos${hotSummary.outside?' · '+hotSummary.outside+' sem quadra única':''}`;
+    }
+    ['atlas-hot-larvae','atlas-hot-cases'].forEach(id=>$(id).onchange=async()=>{await loadHotspots();redraw();});
     window.SfaAtlasLayers.refresh=refreshCatalog;
     refreshCatalog().catch(error=>{notice(error.message+' Quadras e mapas originais continuam disponíveis.');});
     redraw();
