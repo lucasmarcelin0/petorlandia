@@ -61,3 +61,11 @@ def test_geocode_address_empty_arguments():
         assert coords == (-10.0, -50.0)
         call_params = mock_get.call_args[1]['params']
         assert call_params['q'] == 'Brasil'
+
+
+def test_geocode_address_ssrf_blocked():
+    with patch('helpers.is_url_ssrf_safe', return_value=False), \
+         patch.object(requests.Session, 'get') as mock_get:
+        coords = geocode_address(cidade='São Paulo', estado='SP')
+        assert coords is None
+        mock_get.assert_not_called()
