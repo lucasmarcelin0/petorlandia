@@ -68,7 +68,7 @@ def test_public_shell_keeps_shared_css_and_bootstrap_available_synchronously(
 
     assert response.status_code == 200
     assert b'/static/css/clinic.css' in response.data
-    assert b'styles.css?v=20260729hotfix1' in response.data
+    assert b'styles.css?v=20261001docs1' in response.data
     assert b'bootstrap.bundle.min.js?v=5.3&quot; defer' not in response.data
     assert b'bootstrap.bundle.min.js?v=5.3" defer' not in response.data
 
