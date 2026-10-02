@@ -27,9 +27,10 @@
           else merged.push({...g,names:[g.name]});});
         const cards=merged.map(g=>{const p=project(g.coordinates);return {...g,x:p.x,y:p.y,width:g.names.length>1?154:128,height:40};});
         F.placeLabels(cards,size.x,size.y,3,reserve()).forEach(g=>{
-          const title=g.names.join(' · ');
+          const title=g.names.join(' · '),census=g.items.some(f=>f.atlasEntry.origin?.type==='cnefe');
+          const caption=census&&g.names.length>1?g.names.length+' localidades próximas':title;
           L.marker([g.coordinates[1],g.coordinates[0]],{pane,keyboard:true,title:'Aproximar '+title,icon:L.divIcon({className:'atlas-condo-overview',
-            iconSize:[g.width,40],iconAnchor:[g.width/2,20],html:`<span style="--condo-color:${g.color}"><b>${esc(title)}</b><small>${g.items.length} casas · aproximar</small></span>`})})
+            iconSize:[g.width,40],iconAnchor:[g.width/2,20],html:`<span style="--condo-color:${g.color}"><b>${esc(caption)}</b><small>${g.items.length} ${census?'números':'casas'} · aproximar</small></span>`})})
             .on('click',()=>focus(g.items)).addTo(labels);
         });
         return;

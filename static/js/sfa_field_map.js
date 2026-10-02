@@ -164,7 +164,15 @@
     $('field-numbers').onchange = scheduleLabels;
     $('field-census').onchange = () => {$('field-census').checked ? censusLayer.addTo(map) : censusLayer.remove();};
     $('field-reset').onclick = () => {clearTimeout(searchTimer); atlasSearch.clear(); $('field-district').value = ''; $('field-sector').value = ''; updateSectors(); clearSelection(); draw(true);};
-    document.querySelectorAll('[data-atlas-panel]').forEach(button=>button.onclick=()=>{const target=$(button.dataset.atlasPanel);target?.scrollIntoView({block:'start',behavior:'auto'});});
+    document.querySelectorAll('[data-atlas-panel]').forEach(button=>button.onclick=()=>{
+      const target=$(button.dataset.atlasPanel),rail=button.closest('.field-rail');
+      if(!target)return;
+      if(rail&&rail.scrollHeight>rail.clientHeight+1){
+        rail.scrollTo({top:rail.scrollTop+target.getBoundingClientRect().top-rail.getBoundingClientRect().top-48,behavior:'auto'});
+        const toolbarTop=$('field-filters').getBoundingClientRect().top;
+        if(toolbarTop<60)window.scrollBy({top:toolbarTop-65,left:0,behavior:'auto'});
+      }else target.scrollIntoView({block:'nearest',behavior:'auto'});
+    });
     draw(true);
   }
   $('field-fullscreen').onclick = () => {
