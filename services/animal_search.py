@@ -71,6 +71,7 @@ def search_animals(
 
     # Apply text filter only when a term is provided
     if (term or '').strip():
+        like_term = f"%{term.strip()}%"
         filters = [
             Animal.name.ilike(like_term),
             Animal.microchip_number.ilike(like_term),
