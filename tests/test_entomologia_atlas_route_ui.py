@@ -69,3 +69,9 @@ def test_paineis_do_atlas_em_sanfona_estao_na_tela(client):
     # Cada atalho aponta para um painel que existe.
     for target in re.findall(r'data-atlas-panel="([a-z0-9-]+)"', html):
         assert f'id="{target}"' in html, target
+
+
+def test_css_do_menu_tem_versao_para_furar_o_cache_do_navegador(client):
+    # O navegador guarda /static por 1 h; sem ?v= o celular continuava com o CSS antigo do menu.
+    html = _page(client)
+    assert re.search(r'sfa_entomologia\.css\?v=[\w-]+', html)
