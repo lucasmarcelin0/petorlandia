@@ -195,6 +195,12 @@ def entomologia():
     dataset['territory_url'] = url_for('sfa_routes.entomologia_territorio',
                                        token=_token_admin_informado() or None)
     acesso_completo = _acesso_interno_sfa_liberado()
+    if not current_app.testing:
+        try:
+            from services import entomologia_atlas_search as _atlas_search
+            _atlas_search.warm_async(current_app._get_current_object(), acesso_completo)
+        except Exception:                      # só acelera a busca; a tela abre mesmo sem isso
+            current_app.logger.warning('Pré-montagem do índice do atlas não iniciou.', exc_info=True)
     dataset['atlas_urls'] = {
         'catalog': url_for('sfa_routes.entomologia_atlas_catalogo', token=_token_admin_informado() or None),
         'layer': url_for('sfa_routes.entomologia_atlas_camada', layer='LAYER', token=_token_admin_informado() or None),

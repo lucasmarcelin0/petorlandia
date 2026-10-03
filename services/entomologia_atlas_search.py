@@ -283,6 +283,38 @@ def client_index(clinical_allowed):
     return payload
 
 
+_warming = set()
+
+
+def warm_async(app, clinical_allowed):
+    """Monta o índice em segundo plano, antes de o navegador pedi-lo.
+
+    A primeira montagem depois de um deploy lê todas as camadas; se coincidir com o dyno sem folga de memória,
+    a requisição do índice pode passar dos 30 s do roteador (H12) e o celular fica sem busca instantânea.
+    Chamado quando a tela do atlas abre: quando o navegador pede o índice, ele já está pronto (ou é a mesma montagem,
+    sem repetir o trabalho). Devolve a thread (None se já havia uma montando).
+    """
+    variant = bool(clinical_allowed)
+    with _lock:
+        if variant in _warming:
+            return None
+        _warming.add(variant)
+
+    def run():
+        try:
+            with app.app_context():
+                client_index(variant)
+        except Exception:                      # a requisição do índice refaz e mostra o erro de verdade
+            app.logger.warning('Não foi possível pré-montar o índice de busca do atlas.', exc_info=True)
+        finally:
+            with _lock:
+                _warming.discard(variant)
+
+    thread = threading.Thread(target=run, name='atlas-index-warm', daemon=True)
+    thread.start()
+    return thread
+
+
 def place(layer_id, feature_id, clinical_allowed):
     """Feição completa (com a geometria) de uma entrada do índice, ruas já unidas."""
     snap = snapshot()

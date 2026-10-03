@@ -3,7 +3,8 @@
   window.SfaAtlasSearch={attach(map,dataset,territory,{select,fit,areaName,addStop}){
     const input=$('field-search'),panel=$('atlas-search-panel'),results=$('atlas-search-results'),status=$('atlas-search-status'),preview=L.layerGroup().addTo(map);
     const urls=dataset.editor_urls,Model=window.SfaAtlasSearchModel;
-    let run=0,timer=null,controller=null,index=null,indexState='idle',placeRun=0;
+    let run=0,timer=null,controller=null,index=null,indexState='idle',placeRun=0,failures=0,failedAt=0;
+    const RETRY_MS=[3000,8000,20000,45000];
     const highlight={style:{color:'#fff',weight:5,fillOpacity:.2},pointToLayer:(_,coords)=>L.circleMarker(coords,{radius:10,color:'#fff',fillColor:'#087f81',fillOpacity:1})};
 
     function open(value){panel.hidden=!value;input.setAttribute('aria-expanded',String(value));}
@@ -36,17 +37,23 @@
 
     // ---- Índice local: resposta imediata, sem rede ----
     function loadIndex(){
+      // Falhou antes (servidor ocupado, rede)? Tenta de novo depois de alguns segundos, em vez de ficar sem a busca instantânea.
+      if(indexState==='failed'&&Date.now()-failedAt>5000)indexState='idle';
       if(indexState!=='idle'||!urls.search_index||!Model)return;
       indexState='loading';
+      const guard=new AbortController(),giveUp=setTimeout(()=>guard.abort(),28000);
       // Sem `cache:`: o navegador revalida com a etiqueta (ETag) quando o servidor permite.
-      fetch(urls.search_index,{credentials:'same-origin'}).then(r=>{
+      fetch(urls.search_index,{credentials:'same-origin',signal:guard.signal}).then(r=>{
         if(!r.ok||!r.headers.get('content-type')?.includes('application/json'))throw Error('índice indisponível');
         return r.json();
       }).then(data=>{
-        index=data;indexState='ready';
+        clearTimeout(giveUp);index=data;indexState='ready';failures=0;
         // A busca em andamento no servidor perde para a local, que é imediata.
         if(input.value.trim()){run++;controller?.abort();clearTimeout(timer);localSearch(input.value.trim());}
-      }).catch(()=>{indexState='failed';});
+      }).catch(()=>{
+        clearTimeout(giveUp);indexState='failed';failedAt=Date.now();
+        if(failures<RETRY_MS.length)setTimeout(()=>{if(indexState==='failed'){indexState='idle';loadIndex();}},RETRY_MS[failures++]);
+      });
     }
     const where=e=>e[5]===1?'Ponto cadastrado':e[5]===2?'Trecho / referência no mapa':'Sem posição · consultar cadastro';
     function stopFor(e,layer){return {name:e[2],note:[e[3],layer.title].filter(Boolean).join(' · '),kind:e[5],x:e[6],y:e[7],bbox:e[8],layerId:layer.id,featureId:e[1]};}
@@ -98,12 +105,14 @@
         if(data.results.length)section('Endereços e locais');
         data.results.forEach(item=>{
           const f=item.feature,p=f.properties;
+          // Mesmo na busca de reserva dá para ir para a rota: a posição vem da própria feição devolvida.
+          const stop=f.geometry?{name:p.name||p.label||item.layer_title,note:[p.address,item.layer_title].filter(Boolean).join(' · '),feature:f,layerId:item.layer_id,featureId:f.id}:undefined;
           button(p.name||p.label||item.layer_title,[p.address,item.layer_title,item.located?(f.geometry.type==='Point'?'Ponto cadastrado':'Trecho / referência no mapa'):'Sem posição · consultar cadastro'].filter(Boolean).join(' · '),()=>{
             preview.clearLayers();
             if(f.geometry){const layer=L.geoJSON(f,highlight).addTo(preview);const bounds=layer.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[45,45],maxZoom:19});map.fire('atlasfocusfeature',{layerId:item.layer_id,featureId:f.id});open(false);}
             else if(p.cadastre_ref){window.SfaCadastreViewer.open(dataset,p.cadastre_ref,item.layer_id,f.id);open(false);}
             else{const b=document.createElement('button');b.type='button';b.dataset.atlasLayer=item.layer_id;b.dataset.atlasFeature=f.id;b.hidden=true;document.body.append(b);b.click();b.remove();open(false);}
-          });count++;
+          },stop);count++;
         });
         status.textContent=count?count+' opções · selecione para localizar ou consultar':'Nenhuma correspondência. Tente o nome da rua ou da quadra. Números sem cadastro não recebem posição estimada.';
       }catch(e){if(e.name!=='AbortError'&&seq===run)status.textContent=e.message;}
