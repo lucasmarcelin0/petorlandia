@@ -144,4 +144,27 @@ near(S.gestureZoom(17, 2), 18); near(S.gestureZoom(17, 0.5), 16); assert.equal(S
 near(S.gestureRotation(40, 15), 25); near(S.gestureRotation(10, -30), 40);
 assert.ok(S.FREE_IDLE_MS >= 10000 && S.FREE_IDLE_MS <= 60000);
 
+// ---- bússola ----
+const hd = (a, b, g) => S.compassFromEuler(a, b, g);
+const close = (x, y, tol, m) => assert.ok(Math.abs(S.angleDelta(x, y)) <= tol, (m || '') + ' ' + x + ' ≉ ' + y);
+close(hd(0, 0, 0), 0, 0.01, 'deitado, topo ao norte');
+close(hd(90, 0, 0), 270, 0.01, 'deitado, girado 90° anti-horário: topo ao oeste');
+close(hd(270, 0, 0), 90, 0.01, 'deitado, topo ao leste');
+close(hd(180, 0, 0), 180, 0.01);
+close(hd(0, 90, 0), 0, 0.01, 'em pé olhando ao norte (câmera traseira)');
+close(hd(270, 90, 0), 90, 0.01, 'em pé olhando ao leste');
+close(hd(180, 90, 0), 180, 0.01, 'em pé olhando ao sul');
+close(hd(90, 90, 0), 270, 0.01, 'em pé olhando ao oeste');
+close(hd(0, 70, 0), 0, 0.5, 'inclinado: continua ao norte');
+close(hd(270, 60, 5), 90, 7, 'inclinado e meio torto: leste (a rolagem de 5° desvia a câmera uns graus)');
+// sem saltos ao inclinar o celular parado olhando para leste
+let prev = null, worst = 0;
+for (let beta = 0; beta <= 90; beta += 3) { const h = hd(270, beta, 0); if (prev !== null) worst = Math.max(worst, Math.abs(S.angleDelta(prev, h))); prev = h; }
+assert.ok(worst < 6, 'a seta não pula na transição deitado/em pé: ' + worst);
+assert.equal(S.withScreen(10, 90), 100); assert.equal(S.withScreen(350, 90), 80); assert.equal(S.withScreen(10, 270), 280); assert.equal(S.withScreen(10, undefined), 10);
+near(S.easeAngle(350, 10, 0.5), 0, 'atravessa o norte pelo lado curto'); near(S.easeAngle(10, 350, 0.5), 0); assert.equal(S.easeAngle(NaN, 123, 0.3), 123); near(S.easeAngle(100, 200, 1), 200); near(S.easeAngle(100, 200, 0), 100);
+near(S.arrowOnScreen(90, 90), 0, 'mapa e celular na mesma direção: seta para cima'); near(S.arrowOnScreen(100, 90), 10); near(S.arrowOnScreen(0, 90), 270, 'celular ao norte, mapa para leste: seta à esquerda'); near(S.arrowOnScreen(45, 0), 45);
+assert.equal(S.useCompass(0, true), true); assert.equal(S.useCompass(1.4, true), true, 'a pé: bússola'); assert.equal(S.useCompass(8, true), false, 'de carro: rumo do deslocamento');
+assert.equal(S.useCompass(0, false), false); assert.equal(S.useCompass(undefined, true), true);
+
 console.log('sessão da navegação: ok');

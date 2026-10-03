@@ -10,7 +10,7 @@
 (function(){
   'use strict';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const VOICE_KEY='sfa-nav-voice', THEME_KEY='sfa-nav-theme', HINT_KEY='sfa-nav-gesture-hint', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
+  const VOICE_KEY='sfa-nav-voice', THEME_KEY='sfa-nav-theme', HINT_KEY='sfa-nav-gesture-hint', COMPASS_KEY='sfa-nav-compass', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
   const ATTRIB={streets:'Mapa © Esri, HERE, Garmin, OpenStreetMap e comunidade GIS',satellite:'Imagens © Esri, Maxar, Earthstar Geographics e comunidade GIS'};
 
   // ---- Ícones das manobras (SVG simples, traço branco) ----
@@ -61,10 +61,13 @@
         +'<button type="button" data-act="base" title="Mapa de ruas ou satélite"></button>'
         +'<button type="button" data-act="theme" title="Tema do mapa: automático, noite ou dia"></button>'
         +'<button type="button" data-act="overview" aria-label="Ver a rota inteira" title="Ver a rota inteira">🧭</button>'
+        +'<button type="button" data-act="steps" aria-label="Percurso: ruas à frente" title="Percurso: ruas à frente">🛣️</button>'
+        +'<button type="button" data-act="compass" title="A seta azul acompanha o celular (bússola)">📱</button>'
         +'<button type="button" data-act="speed" hidden title="Velocidade da simulação"></button></div>'
         +'<div class="nav-zoom" role="group" aria-label="Zoom do mapa"><button type="button" class="nav-zoom-auto" data-act="zoom-auto" hidden title="Voltar ao zoom automático">Auto</button>'
         +'<div class="nav-zoom-pair"><button type="button" data-act="zoom-in" aria-label="Aproximar o mapa">＋</button><button type="button" data-act="zoom-out" aria-label="Afastar o mapa">－</button></div></div>'
         +'<button type="button" class="nav-recenter" data-act="recenter" hidden><span aria-hidden="true">◎</span> Recentralizar</button>'
+        +'<section class="nav-steps" aria-label="Percurso à frente" hidden><header><strong>Percurso</strong><small class="nav-steps-sub"></small><button type="button" data-act="steps" aria-label="Fechar o percurso">×</button></header><ol class="nav-steps-list"></ol></section>'
         +'<footer class="nav-bar"><div class="nav-next"><small class="nav-stoplabel"></small><strong class="nav-stopname"></strong><span class="nav-stopnote"></span></div>'
         +'<div class="nav-stats"><strong class="nav-eta"></strong><span class="nav-left"></span></div>'
         +'<div class="nav-bar-actions"><button type="button" class="nav-here" data-act="here" title="Marcar que já chegou a esta parada">Cheguei</button><button type="button" data-act="skip" title="Pular esta parada e recalcular">Pular</button><button type="button" class="nav-exit" data-act="exit">Sair</button></div></footer>'
@@ -76,7 +79,8 @@
         toast:$('.nav-toast'),eta:$('.nav-eta'),left:$('.nav-left'),stopLabel:$('.nav-stoplabel'),stopName:$('.nav-stopname'),stopNote:$('.nav-stopnote'),attrib:$('.nav-attrib'),gps:$('.nav-gps'),
         approach:$('.nav-approach i'),bar:$('.nav-bar'),
         card:$('.nav-card'),cardIcon:$('.nav-card-icon'),cardEyebrow:$('.nav-card-eyebrow'),cardTitle:$('.nav-card-title'),cardNote:$('.nav-card-note'),cardDots:$('.nav-dots'),cardStats:$('.nav-card-stats'),cardActions:$('.nav-card-actions'),
-        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),theme:$('[data-act="theme"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),here:$('[data-act="here"]'),overview:$('[data-act="overview"]'),zoomAuto:$('[data-act="zoom-auto"]'),recenter:$('[data-act="recenter"]')}};
+        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),theme:$('[data-act="theme"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),here:$('[data-act="here"]'),overview:$('[data-act="overview"]'),zoomAuto:$('[data-act="zoom-auto"]'),recenter:$('[data-act="recenter"]'),steps:$('.nav-tools [data-act="steps"]'),compass:$('[data-act="compass"]')},
+        steps:$('.nav-steps'),stepsList:$('.nav-steps-list'),stepsSub:$('.nav-steps-sub')};
       root.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)act(b.dataset.act);});
       gestures(ui.stage);
       return ui;
@@ -128,6 +132,71 @@
       };
       ['pointerup','pointercancel','lostpointercapture'].forEach(t=>el.addEventListener(t,end));
     }
+    // ---------------------------------------------------------------- percurso adiantado
+    // Lista as ruas que vêm pela frente (nome, manobra e quanto se anda em cada uma) e escreve os nomes no mapa.
+    function stepsKey(){const p=Nav.progress(nav.route,nav.along);return nav.token+'|'+p.nextIndex+'|'+nav.leg;}
+    function renderSteps(){
+      if(!nav||!nav.route||!ui)return;
+      const items=Nav.itinerary(nav.route,nav.along,40);
+      ui.stepsSub.textContent=items.length?'· '+Route.formatDistance(Math.max(0,nav.route.total-nav.along))+' até o fim':'';
+      ui.stepsList.replaceChildren();
+      items.forEach((it,n)=>{
+        const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='nav-step'+(it.current?' is-current':'')+(it.type==='arrive'?' is-stop':'');
+        const title=it.type==='arrive'?(it.name||('Parada '+it.stop)):(it.street||'Rua sem nome');
+        const when=it.current?'Você está aqui':'em '+Route.formatDistance(it.distance);
+        const sub=it.type==='arrive'?(it.final?'Destino final':'Parada '+it.stop)+' · '+when:(it.current?when:it.text+' · '+when);
+        b.innerHTML='<span class="nav-step-icon">'+icon(it.type==='depart'?'straight':it.type)+'</span><span class="nav-step-text"><strong>'+esc(title)+'</strong><small>'+esc(sub)+'</small></span>'
+          +(it.type==='arrive'?'':'<span class="nav-step-len">'+esc(Route.formatDistance(it.length))+'</span>');
+        b.onclick=()=>previewStep(it);
+        li.append(b);ui.stepsList.append(li);
+      });
+      nav.stepsKey=stepsKey();
+    }
+    function openSteps(open){
+      if(!nav||!ui)return;
+      nav.stepsOpen=open===undefined?!nav.stepsOpen:open;
+      ui.steps.hidden=!nav.stepsOpen;ui.buttons.steps.classList.toggle('is-on',nav.stepsOpen);
+      if(nav.stepsOpen){hideCard();hideToast();renderSteps();const cur=ui.stepsList.querySelector('.is-current');cur&&cur.scrollIntoView({block:'nearest'});}
+      syncBar();
+    }
+    // Toca numa rua da lista: o mapa solta, destaca o trecho e enquadra. "Recentralizar" volta.
+    function previewStep(it){
+      if(!nav||!nav.route)return;
+      openSteps(false);
+      enterFree();
+      nav.layers.preview.clearLayers();
+      let pts;
+      if(it.type==='arrive')pts=[[it.lat,it.lng]];
+      else pts=Nav.segment(nav.route,Math.max(it.from,it.current?nav.along:it.from),it.to);
+      if(pts.length>=2){
+        L.polyline(pts,{color:'#fff',weight:16,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(nav.layers.preview);
+        L.polyline(pts,{color:'#f08c00',weight:10,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(nav.layers.preview);
+      }
+      const bounds=L.latLngBounds(pts.length?pts:[[it.lat,it.lng]]);
+      const pad=Math.round((ui.bar?ui.bar.offsetHeight:150)+30);
+      if(bounds.getNorthEast().equals(bounds.getSouthWest()))nav.navMap.setView(bounds.getCenter(),18,{animate:true});
+      else nav.navMap.fitBounds(bounds,{paddingTopLeft:[40,140],paddingBottomRight:[40,pad],maxZoom:18,animate:true});
+      nav.rotation=0;setRotation(0);                                   // norte para cima: o trecho aparece como no mapa
+      toast(it.type==='arrive'?(it.name||'Parada '+it.stop):((it.street||'Rua sem nome')+' · '+Route.formatDistance(it.length)),3200);
+      touched();
+    }
+    function clearPreview(){if(nav&&nav.layers&&nav.layers.preview)nav.layers.preview.clearLayers();}
+    // Nomes das próximas ruas escritos sobre o traçado (de pé, mesmo com o mapa girado).
+    function drawLabels(){
+      if(!nav||!nav.route||!nav.layers.labels)return;
+      const key=stepsKey();
+      if(key===nav.labelsKey)return;
+      nav.labelsKey=key;
+      nav.layers.labels.clearLayers();
+      Nav.itinerary(nav.route,nav.along,8).forEach(it=>{
+        if(it.type==='arrive'||!it.street)return;
+        const from=Math.max(it.from,it.current?nav.along+20:it.from);
+        if(it.to-from<45)return;                                          // trecho curto demais para um nome legível
+        const mid=Nav.pointAt(nav.route,(from+it.to)/2);
+        L.marker([mid.lat,mid.lng],{icon:L.divIcon({className:'nav-street',html:'<span class="nav-street-in">'+esc(it.street)+'</span>',iconSize:[0,0]}),interactive:false,keyboard:false,zIndexOffset:-500}).addTo(nav.layers.labels);
+      });
+    }
+
     // Mapa solto: a seta passa a ser um marcador no próprio mapa (a fixa só vale seguindo a posição).
     function syncMe(){
       if(!nav||!ui)return;
@@ -146,8 +215,54 @@
     function placeMarker(){
       if(!nav||!nav.marker||!nav.fix)return;
       nav.marker.setLatLng([nav.fix.lat,nav.fix.lng]);
-      const el=nav.marker.getElement(),pin=el&&el.firstChild;
-      if(pin)pin.style.transform='rotate('+Math.round(nav.heading)+'deg)';
+      const el=nav.marker.getElement(),pin=el&&el.firstChild,h=arrowHeading();
+      nav.markerRot=Nav.unwrap(nav.markerRot===null?h:nav.markerRot,h);
+      if(pin)pin.style.transform='rotate('+Math.round(nav.markerRot)+'deg)';
+    }
+    // ---- Bússola: a seta azul mostra para onde o celular aponta (parado ou a pé); em velocidade vale o rumo do deslocamento.
+    const arrowHeading=()=>Session.useCompass(nav.speed,nav.compassOn&&nav.orient.seen)?nav.orient.heading:nav.heading;
+    function applyArrow(){
+      if(!nav||!ui)return;
+      if(nav.marker)placeMarker();
+      const rel=Session.arrowOnScreen(arrowHeading(),nav.followNorth?0:nav.rotation);
+      nav.arrowRel=Nav.unwrap(nav.arrowRel,rel);
+      ui.me.style.transform='translate(-50%,-50%) rotate('+Math.round(nav.arrowRel*10)/10+'deg)';
+      ui.me.classList.toggle('is-compass',Session.useCompass(nav.speed,nav.compassOn&&nav.orient.seen));
+    }
+    function onOrientation(e){
+      if(!nav||!nav.compassOn)return;
+      let raw=null;
+      if(typeof e.webkitCompassHeading==='number'&&!Number.isNaN(e.webkitCompassHeading)){
+        raw=e.webkitCompassHeading;nav.orient.accuracy=typeof e.webkitCompassAccuracy==='number'?e.webkitCompassAccuracy:null;
+      }else if((e.type==='deviceorientationabsolute'||e.absolute===true)&&typeof e.alpha==='number'){
+        raw=Session.compassFromEuler(e.alpha,e.beta||0,e.gamma||0);
+      }
+      if(raw===null)return;
+      const angle=(window.screen&&screen.orientation&&screen.orientation.angle)||window.orientation||0;
+      nav.orient.heading=Session.easeAngle(nav.orient.heading,Session.withScreen(raw,angle),nav.orient.seen?0.3:1);
+      if(!nav.orient.seen){nav.orient.seen=true;paintCompass();}
+      if(!nav.orient.raf)nav.orient.raf=requestAnimationFrame(()=>{if(!nav)return;nav.orient.raf=0;applyArrow();});
+    }
+    function bindCompass(){
+      if(!nav||nav.compassBound)return;
+      nav.compassBound=true;
+      window.addEventListener('deviceorientationabsolute',onOrientation,true);
+      window.addEventListener('deviceorientation',onOrientation,true);
+      // Sem sensor, a seta segue o deslocamento: avisa uma vez em vez de parecer quebrada.
+      later(()=>{if(active&&nav&&nav.compassOn&&!nav.orient.seen)toast('Este aparelho não informou a bússola: a seta segue a direção do deslocamento.',5000);},4500);
+    }
+    function unbindCompass(){
+      window.removeEventListener('deviceorientationabsolute',onOrientation,true);
+      window.removeEventListener('deviceorientation',onOrientation,true);
+      if(nav)nav.compassBound=false;
+    }
+    // iOS só libera o sensor depois de um toque: este pedido sai de dentro do clique em "Navegar".
+    function enableCompass(){
+      if(!nav||nav.simulate||!nav.compassOn||!window.DeviceOrientationEvent)return;
+      const ask=window.DeviceOrientationEvent.requestPermission;
+      if(typeof ask==='function'){
+        ask.call(window.DeviceOrientationEvent).then(r=>{if(r==='granted')bindCompass();else if(nav&&ui)toast('Sem permissão da bússola: a seta segue a direção do deslocamento.',5000);}).catch(()=>{});
+      }else bindCompass();
     }
     function enterFree(){
       if(nav.free)return;
@@ -163,6 +278,7 @@
       if(!nav||!ui)return;
       clearTimeout(nav.freeTimer);
       const was=isFree();
+      clearPreview();
       nav.free=false;
       if(nav.overview){nav.overview=false;ui.buttons.overview.classList.remove('is-on');}
       syncMe();
@@ -178,7 +294,8 @@
         followNorth:false,overview:false,voice:safeGet(VOICE_KEY)!=='0',zoomBias:0,said:{},deviation:{since:null},rerouting:false,lastReroute:0,finished:false,
         watch:null,timers:[],wake:null,navMap:null,layers:{},basemap:null,arrived:false,simSpeed:0,simAlong:0,simPause:false,token:0,pins:[],
         session:null,persist:!opts.simulate,order:[],undoInfo:null,lastPos:null,manualArrive:false,theme:safeGet(THEME_KEY)||'auto',pinchRaf:0,
-        free:false,freeTimer:null,freeIdleMs:Session.FREE_IDLE_MS,marker:null};
+        free:false,freeTimer:null,freeIdleMs:Session.FREE_IDLE_MS,marker:null,
+        compassOn:safeGet(COMPASS_KEY)!=='0',orient:{heading:null,seen:false,accuracy:null,raf:0},arrowRel:0,markerRot:null,stepsOpen:false,stepsKey:'',labelsKey:'',compassBound:false};
     }
     function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
     function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){/* sem armazenamento */}}
@@ -202,7 +319,7 @@
       nav.order=opts.simulate?all.slice(1):all;                 // numeração das paradas na rota inteira, mesmo depois de recalcular
       build();paintStatic();persist();
       document.documentElement.classList.add('atlas-nav-open');ui.root.classList.add('is-open');
-      pushGuard();enterFullscreen();holdScreen();
+      pushGuard();enterFullscreen();holdScreen();enableCompass();
       setupMap();layout();
       status('Preparando a rota…');
       try{
@@ -440,11 +557,12 @@
       nav.basemap=window.SfaMapLayers.attach(nav.navMap,{mode:'streets'});
       nav.navMap.setView(map.getCenter(),17,{animate:false});
       nav.layers.route=L.layerGroup().addTo(nav.navMap);nav.layers.pins=L.layerGroup().addTo(nav.navMap);
+      nav.layers.labels=L.layerGroup().addTo(nav.navMap);nav.layers.preview=L.layerGroup().addTo(nav.navMap);
       paintBase();
     }
     function drawRoute(){
       const L_=nav.layers,route=nav.route;
-      L_.route.clearLayers();L_.pins.clearLayers();
+      L_.route.clearLayers();L_.pins.clearLayers();L_.labels.clearLayers();L_.preview.clearLayers();nav.labelsKey='';
       nav.casing=L.polyline(route.points,{color:'#fff',weight:15,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(L_.route);
       nav.done=L.polyline([],{color:'#9aa9ad',weight:9,opacity:.9,lineCap:'round',lineJoin:'round',interactive:false}).addTo(L_.route);
       nav.line=L.polyline(route.points,{color:'#1c7ed6',weight:9,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(L_.route);
@@ -485,7 +603,7 @@
       const ahead=nav.followNorth?{lat,lng}:Nav.offset(lat,lng,nav.heading,nav.shift*mpp(zoom,lat));
       const target=nav.followNorth?Nav.unwrap(nav.rotation,0):Nav.unwrap(nav.rotation,nav.heading);
       nav.rotation=target;setRotation(nav.followNorth?0:target);
-      ui.me.style.transform=nav.followNorth?'translate(-50%,-50%) rotate('+Math.round(nav.heading)+'deg)':'translate(-50%,-50%)';
+      applyArrow();
       if(force||Math.abs(nav.navMap.getZoom()-zoom)>0.2)nav.navMap.setView([ahead.lat,ahead.lng],zoom,{animate:!force,duration:0.8});
       else nav.navMap.panTo([ahead.lat,ahead.lng],{animate:true,duration:0.9,easeLinearity:1,noMoveStart:true});
     }
@@ -519,6 +637,8 @@
       ui.buttons.skip.hidden=final;ui.buttons.here.hidden=nav.arrived||nav.finished;
       syncBar();
       if(nav.marker)placeMarker();
+      drawLabels();
+      if(nav.stepsOpen&&nav.stepsKey!==stepsKey())renderSteps();
       follow(false);
     }
     function setBanner(type,dist,text,then){
@@ -532,7 +652,14 @@
       const phase=Nav.shouldSpeak(nav.said,key,distance,nav.speed||(mode()==='motor'?6:1.4));
       if(phase)speak(Nav.spoken(m,distance,phase));
     }
-    function paintStatic(){paintVoice();paintOrient();paintAttrib();paintTheme();paintZoom();applyTheme();ui.stopLabel.textContent='';}
+    function paintStatic(){paintVoice();paintOrient();paintAttrib();paintTheme();paintZoom();paintCompass();applyTheme();ui.stopLabel.textContent='';}
+    function paintCompass(){
+      if(!ui)return;
+      const b=ui.buttons.compass,on=nav.compassOn;
+      b.hidden=nav.simulate;                                           // na simulação não há celular apontando
+      b.setAttribute('aria-pressed',String(on));b.classList.toggle('is-on',on&&nav.orient.seen);
+      b.setAttribute('aria-label',on?'Seta pela bússola ligada. Toque para seguir só o deslocamento.':'Seta pelo deslocamento. Toque para usar a bússola do celular.');
+    }
     const THEME_LABEL={auto:'Tema automático',night:'Tema noite',day:'Tema dia'},THEME_ICON={auto:'🌗',night:'🌙',day:'☀️'};
     function paintTheme(){ui.buttons.theme.textContent=THEME_ICON[nav.theme];ui.buttons.theme.setAttribute('aria-label',THEME_LABEL[nav.theme]+'. Toque para mudar.');}
     function applyTheme(){
@@ -562,6 +689,7 @@
     function hideToast(){if(ui)ui.toast.hidden=true;}
     function status(text){if(text)toast(text,0);else hideToast();}
     function showCard({type,title,note,actions,sheet,eyebrow,dots,stats}){
+      if(nav&&nav.stepsOpen){nav.stepsOpen=false;ui.steps.hidden=true;ui.buttons.steps.classList.remove('is-on');}
       ui.card.classList.toggle('is-sheet',!!sheet);
       ui.cardIcon.innerHTML=type==='arrive'?'<span>'+icon('arrive')+'</span>':'';ui.cardIcon.hidden=type!=='arrive';
       ui.cardEyebrow.textContent=eyebrow||'';ui.cardEyebrow.hidden=!eyebrow;
@@ -589,6 +717,11 @@
         case 'zoom-out':if(isFree())freeZoom(-0.5);else{nav.zoomBias=Session.stepBias(nav.zoomBias,-0.5);paintZoom();follow(true);}break;
         case 'recenter':recenter();break;
         case 'zoom-auto':nav.zoomBias=0;paintZoom();follow(true);break;
+        case 'compass':
+          nav.compassOn=!nav.compassOn;safeSet(COMPASS_KEY,nav.compassOn?'1':'0');
+          if(nav.compassOn){enableCompass();toast('A seta azul acompanha o celular.',2200);}else{unbindCompass();nav.orient.seen=false;nav.orient.heading=null;toast('A seta azul segue a direção do deslocamento.',2200);}
+          paintCompass();applyArrow();break;
+        case 'steps':openSteps();break;
         case 'theme':nav.theme=Session.nextTheme(nav.theme);safeSet(THEME_KEY,nav.theme);paintTheme();applyTheme();toast(THEME_LABEL[nav.theme],1800);break;
         case 'here':if(!nav.arrived&&!nav.finished&&nav.fix)arrive(true);break;
         case 'speed':nav.simSpeed=(nav.simSpeed+1)%SIM_SPEEDS.length;paintSpeed();break;
@@ -643,7 +776,7 @@
     }
     function exit(silent){
       if(!active)return;
-      active=false;stopSources();
+      active=false;stopSources();unbindCompass();
       if(nav.wake){try{nav.wake.release();}catch(e){/* nada */}}
       if('speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){/* nada */}}
       leaveFullscreen();

@@ -48,6 +48,31 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
 .nav-me-marker{background:none;border:0}.nav-me-pin{display:block;width:46px;height:46px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.5))}
 .atlas-nav.is-gesture .nav-rot,.atlas-nav.is-gesture .nav-pin-in{transition:none}
 
+/* Percurso à frente: lista de ruas */
+.nav-steps{position:absolute;z-index:7;left:0;right:0;bottom:var(--nav-bar-h,150px);max-height:min(58%,520px);display:flex;flex-direction:column;border-radius:22px 22px 0 0;background:#fff;color:#0a3a41;box-shadow:0 -10px 30px rgba(0,0,0,.4);animation:nav-sheet .3s cubic-bezier(.16,1,.3,1)}
+.nav-steps[hidden]{display:none}
+.nav-steps header{display:flex;align-items:baseline;gap:8px;padding:14px 16px 8px}
+.nav-steps header strong{font-size:1.05rem}.nav-steps header small{flex:1;color:#52717a;font-size:.8rem}
+.nav-steps header button{align-self:center;width:44px;height:44px;border:0;border-radius:50%;background:#e8f1ef;color:#0a3a41;font-size:1.5rem;line-height:1;cursor:pointer}
+.nav-steps-list{margin:0;padding:0 8px 10px;list-style:none;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.nav-step{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:8px 10px;border:0;border-radius:14px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.nav-step:active{background:#e8f1ef}.nav-step:focus-visible{outline:3px solid #1c7ed6;outline-offset:-3px}
+.nav-step.is-current{background:#e7f1fb}.nav-step.is-stop{background:#fff4e6}
+.nav-step-icon{flex:none;width:38px;height:38px;padding:6px;border-radius:10px;background:#0b7285}
+.nav-step.is-stop .nav-step-icon{background:#e8590c}
+.nav-step-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.nav-step-text strong{font-size:.98rem;line-height:1.25;overflow-wrap:anywhere}
+.nav-step-text small{font-size:.76rem;line-height:1.3;color:#52717a}
+.nav-step-len{flex:none;font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums;color:#0b7285}
+
+/* Nomes das ruas sobre o traçado (de pé mesmo com o mapa girado) */
+.nav-street{background:none;border:0;pointer-events:none}
+.nav-street-in{display:block;position:absolute;left:0;top:0;transform:translate(-50%,-50%) rotate(var(--nav-rot,0deg));padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid #9ec5cc;color:#0a3a41;font:700 .72rem/1.3 system-ui,sans-serif;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3);transition:transform .85s cubic-bezier(.3,.7,.3,1)}
+.atlas-nav.is-gesture .nav-street-in{transition:none}
+.atlas-nav.is-night .nav-street-in{background:rgba(18,38,43,.92);border-color:#3f6e78;color:#e6f1ef}
+.nav-me.is-compass{transition:transform .1s linear}
+.nav-tools button[data-act="compass"]:not(.is-on){opacity:.75}
+
 /* Barra de chegada */
 .nav-bar{position:absolute;z-index:6;left:0;right:0;bottom:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"next" "stats" "actions";gap:6px;padding:13px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;color:#0a3a41;border-radius:20px 20px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.28)}
 .nav-stats{grid-area:stats;display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 12px}.nav-bar-actions{grid-area:actions}.nav-next{grid-area:next}
@@ -116,7 +141,9 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
   .nav-bar-actions{margin-top:0}.nav-bar-actions button{min-height:42px;flex:none;padding:0 14px}.nav-next .nav-stopnote{display:none}.nav-next strong{-webkit-line-clamp:1}
   .nav-zoom{right:auto;left:10px;align-items:flex-start;bottom:calc(var(--nav-bar-h,96px) + 8px)}
   .nav-attrib{left:70px;max-width:50%}
-  .nav-recenter{min-height:44px;padding:0 18px;font-size:.85rem}.nav-zoom-pair button{width:46px;height:44px;font-size:1.3rem}
+  .nav-recenter{min-height:44px;padding:0 18px;font-size:.85rem}
+  .nav-steps{left:50%;right:auto;width:min(92%,560px);transform:translateX(-50%);max-height:calc(100% - 70px - var(--nav-bar-h,96px));animation:none}
+  .nav-step{min-height:50px;padding:5px 8px}.nav-zoom-pair button{width:46px;height:44px;font-size:1.3rem}
   .nav-card.is-sheet{left:50%;right:auto;width:min(92%,520px);transform:translateX(-50%);max-height:96dvh;overflow:auto}
   .nav-card.is-sheet .nav-card-icon{display:none}
   .nav-toast{top:calc(env(safe-area-inset-top) + 86px)}.nav-gps{top:calc(env(safe-area-inset-top) + 82px)}
@@ -146,4 +173,9 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
 .atlas-nav.is-night .nav-dot.is-done{background:#2f9e44;border-color:#2f9e44}.atlas-nav.is-night .nav-dot.is-notfound{background:#e03131;border-color:#e03131}.atlas-nav.is-night .nav-dot.is-skipped{background:#868e96;border-color:#868e96}.atlas-nav.is-night .nav-dot.is-current{background:#4dabf7;border-color:#4dabf7}
 .atlas-nav.is-night .nav-tools button,.atlas-nav.is-night .nav-zoom-pair{background:#1f3a40;color:#e6f1ef}
 .atlas-nav.is-night .nav-zoom-pair button{color:#e6f1ef}.atlas-nav.is-night .nav-zoom-pair button+button{border-top-color:#2f4d54}
+.atlas-nav.is-night .nav-steps{background:#12262b;color:#e6f1ef}
+.atlas-nav.is-night .nav-steps header small,.atlas-nav.is-night .nav-step-text small{color:#9db8b4}
+.atlas-nav.is-night .nav-step-len{color:#5ad1c8}
+.atlas-nav.is-night .nav-steps header button{background:#1f3a40;color:#e6f1ef}
+.atlas-nav.is-night .nav-step.is-current{background:#183746}.atlas-nav.is-night .nav-step.is-stop{background:#3a2a1c}.atlas-nav.is-night .nav-step:active{background:#1f3a40}
 .atlas-nav.is-night .nav-attrib{background:rgba(15,26,29,.78);color:#9db8b4}

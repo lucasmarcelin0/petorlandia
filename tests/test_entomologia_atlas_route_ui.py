@@ -48,9 +48,9 @@ def test_versoes_dos_arquivos_alterados_foram_trocadas_no_template(client):
     html = _page(client)
     for name, version in (('sfa_atlas_search.js', '20261005-busca2'), ('sfa_atlas_search_model.js', '20261007-letra'), ('sfa_field_map.js', '20261002-rota'),
                           ('sfa_atlas_route.js', '20261004-ux'), ('sfa_atlas_route_model.js', '20261003-nav'),
-                          ('sfa_atlas_nav.js', '20261005-gestos'), ('sfa_atlas_nav_model.js', '20261003-nav'),
-                          ('sfa_atlas_nav_session.js', '20261005-gestos'),
-                          ('sfa_atlas_nav.css', '20261005-gestos'), ('sfa_atlas_route.css', '20261004-ux')):
+                          ('sfa_atlas_nav.js', '20261006-bussola'), ('sfa_atlas_nav_model.js', '20261006-bussola'),
+                          ('sfa_atlas_nav_session.js', '20261006-bussola'),
+                          ('sfa_atlas_nav.css', '20261006-bussola'), ('sfa_atlas_route.css', '20261004-ux')):
         assert re.search(re.escape(name) + r'\?v=' + re.escape(version), html), name
 
 
