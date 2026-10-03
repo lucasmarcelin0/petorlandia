@@ -269,6 +269,36 @@ def test_rua_de_nome_em_letra_acha_a_rua_exata(app, monkeypatch):
         assert _names('avenida z') == []
 
 
+def test_montagem_do_indice_e_uma_so_mesmo_com_varias_requisicoes_ao_mesmo_tempo(app, monkeypatch):
+    """Com o cache vazio, índice + buscas + pré-montagem chegavam juntos e cada um montava a sua cópia (R14/R15)."""
+    import threading
+    import time
+    layers = _synthetic_layers()
+    calls = []
+
+    def slow_layers(allowed, include_deleted=False):
+        calls.append(1)
+        time.sleep(0.4)                       # tempo para as outras threads chegarem
+        return {k: deepcopy(v) for k, v in layers.items() if allowed or not v['clinical']}
+    monkeypatch.setattr(editor, 'layers', slow_layers)
+    fast.reset()
+    results = []
+
+    def work(kind):
+        with app.app_context():
+            results.append(fast.client_index(True) if kind == 'index' else fast.search('rua quinze', True))
+    threads = [threading.Thread(target=work, args=(k,)) for k in ('index', 'index', 'search', 'search', 'search')]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    assert not any(t.is_alive() for t in threads)
+    assert len(calls) == 1, f'montou {len(calls)} vezes ao mesmo tempo'
+    assert len(results) == 5
+    indices = [r for r in results if isinstance(r, tuple)]
+    assert len(indices) == 2 and indices[0] == indices[1]          # os dois pedidos do índice recebem o mesmo payload
+
+
 def test_pre_montagem_do_indice_em_segundo_plano(app, monkeypatch):
     layers = _synthetic_layers()
     monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
