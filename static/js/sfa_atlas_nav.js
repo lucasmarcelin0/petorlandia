@@ -10,7 +10,7 @@
 (function(){
   'use strict';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const VOICE_KEY='sfa-nav-voice', THEME_KEY='sfa-nav-theme', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
+  const VOICE_KEY='sfa-nav-voice', THEME_KEY='sfa-nav-theme', HINT_KEY='sfa-nav-gesture-hint', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
   const ATTRIB={streets:'Mapa © Esri, HERE, Garmin, OpenStreetMap e comunidade GIS',satellite:'Imagens © Esri, Maxar, Earthstar Geographics e comunidade GIS'};
 
   // ---- Ícones das manobras (SVG simples, traço branco) ----
@@ -64,6 +64,7 @@
         +'<button type="button" data-act="speed" hidden title="Velocidade da simulação"></button></div>'
         +'<div class="nav-zoom" role="group" aria-label="Zoom do mapa"><button type="button" class="nav-zoom-auto" data-act="zoom-auto" hidden title="Voltar ao zoom automático">Auto</button>'
         +'<div class="nav-zoom-pair"><button type="button" data-act="zoom-in" aria-label="Aproximar o mapa">＋</button><button type="button" data-act="zoom-out" aria-label="Afastar o mapa">－</button></div></div>'
+        +'<button type="button" class="nav-recenter" data-act="recenter" hidden><span aria-hidden="true">◎</span> Recentralizar</button>'
         +'<footer class="nav-bar"><div class="nav-next"><small class="nav-stoplabel"></small><strong class="nav-stopname"></strong><span class="nav-stopnote"></span></div>'
         +'<div class="nav-stats"><strong class="nav-eta"></strong><span class="nav-left"></span></div>'
         +'<div class="nav-bar-actions"><button type="button" class="nav-here" data-act="here" title="Marcar que já chegou a esta parada">Cheguei</button><button type="button" data-act="skip" title="Pular esta parada e recalcular">Pular</button><button type="button" class="nav-exit" data-act="exit">Sair</button></div></footer>'
@@ -75,26 +76,100 @@
         toast:$('.nav-toast'),eta:$('.nav-eta'),left:$('.nav-left'),stopLabel:$('.nav-stoplabel'),stopName:$('.nav-stopname'),stopNote:$('.nav-stopnote'),attrib:$('.nav-attrib'),gps:$('.nav-gps'),
         approach:$('.nav-approach i'),bar:$('.nav-bar'),
         card:$('.nav-card'),cardIcon:$('.nav-card-icon'),cardEyebrow:$('.nav-card-eyebrow'),cardTitle:$('.nav-card-title'),cardNote:$('.nav-card-note'),cardDots:$('.nav-dots'),cardStats:$('.nav-card-stats'),cardActions:$('.nav-card-actions'),
-        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),theme:$('[data-act="theme"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),here:$('[data-act="here"]'),overview:$('[data-act="overview"]'),zoomAuto:$('[data-act="zoom-auto"]')}};
+        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),theme:$('[data-act="theme"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),here:$('[data-act="here"]'),overview:$('[data-act="overview"]'),zoomAuto:$('[data-act="zoom-auto"]'),recenter:$('[data-act="recenter"]')}};
       root.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)act(b.dataset.act);});
-      pinch(ui.stage);
+      gestures(ui.stage);
       return ui;
     }
 
-    // Pinça na tela: dois dedos mudam o zoom (o mesmo ajuste dos botões ＋ e －).
-    function pinch(el){
-      const pts=new Map();let start=null;
-      const two=()=>{const [a,b]=[...pts.values()];return Math.hypot(a.x-b.x,a.y-b.y)||1;};
-      el.addEventListener('pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2&&nav)start={d:two(),bias:nav.zoomBias};});
-      el.addEventListener('pointermove',e=>{
-        if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-        if(pts.size!==2||!start||!nav)return;
-        nav.zoomBias=Session.pinchBias(start.bias,two()/start.d);
-        if(nav.overview){nav.overview=false;ui.buttons.overview.classList.remove('is-on');}
-        if(!nav.pinchRaf)nav.pinchRaf=requestAnimationFrame(()=>{if(!nav)return;nav.pinchRaf=0;follow(true);});
+    // ---------------------------------------------------------------- gestos no mapa
+    // Um dedo arrasta; dois dedos aproximam/afastam e giram. Pinça simples só muda o zoom e continua seguindo a posição;
+    // arrastar ou girar solta o mapa ("livre") até tocar em Recentralizar (ou 20 s sem tocar).
+    const isFree=()=>!!(nav&&(nav.free||nav.overview));
+    function gestures(el){
+      const pts=new Map();let g=null;
+      const at=e=>({x:e.clientX,y:e.clientY}),pair=()=>[...pts.values()];
+      const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y)||1,mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+      function begin(){
+        if(!nav||!nav.navMap)return;
+        clearTimeout(nav.freeTimer);ui.root.classList.add('is-gesture');
+        if(pts.size===1)g={kind:'pan',last:pair()[0],moved:0};
+        else if(pts.size>=2){const [a,b]=pair();g={kind:'two',d:dist(a,b),ang:Session.fingerAngle(a,b),prevAng:Session.fingerAngle(a,b),twist:0,mid:mid(a,b),rot:nav.rotation,bias:nav.zoomBias,zoom:nav.navMap.getZoom(),free:isFree()};}
+      }
+      el.addEventListener('pointerdown',e=>{
+        if(!nav)return;pts.set(e.pointerId,at(e));try{el.setPointerCapture(e.pointerId);}catch(err){/* ponteiro sintético ou já solto */}
+        begin();
       });
-      const end=e=>{pts.delete(e.pointerId);if(pts.size<2)start=null;if(nav)paintZoom();};
-      ['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,end));
+      el.addEventListener('pointermove',e=>{
+        if(!pts.has(e.pointerId)||!nav||!g)return;pts.set(e.pointerId,at(e));
+        if(g.kind==='pan'&&pts.size===1){
+          const p=at(e),dx=p.x-g.last.x,dy=p.y-g.last.y;g.last=p;g.moved+=Math.hypot(dx,dy);
+          if(g.moved<8&&!isFree())return;                                   // um toque não solta o mapa
+          enterFree();
+          const [mx,my]=Session.screenToMap(dx,dy,nav.rotation);nav.navMap.panBy([-mx,-my],{animate:false});
+        }else if(g.kind==='two'&&pts.size>=2){
+          const [a,b]=pair(),d=dist(a,b),ang=Session.fingerAngle(a,b),m=mid(a,b);
+          g.twist+=Session.angleDelta(g.prevAng,ang);g.prevAng=ang;
+          if(!g.free&&Math.abs(g.twist)>10){enterFree();g.free=true;g.zoom=nav.navMap.getZoom();g.d=d;g.rot=nav.rotation;g.mid=m;}
+          if(g.free){
+            nav.rotation=Session.gestureRotation(g.rot,g.twist);setRotation(nav.rotation);
+            nav.navMap.setZoom(Session.gestureZoom(g.zoom,d/g.d),{animate:false});
+            const [mx,my]=Session.screenToMap(m.x-g.mid.x,m.y-g.mid.y,nav.rotation);g.mid=m;nav.navMap.panBy([-mx,-my],{animate:false});
+          }else{
+            nav.zoomBias=Session.pinchBias(g.bias,d/g.d);
+            if(!nav.pinchRaf)nav.pinchRaf=requestAnimationFrame(()=>{if(!nav)return;nav.pinchRaf=0;follow(true);});
+          }
+        }
+      });
+      const end=e=>{
+        if(!pts.delete(e.pointerId))return;
+        if(pts.size===0){g=null;if(ui)ui.root.classList.remove('is-gesture');if(nav){paintZoom();touched();}}
+        else if(pts.size===1)g={kind:'pan',last:pair()[0],moved:isFree()?99:0};   // um dedo levantou: continua arrastando com o outro
+      };
+      ['pointerup','pointercancel','lostpointercapture'].forEach(t=>el.addEventListener(t,end));
+    }
+    // Mapa solto: a seta passa a ser um marcador no próprio mapa (a fixa só vale seguindo a posição).
+    function syncMe(){
+      if(!nav||!ui)return;
+      if(isFree()){
+        if(!nav.marker&&nav.fix){
+          nav.marker=L.marker([nav.fix.lat,nav.fix.lng],{icon:L.divIcon({className:'nav-me-marker',html:'<span class="nav-me-pin">'+ME+'</span>',iconSize:[46,46],iconAnchor:[23,23]}),interactive:false,keyboard:false,zIndexOffset:1000}).addTo(nav.navMap);
+        }
+        ui.me.hidden=true;placeMarker();
+      }else{
+        if(nav.marker){nav.marker.remove();nav.marker=null;}
+        ui.me.hidden=false;
+      }
+      ui.buttons.recenter.hidden=!isFree();
+      ui.root.classList.toggle('is-free',isFree());
+    }
+    function placeMarker(){
+      if(!nav||!nav.marker||!nav.fix)return;
+      nav.marker.setLatLng([nav.fix.lat,nav.fix.lng]);
+      const el=nav.marker.getElement(),pin=el&&el.firstChild;
+      if(pin)pin.style.transform='rotate('+Math.round(nav.heading)+'deg)';
+    }
+    function enterFree(){
+      if(nav.free)return;
+      nav.free=true;nav.navMap.stop();syncMe();
+      if(!safeGet(HINT_KEY)){safeSet(HINT_KEY,'1');toast('Arraste e gire com 2 dedos. Toque em Recentralizar para voltar.',4800);}
+    }
+    // Sem tocar por um tempo, o mapa volta sozinho (útil com o veículo em movimento). A visão geral fica até a pessoa sair dela.
+    function touched(){
+      clearTimeout(nav.freeTimer);
+      if(nav.free&&!nav.overview)nav.freeTimer=setTimeout(()=>{if(active&&nav&&nav.free&&!nav.overview)recenter();},nav.freeIdleMs);
+    }
+    function recenter(){
+      if(!nav||!ui)return;
+      clearTimeout(nav.freeTimer);
+      const was=isFree();
+      nav.free=false;
+      if(nav.overview){nav.overview=false;ui.buttons.overview.classList.remove('is-on');}
+      syncMe();
+      if(was&&nav.fix)follow(false);
+    }
+    function freeZoom(step){
+      nav.navMap.setZoom(Session.gestureZoom(nav.navMap.getZoom(),Math.pow(2,step)),{animate:true});touched();
     }
 
     // ---------------------------------------------------------------- estado da navegação
@@ -102,7 +177,8 @@
       return {simulate:!!opts.simulate,stops:[],route:null,leg:1,along:0,minAlong:0,reachedAlong:-1,heading:0,rotation:0,fix:null,lastFix:null,speed:0,
         followNorth:false,overview:false,voice:safeGet(VOICE_KEY)!=='0',zoomBias:0,said:{},deviation:{since:null},rerouting:false,lastReroute:0,finished:false,
         watch:null,timers:[],wake:null,navMap:null,layers:{},basemap:null,arrived:false,simSpeed:0,simAlong:0,simPause:false,token:0,pins:[],
-        session:null,persist:!opts.simulate,order:[],undoInfo:null,lastPos:null,manualArrive:false,theme:safeGet(THEME_KEY)||'auto',pinchRaf:0};
+        session:null,persist:!opts.simulate,order:[],undoInfo:null,lastPos:null,manualArrive:false,theme:safeGet(THEME_KEY)||'auto',pinchRaf:0,
+        free:false,freeTimer:null,freeIdleMs:Session.FREE_IDLE_MS,marker:null};
     }
     function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
     function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){/* sem armazenamento */}}
@@ -233,6 +309,7 @@
     // ---------------------------------------------------------------- chegada às paradas
     function arrive(manual){
       const route=nav.route,k=nav.leg,place=route.stops[k],final=k===route.stopAlong.length-1;
+      recenter();
       nav.arrived=true;nav.manualArrive=!!manual;nav.before={along:nav.along,minAlong:nav.minAlong};
       nav.along=Math.max(nav.along,route.stopAlong[k]-Nav.ARRIVE_METERS);
       nav.minAlong=route.stopAlong[k]-(Nav.ARRIVE_METERS+5);          // não volta para antes da parada
@@ -400,7 +477,7 @@
     }
     // Centraliza adiante da posição, para a seta ficar no terço de baixo. Gira o mapa para o rumo.
     function follow(force){
-      if(!nav.navMap||!nav.fix||nav.overview)return;
+      if(!nav.navMap||!nav.fix||nav.overview||nav.free)return;
       const zoom=zoomFor(),lat=nav.fix.lat,lng=nav.fix.lng;
       const ahead=nav.followNorth?{lat,lng}:Nav.offset(lat,lng,nav.heading,nav.shift*mpp(zoom,lat));
       const target=nav.followNorth?Nav.unwrap(nav.rotation,0):Nav.unwrap(nav.rotation,nav.heading);
@@ -438,6 +515,7 @@
       ui.stopNote.textContent=place&&place.note||'';ui.stopNote.hidden=!(place&&place.note);
       ui.buttons.skip.hidden=final;ui.buttons.here.hidden=nav.arrived||nav.finished;
       syncBar();
+      if(nav.marker)placeMarker();
       follow(false);
     }
     function setBanner(type,dist,text,then){
@@ -504,8 +582,9 @@
         case 'voice':nav.voice=!nav.voice;safeSet(VOICE_KEY,nav.voice?'1':'0');paintVoice();if(!nav.voice&&'speechSynthesis' in window)window.speechSynthesis.cancel();else speak('Voz ligada.');break;
         case 'orient':nav.followNorth=!nav.followNorth;paintOrient();follow(true);break;
         case 'base':nav.basemap.setMode(nav.basemap.getMode()==='satellite'?'streets':'satellite');paintBase();break;
-        case 'zoom-in':nav.zoomBias=Session.stepBias(nav.zoomBias,0.5);paintZoom();nav.overview=false;ui.buttons.overview.classList.remove('is-on');follow(true);break;
-        case 'zoom-out':nav.zoomBias=Session.stepBias(nav.zoomBias,-0.5);paintZoom();nav.overview=false;ui.buttons.overview.classList.remove('is-on');follow(true);break;
+        case 'zoom-in':if(isFree())freeZoom(0.5);else{nav.zoomBias=Session.stepBias(nav.zoomBias,0.5);paintZoom();follow(true);}break;
+        case 'zoom-out':if(isFree())freeZoom(-0.5);else{nav.zoomBias=Session.stepBias(nav.zoomBias,-0.5);paintZoom();follow(true);}break;
+        case 'recenter':recenter();break;
         case 'zoom-auto':nav.zoomBias=0;paintZoom();follow(true);break;
         case 'theme':nav.theme=Session.nextTheme(nav.theme);safeSet(THEME_KEY,nav.theme);paintTheme();applyTheme();toast(THEME_LABEL[nav.theme],1800);break;
         case 'here':if(!nav.arrived&&!nav.finished&&nav.fix)arrive(true);break;
@@ -516,9 +595,10 @@
       }
     }
     function overview(){
+      clearTimeout(nav.freeTimer);
       nav.overview=!nav.overview;ui.buttons.overview.classList.toggle('is-on',nav.overview);
-      if(nav.overview){setRotation(0);nav.navMap.fitBounds(L.latLngBounds(nav.route.points),{padding:[70,70],animate:true});}
-      else follow(true);
+      if(nav.overview){nav.free=false;nav.rotation=0;setRotation(0);nav.navMap.fitBounds(L.latLngBounds(nav.route.points),{padding:[70,70],animate:true});syncMe();}
+      else{syncMe();follow(true);}
     }
     function askExit(){
       if(!ui.card.hidden&&nav.finished){exit();return;}

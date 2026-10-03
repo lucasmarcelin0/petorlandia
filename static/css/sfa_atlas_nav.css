@@ -41,6 +41,13 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
 .nav-zoom-auto[hidden]{display:none}
 .nav-zoom button:focus-visible{outline:3px solid #1c7ed6;outline-offset:-3px}
 
+/* Mapa solto: Recentralizar e marcador da posição */
+.nav-recenter{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-bar-h,150px) + 16px);display:inline-flex;align-items:center;gap:8px;min-height:52px;padding:0 22px;border:0;border-radius:999px;background:#1c7ed6;color:#fff;font:800 .95rem system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.42);cursor:pointer;white-space:nowrap;animation:nav-rise .25s ease-out}
+.nav-recenter[hidden]{display:none}.nav-recenter span{font-size:1.2rem;line-height:1}.nav-recenter:active{transform:translateX(-50%) scale(.96)}.nav-recenter:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.nav-me[hidden]{display:none}
+.nav-me-marker{background:none;border:0}.nav-me-pin{display:block;width:46px;height:46px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.5))}
+.atlas-nav.is-gesture .nav-rot,.atlas-nav.is-gesture .nav-pin-in{transition:none}
+
 /* Barra de chegada */
 .nav-bar{position:absolute;z-index:6;left:0;right:0;bottom:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"next" "stats" "actions";gap:6px;padding:13px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;color:#0a3a41;border-radius:20px 20px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.28)}
 .nav-stats{grid-area:stats;display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 12px}.nav-bar-actions{grid-area:actions}.nav-next{grid-area:next}
@@ -60,7 +67,7 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
 .nav-bar-actions button:focus-visible{outline:3px solid #1c7ed6;outline-offset:2px}
 
 /* Avisos */
-.nav-toast{position:absolute;z-index:7;left:50%;top:calc(env(safe-area-inset-top) + 150px);transform:translateX(-50%);max-width:min(92%,420px);margin:0;padding:10px 16px;border-radius:999px;background:rgba(10,58,65,.94);color:#fff;font-size:.86rem;font-weight:600;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.35);animation:nav-toast .3s ease}
+.nav-toast{position:absolute;z-index:7;left:50%;top:calc(env(safe-area-inset-top) + 150px);transform:translateX(-50%);max-width:min(92%,420px);margin:0;padding:10px 16px;border-radius:22px;background:rgba(10,58,65,.94);color:#fff;font-size:.86rem;font-weight:600;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.35);animation:nav-toast .3s ease}
 .nav-toast.is-error{background:rgba(180,35,24,.95)}
 .nav-toast.has-action{display:flex;align-items:center;gap:12px;padding:6px 8px 6px 16px;border-radius:999px;pointer-events:auto}
 .nav-toast button{min-height:38px;padding:0 16px;border:0;border-radius:999px;background:#ffd43b;color:#2b1d00;font:800 .84rem system-ui,sans-serif;cursor:pointer}
@@ -108,7 +115,8 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
   .nav-bar{padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"next actions" "stats actions";gap:2px 14px;align-items:center}
   .nav-bar-actions{margin-top:0}.nav-bar-actions button{min-height:42px;flex:none;padding:0 14px}.nav-next .nav-stopnote{display:none}.nav-next strong{-webkit-line-clamp:1}
   .nav-zoom{right:auto;left:10px;align-items:flex-start;bottom:calc(var(--nav-bar-h,96px) + 8px)}
-  .nav-attrib{left:70px;max-width:50%}.nav-zoom-pair button{width:46px;height:44px;font-size:1.3rem}
+  .nav-attrib{left:70px;max-width:50%}
+  .nav-recenter{min-height:44px;padding:0 18px;font-size:.85rem}.nav-zoom-pair button{width:46px;height:44px;font-size:1.3rem}
   .nav-card.is-sheet{left:50%;right:auto;width:min(92%,520px);transform:translateX(-50%);max-height:96dvh;overflow:auto}
   .nav-card.is-sheet .nav-card-icon{display:none}
   .nav-toast{top:calc(env(safe-area-inset-top) + 86px)}.nav-gps{top:calc(env(safe-area-inset-top) + 82px)}
@@ -117,9 +125,10 @@ html.atlas-nav-open,html.atlas-nav-open body{overflow:hidden;overscroll-behavior
 
 @keyframes nav-in{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
 @keyframes nav-toast{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes nav-rise{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes nav-sheet{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
 @keyframes nav-pop{from{opacity:0;transform:translate(-50%,-46%) scale(.94)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
-@media (prefers-reduced-motion:reduce){.atlas-nav,.nav-toast,.nav-card{animation:none}.nav-rot,.nav-me,.nav-pin-in,.nav-tools button,.nav-approach i{transition:none}}
+@media (prefers-reduced-motion:reduce){.atlas-nav,.nav-toast,.nav-card,.nav-recenter{animation:none}.nav-rot,.nav-me,.nav-pin-in,.nav-tools button,.nav-approach i{transition:none}}
 
 /* Tema noite: mapa escurecido, painéis escuros, menos brilho à noite */
 .atlas-nav.is-night{background:#0f1a1d}
