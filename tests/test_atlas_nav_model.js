@@ -166,6 +166,43 @@ assert.equal(Nav.describe({type: 'uturn', street: ''}), 'Faça o retorno');
 assert.equal(Nav.describe({type: 'sharp-left', street: 'Rua B'}), 'Faça uma curva fechada à esquerda na Rua B');
 assert.equal(Nav.describe({type: 'slight-right', street: ''}), 'Faça uma curva suave à direita');
 
+// 12b. Percurso adiantado: rua por rua, com o trecho de cada uma.
+{
+  const g = network(street('Rua A', [0, 0], [300, 0]), street('Avenida B', [300, 0], [300, 250]), street('Rua C', [300, 250], [100, 250]));
+  const route = drive(g, [0, 0], [100, 250]);
+  const all = Nav.itinerary(route, 0);
+  assert.deepEqual(all.map(i => i.type), ['depart', 'left', 'left', 'arrive']);
+  assert.deepEqual(all.map(i => i.street), ['Rua A', 'Avenida B', 'Rua C', '']);
+  assert.equal(all[0].current, true, 'o primeiro item é o trecho em que a pessoa está');
+  assert.equal(all[1].current, false);
+  near(all[0].length, 300, 6); near(all[1].length, 250, 6); near(all[2].length, 200, 6);
+  assert.equal(all[3].length, 0);
+  near(all[1].distance, 300, 6, 'a primeira curva está a ~300 m'); near(all[2].distance, 550, 8);
+  assert.equal(all[1].text, 'Vire à esquerda na Avenida B');
+  assert.equal(all[3].final, true);
+  // Os trechos somam o percurso inteiro.
+  near(all.reduce((t, i) => t + i.length, 0), route.total, 3);
+  // Andando: o trecho já feito some e o corrente encurta.
+  const mid = Nav.itinerary(route, 380);
+  assert.deepEqual(mid.map(i => i.street), ['Avenida B', 'Rua C', '']);
+  assert.equal(mid[0].current, true); near(mid[0].length, 300 + 250 - 380, 6); assert.equal(mid[0].distance, 0);
+  near(mid[1].distance, 550 - 380, 8);
+  assert.equal(Nav.itinerary(route, 0, 2).length, 2, 'respeita o limite');
+  assert.deepEqual(Nav.itinerary(route, route.total).map(i => i.type), [], 'no fim não sobra nada');
+  // Trecho destacado no mapa: começa e termina onde dizem.
+  const seg = Nav.segment(route, all[1].from, all[1].to);
+  near(Route.distance(seg[0][0], seg[0][1], all[1].lat, all[1].lng), 0, 1.5);
+  const last = seg[seg.length - 1], endPt = Nav.pointAt(route, all[1].to);
+  near(Route.distance(last[0], last[1], endPt.lat, endPt.lng), 0, 0.5);
+  let meters = 0; for (let k = 1; k < seg.length; k++) meters += Route.distance(seg[k - 1][0], seg[k - 1][1], seg[k][0], seg[k][1]);
+  near(meters, all[1].to - all[1].from, 3);
+  assert.equal(Nav.segment(route, 500, 100).length >= 2, true, 'aceita os limites invertidos');
+  // Duas paradas: cada chegada vira um item com o número da parada.
+  const two = drive(g, [0, 0], [300, 250], [100, 250]);
+  const stopsList = Nav.itinerary(two, 0).filter(i => i.type === 'arrive');
+  assert.deepEqual(stopsList.map(i => i.stop), [1, 2]); assert.deepEqual(stopsList.map(i => i.final), [false, true]);
+}
+
 // 13. Malha real da cidade: manobras plausíveis e progresso coerente ao "andar" a rota inteira.
 let checked = 'sintéticos';
 if (process.argv[2]) {

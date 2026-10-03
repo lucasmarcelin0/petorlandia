@@ -226,6 +226,38 @@
   }
 
   /**
+   * Percurso adiantado: o que vem pela frente, rua por rua. Cada item é uma manobra e o trecho que ela abre
+   * (até a manobra seguinte): {index, type, street, text, from, to, length, distance, current, lat, lng, stop}.
+   * O primeiro é o trecho em que a pessoa está agora (`current`); `distance` é quanto falta para o item começar.
+   */
+  function itinerary(route, along, max) {
+    const ms = route.maneuvers, out = [];
+    for (let i = 0; i < ms.length; i++) {
+      const m = ms[i], next = ms[i + 1];
+      const from = m.along, to = next ? next.along : route.total;
+      if (m.type === 'arrive') { if (m.along <= along + 1) continue; }
+      else if (to <= along + 1) continue;                                   // trecho já percorrido
+      const current = m.type !== 'arrive' && from <= along + 1 && to > along + 1;
+      out.push({
+        index: i, type: m.type, street: m.street || '', text: describe(m), from, to,
+        length: m.type === 'arrive' ? 0 : Math.max(0, to - Math.max(from, current ? along : from)),
+        distance: current ? 0 : Math.max(0, from - along), current, lat: m.lat, lng: m.lng,
+        stop: m.type === 'arrive' ? m.stop : undefined, final: !!m.final, name: m.name || '',
+      });
+      if (max && out.length >= max) break;
+    }
+    return out;
+  }
+  /** Pontos do traçado entre duas distâncias (para destacar um trecho no mapa). */
+  function segment(route, from, to) {
+    const a = clamp(Math.min(from, to), 0, route.total), b = clamp(Math.max(from, to), 0, route.total);
+    const first = pointAt(route, a), last = pointAt(route, b), pts = [[first.lat, first.lng]];
+    for (let i = 0; i < route.points.length; i++) if (route.cum[i] > a && route.cum[i] < b) pts.push(route.points[i]);
+    pts.push([last.lat, last.lng]);
+    return pts;
+  }
+
+  /**
    * Controle de desvio. state: {since: ms|null}. Devolve {state, off, reroute}:
    * `off` assim que passa de OFF_METERS; `reroute` só depois de OFF_SECONDS fora (evita recalcular
    * por um tropeço do GPS). Voltar para perto da rota zera tudo.
@@ -289,7 +321,7 @@
 
   return {
     norm360, diff, bearing, offset, smoothAngle, unwrap, headingFromFixes,
-    buildRoute, walkAlong, pointAt, maneuvers, locate, progress, trackDeviation,
+    buildRoute, walkAlong, pointAt, maneuvers, locate, progress, itinerary, segment, trackDeviation,
     describe, spoken, spokenDistance, inStreet, thresholds, shouldSpeak, eta,
     ARRIVE_METERS, OFF_METERS, OFF_SECONDS,
   };

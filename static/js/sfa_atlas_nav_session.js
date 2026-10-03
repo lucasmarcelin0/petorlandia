@@ -145,6 +145,39 @@
   /** Giro dos dedos vira giro do mapa: o mapa acompanha os dedos, então a rotação do quadrado diminui. */
   const gestureRotation = (startRotation, twist) => startRotation - twist;
 
-  return {FREE_IDLE_MS, ZOOM_MIN, ZOOM_MAX, fingerAngle, angleDelta, screenToMap, gestureZoom, gestureRotation, STORE, MAX_AGE, STATUSES, BIAS_MIN, BIAS_MAX, stopKey, create, sanitize, load, save, clear, record, undo, statusOf, pending, counts,
+  // ---- Bússola do aparelho ---------------------------------------------------------
+  /**
+   * Para onde o celular aponta (graus, horário a partir do norte), a partir dos ângulos do sensor (alpha, beta, gamma;
+   * alpha cresce no sentido anti-horário, como na especificação do navegador).
+   * Deitado, vale a ponta de cima do aparelho; em pé (como quem segue o caminho olhando a tela), vale a direção
+   * da câmera traseira. A passagem de um para o outro é pela inclinação, para a seta não pular.
+   */
+  function compassFromEuler(alpha, beta, gamma) {
+    const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
+    const zx = Math.cos(a) * Math.sin(g) + Math.sin(a) * Math.sin(b) * Math.cos(g);
+    const zy = Math.sin(a) * Math.sin(g) - Math.cos(a) * Math.sin(b) * Math.cos(g);
+    const zz = Math.cos(b) * Math.cos(g);
+    const top = Math.atan2(-Math.sin(a) * Math.cos(b), Math.cos(a) * Math.cos(b)) / r;      // ponta de cima, projetada
+    const back = Math.atan2(-zx, -zy) / r;                                                    // câmera traseira, projetada
+    const flat = Math.min(1, Math.max(0, (Math.abs(zz) - 0.45) / 0.35));                       // 0 = em pé, 1 = deitado
+    // Mistura pelos vetores (não pelos ângulos) para não girar o caminho longo na virada.
+    const tx = Math.sin(top * r), ty = Math.cos(top * r), bx = Math.sin(back * r), by = Math.cos(back * r);
+    const x = flat * tx + (1 - flat) * bx, y = flat * ty + (1 - flat) * by;
+    return ((Math.atan2(x, y) / r) % 360 + 360) % 360;
+  }
+  /** A tela girada (paisagem) muda o que é "frente" para quem olha: soma o ângulo da tela. */
+  const withScreen = (heading, screenAngle) => (((heading + (Number(screenAngle) || 0)) % 360) + 360) % 360;
+  /** Média móvel de ângulos pelo caminho curto; `k` entre 0 (não muda) e 1 (acompanha na hora). */
+  function easeAngle(previous, next, k) {
+    if (!Number.isFinite(previous)) return next;
+    return (((previous + angleDelta(previous, next) * k) % 360) + 360) % 360;
+  }
+  /** Seta na tela: quando o mapa está girado, a seta mostra a diferença entre o celular e o mapa. */
+  const arrowOnScreen = (heading, mapRotation) => (((heading - (Number(mapRotation) || 0)) % 360) + 360) % 360;
+  /** Acima desta velocidade (m/s) vale o rumo do deslocamento; abaixo (a pé, parado), a bússola. */
+  const COMPASS_BELOW_SPEED = 2.5;
+  const useCompass = (speed, available) => !!available && !(Number.isFinite(speed) && speed >= COMPASS_BELOW_SPEED);
+
+  return {compassFromEuler, withScreen, easeAngle, arrowOnScreen, useCompass, COMPASS_BELOW_SPEED, FREE_IDLE_MS, ZOOM_MIN, ZOOM_MAX, fingerAngle, angleDelta, screenToMap, gestureZoom, gestureRotation, STORE, MAX_AGE, STATUSES, BIAS_MIN, BIAS_MAX, stopKey, create, sanitize, load, save, clear, record, undo, statusOf, pending, counts,
     progressLabel, resumable, summaryText, zoomFor, stepBias, pinchBias, isNight, nextTheme, approach};
 });
