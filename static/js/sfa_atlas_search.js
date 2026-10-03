@@ -123,12 +123,16 @@
     }
 
     // Índice a caminho: espera (costuma levar 1 s) em vez de mandar uma consulta pesada ao servidor a cada tecla.
-    function waiting(){run++;controller?.abort();preview.clearLayers();results.replaceChildren();open(true);status.textContent='Preparando a busca instantânea…';}
+    function waiting(){
+      run++;controller?.abort();preview.clearLayers();results.replaceChildren();open(true);
+      territoryMatches(input.value.trim());                       // quadras e setores são locais: aparecem já
+      status.textContent='Preparando a busca de endereços…';
+    }
     function search(){
       if(!input.value.trim()){open(false);return;}
       if(index){localSearch(input.value.trim());return;}
       loadIndex();
-      if(indexState==='failed')serverSearch();else waiting();
+      if(indexState==='loading')waiting();else serverSearch();      // sem índice nem download em andamento (falha ou recurso ausente): reserva
     }
     $('field-filters').onsubmit=e=>{e.preventDefault();clearTimeout(timer);search();};
     input.oninput=()=>{
@@ -136,8 +140,8 @@
       if(!input.value.trim()){clear();return;}
       if(index){localSearch(input.value.trim());return;}   // imediato: sem espera e sem rede
       loadIndex();
-      if(indexState==='failed')timer=setTimeout(serverSearch,400);   // índice indisponível: reserva no servidor
-      else waiting();                                                  // a caminho: o resultado local aparece quando chegar
+      if(indexState==='loading')waiting();                             // a caminho: o resultado local aparece quando chegar
+      else timer=setTimeout(serverSearch,400);                         // indisponível (falha ou recurso ausente): reserva no servidor
     };
     input.onfocus=loadIndex;
     // Baixa o índice logo depois que a tela termina de carregar, antes de alguém digitar.

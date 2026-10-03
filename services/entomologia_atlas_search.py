@@ -133,7 +133,10 @@ def _cache_key(signature):
 def snapshot():
     signature = _signature()
     if signature is None:
-        return _Snapshot(editor.layers(True), None)
+        # Banco indisponível: não dá para guardar o resultado, mas montar várias cópias ao mesmo tempo é justamente o
+        # que estourava a memória. Uma por vez.
+        with _build_lock:
+            return _Snapshot(editor.layers(True), None)
     key = _cache_key(signature)
     with _lock:
         cached = _snapshots.get(key)

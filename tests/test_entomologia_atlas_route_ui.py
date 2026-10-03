@@ -46,7 +46,7 @@ def test_dataset_traz_as_urls_novas(client):
 def test_versoes_dos_arquivos_alterados_foram_trocadas_no_template(client):
     """Os estáticos têm cache de 1 ano por versão: sem trocar o ?v= o navegador não baixa o novo."""
     html = _page(client)
-    for name, version in (('sfa_atlas_search.js', '20261008-memoria'), ('sfa_atlas_search_model.js', '20261007-letra'), ('sfa_field_map.js', '20261002-rota'),
+    for name, version in (('sfa_atlas_search.js', '20261009-achados'), ('sfa_atlas_search_model.js', '20261007-letra'), ('sfa_field_map.js', '20261002-rota'),
                           ('sfa_atlas_route.js', '20261004-ux'), ('sfa_atlas_route_model.js', '20261003-nav'),
                           ('sfa_atlas_nav.js', '20261006-bussola'), ('sfa_atlas_nav_model.js', '20261006-bussola'),
                           ('sfa_atlas_nav_session.js', '20261006-bussola'),

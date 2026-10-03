@@ -299,6 +299,39 @@ def test_montagem_do_indice_e_uma_so_mesmo_com_varias_requisicoes_ao_mesmo_tempo
     assert len(indices) == 2 and indices[0] == indices[1]          # os dois pedidos do índice recebem o mesmo payload
 
 
+def test_sem_banco_as_montagens_tambem_sao_uma_por_vez(app, monkeypatch):
+    """Banco indisponível (assinatura None): não há cache, mas nunca duas cópias ao mesmo tempo."""
+    import threading
+    import time
+    layers = _synthetic_layers()
+    state = {'now': 0, 'peak': 0, 'calls': 0}
+    guard = threading.Lock()
+
+    def layers_fn(allowed, include_deleted=False):
+        with guard:
+            state['now'] += 1
+            state['calls'] += 1
+            state['peak'] = max(state['peak'], state['now'])
+        time.sleep(0.15)
+        with guard:
+            state['now'] -= 1
+        return {k: deepcopy(v) for k, v in layers.items()}
+    monkeypatch.setattr(editor, 'layers', layers_fn)
+    monkeypatch.setattr(fast, '_signature', lambda: None)
+    fast.reset()
+
+    def work():
+        with app.app_context():
+            fast.search('rua quinze', True)
+    threads = [threading.Thread(target=work) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    assert not any(t.is_alive() for t in threads)
+    assert state['calls'] == 5 and state['peak'] == 1, state
+
+
 def test_pre_montagem_do_indice_em_segundo_plano(app, monkeypatch):
     layers = _synthetic_layers()
     monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
