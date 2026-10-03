@@ -12,7 +12,17 @@ const stops = [
 const memory = () => { const m = new Map(); return {getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k)}; };
 
 // ---- chave de parada: igual para a mesma coordenada, mesmo recalculando ----
-assert.equal(S.stopKey({lat: -20.712341, lng: -47.881231}), S.stopKey({lat: -20.712344, lng: -47.881234}));
+assert.equal(S.stopKey({lat: -20.712341, lng: -47.881231, name: 'A'}), S.stopKey({lat: -20.712344, lng: -47.881234, name: 'A'}));
+// Dois endereços no mesmo ponto (feições diferentes) são duas paradas; a mesma feição é a mesma parada em qualquer ordem.
+const twinA = {lat: -20.7, lng: -47.9, name: 'Casa 12', layerId: 'cad', featureId: 'f1'}, twinB = {lat: -20.7, lng: -47.9, name: 'Casa 14', layerId: 'cad', featureId: 'f2'};
+assert.notEqual(S.stopKey(twinA), S.stopKey(twinB));
+assert.equal(S.stopKey(twinA), S.stopKey({...twinA, lat: -20.70001}), 'a identidade vem da feição, não das coordenadas');
+assert.notEqual(S.stopKey({lat: -20.7, lng: -47.9, name: 'Sem camada 1'}), S.stopKey({lat: -20.7, lng: -47.9, name: 'Sem camada 2'}), 'sem camada, o nome separa');
+{
+  const t = S.create(NOW); S.record(t, S.stopKey(twinA), 'done', NOW);
+  assert.equal(S.statusOf(t, twinA), 'done'); assert.equal(S.statusOf(t, twinB), null, 'concluir uma não conclui a outra');
+  assert.deepEqual(S.pending([twinA, twinB], t).map(x => x.name), ['Casa 14'], 'a pendente não some ao continuar');
+}
 assert.notEqual(S.stopKey(stops[0]), S.stopKey(stops[1]));
 
 // ---- registrar, contar e desfazer ----

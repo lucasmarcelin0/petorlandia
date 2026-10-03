@@ -17,8 +17,13 @@
   const BIAS_MIN = -4, BIAS_MAX = 3;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  /** Identidade de uma parada: as coordenadas (cinco casas ≈ 1 m). Sobrevive a reordenar e a recalcular. */
-  const stopKey = s => Number(s.lat).toFixed(5) + ',' + Number(s.lng).toFixed(5);
+  /**
+   * Identidade de uma parada. Vem do registro de origem (camada + feição) quando existe: dois endereços no mesmo ponto
+   * continuam sendo duas paradas. Sem isso, coordenadas (cinco casas ≈ 1 m) mais o nome. Sobrevive a reordenar e a recalcular.
+   */
+  const stopKey = s => (s.layerId != null && s.featureId != null)
+    ? 'f:' + s.layerId + '|' + s.featureId
+    : 'c:' + Number(s.lat).toFixed(5) + ',' + Number(s.lng).toFixed(5) + '|' + String(s.name || '');
 
   function create(now) {
     return {v: 1, startedAt: now, savedAt: now, traveled: 0, paused: false, results: {}, log: []};

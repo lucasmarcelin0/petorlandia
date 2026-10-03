@@ -42,7 +42,7 @@
       return Session.resumable(list,session)?{session,stops:list,label:Session.progressLabel(list,session),pending:Session.pending(list,session).length}:null;
     }
     function discard(){const st=store();if(st)Session.clear(st);}
-    function statusOf(stop){const st=store(),session=st&&Session.load(st,Date.now());return session?Session.statusOf(session,stop&&{lat:stop.lat,lng:stop.lng}):null;}
+    function statusOf(stop){const st=store(),session=st&&Session.load(st,Date.now());return session&&stop?Session.statusOf(session,stop):null;}
 
     const clock=ms=>new Date(Date.now()+ms).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     const mpp=(zoom,lat)=>156543.03392*Math.cos(lat*Math.PI/180)/Math.pow(2,zoom);
@@ -216,14 +216,17 @@
       }catch(e){
         if(!active)return;
         showCard({title:e&&e.denied?'Sem acesso à localização':'Não foi possível iniciar',note:(e&&e.message)||'Tente novamente.',
-          actions:[['Tentar de novo',()=>{const s=nav.simulate;exit(true);setTimeout(()=>start({simulate:s}),50);},true],['Simular',()=>{exit(true);setTimeout(()=>start({simulate:true}),50);}],['Sair',()=>exit()]]});
+          actions:[['Tentar de novo',()=>{const s=nav.simulate,again=!!opts.resume;exit(true);setTimeout(()=>start({simulate:s,resume:again}),50);},true],['Simular',()=>{exit(true);setTimeout(()=>start({simulate:true}),50);}],['Sair',()=>exit()]]});
       }
     }
 
     function firstFix(){
       return new Promise((resolve,reject)=>{
         if(!navigator.geolocation){reject(Object.assign(new Error('Este aparelho não informa a localização. Use a simulação para testar.'),{denied:true}));return;}
-        navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,name:'Você',accuracy:p.coords.accuracy}),err=>{
+        // O navegador só conta o tempo depois de a pessoa responder ao pedido de permissão; se ela o ignorar, a tela ficaria presa.
+        const guard=setTimeout(()=>reject(Object.assign(new Error('O aparelho não respondeu sobre a localização. Libere o acesso no navegador e tente de novo, ou use a simulação.'),{denied:false})),25000);
+        navigator.geolocation.getCurrentPosition(p=>{clearTimeout(guard);resolve({lat:p.coords.latitude,lng:p.coords.longitude,name:'Você',accuracy:p.coords.accuracy});},err=>{
+          clearTimeout(guard);
           reject(Object.assign(new Error(err.code===1?'A localização está bloqueada. Libere no navegador e tente de novo, ou use a simulação.':err.code===3?'O GPS demorou para responder. Tente ao ar livre.':'Não foi possível obter a posição agora.'),{denied:err.code===1}));
         },{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
       });
