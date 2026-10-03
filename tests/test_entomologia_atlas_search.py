@@ -206,7 +206,10 @@ def _synthetic_layers():
                              feat(3, 'Sem posição', located=False, cep='14620-999')]}
     streets = {'id': 'ref', 'title': 'Ruas', 'clinical': False, 'deleted': False, 'origin': {'type': 'reference'},
                'features': [feat(10, 'Rua Quinze', category='residential'), feat(11, 'Rua Quinze', category='residential'),
-                            feat(12, 'Rua Quinze', category='primary')]}
+                            feat(12, 'Rua Quinze', category='primary'),
+                            feat(13, 'Avenida I', category='residential'), feat(14, 'Avenida Internacional', category='primary'),
+                            feat(15, 'Rua A', category='residential'), feat(16, 'Rua Amazonas', category='residential'),
+                            feat(17, 'Acesso A Avenida Marginal Esquerda, sem número', category='service')]}
     many = {'id': 'many', 'title': 'Muitos', 'clinical': False, 'deleted': False, 'origin': {'type': 'cnefe'},
             'features': [feat(100 + i, 'Posto %d' % i, located=i % 3 != 0, address='Rua Quinze, %d' % i) for i in range(260)]}
     clinical = {'id': 'clin', 'title': 'Casos', 'clinical': True, 'deleted': False, 'origin': {'type': 'earth'},
@@ -241,6 +244,29 @@ def test_cep_funciona_so_com_numeros(app, monkeypatch, query):
             return  # separado por espaço não é CEP; só não pode quebrar
         assert {'Casa 12', 'Casa 14'} <= names
         assert 'Sem posição' not in names  # outro CEP (14620-999) não entra
+
+
+def _names(query, allowed=True):
+    return sorted({i['feature']['properties']['name'] for i in fast.search(query, allowed)})
+
+
+def test_rua_de_nome_em_letra_acha_a_rua_exata(app, monkeypatch):
+    """"Avenida i" achava qualquer endereço com a letra i; agora a avenida I vem sozinha."""
+    layers = _synthetic_layers()
+    monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
+        k: v for k, v in layers.items() if allowed or not v['clinical']})
+    fast.reset()
+    with app.app_context():
+        assert _names('Avenida i') == ['Avenida I']
+        assert _names('avenida I') == ['Avenida I']
+        assert _names('Av. i') == ['Avenida I']
+        assert _names('Rua A') == ['Rua A']
+        # Passou da letra: volta ao casamento por prefixo, sem a rua exata.
+        assert 'Avenida Internacional' in _names('avenida in') and 'Avenida I' not in _names('avenida in')
+        assert 'Rua Amazonas' in _names('rua am')
+        # Rua em letra que não existe: cai no casamento solto de antes (a pessoa pode estar digitando outra rua).
+        assert 'Rua Amazonas' in _names('rua a') or _names('rua a') == ['Rua A']
+        assert _names('avenida z') == []
 
 
 def test_pre_montagem_do_indice_em_segundo_plano(app, monkeypatch):
@@ -306,7 +332,9 @@ def test_busca_no_navegador_equivale_ao_servidor(app, monkeypatch, tmp_path):
     if not node:
         pytest.skip('Node.js não está disponível')
     queries = QUERIES + ['14620-010', '14620', 'casa 12', 'casa 14', 'quadra s024q045', 'rua quinze', 'rua 15',
-                         'posto', 'posto 7', 'quimera', 'sem posicao', 'residential', 'rua quinze 12', '15']
+                         'posto', 'posto 7', 'quimera', 'sem posicao', 'residential', 'rua quinze 12', '15',
+                         'avenida i', 'Avenida I', 'Av. i', 'rua a', 'avenida in', 'avenida z', 'rua am', 'rua e', 'travessa b',
+                         'avenida i 120', 'rua a 5']
     variants = [_variant('dados reais', app, True, QUERIES)]
     layers = _synthetic_layers()
     monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {

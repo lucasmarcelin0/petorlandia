@@ -14,6 +14,7 @@
   const LIMIT = 80;
   const KINDS = 'rua|avenida|alameda|travessa';
   const PHRASE = new RegExp('\\b(?:' + KINDS + '|casa) \\d+[a-z]?\\b', 'g');
+  const LETTER = new RegExp('\\b(' + KINDS + ') ([a-z])\\b', 'g');   // ruas de nome em letra: "Avenida I", "Rua A"
   const ONES = 'um dois tres quatro cinco seis sete oito nove'.split(' ');
   const SMALL = 'um dois tres quatro cinco seis sete oito nove dez onze doze treze quatorze quinze'.split(' ');
   const BIG = [[16, 'dezesseis'], [17, 'dezessete'], [18, 'dezoito'], [19, 'dezenove'], [20, 'vinte'],
@@ -56,17 +57,22 @@
     }
   }
 
-  // Interpreta o texto digitado como o servidor: expressões "rua 12" e demais palavras.
-  function parse(query) {
+  // Interpreta o texto digitado como o servidor: expressões "rua 12", ruas de nome em letra e demais palavras.
+  // `strict`: "Avenida I" vale como expressão exata, e a letra solta deixa de casar com "qualquer palavra com i".
+  function parse(query, strict) {
     let q = searchText(query);
     if (!q || q.length > 240) return null;
     q = q.replace(ABBREVIATION[0], ABBREVIATION[1]);
     const phrases = q.match(PHRASE) || [];
-    const tokens = q.replace(PHRASE, ' ').replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+    let rest = q.replace(PHRASE, ' ');
+    const letters = [];
+    if (strict !== false) rest = rest.replace(LETTER, (m, kind, letter) => { letters.push(kind + ' ' + letter); return kind; });
+    const tokens = rest.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
     return {
-      phrases,
+      phrases: phrases.concat(letters),
       words: tokens.filter(t => !/^\d+$/.test(t)),
       digits: tokens.filter(t => /^\d+$/.test(t)),
+      hasLetters: letters.length > 0,
     };
   }
 
@@ -86,6 +92,13 @@
   function search(index, query, limit) {
     const parsed = parse(query);
     if (!parsed) return [];
+    let found = run(index, parsed, limit);
+    // Rua em letra que não existe: volta ao casamento solto (a pessoa pode estar no meio de "Rua Amazonas").
+    if (!found.length && parsed.hasLetters) found = run(index, parse(query, false), limit);
+    return found;
+  }
+
+  function run(index, parsed, limit) {
     const max = limit || LIMIT, placed = [], unplaced = [], streets = new Set();
     for (let i = 0; i < index.entries.length && placed.length < max; i++) {
       const e = index.entries[i];
