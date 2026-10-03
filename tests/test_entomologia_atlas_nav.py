@@ -38,3 +38,12 @@ def test_modelo_de_navegacao_na_malha_real(app, tmp_path, stride):
     result = _node(fixture)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'reais' in result.stdout
+
+
+def test_sessao_da_navegacao_resultados_progresso_zoom_e_tema():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node.js não está disponível')
+    result = subprocess.run([node, str(ROOT / 'tests' / 'test_atlas_nav_session.js')], cwd=ROOT, capture_output=True, text=True,
+                            timeout=60, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr

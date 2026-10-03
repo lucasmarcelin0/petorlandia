@@ -13,6 +13,7 @@
     if(!panel||!Model||!urls.street_network)return {addStop(){}};
     const list=$('atlas-route-list'),empty=$('atlas-route-empty'),summary=$('atlas-route-summary'),notice=$('atlas-route-notice'),links=$('atlas-route-links');
     const buttons={here:$('atlas-route-here'),optimize:$('atlas-route-optimize'),fit:$('atlas-route-fit'),copy:$('atlas-route-copy'),clear:$('atlas-route-clear'),foot:$('atlas-route-foot'),motor:$('atlas-route-motor'),nav:$('atlas-route-nav'),sim:$('atlas-route-sim')};
+    const resume=$('atlas-route-resume'),resumeText=$('atlas-route-resume-text'),resumeGo=$('atlas-route-resume-go'),resumeReset=$('atlas-route-resume-reset');
     let stops=[],plan=null,mode='foot',graphPromise=null,run=0,focusAfter=null,computing=null;
     map.createPane('atlas-route').style.zIndex=640;
     const layer=L.layerGroup().addTo(map);
@@ -125,8 +126,10 @@
       stops.forEach((s,i)=>{
         const li=document.createElement('li');li.className='atlas-route-stop'+(s.gps?' is-gps':'');
         const leg=plan&&plan.legs[i];
-        li.innerHTML='<span class="atlas-route-number" aria-hidden="true">'+(s.gps?'●':i+1)+'</span>'
-          +'<div class="atlas-route-text"><strong>'+esc(s.name)+'</strong>'+(s.note?'<small>'+esc(s.note)+'</small>':'')
+        const result=!s.gps&&navigation?navigation.statusOf(s):null;
+        if(result)li.classList.add('is-'+result);
+        li.innerHTML='<span class="atlas-route-number" aria-hidden="true">'+(s.gps?'●':result==='done'?'✓':result==='notfound'?'✕':result==='skipped'?'↷':i+1)+'</span>'
+          +'<div class="atlas-route-text"><strong>'+esc(s.name)+'</strong>'+(result?'<span class="atlas-route-tag is-'+result+'">'+({done:'Concluída',notfound:'Não encontrada',skipped:'Pulada'})[result]+'</span>':'')+(s.note?'<small>'+esc(s.note)+'</small>':'')
           +(leg?'<small class="atlas-route-leg'+(leg.connected?'':' is-straight')+'">'+(leg.connected?'→ ':'⚠ linha reta · ')+esc(Model.formatDistance(leg.distance))+' · '+esc(Model.formatDuration(Model.minutes(leg.distance,mode)))+' '+speedLabel(mode)+'</small>':'')+'</div>'
           +'<div class="atlas-route-tools"></div>';
         const tools=li.querySelector('.atlas-route-tools');
@@ -147,7 +150,14 @@
       const places=stops.filter(s=>!s.gps).length;                       // a posição de partida vem do GPS na hora de navegar
       buttons.nav.disabled=places<1;buttons.sim.disabled=places<2;
       ['foot','motor'].forEach(m=>{buttons[m].setAttribute('aria-pressed',String(mode===m));buttons[m].classList.toggle('is-on',mode===m);});
-      renderSummary(two);renderLinks(two);renderChip();
+      renderSummary(two);renderLinks(two);renderChip();renderResume();
+    }
+    // Navegação interrompida: oferece continuar de onde parou (o progresso fica só nesta aba).
+    function renderResume(){
+      const info=navigation&&resume?navigation.saved():null;
+      if(!resume)return;
+      resume.hidden=!info;buttons.nav.hidden=!!info;
+      if(info)resumeText.textContent='Navegação em andamento · '+info.label+' · '+(info.pending===1?'falta 1 parada':'faltam '+info.pending+' paradas');
     }
     function renderSummary(two){
       if(!two||!plan){summary.hidden=true;summary.textContent='';return;}
@@ -245,7 +255,7 @@
     }
     function clearAll(){
       if(stops.length>2&&!window.confirm('Remover as '+stops.length+' paradas da rota?'))return;
-      stops=[];changed();say('Rota limpa.');
+      stops=[];if(navigation)navigation.discard();changed();say('Rota limpa.');
     }
 
     buttons.here.onclick=here;buttons.optimize.onclick=optimize;buttons.fit.onclick=fitRoute;buttons.copy.onclick=copy;buttons.clear.onclick=clearAll;
@@ -255,6 +265,8 @@
     const navigation=window.SfaAtlasNav?window.SfaAtlasNav.attach(map,{graph,stops:()=>stops.filter(s=>!s.gps),mode:()=>mode,onExit:()=>render()}):null;
     buttons.nav.onclick=()=>{if(navigation)navigation.start({simulate:false});};
     buttons.sim.onclick=()=>{if(navigation)navigation.start({simulate:true});};
+    if(resumeGo)resumeGo.onclick=()=>{if(navigation)navigation.start({resume:true});};
+    if(resumeReset)resumeReset.onclick=()=>{if(navigation){navigation.discard();render();say('Progresso apagado. Você pode iniciar a navegação do começo.');}};
 
     restore();render();
     if(stops.length)compute();

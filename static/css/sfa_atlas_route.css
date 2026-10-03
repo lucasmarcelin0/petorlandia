@@ -70,3 +70,15 @@
 .atlas-route-go #atlas-route-nav:hover:not(:disabled),.atlas-route-go #atlas-route-nav:focus-visible{background:#1a6fbd}
 .atlas-route-go #atlas-route-nav:disabled{background:#9dc3e6;border-color:#9dc3e6;box-shadow:none}
 .atlas-route-go small{font-size:.66rem;line-height:1.45;color:#64777d;text-align:center}
+
+/* Continuar de onde parou e resultado de cada parada */
+.atlas-route-resume{margin:10px 0 4px;padding:12px;border-radius:12px;background:#e7f1fb;border:1px solid #b6d4f2;color:#12395f}
+.atlas-route-resume strong{display:block;font-size:.84rem;line-height:1.35;margin-bottom:9px}
+.atlas-route-resume div{display:flex;flex-direction:column;gap:7px}
+.atlas-route-resume button{min-height:48px;padding:8px 14px;border:1px solid #b9cdd1;border-radius:10px;background:#fff;color:#21525a;font-size:.84rem;font-weight:700;cursor:pointer}
+.atlas-route-resume #atlas-route-resume-go{background:#1c7ed6;border-color:#1c7ed6;color:#fff;font-size:.92rem;min-height:52px}
+.atlas-route-resume[hidden],.atlas-route-go button[hidden]{display:none}
+.atlas-route-tag{display:inline-block;margin:2px 0 3px;padding:1px 8px;border-radius:999px;font-size:.66rem;font-weight:800;letter-spacing:.02em}
+.atlas-route-tag.is-done{background:#d3f0dc;color:#1b5e2f}.atlas-route-tag.is-notfound{background:#fde0dd;color:#9b1c13}.atlas-route-tag.is-skipped{background:#e9ecef;color:#495057}
+.atlas-route-stop.is-done .atlas-route-number{background:#2f9e44}.atlas-route-stop.is-notfound .atlas-route-number{background:#e03131}.atlas-route-stop.is-skipped .atlas-route-number{background:#868e96}
+.atlas-route-stop.is-done strong{color:#4f6b58}
