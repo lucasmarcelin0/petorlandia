@@ -30,6 +30,10 @@ HAY_FIELDS = ('name', 'label', 'address', 'category', 'cep', 'neighborhood', 'ca
               'original_street', 'house_number')
 
 _lock = threading.RLock()
+# Montar o índice lê e copia todas as camadas (dezenas de MB). Sem esta trava, cada requisição que chegava com o
+# cache vazio montava a sua própria cópia ao mesmo tempo (índice, busca de reserva a cada tecla, pré-montagem), e o
+# pico de memória somado levava o dyno a R14/R15. Agora só uma monta; as outras esperam e reaproveitam.
+_build_lock = threading.Lock()
 _snapshots = {}
 _payloads = {}
 
@@ -135,12 +139,17 @@ def snapshot():
         cached = _snapshots.get(key)
     if cached:
         return cached
-    built = _Snapshot(editor.layers(True), signature)
-    with _lock:
-        _snapshots.clear()
-        _payloads.clear()
-        _snapshots[key] = built
-    return built
+    with _build_lock:
+        with _lock:                                  # quem esperou a trava encontra pronto o que outro montou
+            cached = _snapshots.get(key)
+        if cached:
+            return cached
+        built = _Snapshot(editor.layers(True), signature)
+        with _lock:
+            _snapshots.clear()
+            _payloads.clear()
+            _snapshots[key] = built
+        return built
 
 
 def reset():
@@ -288,6 +297,15 @@ def client_index(clinical_allowed):
         cached = _payloads.get((snap.signature, variant))
     if cached and snap.signature is not None:
         return cached
+    with _build_lock:
+        with _lock:
+            cached = _payloads.get((snap.signature, variant))
+        if cached and snap.signature is not None:
+            return cached
+        return _build_payload(snap, variant)
+
+
+def _build_payload(snap, variant):
     layer_index, layers, rows = {}, [], []
     for members in snap.groups():
         layer = members[0].layer

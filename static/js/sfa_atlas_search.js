@@ -53,6 +53,8 @@
       }).catch(()=>{
         clearTimeout(giveUp);indexState='failed';failedAt=Date.now();
         if(failures<RETRY_MS.length)setTimeout(()=>{if(indexState==='failed'){indexState='idle';loadIndex();}},RETRY_MS[failures++]);
+        // Quem já estava esperando o índice passa a ser atendido pelo servidor (só agora: antes, cada tecla gerava uma consulta pesada).
+        if(!index&&input.value.trim()&&!panel.hidden)serverSearch();
       });
     }
     const where=e=>e[5]===1?'Ponto cadastrado':e[5]===2?'Trecho / referência no mapa':'Sem posição · consultar cadastro';
@@ -96,12 +98,14 @@
     // ---- Reserva: consulta ao servidor (comportamento anterior) ----
     async function serverSearch(){
       const query=input.value.trim(),seq=++run;controller?.abort();preview.clearLayers();results.replaceChildren();
+      let timedOut=false;
       if(!query){open(false);return;}open(true);status.textContent='Buscando no atlas…';
       let count=territoryMatches(query);
       try{
-        controller=new AbortController();const response=await fetch(urls.search+(urls.search.includes('?')?'&':'?')+'q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+        controller=new AbortController();const mine=controller,giveUp=setTimeout(()=>{timedOut=true;mine.abort();},15000);
+        const response=await fetch(urls.search+(urls.search.includes('?')?'&':'?')+'q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store',signal:controller.signal});
         if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw Error('Não foi possível consultar os endereços. As quadras continuam disponíveis.');
-        const data=await response.json();if(seq!==run)return;
+        const data=await response.json();clearTimeout(giveUp);if(seq!==run)return;
         if(data.results.length)section('Endereços e locais');
         data.results.forEach(item=>{
           const f=item.feature,p=f.properties;
@@ -115,19 +119,25 @@
           },stop);count++;
         });
         status.textContent=count?count+' opções · selecione para localizar ou consultar':'Nenhuma correspondência. Tente o nome da rua ou da quadra. Números sem cadastro não recebem posição estimada.';
-      }catch(e){if(e.name!=='AbortError'&&seq===run)status.textContent=e.message;}
+      }catch(e){if(seq!==run)return;if(e.name!=='AbortError')status.textContent=e.message;else if(timedOut)status.textContent='A busca demorou demais. Tente de novo em instantes.';}
     }
 
+    // Índice a caminho: espera (costuma levar 1 s) em vez de mandar uma consulta pesada ao servidor a cada tecla.
+    function waiting(){run++;controller?.abort();preview.clearLayers();results.replaceChildren();open(true);status.textContent='Preparando a busca instantânea…';}
     function search(){
       if(!input.value.trim()){open(false);return;}
-      if(index)localSearch(input.value.trim());else{loadIndex();serverSearch();}
+      if(index){localSearch(input.value.trim());return;}
+      loadIndex();
+      if(indexState==='failed')serverSearch();else waiting();
     }
     $('field-filters').onsubmit=e=>{e.preventDefault();clearTimeout(timer);search();};
     input.oninput=()=>{
       run++;controller?.abort();clearTimeout(timer);
       if(!input.value.trim()){clear();return;}
       if(index){localSearch(input.value.trim());return;}   // imediato: sem espera e sem rede
-      loadIndex();timer=setTimeout(serverSearch,400);       // enquanto o índice não chega
+      loadIndex();
+      if(indexState==='failed')timer=setTimeout(serverSearch,400);   // índice indisponível: reserva no servidor
+      else waiting();                                                  // a caminho: o resultado local aparece quando chegar
     };
     input.onfocus=loadIndex;
     // Baixa o índice logo depois que a tela termina de carregar, antes de alguém digitar.
