@@ -299,8 +299,8 @@ def test_montagem_do_indice_e_uma_so_mesmo_com_varias_requisicoes_ao_mesmo_tempo
     assert len(indices) == 2 and indices[0] == indices[1]          # os dois pedidos do índice recebem o mesmo payload
 
 
-def test_sem_banco_as_montagens_tambem_sao_uma_por_vez(app, monkeypatch):
-    """Banco indisponível (assinatura None): não há cache, mas nunca duas cópias ao mesmo tempo."""
+def test_sem_banco_as_requisicoes_simultaneas_dividem_uma_montagem(app, monkeypatch):
+    """Banco indisponível (assinatura None): sem cache, mas uma só montagem, repartida entre as requisições simultâneas."""
     import threading
     import time
     layers = _synthetic_layers()
@@ -329,7 +329,7 @@ def test_sem_banco_as_montagens_tambem_sao_uma_por_vez(app, monkeypatch):
     for t in threads:
         t.join(timeout=60)
     assert not any(t.is_alive() for t in threads)
-    assert state['calls'] == 5 and state['peak'] == 1, state
+    assert state['calls'] == 1 and state['peak'] == 1, state   # quem chega junto reaproveita a mesma montagem
 
 
 def test_pre_montagem_do_indice_em_segundo_plano(app, monkeypatch):

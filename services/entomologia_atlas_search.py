@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 
 from services import entomologia_atlas as atlas
 from services import entomologia_atlas_editor as editor
@@ -34,6 +35,8 @@ _lock = threading.RLock()
 # cache vazio montava a sua própria cópia ao mesmo tempo (índice, busca de reserva a cada tecla, pré-montagem), e o
 # pico de memória somado levava o dyno a R14/R15. Agora só uma monta; as outras esperam e reaproveitam.
 _build_lock = threading.Lock()
+_degraded = {'at': 0.0, 'snap': None}      # sem banco: um só snapshot, repartido entre quem chega junto
+_DEGRADED_TTL = 15.0
 _snapshots = {}
 _payloads = {}
 
@@ -136,7 +139,11 @@ def snapshot():
         # Banco indisponível: não dá para guardar o resultado, mas montar várias cópias ao mesmo tempo é justamente o
         # que estourava a memória. Uma por vez.
         with _build_lock:
-            return _Snapshot(editor.layers(True), None)
+            if _degraded['snap'] is not None and time.monotonic() - _degraded['at'] < _DEGRADED_TTL:
+                return _degraded['snap']
+            built = _Snapshot(editor.layers(True), None)
+            _degraded.update(at=time.monotonic(), snap=built)
+            return built
     key = _cache_key(signature)
     with _lock:
         cached = _snapshots.get(key)
@@ -156,6 +163,7 @@ def snapshot():
 
 
 def reset():
+    _degraded.update(at=0.0, snap=None)
     with _lock:
         _snapshots.clear()
         _payloads.clear()
