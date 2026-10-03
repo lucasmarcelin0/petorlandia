@@ -680,6 +680,34 @@ def vacina_pmo_doses_webhook():
     return jsonify({'success': True, 'message': 'Compilação do Controle de doses iniciada.'})
 
 
+@bp.route('/vacina-pmo/webhook/cobertura-atlas', methods=['POST'])
+@csrf.exempt
+def vacina_pmo_cobertura_atlas():
+    """Mede quantos endereços da planilha o atlas consegue posicionar (menu da planilha).
+
+    Mesmo token do webhook de status. Recebe só ``rua``, ``numero`` e ``bairro`` de cada linha
+    (nunca nome nem telefone) e devolve contagens; não grava nada.
+    """
+    import hmac
+
+    expected = os.getenv('PMO_SYNC_WEBHOOK_TOKEN', '').strip()
+    provided = (request.args.get('token') or request.headers.get('X-PMO-Token') or '').strip()
+    if not expected or not provided or not hmac.compare_digest(provided, expected):
+        abort(403)
+    if (request.content_length or 0) > 512 * 1024:
+        abort(413)
+    payload = request.get_json(silent=True) or {}
+    rows = payload.get('rows')
+    if not isinstance(rows, list):
+        return jsonify({'success': False, 'message': 'Envie {"rows": [{"linha", "rua", "numero", "bairro"}]}.'}), 400
+    from services.entomologia_atlas_cobertura import coverage
+    clean = [{'linha': r.get('linha'), 'rua': r.get('rua'), 'numero': r.get('numero'), 'bairro': r.get('bairro')}
+             for r in rows if isinstance(r, dict)]
+    result = coverage(clean)
+    result['success'] = True
+    return jsonify(result)
+
+
 def _pmo_painel_guard():
     if current_user.role not in ('admin', 'vacinador'):
         abort(403)
