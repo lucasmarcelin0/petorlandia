@@ -17,8 +17,13 @@
   const BIAS_MIN = -4, BIAS_MAX = 3;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  /** Identidade de uma parada: as coordenadas (cinco casas ≈ 1 m). Sobrevive a reordenar e a recalcular. */
-  const stopKey = s => Number(s.lat).toFixed(5) + ',' + Number(s.lng).toFixed(5);
+  /**
+   * Identidade de uma parada. Vem do registro de origem (camada + feição) quando existe: dois endereços no mesmo ponto
+   * continuam sendo duas paradas. Sem isso, coordenadas (cinco casas ≈ 1 m) mais o nome. Sobrevive a reordenar e a recalcular.
+   */
+  const stopKey = s => (s.layerId != null && s.featureId != null)
+    ? 'f:' + s.layerId + '|' + s.featureId
+    : 'c:' + Number(s.lat).toFixed(5) + ',' + Number(s.lng).toFixed(5) + '|' + String(s.name || '');
 
   function create(now) {
     return {v: 1, startedAt: now, savedAt: now, traveled: 0, paused: false, results: {}, log: []};
@@ -120,6 +125,26 @@
     return clamp(1 - distance / span, 0, 1);
   }
 
-  return {STORE, MAX_AGE, STATUSES, BIAS_MIN, BIAS_MAX, stopKey, create, sanitize, load, save, clear, record, undo, statusOf, pending, counts,
+  // ---- Gestos livres no mapa ----------------------------------------------------------
+  const FREE_IDLE_MS = 20000;                      // sem tocar na tela, o mapa volta sozinho para a posição
+  const ZOOM_MIN = 12, ZOOM_MAX = 20;
+  /** Ângulo (graus, horário, y para baixo) da reta que liga dois dedos. */
+  const fingerAngle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  /** Menor giro de a0 para a1, entre -180 e 180. */
+  const angleDelta = (a0, a1) => { const d = (((a1 - a0) % 360) + 360) % 360; return d > 180 ? d - 360 : d; };
+  /**
+   * Um arrasto na tela vira um deslocamento no mapa. O mapa fica dentro de um quadrado girado por CSS em `-rotation`
+   * graus; para voltar da tela ao quadrado é preciso girar o vetor `rotation` graus no sentido horário.
+   */
+  function screenToMap(dx, dy, rotation) {
+    const t = rotation * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    return [dx * c - dy * s, dx * s + dy * c];
+  }
+  /** Dois dedos mais afastados aproximam o mapa: o dobro da distância = um nível de zoom. */
+  const gestureZoom = (startZoom, ratio) => ratio > 0 ? clamp(startZoom + Math.log2(ratio), ZOOM_MIN, ZOOM_MAX) : startZoom;
+  /** Giro dos dedos vira giro do mapa: o mapa acompanha os dedos, então a rotação do quadrado diminui. */
+  const gestureRotation = (startRotation, twist) => startRotation - twist;
+
+  return {FREE_IDLE_MS, ZOOM_MIN, ZOOM_MAX, fingerAngle, angleDelta, screenToMap, gestureZoom, gestureRotation, STORE, MAX_AGE, STATUSES, BIAS_MIN, BIAS_MAX, stopKey, create, sanitize, load, save, clear, record, undo, statusOf, pending, counts,
     progressLabel, resumable, summaryText, zoomFor, stepBias, pinchBias, isNight, nextTheme, approach};
 });
