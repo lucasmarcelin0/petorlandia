@@ -25,6 +25,7 @@ from services.entomologia_atlas import normalize
 RESULT_LIMIT = 80
 INDEX_FORMAT = 'cep-digitos-1'  # muda quando o conteúdo do índice muda sem mudar os dados
 PHRASE_PATTERN = re.compile(r'\b(?:rua|avenida|alameda|travessa|casa) \d+[a-z]?\b')
+LETTER_PATTERN = re.compile(r'\b(rua|avenida|alameda|travessa) ([a-z])\b')
 HAY_FIELDS = ('name', 'label', 'address', 'category', 'cep', 'neighborhood', 'cadastre_ref',
               'original_street', 'house_number')
 
@@ -148,22 +149,34 @@ def reset():
         _payloads.clear()
 
 
-def parse(query):
-    """Mesma interpretação do texto digitado que a busca sempre teve."""
+def parse(query, strict=True):
+    """Mesma interpretação do texto digitado que a busca sempre teve.
+
+    Ruas de nome em letra ("Avenida I", "Rua A") entram como expressão exata quando ``strict``: a letra solta
+    deixa de valer como "qualquer palavra que contenha i", que enchia a lista de endereços sem relação.
+    """
     q = editor.search_text(query)
     if not q or len(q) > 240:
         return None
     q = re.sub(r'\bav\.?\s', 'avenida ', q)
     phrases = PHRASE_PATTERN.findall(q)
-    tokens = PHRASE_PATTERN.sub(' ', q).replace(',', ' ').split()
+    rest = PHRASE_PATTERN.sub(' ', q)
+    letters = []
+    if strict:
+        def keep_kind(m):
+            letters.append(m.group(1) + ' ' + m.group(2))
+            return m.group(1)
+        rest = LETTER_PATTERN.sub(keep_kind, rest)
+    tokens = rest.replace(',', ' ').split()
     return (
-        [re.compile(r'(?<!\w)' + re.escape(t) + r'(?!\w)') for t in phrases],
+        [re.compile(r'(?<!\w)' + re.escape(t) + r'(?!\w)') for t in phrases + letters],
         [(t, re.compile(r'(?<!\d)' + re.escape(t) + r'(?!\d)') if t.isdigit() else None) for t in tokens],
+        bool(letters),
     )
 
 
 def _matches(hay, parsed):
-    phrases, tokens = parsed
+    phrases, tokens = parsed[0], parsed[1]
     return (all(p.search(hay) for p in phrases)
             and all((rx.search(hay) if rx else t in hay) for t, rx in tokens))
 
@@ -175,10 +188,21 @@ def _merge(base, other_geometry):
 
 
 def search(query, clinical_allowed):
-    """Resultado idêntico ao da busca anterior, sem recarregar nem renormalizar."""
+    """Resultado idêntico ao da busca anterior, sem recarregar nem renormalizar.
+
+    Com nome de rua em letra ("Avenida I"), primeiro vale a rua exata; só se ela não existir volta ao casamento
+    solto de antes (a pessoa pode estar no meio de "Rua Amazonas").
+    """
     parsed = parse(query)
     if parsed is None:
         return []
+    found = _run(parsed, clinical_allowed)
+    if not found and parsed[2]:
+        found = _run(parse(query, strict=False), clinical_allowed)
+    return found
+
+
+def _run(parsed, clinical_allowed):
     result, grouped, located = [], {}, 0
     for entry in snapshot().entries:
         layer, f = entry.layer, entry.feature
