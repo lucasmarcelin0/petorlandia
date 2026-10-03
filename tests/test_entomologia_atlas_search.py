@@ -243,6 +243,46 @@ def test_cep_funciona_so_com_numeros(app, monkeypatch, query):
         assert 'Sem posição' not in names  # outro CEP (14620-999) não entra
 
 
+def test_pre_montagem_do_indice_em_segundo_plano(app, monkeypatch):
+    layers = _synthetic_layers()
+    monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
+        k: v for k, v in layers.items() if allowed or not v['clinical']})
+    fast.reset()
+    thread = fast.warm_async(app, True)
+    assert thread is not None
+    thread.join(timeout=60)
+    assert not thread.is_alive()
+    with fast._lock:
+        assert not fast._warming
+    with app.app_context():
+        snap = fast.snapshot()
+        if snap.signature is not None:        # com assinatura o payload fica guardado e a requisição o reaproveita
+            assert (snap.signature, True) in fast._payloads
+        body, _etag = fast.client_index(True)
+    assert json.loads(body)['entries']
+
+
+def test_pre_montagem_nao_duplica_trabalho_nem_quebra_a_tela(app, monkeypatch):
+    fast.reset()
+    with fast._lock:
+        fast._warming.add(True)
+    try:
+        assert fast.warm_async(app, True) is None          # já há uma montando
+    finally:
+        with fast._lock:
+            fast._warming.discard(True)
+
+    def boom(allowed, include_deleted=False):
+        raise RuntimeError('banco fora')
+    monkeypatch.setattr(editor, 'layers', boom)
+    fast.reset()
+    thread = fast.warm_async(app, False)
+    thread.join(timeout=60)
+    assert not thread.is_alive()                           # a falha é registrada e não derruba nada
+    with fast._lock:
+        assert not fast._warming
+
+
 TEXTS = ['Rua Um', 'RUA UM, 12', 'Av. Brasil 100', 'Avenida   Sete', 'Rua vinte e um', 'Rua trinta e nove', 'Travessa Dois 0045',
          'casa 007', 'Casa 0', 'rua quinze', 'Rua Dezesseis', 'rua cem', 'rua cento e dois', 'Alameda Vinte', 'Rua Trinta',
          'São José do Rio Preto', 'AÇÚCAR e café', 'Praça 9 de Julho', 'rua 01', 'avenida 007b', 'Rua Um e Rua Dois',
