@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_condominios.css', v='20261002-cnefe') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_folders.css', v='20261002-atlas') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_route.css', v='20261003-nav') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_nav.css', v='20261003-nav') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_route.css', v='20261004-ux') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_nav.css', v='20261004-ux') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_accordion.css', v='20261004-acordeao') }}">
 {% endblock %}
 {% block content %}
@@ -190,6 +190,7 @@
               <button type="button" id="atlas-route-copy" disabled>Copiar roteiro</button>
               <button type="button" id="atlas-route-clear" disabled>Limpar rota</button>
             </div>
+            <div id="atlas-route-resume" class="atlas-route-resume" role="status" hidden><strong id="atlas-route-resume-text"></strong><div><button type="button" id="atlas-route-resume-go">▶ Continuar de onde parou</button><button type="button" id="atlas-route-resume-reset">Recomeçar</button></div></div>
             <div class="atlas-route-go">
               <button type="button" id="atlas-route-nav" disabled>▶ Iniciar navegação</button>
               <button type="button" id="atlas-route-sim" disabled title="Percorre a rota sozinha na tela, sem usar o GPS">Testar sem sair do lugar</button>
@@ -254,8 +255,9 @@
 <script src="{{ url_for('static', filename='js/sfa_cadastre_viewer.js', v='20261002-croqui') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_route_model.js', v='20261003-nav') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_nav_model.js', v='20261003-nav') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_nav.js', v='20261003-nav') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_route.js', v='20261003-nav') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_nav_session.js', v='20261004-ux') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_nav.js', v='20261004-ux') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_route.js', v='20261004-ux') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_search_model.js', v='20261002-busca') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261002-busca') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261002-cnefe') }}"></script>

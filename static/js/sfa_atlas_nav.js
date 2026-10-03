@@ -10,7 +10,7 @@
 (function(){
   'use strict';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const VOICE_KEY='sfa-nav-voice', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
+  const VOICE_KEY='sfa-nav-voice', THEME_KEY='sfa-nav-theme', SIM_SPEEDS=[null,10,25];             // m/s; null = velocidade do modo escolhido
   const ATTRIB={streets:'Mapa © Esri, HERE, Garmin, OpenStreetMap e comunidade GIS',satellite:'Imagens © Esri, Maxar, Earthstar Geographics e comunidade GIS'};
 
   // ---- Ícones das manobras (SVG simples, traço branco) ----
@@ -29,9 +29,20 @@
   const ME='<svg viewBox="0 0 48 48" width="100%" height="100%" aria-hidden="true"><path d="M24 4 40 42 24 34 8 42Z" fill="#1c7ed6" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>';
 
   window.SfaAtlasNav={attach(map,{graph,stops,mode,onExit}){
-    const Route=window.SfaAtlasRouteModel,Nav=window.SfaAtlasNavModel;
-    if(!Route||!Nav||!window.L)return {start(){},get active(){return false;}};
+    const Route=window.SfaAtlasRouteModel,Nav=window.SfaAtlasNavModel,Session=window.SfaAtlasNavSession;
+    if(!Route||!Nav||!Session||!window.L)return {start(){},saved(){return null;},discard(){},statusOf(){return null;},get active(){return false;}};
     let ui=null,nav=null,active=false;
+    const store=()=>{try{return window.sessionStorage;}catch(e){return null;}};
+    const keyed=list=>list.map(s=>({...s,key:Session.stopKey(s)}));
+    // Progresso guardado na aba para as paradas atuais (ou nada).
+    function saved(){
+      const st=store(),session=st&&Session.load(st,Date.now());
+      if(!session)return null;
+      const list=keyed(stops());
+      return Session.resumable(list,session)?{session,stops:list,label:Session.progressLabel(list,session),pending:Session.pending(list,session).length}:null;
+    }
+    function discard(){const st=store();if(st)Session.clear(st);}
+    function statusOf(stop){const st=store(),session=st&&Session.load(st,Date.now());return session?Session.statusOf(session,stop&&{lat:stop.lat,lng:stop.lng}):null;}
 
     const clock=ms=>new Date(Date.now()+ms).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     const mpp=(zoom,lat)=>156543.03392*Math.cos(lat*Math.PI/180)/Math.pow(2,zoom);
@@ -42,48 +53,78 @@
       root.innerHTML=
         '<div class="nav-stage"><div class="nav-rot"><div class="nav-map"></div></div>'
         +'<div class="nav-me" aria-hidden="true">'+ME+'</div></div>'
-        +'<header class="nav-banner" aria-live="off"><span class="nav-banner-icon"></span><div class="nav-banner-text"><strong class="nav-dist"></strong><span class="nav-instr"></span><small class="nav-then"></small></div></header>'
+        +'<header class="nav-banner" aria-live="off"><span class="nav-banner-icon"></span><div class="nav-banner-text"><strong class="nav-dist"></strong><span class="nav-instr"></span><small class="nav-then"></small></div><div class="nav-approach" aria-hidden="true"><i></i></div></header>'
         +'<p class="nav-toast" role="status" hidden></p>'
         +'<div class="nav-tools" role="group" aria-label="Controles do mapa">'
         +'<button type="button" data-act="voice" aria-label="Voz ligada" title="Voz"></button>'
         +'<button type="button" data-act="orient" title="Girar o mapa ou manter o norte para cima"></button>'
         +'<button type="button" data-act="base" title="Mapa de ruas ou satélite"></button>'
+        +'<button type="button" data-act="theme" title="Tema do mapa: automático, noite ou dia"></button>'
         +'<button type="button" data-act="overview" aria-label="Ver a rota inteira" title="Ver a rota inteira">🧭</button>'
-        +'<button type="button" data-act="zoom-in" aria-label="Aproximar">＋</button><button type="button" data-act="zoom-out" aria-label="Afastar">－</button>'
         +'<button type="button" data-act="speed" hidden title="Velocidade da simulação"></button></div>'
-        +'<footer class="nav-bar"><div class="nav-stats"><strong class="nav-eta"></strong><span class="nav-left"></span></div>'
-        +'<div class="nav-bar-actions"><button type="button" data-act="skip" title="Pular esta parada e recalcular">Pular</button><button type="button" class="nav-exit" data-act="exit">Sair</button></div>'
-        +'<div class="nav-next"><small class="nav-stoplabel"></small><span class="nav-stopname"></span></div></footer>'
+        +'<div class="nav-zoom" role="group" aria-label="Zoom do mapa"><button type="button" class="nav-zoom-auto" data-act="zoom-auto" hidden title="Voltar ao zoom automático">Auto</button>'
+        +'<div class="nav-zoom-pair"><button type="button" data-act="zoom-in" aria-label="Aproximar o mapa">＋</button><button type="button" data-act="zoom-out" aria-label="Afastar o mapa">－</button></div></div>'
+        +'<footer class="nav-bar"><div class="nav-next"><small class="nav-stoplabel"></small><strong class="nav-stopname"></strong><span class="nav-stopnote"></span></div>'
+        +'<div class="nav-stats"><strong class="nav-eta"></strong><span class="nav-left"></span></div>'
+        +'<div class="nav-bar-actions"><button type="button" class="nav-here" data-act="here" title="Marcar que já chegou a esta parada">Cheguei</button><button type="button" data-act="skip" title="Pular esta parada e recalcular">Pular</button><button type="button" class="nav-exit" data-act="exit">Sair</button></div></footer>'
         +'<p class="nav-attrib"></p><p class="nav-gps" hidden>Sinal de GPS fraco</p>'
-        +'<section class="nav-card" role="alertdialog" aria-live="assertive" hidden><div class="nav-card-icon"></div><h2 class="nav-card-title"></h2><p class="nav-card-note"></p><div class="nav-card-actions"></div></section>';
+        +'<section class="nav-card" role="alertdialog" aria-live="assertive" hidden><div class="nav-card-icon"></div><p class="nav-card-eyebrow" hidden></p><h2 class="nav-card-title"></h2><p class="nav-card-note"></p><div class="nav-dots" aria-hidden="true" hidden></div><div class="nav-card-stats" hidden></div><div class="nav-card-actions"></div></section>';
       document.body.append(root);
       const $=s=>root.querySelector(s);
       ui={root,stage:$('.nav-stage'),rot:$('.nav-rot'),mapEl:$('.nav-map'),me:$('.nav-me'),icon:$('.nav-banner-icon'),dist:$('.nav-dist'),instr:$('.nav-instr'),then:$('.nav-then'),
-        toast:$('.nav-toast'),eta:$('.nav-eta'),left:$('.nav-left'),stopLabel:$('.nav-stoplabel'),stopName:$('.nav-stopname'),attrib:$('.nav-attrib'),gps:$('.nav-gps'),
-        card:$('.nav-card'),cardIcon:$('.nav-card-icon'),cardTitle:$('.nav-card-title'),cardNote:$('.nav-card-note'),cardActions:$('.nav-card-actions'),
-        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),overview:$('[data-act="overview"]')}};
+        toast:$('.nav-toast'),eta:$('.nav-eta'),left:$('.nav-left'),stopLabel:$('.nav-stoplabel'),stopName:$('.nav-stopname'),stopNote:$('.nav-stopnote'),attrib:$('.nav-attrib'),gps:$('.nav-gps'),
+        approach:$('.nav-approach i'),bar:$('.nav-bar'),
+        card:$('.nav-card'),cardIcon:$('.nav-card-icon'),cardEyebrow:$('.nav-card-eyebrow'),cardTitle:$('.nav-card-title'),cardNote:$('.nav-card-note'),cardDots:$('.nav-dots'),cardStats:$('.nav-card-stats'),cardActions:$('.nav-card-actions'),
+        buttons:{voice:$('[data-act="voice"]'),orient:$('[data-act="orient"]'),base:$('[data-act="base"]'),theme:$('[data-act="theme"]'),speed:$('[data-act="speed"]'),skip:$('[data-act="skip"]'),here:$('[data-act="here"]'),overview:$('[data-act="overview"]'),zoomAuto:$('[data-act="zoom-auto"]')}};
       root.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)act(b.dataset.act);});
+      pinch(ui.stage);
       return ui;
+    }
+
+    // Pinça na tela: dois dedos mudam o zoom (o mesmo ajuste dos botões ＋ e －).
+    function pinch(el){
+      const pts=new Map();let start=null;
+      const two=()=>{const [a,b]=[...pts.values()];return Math.hypot(a.x-b.x,a.y-b.y)||1;};
+      el.addEventListener('pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2&&nav)start={d:two(),bias:nav.zoomBias};});
+      el.addEventListener('pointermove',e=>{
+        if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+        if(pts.size!==2||!start||!nav)return;
+        nav.zoomBias=Session.pinchBias(start.bias,two()/start.d);
+        if(nav.overview){nav.overview=false;ui.buttons.overview.classList.remove('is-on');}
+        if(!nav.pinchRaf)nav.pinchRaf=requestAnimationFrame(()=>{if(!nav)return;nav.pinchRaf=0;follow(true);});
+      });
+      const end=e=>{pts.delete(e.pointerId);if(pts.size<2)start=null;if(nav)paintZoom();};
+      ['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,end));
     }
 
     // ---------------------------------------------------------------- estado da navegação
     function createState(opts){
       return {simulate:!!opts.simulate,stops:[],route:null,leg:1,along:0,minAlong:0,reachedAlong:-1,heading:0,rotation:0,fix:null,lastFix:null,speed:0,
         followNorth:false,overview:false,voice:safeGet(VOICE_KEY)!=='0',zoomBias:0,said:{},deviation:{since:null},rerouting:false,lastReroute:0,finished:false,
-        watch:null,timers:[],wake:null,navMap:null,layers:{},basemap:null,arrived:false,simSpeed:0,simAlong:0,simPause:false,token:0,pins:[]};
+        watch:null,timers:[],wake:null,navMap:null,layers:{},basemap:null,arrived:false,simSpeed:0,simAlong:0,simPause:false,token:0,pins:[],
+        session:null,persist:!opts.simulate,order:[],undoInfo:null,lastPos:null,manualArrive:false,theme:safeGet(THEME_KEY)||'auto',pinchRaf:0};
     }
     function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
     function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){/* sem armazenamento */}}
     const later=(fn,ms)=>{const t=setTimeout(fn,ms);nav&&nav.timers.push(t);return t;};
+    function persist(){if(nav&&nav.persist){const st=store();if(st)Session.save(st,nav.session,Date.now());}}
+    const numberOf=stop=>{const i=stop&&stop.key?nav.order.findIndex(o=>o.key===stop.key):-1;return i>=0?i+1:0;};
 
     // ---------------------------------------------------------------- iniciar
     async function start(opts){
       if(active)return;
-      const wanted=stops();
+      const all=keyed(stops());
+      if(!all.length)return;
+      if(opts.simulate&&all.length<2){alert('Para simular, adicione pelo menos duas paradas.');return;}
+      // Continuar: só o que falta visitar, com o histórico de quem já foi atendido.
+      let session=null,wanted=all;
+      if(opts.resume&&!opts.simulate){const st=store();session=st&&Session.load(st,Date.now());if(session)wanted=Session.pending(all,session);}
+      if(!session){session=Session.create(Date.now());}
+      session.paused=false;
       if(!wanted.length)return;
-      if(opts.simulate&&wanted.length<2){toast('Para simular, adicione pelo menos duas paradas.',4000,true);return;}
-      active=true;nav=createState(opts);nav.stops=wanted.slice();
-      build();paintStatic();
+      active=true;nav=createState(opts);nav.stops=wanted.slice();nav.session=session;
+      nav.order=opts.simulate?all.slice(1):all;                 // numeração das paradas na rota inteira, mesmo depois de recalcular
+      build();paintStatic();persist();
       document.documentElement.classList.add('atlas-nav-open');ui.root.classList.add('is-open');
       pushGuard();enterFullscreen();holdScreen();
       setupMap();layout();
@@ -94,7 +135,7 @@
         const destinations=nav.simulate?wanted.slice(1):wanted;
         await plan(here,destinations,true);
         if(!active)return;
-        toast(nav.simulate?'Simulação: a rota é percorrida sozinha.':'Mantenha os olhos na via. Use com o veículo parado ao mexer na tela.',4500);
+        toast(nav.simulate?'Simulação: a rota é percorrida sozinha.':(opts.resume?'Continuando de onde você parou.':'Mantenha os olhos na via. Use com o veículo parado ao mexer na tela.'),4500);
         begin();
       }catch(e){
         if(!active)return;
@@ -117,7 +158,7 @@
       const g=await graph();
       const places=[{lat:from.lat,lng:from.lng,name:from.name||'Você'},...destinations];
       const result=Route.plan(g,places);
-      const route=Nav.buildRoute(g,result.legs,places.map((p,k)=>({lat:p.lat,lng:p.lng,name:k===0?(from.name||'Você'):p.name})));
+      const route=Nav.buildRoute(g,result.legs,places.map((p,k)=>({lat:p.lat,lng:p.lng,name:k===0?(from.name||'Você'):p.name,note:p.note||'',key:p.key||null})));
       nav.route=route;nav.stopsLeft=destinations;nav.leg=1;nav.along=0;nav.minAlong=0;nav.said={};nav.deviation={since:null};nav.arrived=false;
       nav.heading=route.maneuvers[0]?route.maneuvers[0].heading:0;
       if(first||!nav.rotationSet){nav.rotation=Nav.unwrap(nav.rotation||0,nav.heading);nav.rotationSet=true;}
@@ -163,6 +204,10 @@
       if(heading!==null){nav.heading=Nav.smoothAngle(nav.heading,heading,nav.simulate?0.6:0.4);nav.lastFix=fix;}
       else if(!nav.lastFix)nav.lastFix=fix;                                                           // parado: o mapa não gira
       nav.fix=fix;nav.speed=Number.isFinite(fix.speed)?fix.speed:nav.speed;
+      if(fix.accuracy<=50){
+        if(nav.lastPos){const d=Route.distance(nav.lastPos.lat,nav.lastPos.lng,fix.lat,fix.lng);if(d>=3&&d<400)nav.session.traveled+=d;}
+        nav.lastPos={lat:fix.lat,lng:fix.lng};
+      }
 
       const here=Nav.locate(nav.route,fix.lat,fix.lng,nav.along,{minAlong:nav.minAlong,heading:moving?nav.heading:null});
       const dev=Nav.trackDeviation(nav.deviation,here.offRoute,fix.t);
@@ -180,39 +225,116 @@
       const stopPlace=nav.route.stops[nav.leg];
       const toStop=Route.distance(fix.lat,fix.lng,stopPlace.lat,stopPlace.lng);
       const remainingToStop=nav.route.stopAlong[nav.leg]-nav.along;
-      if(!nav.arrived&&(toStop<=Nav.ARRIVE_METERS||(remainingToStop<=8&&here.offRoute<=Nav.OFF_METERS&&toStop<=60)))return arrive();
+      if(!nav.arrived&&(toStop<=Nav.ARRIVE_METERS||(remainingToStop<=8&&here.offRoute<=Nav.OFF_METERS&&toStop<=60)))return arrive(false);
       if(nav.arrived)return;
       render(dev.off);
     }
 
     // ---------------------------------------------------------------- chegada às paradas
-    function arrive(){
+    function arrive(manual){
       const route=nav.route,k=nav.leg,place=route.stops[k],final=k===route.stopAlong.length-1;
-      nav.arrived=true;nav.along=Math.max(nav.along,route.stopAlong[k]-Nav.ARRIVE_METERS);
+      nav.arrived=true;nav.manualArrive=!!manual;nav.before={along:nav.along,minAlong:nav.minAlong};
+      nav.along=Math.max(nav.along,route.stopAlong[k]-Nav.ARRIVE_METERS);
       nav.minAlong=route.stopAlong[k]-(Nav.ARRIVE_METERS+5);          // não volta para antes da parada
       nav.simPause=true;
       speak(Nav.spoken({type:'arrive',name:place.name,final},0,'near'));
       render(false);
-      if(final){
-        nav.finished=true;stopSources();
-        const total=Math.round(route.total);
-        showCard({type:'arrive',title:'Rota concluída',note:(place.name?place.name+'. ':'')+'Distância percorrida: '+Route.formatDistance(total)+'.',
-          actions:[['Fechar',()=>exit(),true]]});
-      }else{
-        const following=route.stops[k+1];
-        showCard({type:'arrive',title:'Você chegou',note:(place.name||'Parada '+k)+(following?' · próxima: '+(following.name||'parada '+(k+1)):''),
-          actions:[['Seguir para a próxima parada',goNext,true],['Encerrar',()=>exit()]]});
-        if(nav.simulate)later(()=>{if(active&&nav&&nav.arrived&&!nav.finished)goNext();},3500);
-      }
+      showArrival();
+      if(nav.simulate)later(()=>{if(active&&nav&&nav.arrived&&!nav.finished)resolve('done');},3500);
+    }
+    function dotsFor(current){
+      return nav.order.map(o=>{
+        const r=Session.statusOf(nav.session,o);
+        const cls=o.key===current?'is-current':r==='done'?'is-done':r==='notfound'?'is-notfound':r==='skipped'?'is-skipped':'';
+        return '<span class="nav-dot '+cls+'"></span>';
+      }).join('');
+    }
+    function showArrival(){
+      const route=nav.route,k=nav.leg,place=route.stops[k],final=k===route.stopAlong.length-1,following=route.stops[k+1];
+      const n=numberOf(place)||k,total=nav.order.length||route.stopAlong.length-1;
+      showCard({sheet:true,type:'arrive',eyebrow:'Parada '+n+' de '+total,title:place.name||('Parada '+n),
+        note:[place.note,following?'Próxima: '+(following.name||'parada '+(n+1)):''].filter(Boolean).join(' · '),dots:dotsFor(place.key),
+        actions:[[final?'✓ Concluir a rota':'✓ Concluída · seguir',()=>resolve('done'),true],['Não encontrei / sem acesso',()=>resolve('notfound')]]
+          .concat(nav.manualArrive?[['Ainda não cheguei',unarrive,false,'ghost']]:[])});
+    }
+    // "Cheguei" apertado sem querer: volta ao ponto em que estava.
+    function unarrive(){
+      if(!nav||!nav.arrived||nav.finished)return;
+      hideCard();nav.arrived=false;nav.simPause=false;nav.manualArrive=false;
+      if(nav.before){nav.along=nav.before.along;nav.minAlong=nav.before.minAlong;}
+      render(false);
+    }
+    // Resultado da parada atual. Fica registrado na aba (para continuar depois) e dá para desfazer por alguns segundos.
+    function resolve(status){
+      if(!nav||!nav.arrived||nav.finished)return;
+      const route=nav.route,k=nav.leg,place=route.stops[k],final=k===route.stopAlong.length-1;
+      Session.record(nav.session,place.key,status,Date.now());
+      nav.undoInfo={status,key:place.key,stop:{lat:place.lat,lng:place.lng,name:place.name,note:place.note||'',key:place.key}};
+      persist();
+      if(final){finish();return;}
+      hideCard();goNext();
+      offerUndo(status==='done'?'Concluída':'Não encontrada',place.name);
     }
     function goNext(){
       if(!nav||nav.finished||!nav.arrived)return;
-      hideCard();nav.arrived=false;nav.simPause=false;nav.leg++;nav.said={};
+      hideCard();nav.arrived=false;nav.manualArrive=false;nav.simPause=false;nav.leg++;nav.said={};
       speak('Seguindo para '+(nav.route.stops[nav.leg].name||'a próxima parada')+'.');
       render(false);
     }
+    function offerUndo(label,name){
+      toast(label+(name?': '+name:''),8000,false,{label:'Desfazer',fn:undo});
+    }
+    async function undo(){
+      const info=nav&&nav.undoInfo;if(!info||nav.finished)return;
+      nav.undoInfo=null;hideToast();
+      Session.undo(nav.session);persist();
+      const route=nav.route,k=route.stops.findIndex((s,i)=>i>=1&&s&&s.key===info.key);
+      if(info.status!=='skipped'&&k>=1&&k===nav.leg-1){
+        nav.leg=k;nav.arrived=true;nav.manualArrive=false;nav.simPause=true;nav.said={};render(false);showArrival();return;
+      }
+      // A rota já foi recalculada sem essa parada: ela volta como a próxima.
+      if(!nav.fix)return;
+      nav.rerouting=true;toast('Recalculando a rota…',0);
+      const mine=++nav.token;
+      try{
+        const remaining=[info.stop].concat(route.stops.slice(nav.leg).filter(Boolean).map(s=>({lat:s.lat,lng:s.lng,name:s.name,note:s.note||'',key:s.key})));
+        await plan({lat:nav.fix.lat,lng:nav.fix.lng,name:'Você'},remaining,false);
+        if(mine===nav.token&&active)hideToast();
+      }catch(e){toast('Não foi possível desfazer agora.',4000,true);}
+      finally{if(nav)nav.rerouting=false;}
+    }
+    function skipStop(){
+      if(!nav||nav.finished||nav.arrived||nav.rerouting)return;
+      const route=nav.route,place=route.stops[nav.leg];
+      if(!place||nav.leg>=route.stopAlong.length-1)return;
+      Session.record(nav.session,place.key,'skipped',Date.now());
+      nav.undoInfo={status:'skipped',key:place.key,stop:{lat:place.lat,lng:place.lng,name:place.name,note:place.note||'',key:place.key}};
+      persist();
+      reroute(true).then(()=>{if(active&&nav&&nav.undoInfo)offerUndo('Pulada',place.name);});
+    }
+    function elapsedText(){
+      const minutes=Math.max(1,Math.round((Date.now()-nav.session.startedAt)/60000));
+      return minutes>=60?Math.floor(minutes/60)+' h '+String(minutes%60).padStart(2,'0')+' min':minutes+' min';
+    }
+    function finish(){
+      nav.finished=true;stopSources();persist();hideToast();nav.undoInfo=null;
+      const list=nav.order,c=Session.counts(list,nav.session),meta={distance:Route.formatDistance(Math.round(nav.session.traveled)),duration:elapsedText()};
+      const open=list.filter(s=>Session.statusOf(nav.session,s)!=='done');
+      showCard({sheet:true,type:'arrive',eyebrow:'Rota concluída',title:c.done+' de '+c.total+' paradas concluídas',
+        note:open.length?'Ficaram de fora: '+open.slice(0,4).map(s=>s.name).join(', ')+(open.length>4?' e mais '+(open.length-4):'')+'.':'Tudo atendido. Bom trabalho!',
+        stats:[['Concluídas',c.done],['Não encontradas',c.notfound],['Puladas',c.skipped],['Percurso',meta.distance],['Tempo',meta.duration]],dots:dotsFor(null),
+        actions:[['Copiar resumo',()=>copySummary(meta)],['Fechar',()=>exit(),true]]});
+    }
+    async function copySummary(meta){
+      const text=Session.summaryText(nav.order,nav.session,meta),b=ui.cardActions.querySelector('button');
+      try{
+        if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(text);
+        else{const t=document.createElement('textarea');t.value=text;t.style.cssText='position:fixed;opacity:0';document.body.append(t);t.select();document.execCommand('copy');t.remove();}
+        if(b){b.textContent='✓ Copiado';setTimeout(()=>{if(b.isConnected)b.textContent='Copiar resumo';},1600);}
+      }catch(e){if(b)b.textContent='Não foi possível copiar';}
+    }
 
-    // ---------------------------------------------------------------- recálculo e pular parada
+    // ---------------------------------------------------------------- recálculo
     async function reroute(skip){
       if(nav.rerouting||!nav.fix||Date.now()-nav.lastReroute<8000&&!skip)return;
       nav.rerouting=true;nav.lastReroute=Date.now();
@@ -224,7 +346,7 @@
         if(skip)remaining=remaining.slice(1);
         if(!remaining.length){exit();return;}
         const spot={lat:nav.fix.lat,lng:nav.fix.lng,name:'Você'};
-        await plan(spot,remaining.map(s=>({lat:s.lat,lng:s.lng,name:s.name})),false);
+        await plan(spot,remaining.map(s=>({lat:s.lat,lng:s.lng,name:s.name,note:s.note||'',key:s.key})),false);
         if(mine!==nav.token||!active)return;
         hideToast();
       }catch(e){toast('Não foi possível recalcular agora.',4000,true);}
@@ -248,7 +370,8 @@
       nav.line=L.polyline(route.points,{color:'#1c7ed6',weight:9,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(L_.route);
       route.stops.forEach((s,k)=>{
         if(k===0)return;
-        const div=L.divIcon({className:'nav-pin',html:'<span class="nav-pin-in"><b>'+k+'</b></span>',iconSize:[34,34],iconAnchor:[17,17]});
+        const n=numberOf(s)||k;
+        const div=L.divIcon({className:'nav-pin',html:'<span class="nav-pin-in"><b>'+n+'</b></span>',iconSize:[34,34],iconAnchor:[17,17]});
         L.marker([s.lat,s.lng],{icon:div,interactive:false,keyboard:false}).addTo(L_.pins);
       });
       nav.pinEls=null;
@@ -262,18 +385,18 @@
       Object.assign(ui.rot.style,{width:d+'px',height:d+'px',left:((w-d)/2)+'px',top:((h-d)/2)+'px'});
       // Quanto a seta fica abaixo do centro: no terço de baixo, mas sempre acima da barra de chegada
       // (em paisagem a tela é baixa e a barra ocuparia o lugar da seta).
-      const bar=ui.root.querySelector('.nav-bar'),barHeight=bar?bar.offsetHeight:110;
+      const barHeight=syncBar();
       nav.shift=Math.max(0,Math.min(Math.round(h*0.22),Math.round(h/2-barHeight-38)));
       ui.me.style.top='calc(50% + '+nav.shift+'px)';
       nav.navMap&&nav.navMap.invalidateSize({animate:false});
       if(nav.fix)follow(true);
     }
 
+    // A barra de baixo muda de altura (nome longo, paisagem); o zoom e a atribuição se apoiam nela.
+    function syncBar(){const h=ui.bar?ui.bar.offsetHeight:110;ui.root.style.setProperty('--nav-bar-h',h+'px');return h;}
     function zoomFor(){
-      const speed=nav.speed||0,near=nav.route&&Nav.progress(nav.route,nav.along).nextDistance;
-      let z=speed<2.5?18.5:speed<9?17.75:speed<18?17:16.5;
-      if(near!==undefined&&near<90)z+=0.5;
-      return Math.max(13,Math.min(20,z+nav.zoomBias));
+      const near=nav.route&&Nav.progress(nav.route,nav.along).nextDistance;
+      return Session.zoomFor(nav.speed||0,near,nav.zoomBias);
     }
     // Centraliza adiante da posição, para a seta ficar no terço de baixo. Gira o mapa para o rumo.
     function follow(force){
@@ -296,29 +419,47 @@
       if(idx<0)idx=route.points.length;
       nav.done.setLatLngs(route.points.slice(0,Math.max(1,idx)).concat([[nav.fix.lat,nav.fix.lng]]));
       nav.line.setLatLngs([[nav.fix.lat,nav.fix.lng]].concat(route.points.slice(idx)));
-      if(nav.arrived){setBanner('arrive','Chegou',Nav.describe({type:'arrive',final:k===route.stopAlong.length-1,name:place&&place.name}),'');}
-      else if(off){setBanner('straight','—','Fora da rota',''); }
+      const final=k===route.stopAlong.length-1;
+      if(nav.arrived){setBanner('arrive','Chegou',Nav.describe({type:'arrive',final,name:place&&place.name}),'');setApproach(1);}
+      else if(off){setBanner('straight','—','Fora da rota','');setApproach(0);}
       else if(m){
-        const text=Nav.describe(m);
-        setBanner(m.type==='depart'?'straight':m.type,Route.formatDistance(p.nextDistance),text,(function(){const after=route.maneuvers[p.nextIndex+1];return after&&after.type!=='arrive'&&after.along-m.along<150?'Depois: '+Nav.describe(after).replace(/^./,c=>c.toLowerCase()):'';})());
+        const text=Nav.describe(m),after=route.maneuvers[p.nextIndex+1];
+        const then=after&&after.type!=='arrive'&&after.along-m.along<150?{type:after.type,text:'Depois: '+Nav.describe(after).replace(/^./,c=>c.toLowerCase())}:null;
+        setBanner(m.type==='depart'?'straight':m.type,Route.formatDistance(p.nextDistance),text,then);
+        setApproach(Session.approach(p.nextDistance,nav.speed||(mode()==='motor'?6:1.4)));
         voice(m,p.nextDistance,'m'+Math.round(m.along)+'-'+nav.token);
-      }else setBanner('arrive','',Nav.describe({type:'arrive',final:true,name:place&&place.name}),'');
+      }else{setBanner('arrive','',Nav.describe({type:'arrive',final:true,name:place&&place.name}),'');setApproach(1);}
       const left=p.remaining,minutes=Route.minutes(left,mode());
       ui.eta.textContent=clock(minutes*60000)+' · '+Route.formatDuration(minutes);
       ui.left.textContent=Route.formatDistance(left);
-      ui.stopLabel.textContent='Parada '+k+' de '+(route.stopAlong.length-1)+(nav.arrived?' · chegou':' · '+Route.formatDistance(p.toStop));
+      const n=numberOf(place)||k,total=nav.order.length||route.stopAlong.length-1;
+      ui.stopLabel.textContent='Parada '+n+' de '+total+(nav.arrived?' · chegou':' · '+Route.formatDistance(p.toStop));
       ui.stopName.textContent=place&&place.name||'';
-      ui.buttons.skip.hidden=k===route.stopAlong.length-1;
+      ui.stopNote.textContent=place&&place.note||'';ui.stopNote.hidden=!(place&&place.note);
+      ui.buttons.skip.hidden=final;ui.buttons.here.hidden=nav.arrived||nav.finished;
+      syncBar();
       follow(false);
     }
     function setBanner(type,dist,text,then){
-      ui.icon.innerHTML=icon(type);ui.dist.textContent=dist;ui.instr.textContent=text;ui.then.textContent=then||'';ui.then.hidden=!then;
+      ui.icon.innerHTML=icon(type);ui.dist.textContent=dist;ui.instr.textContent=text;
+      if(then){ui.then.innerHTML='<span class="nav-then-icon">'+icon(then.type)+'</span>'+esc(then.text);ui.then.hidden=false;}
+      else{ui.then.replaceChildren();ui.then.hidden=true;}
     }
+    // Faixa sob o banner: enche conforme a manobra se aproxima.
+    function setApproach(fraction){ui.approach.style.width=Math.round(fraction*100)+'%';}
     function voice(m,distance,key){
       const phase=Nav.shouldSpeak(nav.said,key,distance,nav.speed||(mode()==='motor'?6:1.4));
       if(phase)speak(Nav.spoken(m,distance,phase));
     }
-    function paintStatic(){paintVoice();paintOrient();paintAttrib();ui.stopLabel.textContent='';}
+    function paintStatic(){paintVoice();paintOrient();paintAttrib();paintTheme();paintZoom();applyTheme();ui.stopLabel.textContent='';}
+    const THEME_LABEL={auto:'Tema automático',night:'Tema noite',day:'Tema dia'},THEME_ICON={auto:'🌗',night:'🌙',day:'☀️'};
+    function paintTheme(){ui.buttons.theme.textContent=THEME_ICON[nav.theme];ui.buttons.theme.setAttribute('aria-label',THEME_LABEL[nav.theme]+'. Toque para mudar.');}
+    function applyTheme(){
+      if(!ui)return;
+      ui.root.classList.toggle('is-night',Session.isNight(new Date(),nav.theme));
+      if(!nav.themeTimer&&nav.theme==='auto')nav.themeTimer=setInterval(applyTheme,60000),nav.timers.push(nav.themeTimer);
+    }
+    function paintZoom(){ui.buttons.zoomAuto.hidden=!nav.zoomBias;}
     function paintVoice(){const on=nav.voice;ui.buttons.voice.textContent=on?'🔊':'🔇';ui.buttons.voice.setAttribute('aria-label',on?'Voz ligada':'Voz desligada');ui.buttons.voice.setAttribute('aria-pressed',String(on));}
     function paintOrient(){ui.buttons.orient.textContent=nav.followNorth?'N↑':'↑';ui.buttons.orient.setAttribute('aria-label',nav.followNorth?'Norte para cima':'Mapa gira com a direção');ui.buttons.orient.setAttribute('aria-pressed',String(!nav.followNorth));}
     function paintBase(){
@@ -332,13 +473,22 @@
 
     // ---------------------------------------------------------------- avisos, cartões, voz
     let toastTimer=null;
-    function toast(text,ms,error){ui.toast.textContent=text;ui.toast.hidden=false;ui.toast.classList.toggle('is-error',!!error);clearTimeout(toastTimer);if(ms)toastTimer=setTimeout(hideToast,ms);}
+    function toast(text,ms,error,action){
+      ui.toast.textContent=text;
+      if(action){const b=document.createElement('button');b.type='button';b.textContent=action.label;b.onclick=e=>{e.stopPropagation();action.fn();};ui.toast.append(b);}
+      ui.toast.hidden=false;ui.toast.classList.toggle('is-error',!!error);ui.toast.classList.toggle('has-action',!!action);clearTimeout(toastTimer);if(ms)toastTimer=setTimeout(hideToast,ms);
+    }
     function hideToast(){if(ui)ui.toast.hidden=true;}
     function status(text){if(text)toast(text,0);else hideToast();}
-    function showCard({type,title,note,actions}){
+    function showCard({type,title,note,actions,sheet,eyebrow,dots,stats}){
+      ui.card.classList.toggle('is-sheet',!!sheet);
       ui.cardIcon.innerHTML=type==='arrive'?'<span>'+icon('arrive')+'</span>':'';ui.cardIcon.hidden=type!=='arrive';
-      ui.cardTitle.textContent=title;ui.cardNote.textContent=note||'';ui.cardActions.replaceChildren();
-      actions.forEach(([label,fn,primary])=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.className=primary?'is-primary':'';b.onclick=fn;ui.cardActions.append(b);});
+      ui.cardEyebrow.textContent=eyebrow||'';ui.cardEyebrow.hidden=!eyebrow;
+      ui.cardTitle.textContent=title;ui.cardNote.textContent=note||'';ui.cardNote.hidden=!note;
+      ui.cardDots.innerHTML=dots||'';ui.cardDots.hidden=!dots;
+      ui.cardStats.innerHTML=(stats||[]).map(([label,value])=>'<div><strong>'+esc(value)+'</strong><span>'+esc(label)+'</span></div>').join('');ui.cardStats.hidden=!(stats&&stats.length);
+      ui.cardActions.replaceChildren();
+      actions.forEach(([label,fn,primary,variant])=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.className=(primary?'is-primary ':'')+(variant==='ghost'?'is-ghost':'');b.onclick=fn;ui.cardActions.append(b);});
       ui.card.hidden=false;const first=ui.cardActions.querySelector('button');first&&first.focus({preventScroll:true});
     }
     function hideCard(){ui.card.hidden=true;}
@@ -354,11 +504,14 @@
         case 'voice':nav.voice=!nav.voice;safeSet(VOICE_KEY,nav.voice?'1':'0');paintVoice();if(!nav.voice&&'speechSynthesis' in window)window.speechSynthesis.cancel();else speak('Voz ligada.');break;
         case 'orient':nav.followNorth=!nav.followNorth;paintOrient();follow(true);break;
         case 'base':nav.basemap.setMode(nav.basemap.getMode()==='satellite'?'streets':'satellite');paintBase();break;
-        case 'zoom-in':nav.zoomBias=Math.min(3,nav.zoomBias+0.5);follow(true);break;
-        case 'zoom-out':nav.zoomBias=Math.max(-3,nav.zoomBias-0.5);follow(true);break;
+        case 'zoom-in':nav.zoomBias=Session.stepBias(nav.zoomBias,0.5);paintZoom();nav.overview=false;ui.buttons.overview.classList.remove('is-on');follow(true);break;
+        case 'zoom-out':nav.zoomBias=Session.stepBias(nav.zoomBias,-0.5);paintZoom();nav.overview=false;ui.buttons.overview.classList.remove('is-on');follow(true);break;
+        case 'zoom-auto':nav.zoomBias=0;paintZoom();follow(true);break;
+        case 'theme':nav.theme=Session.nextTheme(nav.theme);safeSet(THEME_KEY,nav.theme);paintTheme();applyTheme();toast(THEME_LABEL[nav.theme],1800);break;
+        case 'here':if(!nav.arrived&&!nav.finished&&nav.fix)arrive(true);break;
         case 'speed':nav.simSpeed=(nav.simSpeed+1)%SIM_SPEEDS.length;paintSpeed();break;
         case 'overview':overview();break;
-        case 'skip':reroute(true);break;
+        case 'skip':skipStop();break;
         case 'exit':askExit();break;
       }
     }
@@ -369,9 +522,12 @@
     }
     function askExit(){
       if(!ui.card.hidden&&nav.finished){exit();return;}
-      showCard({title:'Encerrar a navegação?',note:'A rota continua salva no painel.',actions:[['Continuar',()=>{hideCard();if(nav.arrived&&!nav.finished)showArrivalAgain();},true],['Encerrar',()=>exit()]]});
+      const back=()=>{hideCard();if(nav.arrived&&!nav.finished)showArrival();};
+      const actions=[['Continuar',back,true]];
+      if(nav.persist)actions.push(['Sair e continuar depois',()=>{nav.session.paused=true;persist();exit();}]);
+      actions.push([nav.persist?'Encerrar e descartar':'Encerrar',()=>{if(nav.persist)discard();exit();},false,'ghost']);
+      showCard({title:'Sair da navegação?',note:nav.persist?'Você pode continuar depois: o progresso fica guardado nesta aba do navegador.':'A rota continua salva no painel.',actions});
     }
-    function showArrivalAgain(){const route=nav.route,k=nav.leg,place=route.stops[k];showCard({type:'arrive',title:'Você chegou',note:place.name||'',actions:[['Seguir para a próxima parada',goNext,true],['Encerrar',()=>exit()]]});}
 
     // ---------------------------------------------------------------- tela cheia, tela ligada, botão voltar
     function enterFullscreen(){
@@ -391,7 +547,7 @@
       guarded=false;pushGuard();                      // o "voltar" do celular pergunta, em vez de sair
       if(ui.card.hidden)askExit();
     });
-    document.addEventListener('visibilitychange',()=>{if(active&&document.visibilityState==='visible'){if(nav.wake){try{nav.wake.release();}catch(e){/* já liberado */}nav.wake=null;}holdScreen();}});
+    document.addEventListener('visibilitychange',()=>{if(active&&document.visibilityState==='hidden')persist();if(active&&document.visibilityState==='visible'){if(nav.wake){try{nav.wake.release();}catch(e){/* já liberado */}nav.wake=null;}holdScreen();}});
     window.addEventListener('resize',()=>{if(active)setTimeout(layout,120);});
     window.addEventListener('orientationchange',()=>{if(active)setTimeout(layout,350);});
     document.addEventListener('keydown',e=>{if(active&&e.key==='Escape'){e.preventDefault();askExit();}});
@@ -411,12 +567,12 @@
       try{nav.navMap&&nav.navMap.remove();}catch(e){/* mapa já removido */}
       ui.root.remove();document.documentElement.classList.remove('atlas-nav-open');
       if(guarded){guarded=false;try{history.back();}catch(e){/* nada */}}
-      const done=nav&&nav.finished;
+      const done=nav&&nav.finished,results=nav&&nav.session?{...nav.session.results}:{};
       nav=null;ui=null;
-      if(!silent&&onExit)onExit({finished:!!done});
+      if(!silent&&onExit)onExit({finished:!!done,results});
     }
 
-    const api={start,exit,get active(){return active;},
+    const api={start,exit,saved,discard,statusOf,get active(){return active;},
       // Só para testes e depuração: estado interno e uma posição simulada.
       _state:()=>nav,_fix:onFix};
     window.SfaAtlasNav.last=api;
