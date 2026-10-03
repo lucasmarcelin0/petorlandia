@@ -237,6 +237,90 @@ teste('linha sem bairro reconhecido vai para o fim, nunca é descartada', () => 
 });
 
 // --------------------------------------------------------------------------
+// Cobertura do atlas: só rua, número e bairro saem da planilha
+// --------------------------------------------------------------------------
+teste('cobertura: payload leva só rua, número, bairro e a linha (nunca nome nem telefone)', () => {
+  const ctx = carregar();
+  const dados = [CABECALHO_MESTRE, LINHA_RAQUEL, LINHA_IRANEIDE];
+  const linhas = ctx.montarLinhasCobertura_(dados, ctx.detectarOffset_(dados));
+  assert.strictEqual(linhas.length, 2);
+  assert.deepStrictEqual(Object.keys(linhas[0]).sort(), ['bairro', 'linha', 'numero', 'rua']);
+  assert.strictEqual(linhas[0].rua, 'Rua 4');
+  assert.strictEqual(linhas[0].numero, '1299');
+  assert.strictEqual(linhas[0].linha, 2);
+  const texto = JSON.stringify(linhas);
+  ['Raquel', 'Iraneide', '16992510438', 'Pipoca'].forEach(t => assert.ok(texto.indexOf(t) === -1, 'vazou: ' + t));
+});
+
+teste('cobertura: linha sem rua não é enviada', () => {
+  const ctx = carregar();
+  const vazia = LINHA_RAQUEL.slice(); vazia[2] = '';
+  assert.strictEqual(ctx.montarLinhasCobertura_([CABECALHO_MESTRE, vazia], 1).length, 0);
+});
+
+teste('cobertura: lotes são somados, por bairro e na lista do que ficou de fora', () => {
+  const ctx = carregar();
+  const a = { total: 2, ponto: 1, rua: 1, nenhum: 0, sem_rua: 0, cortado: false,
+    por_bairro: { Centro: { total: 2, ponto: 1, rua: 1, nenhum: 0, sem_rua: 0 } },
+    nao_resolvidos: [{ linha: 3, rua: 'Rua 9', numero: '5', situacao: 'rua' }] };
+  const b = { total: 2, ponto: 0, rua: 0, nenhum: 2, sem_rua: 0, cortado: false,
+    por_bairro: { Centro: { total: 1, ponto: 0, rua: 0, nenhum: 1, sem_rua: 0 }, 'Jardim Siena': { total: 1, ponto: 0, rua: 0, nenhum: 1, sem_rua: 0 } },
+    nao_resolvidos: [{ linha: 8, rua: 'Rua X', numero: '1', situacao: 'nenhum' }, { linha: 9, rua: 'Rua Y', numero: '2', situacao: 'nenhum' }] };
+  const c = ctx.consolidarCobertura_([a, b]);
+  assert.strictEqual(c.total, 4); assert.strictEqual(c.ponto, 1); assert.strictEqual(c.rua, 1); assert.strictEqual(c.nenhum, 2);
+  assert.strictEqual(c.por_bairro.Centro.total, 3); assert.strictEqual(c.por_bairro['Jardim Siena'].nenhum, 1);
+  assert.strictEqual(c.nao_resolvidos.length, 3);
+  const texto = ctx.textoCobertura_(c);
+  assert.match(texto, /Casa com ponto conferido: 1 \(25%\)/);
+  assert.match(texto, /Não encontrado: 2 \(50%\)/);
+});
+
+teste('cobertura: chama o PetOrlândia com o token e em lotes, e escreve na aba própria', () => {
+  const chamadas = [];
+  let aba = null;
+  const dados = [CABECALHO_MESTRE];
+  for (let i = 0; i < 320; i++) { const l = LINHA_RAQUEL.slice(); l[3] = String(i + 1); dados.push(l); }
+  const abaDados = { getDataRange: () => ({ getValues: () => dados }) };
+  const planilha = {
+    getActiveSheet: () => abaDados,
+    getSheetByName: () => aba,
+    insertSheet: () => { aba = { clear() {}, escrito: null, getRange(r, c, nl, nc) { return { setValues: v => { aba.escrito = v; } }; } }; return aba; }
+  };
+  const alertas = [];
+  const stubs = {
+    SpreadsheetApp: { getActiveSpreadsheet: () => planilha, getUi: () => ({ alert: (...a) => alertas.push(a.join(' ')), ButtonSet: { OK: 'OK' } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'segredo' }) },
+    UrlFetchApp: { fetch: (url, opts) => {
+      const linhas = JSON.parse(opts.payload).rows;
+      chamadas.push({ url, token: opts.headers['X-PMO-Token'], n: linhas.length });
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ total: linhas.length, ponto: linhas.length, rua: 0, nenhum: 0, sem_rua: 0, por_bairro: { 'Jardim Siena': { total: linhas.length, ponto: linhas.length, rua: 0, nenhum: 0, sem_rua: 0 } }, nao_resolvidos: [] }) };
+    } },
+  };
+  carregar(stubs).medirCoberturaAtlas();
+  assert.deepStrictEqual(chamadas.map(c => c.n), [150, 150, 20], 'três lotes');
+  assert.ok(chamadas.every(c => c.token === 'segredo' && /vacina-pmo\/webhook\/cobertura-atlas$/.test(c.url)));
+  assert.ok(aba && aba.escrito, 'escreveu na aba "Cobertura do Atlas"');
+  assert.strictEqual(aba.escrito[0][0], 'Cobertura do atlas');
+  assert.ok(alertas.some(a => /320 endereços/.test(a)), alertas.join('|'));
+  assert.strictEqual(abaDados.escrito, undefined, 'a aba de dados não é alterada');
+});
+
+teste('cobertura: erro do servidor avisa e não escreve nada', () => {
+  let escreveu = false;
+  const planilha = { getActiveSheet: () => ({ getDataRange: () => ({ getValues: () => [CABECALHO_MESTRE, LINHA_RAQUEL] }) }),
+    getSheetByName: () => null, insertSheet: () => { escreveu = true; return {}; } };
+  const alertas = [];
+  const stubs = {
+    SpreadsheetApp: { getActiveSpreadsheet: () => planilha, getUi: () => ({ alert: (...a) => alertas.push(a.join(' ')), ButtonSet: { OK: 'OK' } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'segredo' }) },
+    UrlFetchApp: { fetch: () => ({ getResponseCode: () => 503, getContentText: () => 'timeout' }) },
+  };
+  carregar(stubs).medirCoberturaAtlas();
+  assert.ok(alertas.some(a => /503/.test(a)));
+  assert.strictEqual(escreveu, false);
+});
+
+// --------------------------------------------------------------------------
 let falhas = 0;
 testes.forEach(([nome, fn]) => {
   try {

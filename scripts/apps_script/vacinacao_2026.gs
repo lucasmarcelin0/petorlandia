@@ -39,6 +39,7 @@ function onOpen() {
     .addItem("🔍 Gerar Relatório de Duplicidades e Histórico", "gerarRelatorioDuplicidades")
     .addSeparator()
     .addItem("🔄 Otimizar Rotas por Cluster", "routeOptimizeByCluster")
+    .addItem("📍 Medir cobertura no atlas (PetOrlândia)", "medirCoberturaAtlas")
     .addItem("🗺️ Gerar Links do Google Maps", "gerarLinksMapa")
     .addSeparator()
     .addItem("📱 Adicionar Links WhatsApp", "addWhatsAppLinks")
@@ -1091,6 +1092,115 @@ function onEditInstalado(e) {
     }
   } catch (err) {
     Logger.log('onEditInstalado erro: ' + err);
+  }
+}
+
+// ==============================================================================
+// 4b. MÓDULO: COBERTURA DO ATLAS (quantos endereços têm posição conferida no mapa)
+// ==============================================================================
+var COBERTURA_ATLAS = {
+  url: 'https://www.petorlandia.com.br/vacina-pmo/webhook/cobertura-atlas',
+  lote: 150,
+  nomeAba: 'Cobertura do Atlas'
+};
+
+/**
+ * Só rua, número e bairro vão para o PetOrlândia: nome do tutor e telefone ficam na planilha.
+ * `linha` é o número da linha na aba (para achar o endereço depois).
+ */
+function montarLinhasCobertura_(dados, offset) {
+  const col = colunas_(offset || 0);
+  const linhas = [];
+  for (let i = 1; i < dados.length; i++) {
+    const rua = String(dados[i][col.endereco] || '').trim();
+    if (!rua) continue;
+    linhas.push({
+      linha: i + 1,
+      rua: rua,
+      numero: String(dados[i][col.numero] || '').trim(),
+      bairro: String(dados[i][col.bairro] || '').trim()
+    });
+  }
+  return linhas;
+}
+
+function consolidarCobertura_(parciais) {
+  const total = { total: 0, ponto: 0, rua: 0, nenhum: 0, sem_rua: 0, por_bairro: {}, nao_resolvidos: [], cortado: false };
+  parciais.forEach(function (p) {
+    ['total', 'ponto', 'rua', 'nenhum', 'sem_rua'].forEach(function (k) { total[k] += p[k] || 0; });
+    total.cortado = total.cortado || !!p.cortado;
+    Object.keys(p.por_bairro || {}).forEach(function (nome) {
+      const b = total.por_bairro[nome] || (total.por_bairro[nome] = { total: 0, ponto: 0, rua: 0, nenhum: 0, sem_rua: 0 });
+      ['total', 'ponto', 'rua', 'nenhum', 'sem_rua'].forEach(function (k) { b[k] += p.por_bairro[nome][k] || 0; });
+    });
+    total.nao_resolvidos = total.nao_resolvidos.concat(p.nao_resolvidos || []);
+  });
+  return total;
+}
+
+function textoCobertura_(c) {
+  const pct = function (n) { return c.total ? Math.round(100 * n / c.total) + '%' : '—'; };
+  return [
+    c.total + ' endereços conferidos no atlas do PetOrlândia',
+    '• Casa com ponto conferido: ' + c.ponto + ' (' + pct(c.ponto) + ')',
+    '• Só a rua existe no mapa: ' + c.rua + ' (' + pct(c.rua) + ')',
+    '• Não encontrado: ' + c.nenhum + ' (' + pct(c.nenhum) + ')',
+    c.sem_rua ? '• Sem rua preenchida: ' + c.sem_rua : ''
+  ].filter(Boolean).join('\n');
+}
+
+/**
+ * Mede quanto da aba atual o atlas consegue posicionar. NÃO altera a aba de dados:
+ * escreve o resultado na aba "Cobertura do Atlas". Nenhuma posição é estimada.
+ */
+function medirCoberturaAtlas() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const planilha = SpreadsheetApp.getActiveSpreadsheet();
+    const dados = planilha.getActiveSheet().getDataRange().getValues();
+    const linhas = montarLinhasCobertura_(dados, detectarOffset_(dados));
+    if (!linhas.length) { ui.alert('Nada para medir nesta aba (sem endereços).'); return; }
+
+    const token = obterTokenPMO_();
+    const parciais = [];
+    for (let i = 0; i < linhas.length; i += COBERTURA_ATLAS.lote) {
+      const resp = UrlFetchApp.fetch(COBERTURA_ATLAS.url, {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'X-PMO-Token': token },
+        payload: JSON.stringify({ rows: linhas.slice(i, i + COBERTURA_ATLAS.lote) }),
+        muteHttpExceptions: true
+      });
+      if (resp.getResponseCode() !== 200) {
+        ui.alert('⚠️ O PetOrlândia respondeu ' + resp.getResponseCode() + '. Tente de novo em alguns minutos.');
+        return;
+      }
+      parciais.push(JSON.parse(resp.getContentText()));
+    }
+    const c = consolidarCobertura_(parciais);
+
+    let aba = planilha.getSheetByName(COBERTURA_ATLAS.nomeAba);
+    if (!aba) aba = planilha.insertSheet(COBERTURA_ATLAS.nomeAba); else aba.clear();
+    const saida = [['Cobertura do atlas', textoCobertura_(c).split('\n')[0]], ['', '']];
+    saida.push(['Casa com ponto conferido', c.ponto], ['Só a rua existe no mapa', c.rua], ['Não encontrado', c.nenhum], ['Sem rua', c.sem_rua], ['', '']);
+    saida.push(['Bairro', 'Total', 'Com ponto', 'Só a rua', 'Não encontrado']);
+    Object.keys(c.por_bairro).sort().forEach(function (nome) {
+      const b = c.por_bairro[nome];
+      saida.push([nome, b.total, b.ponto, b.rua, b.nenhum + b.sem_rua]);
+    });
+    saida.push(['', ''], ['Linha na aba', 'Rua', 'Número', 'Situação']);
+    c.nao_resolvidos.forEach(function (n) {
+      saida.push([n.linha, n.rua, n.numero, n.situacao === 'rua' ? 'só a rua' : n.situacao === 'sem_rua' ? 'sem rua' : 'não encontrado']);
+    });
+    const largura = saida.reduce(function (m, l) { return Math.max(m, l.length); }, 1);
+    aba.getRange(1, 1, saida.length, largura).setValues(saida.map(function (l) {
+      const copia = l.slice(); while (copia.length < largura) copia.push(''); return copia;
+    }));
+
+    ui.alert('📍 Cobertura do atlas', textoCobertura_(c) + (c.cortado ? '\n\n(Lista longa: só as primeiras linhas de cada lote foram conferidas.)' : '') +
+      '\n\nDetalhe por bairro e a lista do que ficou de fora: aba "' + COBERTURA_ATLAS.nomeAba + '".', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Erro ao medir a cobertura: ' + e);
   }
 }
 

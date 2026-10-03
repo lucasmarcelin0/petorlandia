@@ -51,3 +51,17 @@ Rodar **"🔄 Atualizar status (PetOrlândia)"**. É essa execução que recompi
 Status PMO nas posições novas — e, desde a correção do backend, ela confere o
 nome/telefone de cada linha antes de escrever e apaga status que tenha sobrado
 no cadastro de outro tutor.
+
+## Medir a cobertura do atlas (📍 menu "Medir cobertura no atlas")
+
+Antes de usar o mapa para ordenar os endereços, é preciso saber **quantos têm posição conferida no atlas**.
+O item **📍 Medir cobertura no atlas (PetOrlândia)** faz essa conta na aba aberta:
+
+- envia ao PetOrlândia **só rua, número, bairro e o número da linha** (nunca nome de tutor nem telefone),
+  usando o mesmo `PMO_TOKEN` dos outros itens;
+- não altera a aba de dados: escreve o resultado na aba **"Cobertura do Atlas"** (total, por bairro e a lista do que
+  ficou de fora, com a linha de origem);
+- classifica cada endereço em **casa com ponto conferido**, **só a rua existe no mapa** ou **não encontrado**.
+  Nenhuma posição é estimada.
+
+Precisa do deploy do PetOrlândia com a rota `/vacina-pmo/webhook/cobertura-atlas`.
