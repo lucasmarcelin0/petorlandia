@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import functools
+from datetime import datetime, timezone as dt_timezone
 import gc
 import os
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -164,6 +165,24 @@ def _run_pmo_doses_compile() -> None:
             )
 
 
+@_memory_bounded_job
+def _run_atlas_artefatos() -> None:
+    """Pré-calcula o índice de busca do atlas quando os dados mudam (barato quando nada mudou)."""
+    with app.app_context():
+        if not _env_bool("ATLAS_ARTEFATOS_ENABLED", True):
+            return
+        from services import entomologia_atlas_artefatos
+
+        try:
+            # Aqui não há requisição esperando: vale a compressão máxima (índice ~45% menor que em gzip).
+            versao = entomologia_atlas_artefatos.construir(brotli_qualidade=11)
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha ao pré-calcular os artefatos do atlas.")
+            return
+        if versao:
+            current_app.logger.info("[Scheduler] Artefatos do atlas prontos (versão %s).", versao[:8])
+
+
 def main() -> None:
     timezone = os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
     scheduler = BlockingScheduler(timezone=timezone)
@@ -211,6 +230,16 @@ def main() -> None:
         replace_existing=True,
         max_instances=1,
         coalesce=True,
+    )
+    # Índice de busca do atlas: logo ao subir (depois de um deploy) e, depois, a cada poucos minutos.
+    scheduler.add_job(
+        _run_atlas_artefatos,
+        IntervalTrigger(minutes=_env_int("ATLAS_ARTEFATOS_INTERVAL_MINUTES", 5, 1, 1440)),
+        id='atlas-artefatos',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(dt_timezone.utc),
     )
     # Jobs diários que antes rodavam no dyno web (BackgroundScheduler no
     # app.py). Centralizados aqui: uma única execução, independente do nº de

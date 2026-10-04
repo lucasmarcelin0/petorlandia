@@ -72,3 +72,27 @@ class EntomologiaEquipe(db.Model):
     revogado_por = db.Column(db.String(160))
 
     user = db.relationship("User", foreign_keys=[user_id])
+
+
+class EntomologiaAtlasArtefato(db.Model):
+    """Saídas do atlas calculadas uma vez por versão dos dados (índice de busca, geometrias de ruas).
+
+    São derivadas das importações ativas e dos arquivos versionados: podem ser
+    apagadas a qualquer momento e são refeitas sozinhas. ``corpo`` guarda o JSON
+    já comprimido em gzip (``corpo_br``, em brotli), pronto para ir ao navegador sem recomprimir.
+    """
+    __tablename__ = "entomologia_atlas_artefato"
+    __table_args__ = (
+        db.UniqueConstraint("versao", "variante", "tipo", name="uq_entomologia_atlas_artefato"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    versao = db.Column(db.String(32), nullable=False, index=True)
+    variante = db.Column(db.String(16), nullable=False)
+    tipo = db.Column(db.String(80), nullable=False)
+    corpo = db.Column(db.LargeBinary, nullable=False)
+    corpo_br = db.Column(db.LargeBinary)        # mesma resposta em brotli (~40% menor), quando vale a pena
+    etag = db.Column(db.String(40), nullable=False)
+    formato = db.Column(db.String(40), nullable=False, default='')   # INDEX_FORMAT de quem gravou
+    bytes_crus = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)

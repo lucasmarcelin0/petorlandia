@@ -11,6 +11,20 @@ def register(bp, require_access, clinical_access):
         response=jsonify(data);response.status_code=status
         return _sem_cache(response)
 
+    @bp.after_request
+    def atlas_dados_mudaram(response):
+        """Edição, importação ou desfazer no atlas: a versão nova do índice começa a ser montada já, em segundo plano.
+
+        Enquanto isso a anterior continua servindo a busca; a próxima abertura do atlas recebe a nova.
+        """
+        if request.method=='POST' and 200<=response.status_code<300 and '/entomologia/' in request.path:
+            from services import entomologia_atlas_artefatos as artefatos
+            try:
+                if artefatos.ativo():artefatos.atualizar_em_segundo_plano(current_app._get_current_object())
+            except Exception:
+                current_app.logger.warning('Pré-cálculo do atlas não iniciou após a alteração.',exc_info=True)
+        return response
+
     @bp.route('/entomologia/atlas/editor')
     @require_access
     def atlas_editor_catalog():
@@ -87,15 +101,36 @@ def register(bp, require_access, clinical_access):
     @bp.route('/entomologia/atlas/busca')
     @require_access
     def atlas_place_search():
+        if request.args.get('compacto')=='1':
+            # Reserva do navegador enquanto o índice não chega: mesma busca, sobre o índice já pronto.
+            from services import entomologia_atlas_artefatos as artefatos
+            found=artefatos.busca_compacta(request.args.get('q',''),bool(clinical_access()),current_app._get_current_object())
+            if found is not None:return reply(found)
         return reply({'results':service.search(request.args.get('q',''),clinical_access())})
 
     @bp.route('/entomologia/atlas/busca/indice')
     @require_access
     def atlas_search_index():
         """Índice compacto: o navegador filtra sozinho, a cada tecla, sem ir ao servidor."""
+        from services import entomologia_atlas_artefatos as artefatos
         from services import entomologia_atlas_search as search_service
         clinical=bool(clinical_access())
-        body,etag=search_service.client_index(clinical)
+        # Pronto no banco (já em gzip): nada é montado durante a requisição. Sem versão gravada ainda, o caminho
+        # anterior monta e serve, e a cópia gravada fica para as próximas.
+        pronto=artefatos.indice(clinical,current_app._get_current_object())
+        if pronto==artefatos.PREPARANDO:
+            # Versão nova sendo montada em segundo plano: responde já (o navegador tenta de novo), sem
+            # prender uma das poucas threads do site esperando a montagem.
+            response=_sem_cache(jsonify({'error':'Preparando a busca de endereços.','preparando':True}))
+            response.status_code=503
+            response.headers['Retry-After']='5'
+            return response
+        if pronto is not None:
+            gz,etag,br=pronto
+            body=None
+        else:
+            body,etag=search_service.client_index(clinical)
+            gz=br=None
         if etag and not clinical:
             # Só dados não clínicos podem ser revalidados pelo navegador. Com acesso
             # clínico a regra do atlas continua valendo: nada fica guardado.
@@ -104,21 +139,45 @@ def register(bp, require_access, clinical_access):
             if request.if_none_match.contains(value):
                 response=current_app.response_class(status=304)
             else:
-                response=current_app.response_class(body,mimetype='application/json')
+                response=_corpo_json(gz,body,br)
             response.headers['ETag']=tag
             # `private` + `max-age` é a exceção que o filtro global de respostas
             # autenticadas respeita (senão tudo vira no-store); max-age=0 obriga a revalidar.
             response.headers['Cache-Control']='private, max-age=0, must-revalidate'
             response.headers['Referrer-Policy']='no-referrer'
             return response
-        return _sem_cache(current_app.response_class(body,mimetype='application/json'))
+        return _sem_cache(_corpo_json(gz,body,br))
+
+    def _corpo_json(gz,body,br=None):
+        """Resposta JSON a partir do brotli/gzip pronto (sem recomprimir) ou do texto montado na hora."""
+        if gz is None:
+            return current_app.response_class(body,mimetype='application/json')
+        if br and request.accept_encodings['br']:
+            response=current_app.response_class(br,mimetype='application/json')
+            response.headers['Content-Encoding']='br'
+        elif request.accept_encodings['gzip']:
+            response=current_app.response_class(gz,mimetype='application/json')
+            response.headers['Content-Encoding']='gzip'
+        else:
+            from services.entomologia_atlas_artefatos import descomprimir
+            response=current_app.response_class(descomprimir(gz),mimetype='application/json')
+        response.vary.add('Accept-Encoding')
+        return response
 
     @bp.route('/entomologia/atlas/busca/lugar')
     @require_access
     def atlas_search_place():
         """Feição completa (com a geometria) de uma entrada do índice."""
+        from services import entomologia_atlas_artefatos as artefatos
         from services import entomologia_atlas_search as search_service
-        item=search_service.place(request.args.get('layer',''),request.args.get('feature',''),bool(clinical_access()))
+        layer,feature,clinical=request.args.get('layer',''),request.args.get('feature',''),bool(clinical_access())
+        item=artefatos.lugar(layer,feature,clinical)
+        if item is False:abort(404)
+        if item==artefatos.PREPARANDO:
+            response=reply({'error':'Preparando.','preparando':True},503)
+            response.headers['Retry-After']='5'
+            return response
+        if item is None:item=search_service.place(layer,feature,clinical)
         if not item:abort(404)
         return reply(item)
 
