@@ -32,7 +32,12 @@ from functools import lru_cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent / 'data' / 'entomologia'
+# Muda quando o conjunto de saídas gravadas muda (sem mudar o índice): força uma montagem completa nova.
+ARTEFATOS_FORMATO = 'mapa-1'
 TIPO_INDICE = 'indice'
+TIPO_CATALOGO = 'catalogo'
+TIPO_ENDERECOS = 'enderecos'
+PREFIXO_CAMADA = 'camada:'
 VARIANTES = {True: 'clinico', False: 'publico'}
 VARIANTE_LUGARES = 'todos'
 BALDES = 64                 # geometrias divididas em pedaços: cada toque lê só um pedaço pequeno
@@ -47,6 +52,10 @@ _building = [False]
 _falhou_em = [0.0]          # última montagem que deu erro: por um tempo, o caminho direto responde
 ESPERA_APOS_FALHA_S = 600.0
 PREPARANDO = 'preparando'   # versão atual ainda sendo montada e nada que possa ser servido no lugar
+
+
+def tipo_camada(layer_id):
+    return PREFIXO_CAMADA + str(layer_id)
 
 
 def tipo_lugares(balde):
@@ -70,7 +79,7 @@ def fingerprint_estatico():
 
 def versao(signature):
     from services.entomologia_atlas_search import INDEX_FORMAT
-    texto = INDEX_FORMAT + '|' + repr(signature) + '|' + fingerprint_estatico()
+    texto = INDEX_FORMAT + '|' + ARTEFATOS_FORMATO + '|' + repr(signature) + '|' + fingerprint_estatico()
     return hashlib.sha256(texto.encode('utf-8')).hexdigest()[:32]
 
 
@@ -282,10 +291,12 @@ def construir(liberar_memoria=True, brotli_qualidade=9):
     with _build_lock:
         if existe(v):
             return v
-        snap = busca.snapshot()
-        if snap.signature != signature:      # os dados mudaram no meio: a próxima rodada monta a versão nova
+        from services import entomologia_atlas_editor as editor
+        camadas = editor.layers(True)        # uma única leitura: índice, catálogo, endereços e camadas saem dela
+        if busca._signature() != signature:  # os dados mudaram no meio: a próxima rodada monta a versão nova
             return None
-        linhas = []
+        snap = busca._Snapshot(camadas, signature)
+        linhas = _saidas_do_mapa(camadas)
         for clinico, variante in VARIANTES.items():
             corpo, _ = busca._build_payload(snap, clinico)
             linhas.append((variante, TIPO_INDICE, corpo))
@@ -310,6 +321,75 @@ def _brotli(texto, qualidade):
     return brotli.compress(texto.encode('utf-8'), quality=qualidade, lgwin=22)
 
 
+def _dumps(valor):
+    return json.dumps(valor, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+
+
+def _saidas_do_mapa(camadas):
+    """Respostas de /camadas, /enderecos e /camadas/<id>, idênticas às montadas na hora."""
+    from services import entomologia_atlas_editor as editor
+    from services.entomologia_atlas import active_earth
+    from services.entomologia_cadastre import active as active_cadastre
+    from services.entomologia_cnefe import active as active_cnefe
+    catalogo = {'source': active_earth()['source'], 'cnefe_source': active_cnefe()['source'],
+                'cadastre_source': active_cadastre()['source'], 'items': editor.catalog(True, source=camadas)}
+    linhas = [(VARIANTE_LUGARES, TIPO_CATALOGO, _dumps(catalogo))]
+    # Endereços em duas variantes, como o índice: uma camada de endereços marcada como clínica continua
+    # chegando a quem tem acesso e nunca chega aos demais.
+    for clinico, variante in VARIANTES.items():
+        linhas.append((variante, TIPO_ENDERECOS, _dumps({'layers': [
+            {'id': layer['id'], 'features': layer['features']} for layer in camadas.values()
+            if layer['origin']['type'] == 'cnefe' and (clinico or not layer['clinical'])]})))
+    for layer in camadas.values():
+        if layer['origin']['type'] == 'cnefe':       # o mapa pega os endereços pelo /enderecos
+            continue
+        linhas.append((VARIANTE_LUGARES, tipo_camada(layer['id']), _dumps(
+            {'type': 'FeatureCollection', 'features': layer['features'], 'source': layer['origin']})))
+    return linhas
+
+
+def catalogo():
+    """Catálogo pronto da versão atual (dict) ou ``None``: sem versão anterior, para quem acabou de editar ver o que salvou."""
+    v = versao_atual()
+    item = v and _ler(v, VARIANTE_LUGARES, TIPO_CATALOGO)
+    return json.loads(descomprimir(item[0])) if item else None
+
+
+def enderecos(clinical_allowed):
+    v = versao_atual()
+    return (v and _ler(v, VARIANTES[bool(clinical_allowed)], TIPO_ENDERECOS, guardar=False)) or None
+
+
+def camada(layer_id):
+    """(item pronto, clinical) da camada pedida (aceita o id sem o prefixo ``earth-``) ou ``None``."""
+    v = versao_atual()
+    dados = catalogo() if v else None
+    if dados is None:
+        return None
+    ids = {item['id']: item for item in dados['items']}
+    meta = ids.get(layer_id) or ids.get('earth-' + str(layer_id))
+    if meta is None or meta.get('origin', {}).get('type') == 'cnefe':
+        return None
+    item = _ler(v, VARIANTE_LUGARES, tipo_camada(meta['id']), guardar=False)
+    return (item, bool(meta['clinical'])) if item else None
+
+
+def resposta(item):
+    """Resposta JSON a partir dos bytes prontos: brotli ou gzip conforme o navegador aceita, sem recomprimir."""
+    from flask import current_app, request
+    gz, _, br = item
+    if br and request.accept_encodings['br']:
+        response = current_app.response_class(br, mimetype='application/json')
+        response.headers['Content-Encoding'] = 'br'
+    elif request.accept_encodings['gzip']:
+        response = current_app.response_class(gz, mimetype='application/json')
+        response.headers['Content-Encoding'] = 'gzip'
+    else:
+        response = current_app.response_class(descomprimir(gz), mimetype='application/json')
+    response.vary.add('Accept-Encoding')
+    return response
+
+
 def _gravar(v, linhas, brotli_qualidade=9):
     from sqlalchemy.exc import IntegrityError
     from services.entomologia_atlas_search import INDEX_FORMAT
@@ -319,8 +399,8 @@ def _gravar(v, linhas, brotli_qualidade=9):
         for variante, tipo, corpo in linhas:
             gz = _gz(corpo)
             etag = hashlib.sha256(v.encode() + b'|' + variante.encode() + b'|' + tipo.encode()).hexdigest()[:24]
-            # Só o índice vai inteiro ao navegador; as geometrias são lidas aqui, pedaço por pedaço.
-            br = _brotli(corpo, brotli_qualidade) if tipo == TIPO_INDICE else None
+            # O que vai inteiro ao navegador ganha brotli; as geometrias são lidas aqui, pedaço por pedaço.
+            br = None if tipo.startswith('lugares-') else _brotli(corpo, brotli_qualidade)
             db.session.add(A(versao=v, variante=variante, tipo=tipo, corpo=gz, corpo_br=br, etag=etag,
                              formato=INDEX_FORMAT, bytes_crus=len(corpo.encode('utf-8'))))
         db.session.commit()

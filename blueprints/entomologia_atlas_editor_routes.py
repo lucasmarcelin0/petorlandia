@@ -96,6 +96,9 @@ def register(bp, require_access, clinical_access):
     @bp.route('/entomologia/atlas/enderecos')
     @require_access
     def atlas_cnefe_layers():
+        from services import entomologia_atlas_artefatos as artefatos
+        pronto=artefatos.enderecos(bool(clinical_access()))
+        if pronto is not None:return _sem_cache(artefatos.resposta(pronto))
         return reply({'layers':[{'id':layer['id'],'features':layer['features']} for layer in service.layers(clinical_access()).values() if layer['origin']['type']=='cnefe']})
 
     @bp.route('/entomologia/atlas/busca')
@@ -152,17 +155,8 @@ def register(bp, require_access, clinical_access):
         """Resposta JSON a partir do brotli/gzip pronto (sem recomprimir) ou do texto montado na hora."""
         if gz is None:
             return current_app.response_class(body,mimetype='application/json')
-        if br and request.accept_encodings['br']:
-            response=current_app.response_class(br,mimetype='application/json')
-            response.headers['Content-Encoding']='br'
-        elif request.accept_encodings['gzip']:
-            response=current_app.response_class(gz,mimetype='application/json')
-            response.headers['Content-Encoding']='gzip'
-        else:
-            from services.entomologia_atlas_artefatos import descomprimir
-            response=current_app.response_class(descomprimir(gz),mimetype='application/json')
-        response.vary.add('Accept-Encoding')
-        return response
+        from services.entomologia_atlas_artefatos import resposta
+        return resposta((gz,None,br))
 
     @bp.route('/entomologia/atlas/busca/lugar')
     @require_access

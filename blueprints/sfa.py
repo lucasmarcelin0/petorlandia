@@ -199,13 +199,12 @@ def entomologia():
         try:
             # Se os dados mudaram desde a última versão gravada, já começa a montar a nova (a anterior serve enquanto isso).
             from services import entomologia_atlas_artefatos as _atlas_artefatos
+            # Fora do Heroku (testes, máquina local) não há pré-montagem: uma thread montando as camadas em paralelo
+            # disputava a conexão do banco com a própria requisição. Lá, o índice é montado no primeiro pedido.
             if _atlas_artefatos.ativo():
                 _versao = _atlas_artefatos.versao_atual()
                 if _versao and not _atlas_artefatos.existe(_versao):
                     _atlas_artefatos.atualizar_em_segundo_plano(current_app._get_current_object())
-            else:                              # sem artefatos (máquina local): pré-monta na memória, como antes
-                from services import entomologia_atlas_search as _atlas_search
-                _atlas_search.warm_async(current_app._get_current_object(), acesso_completo)
         except Exception:                      # só acelera a busca; a tela abre mesmo sem isso
             current_app.logger.warning('Pré-montagem do índice do atlas não iniciou.', exc_info=True)
     dataset['atlas_urls'] = {
@@ -243,16 +242,22 @@ def entomologia():
 @bp.route('/entomologia/atlas/camadas')
 @require_entomologia_access
 def entomologia_atlas_catalogo():
-    from services.entomologia_atlas import active_earth
-    from services.entomologia_atlas_editor import catalog
+    from services import entomologia_atlas_artefatos as artefatos
     from services.entomologia_atlas import layer_id
-    from services.entomologia_cadastre import active as active_cadastre
-    from services.entomologia_cnefe import active as active_cnefe
-    response = jsonify({'source': active_earth()['source'], 'cnefe_source':active_cnefe()['source'], 'cadastre_source':active_cadastre()['source'], 'layers':[
+    # Pronto no banco quando a versão atual já foi montada; senão, monta na hora como antes.
+    pronto = artefatos.catalogo()
+    if pronto is None:
+        from services.entomologia_atlas import active_earth
+        from services.entomologia_atlas_editor import catalog
+        from services.entomologia_cadastre import active as active_cadastre
+        from services.entomologia_cnefe import active as active_cnefe
+        pronto = {'source': active_earth()['source'], 'cnefe_source': active_cnefe()['source'],
+                  'cadastre_source': active_cadastre()['source'], 'items': catalog(True)}
+    response = jsonify({'source': pronto['source'], 'cnefe_source':pronto['cnefe_source'], 'cadastre_source':pronto['cadastre_source'], 'layers':[
         ({**item,'allowed':True} if not item['clinical'] or _acesso_interno_sfa_liberado() else
          {'id':item['id'],'title':'Casos Dengue' if item['id']=='earth-'+layer_id('Casos Dengue') else 'Camada de saúde restrita',
           'clinical':True,'allowed':False,'count':None,'color':item['color']})
-        for item in catalog(True)
+        for item in pronto['items']
     ]})
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
@@ -262,6 +267,16 @@ def entomologia_atlas_catalogo():
 @bp.route('/entomologia/atlas/camadas/<layer>')
 @require_entomologia_access
 def entomologia_atlas_camada(layer):
+    from services import entomologia_atlas_artefatos as artefatos
+    pronta = artefatos.camada(layer)
+    if pronta is not None:
+        item, clinica = pronta
+        if clinica and not _acesso_interno_sfa_liberado():
+            abort(404)
+        response = artefatos.resposta(item)
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        return response
     from services.entomologia_atlas_editor import layers
     available=layers(_acesso_interno_sfa_liberado())
     data=available.get(layer) or available.get('earth-'+layer)
