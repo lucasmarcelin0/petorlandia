@@ -3891,7 +3891,9 @@ def _get_sheets_service():
     creds = service_account.Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
     )
-    return build("sheets", "v4", credentials=creds)
+    from services.google_sheets_client import build_sheets
+
+    return build_sheets(creds)
 
 
 def sincronizar_sinan() -> dict:

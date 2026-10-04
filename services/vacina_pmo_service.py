@@ -4404,7 +4404,9 @@ def _get_sheets_service_rw():
     creds = service_account.Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
     )
-    return build("sheets", "v4", credentials=creds)
+    from services.google_sheets_client import build_sheets
+
+    return build_sheets(creds)
 
 
 def pmo_request_sheet_titles() -> list[str]:
