@@ -197,8 +197,15 @@ def entomologia():
     acesso_completo = _acesso_interno_sfa_liberado()
     if not current_app.testing:
         try:
-            from services import entomologia_atlas_search as _atlas_search
-            _atlas_search.warm_async(current_app._get_current_object(), acesso_completo)
+            # Se os dados mudaram desde a última versão gravada, já começa a montar a nova (a anterior serve enquanto isso).
+            from services import entomologia_atlas_artefatos as _atlas_artefatos
+            if _atlas_artefatos.ativo():
+                _versao = _atlas_artefatos.versao_atual()
+                if _versao and not _atlas_artefatos.existe(_versao):
+                    _atlas_artefatos.atualizar_em_segundo_plano(current_app._get_current_object())
+            else:                              # sem artefatos (máquina local): pré-monta na memória, como antes
+                from services import entomologia_atlas_search as _atlas_search
+                _atlas_search.warm_async(current_app._get_current_object(), acesso_completo)
         except Exception:                      # só acelera a busca; a tela abre mesmo sem isso
             current_app.logger.warning('Pré-montagem do índice do atlas não iniciou.', exc_info=True)
     dataset['atlas_urls'] = {

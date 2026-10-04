@@ -374,9 +374,13 @@ def place(layer_id, feature_id, clinical_allowed):
     members = snap.group_for(layer_id, feature_id)
     if not members:
         return None
-    first = members[0]
-    if first.layer['clinical'] and not clinical_allowed:
+    if members[0].layer['clinical'] and not clinical_allowed:
         return None
+    return _place_from(snap, members, layer_id)
+
+
+def _place_from(snap, members, layer_id):
+    first = members[0]
     members = snap.street(first) or members
     base = deepcopy(first.feature)
     for other in members:
@@ -388,3 +392,53 @@ def place(layer_id, feature_id, clinical_allowed):
             _merge(base, other.feature['geometry'])
     return {'layer_id': layer_id, 'layer_title': first.layer['title'], 'feature': base,
             'located': base.get('geometry') is not None}
+
+
+def places(snap):
+    """Tudo o que ``place()`` pode devolver para as entradas que o navegador consulta (ruas e áreas).
+
+    Pontos já trazem a posição no próprio índice; só as entradas de traçado (tipo 2) pedem a geometria.
+    Cada item leva ``clinical`` para a permissão continuar valendo na hora de responder.
+    """
+    result = {}
+    layer_index = {}
+    for members in snap.groups():
+        first = members[0]
+        layer_index.setdefault(first.layer['id'], len(layer_index))
+        if _compact(members, layer_index)[5] != 2:
+            continue
+        key = (first.layer['id'], str(first.feature['id']))
+        result[key] = {'clinical': bool(first.layer['clinical']),
+                       'item': _place_from(snap, members, first.layer['id'])}
+    return result
+
+
+def search_compact(entries, query, limit=RESULT_LIMIT):
+    """A busca do navegador (sfa_atlas_search_model.js) sobre o índice compacto, no servidor.
+
+    Mesmo resultado que o celular calcula sozinho: serve de reserva enquanto o índice ainda não chegou
+    ao aparelho, sem montar nada pesado (usa o índice já pronto).
+    """
+    parsed = parse(query)
+    if parsed is None:
+        return []
+    found = _run_compact(entries, parsed, limit)
+    if not found and parsed[2]:
+        found = _run_compact(entries, parse(query, strict=False), limit)
+    return found
+
+
+def _run_compact(entries, parsed, limit):
+    placed, unplaced, streets = [], [], set()
+    for entry in entries:
+        if len(placed) >= limit:
+            break
+        if not _matches(entry[4], parsed):
+            continue
+        if entry[10] is not None:
+            key = (entry[0], entry[10])
+            if key in streets:
+                continue
+            streets.add(key)
+        (placed if entry[5] else unplaced).append(entry)
+    return (placed + unplaced)[:limit]
