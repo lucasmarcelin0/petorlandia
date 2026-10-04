@@ -113,12 +113,13 @@ def layers(clinical_allowed, include_deleted=False):
     return {key:item for key,item in result.items() if (clinical_allowed or not item['clinical'])
             and (include_deleted or not item['deleted'])}
 
-def catalog(clinical_allowed, include_deleted=False):
+def catalog(clinical_allowed, include_deleted=False, source=None):
+    """``source``: camadas já montadas (``layers(clinical_allowed, include_deleted)``), para não montar de novo."""
     return [{k:v for k,v in layer.items() if k!='features'} | {'count':len(layer['features']),
             'unlocated':sum(f.get('geometry') is None for f in layer['features']),
             'folders':folders.folder_counts(layer),
             'period_years':sorted({f['properties'].get('period_year') or f['properties'].get('date','')[:4] for f in layer['features']} - {''})}
-            for layer in layers(clinical_allowed,include_deleted).values()]
+            for layer in (source if source is not None else layers(clinical_allowed,include_deleted)).values()]
 
 def text(value, field, required=False):
     if not isinstance(value,str): raise ValueError('Campo de texto inválido: '+field)

@@ -258,3 +258,84 @@ def test_montagem_com_erro_volta_ao_caminho_direto(client, app, ligado, monkeypa
     r = client.get(BASE + '/busca/indice')
     assert r.status_code == 200 and r.json['entries']
     artefatos._falhou_em[0] = 0.0
+
+# Catálogo, endereços e camadas prontos (o mapa abre sem remontar as camadas)
+# --------------------------------------------------------------------------
+
+def _com_cores(monkeypatch):
+    layers = _synthetic_layers()
+    for layer in layers.values():
+        layer.setdefault('color', '#087f81')
+    monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
+        k: v for k, v in json.loads(json.dumps(layers)).items() if allowed or not v['clinical']})
+
+
+def _respostas(client, https=None):
+    https = https or {}
+    return {
+        'catalogo': client.get('/sfa/entomologia/atlas/camadas', **https),
+        'enderecos': client.get(BASE + '/enderecos', **https),
+        'ref': client.get('/sfa/entomologia/atlas/camadas/ref', **https),
+        'cad': client.get('/sfa/entomologia/atlas/camadas/cad', **https),
+        'clin': client.get('/sfa/entomologia/atlas/camadas/clin', **https),
+    }
+
+
+def _comparar(antes, depois):
+    for nome in antes:
+        assert depois[nome].status_code == antes[nome].status_code, nome
+        assert depois[nome].headers.get('Cache-Control') == antes[nome].headers.get('Cache-Control'), nome
+        if antes[nome].status_code == 200:
+            assert depois[nome].json == antes[nome].json, nome
+
+
+def test_mapa_pronto_responde_igual_ao_montado_na_hora(client, app, ligado, monkeypatch):
+    _com_cores(monkeypatch)
+    login(client)
+    app.config['ATLAS_ARTEFATOS'] = False
+    antes = _respostas(client)
+    assert antes['clin'].status_code == 200 and antes['enderecos'].json['layers']
+    app.config['ATLAS_ARTEFATOS'] = True
+    with app.app_context():
+        artefatos.construir()
+    monkeypatch.setattr(editor, 'layers', lambda *a, **k: pytest.fail('remontou as camadas na requisição'))
+    depois = _respostas(client)
+    _comparar(antes, depois)
+    comprimida = client.get('/sfa/entomologia/atlas/camadas/ref', headers={'Accept-Encoding': 'br, gzip'})
+    assert comprimida.headers['Content-Encoding'] == 'br'
+
+
+def test_mapa_pronto_mantem_a_regra_clinica_para_quem_nao_tem_acesso(client, app, ligado, monkeypatch):
+    from extensions import db
+    from models.entomologia import EntomologiaEquipe
+    _com_cores(monkeypatch)
+    member = login(client, 'tutor')
+    db.session.add(EntomologiaEquipe(user_id=member.id, concedido_por='admin'))
+    db.session.commit()
+    app.config['TESTING'] = False
+    monkeypatch.setenv('SFA_ALLOW_OPEN_ACCESS', '0')
+    monkeypatch.delenv('SFA_ADMIN_TOKEN', raising=False)
+    https = {'base_url': 'https://localhost'}
+    app.config['ATLAS_ARTEFATOS'] = False
+    antes = _respostas(client, https)
+    app.config['ATLAS_ARTEFATOS'] = True
+    with app.app_context():
+        artefatos.construir()
+    depois = _respostas(client, https)
+    _comparar(antes, depois)
+    assert depois['clin'].status_code == 404
+    restrita = next(i for i in depois['catalogo'].json['layers'] if i['id'] == 'clin')
+    assert restrita['allowed'] is False and 'features' not in restrita
+
+
+def test_mapa_logo_depois_de_editar_vem_fresco_e_nao_da_versao_anterior(client, app, ligado, monkeypatch):
+    _com_cores(monkeypatch)
+    login(client)
+    with app.app_context():
+        artefatos.construir()
+        ligado['assinatura'] = ((9, 'nova'),)            # alguém acabou de salvar
+        assert artefatos.catalogo() is None and artefatos.enderecos() is None and artefatos.camada('ref') is None
+    chamadas = []
+    original = editor.layers
+    monkeypatch.setattr(editor, 'layers', lambda *a, **k: chamadas.append(1) or original(*a, **k))
+    assert client.get('/sfa/entomologia/atlas/camadas').status_code == 200 and chamadas
