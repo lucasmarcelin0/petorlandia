@@ -367,3 +367,18 @@ def test_camada_de_enderecos_marcada_como_clinica_chega_so_a_quem_tem_acesso(app
         sem = json.loads(artefatos.descomprimir(artefatos.enderecos(False)[0]))
     assert [l['id'] for l in com['layers']] == ['many'] and com['layers'][0]['features']
     assert sem['layers'] == []
+
+
+def test_montagem_nao_acumula_textos_na_memoria(app, ligado, monkeypatch):
+    """Grava uma saída por vez e não deixa os índices (5 MB cada em produção) no cache do processo."""
+    vistos = []
+    original = artefatos._gravar
+
+    def gravar(v, linhas, qualidade=9):
+        assert not isinstance(linhas, list)              # gerador consumido aos poucos
+        return original(v, (vistos.append(t) or (var, t, c) for var, t, c in linhas), qualidade)
+    monkeypatch.setattr(artefatos, '_gravar', gravar)
+    with app.app_context():
+        artefatos.construir(liberar_memoria=False)
+        assert fast._payloads == {}
+    assert 'indice' in vistos and 'catalogo' in vistos and any(t.startswith('lugares-') for t in vistos)

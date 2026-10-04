@@ -296,17 +296,9 @@ def construir(liberar_memoria=True, brotli_qualidade=9):
         if busca._signature() != signature:  # os dados mudaram no meio: a próxima rodada monta a versão nova
             return None
         snap = busca._Snapshot(camadas, signature)
-        linhas = _saidas_do_mapa(camadas)
-        for clinico, variante in VARIANTES.items():
-            corpo, _ = busca._build_payload(snap, clinico)
-            linhas.append((variante, TIPO_INDICE, corpo))
-        pedacos = [{} for _ in range(BALDES)]
-        for (layer_id, feature_id), item in busca.places(snap).items():
-            pedacos[balde(layer_id, feature_id)][layer_id + '\x1f' + feature_id] = item
-        for numero, pedaco in enumerate(pedacos):
-            corpo = json.dumps(pedaco, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
-            linhas.append((VARIANTE_LUGARES, tipo_lugares(numero), corpo))
-        _gravar(v, linhas, brotli_qualidade)
+        # Uma saída por vez: gera, comprime e descarta o texto antes da próxima. Acumular todos os textos
+        # crus (índices de 5 MB, endereços, camadas) até o fim levava o scheduler acima da cota de memória.
+        _gravar(v, _linhas(camadas, snap), brotli_qualidade)
         if liberar_memoria:
             # O site passa a servir o que foi gravado: não precisa manter as camadas inteiras na memória.
             busca.reset()
@@ -318,11 +310,27 @@ def _brotli(texto, qualidade):
         import brotli
     except ImportError:                     # sem a biblioteca, o gzip atende todos os navegadores
         return None
-    return brotli.compress(texto.encode('utf-8'), quality=qualidade, lgwin=22)
+    dados = texto if isinstance(texto, bytes) else texto.encode('utf-8')
+    return brotli.compress(dados, quality=qualidade, lgwin=22)
 
 
 def _dumps(valor):
     return json.dumps(valor, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+
+
+def _linhas(camadas, snap):
+    from services import entomologia_atlas_search as busca
+    yield from _saidas_do_mapa(camadas)
+    for clinico, variante in VARIANTES.items():
+        yield variante, TIPO_INDICE, busca._build_payload(snap, clinico, guardar=False)[0]
+    # Cada geometria vira texto JSON assim que é montada: listas de coordenadas em Python ocupam várias
+    # vezes o tamanho do texto, e manter todas como objetos até o fim era o maior pico da montagem.
+    pedacos = [[] for _ in range(BALDES)]
+    for (layer_id, feature_id), item in busca.iter_places(snap):
+        pedacos[balde(layer_id, feature_id)].append(_dumps(layer_id + '\x1f' + feature_id) + ':' + _dumps(item))
+    for numero in range(BALDES):
+        partes, pedacos[numero] = pedacos[numero], None
+        yield VARIANTE_LUGARES, tipo_lugares(numero), '{' + ','.join(partes) + '}'
 
 
 def _saidas_do_mapa(camadas):
@@ -333,19 +341,18 @@ def _saidas_do_mapa(camadas):
     from services.entomologia_cnefe import active as active_cnefe
     catalogo = {'source': active_earth()['source'], 'cnefe_source': active_cnefe()['source'],
                 'cadastre_source': active_cadastre()['source'], 'items': editor.catalog(True, source=camadas)}
-    linhas = [(VARIANTE_LUGARES, TIPO_CATALOGO, _dumps(catalogo))]
+    yield VARIANTE_LUGARES, TIPO_CATALOGO, _dumps(catalogo)
     # Endereços em duas variantes, como o índice: uma camada de endereços marcada como clínica continua
     # chegando a quem tem acesso e nunca chega aos demais.
     for clinico, variante in VARIANTES.items():
-        linhas.append((variante, TIPO_ENDERECOS, _dumps({'layers': [
+        yield variante, TIPO_ENDERECOS, _dumps({'layers': [
             {'id': layer['id'], 'features': layer['features']} for layer in camadas.values()
-            if layer['origin']['type'] == 'cnefe' and (clinico or not layer['clinical'])]})))
+            if layer['origin']['type'] == 'cnefe' and (clinico or not layer['clinical'])]})
     for layer in camadas.values():
         if layer['origin']['type'] == 'cnefe':       # o mapa pega os endereços pelo /enderecos
             continue
-        linhas.append((VARIANTE_LUGARES, tipo_camada(layer['id']), _dumps(
-            {'type': 'FeatureCollection', 'features': layer['features'], 'source': layer['origin']})))
-    return linhas
+        yield VARIANTE_LUGARES, tipo_camada(layer['id']), _dumps(
+            {'type': 'FeatureCollection', 'features': layer['features'], 'source': layer['origin']})
 
 
 def catalogo():
@@ -397,12 +404,17 @@ def _gravar(v, linhas, brotli_qualidade=9):
     from models.entomologia import EntomologiaAtlasArtefato as A
     try:
         for variante, tipo, corpo in linhas:
-            gz = _gz(corpo)
+            dados = corpo.encode('utf-8')
+            del corpo
+            gz = gzip.compress(dados, compresslevel=6, mtime=0)
             etag = hashlib.sha256(v.encode() + b'|' + variante.encode() + b'|' + tipo.encode()).hexdigest()[:24]
             # O que vai inteiro ao navegador ganha brotli; as geometrias são lidas aqui, pedaço por pedaço.
-            br = None if tipo.startswith('lugares-') else _brotli(corpo, brotli_qualidade)
+            # Nível máximo só no índice (o maior download); nas demais o 9 fica quase do mesmo tamanho, bem mais rápido.
+            br = None if tipo.startswith('lugares-') else _brotli(
+                dados, brotli_qualidade if tipo == TIPO_INDICE else min(brotli_qualidade, 9))
             db.session.add(A(versao=v, variante=variante, tipo=tipo, corpo=gz, corpo_br=br, etag=etag,
-                             formato=INDEX_FORMAT, bytes_crus=len(corpo.encode('utf-8'))))
+                             formato=INDEX_FORMAT, bytes_crus=len(dados)))
+            del dados
         db.session.commit()
     except IntegrityError:
         db.session.rollback()               # outro processo gravou a mesma versão antes
