@@ -10,9 +10,11 @@ ficam gravados em ``entomologia_atlas_artefato``, por versão. O site só lê
 bytes prontos (já em gzip). Quem monta:
 
 * o scheduler, que a cada poucos minutos confere se a versão mudou;
-* uma thread do próprio site, quando alguém abre o atlas logo depois de uma
-  importação. Enquanto ela trabalha, a versão anterior continua servindo: a
-  busca nunca fica esperando a montagem.
+* uma thread do próprio site, disparada pela própria edição ou importação.
+  Enquanto ela trabalha, nenhuma requisição espera: quem tem acesso clínico
+  (já vê todas as camadas) recebe a versão anterior; os demais recebem
+  "preparando" e o navegador tenta de novo. Assim uma camada que acabou de
+  virar clínica nunca aparece para quem não deve vê-la.
 
 A versão combina a assinatura das importações ativas, os arquivos JSON
 versionados em ``services/data/entomologia`` e o formato do índice. Qualquer
@@ -42,6 +44,9 @@ _build_lock = threading.Lock()
 _bytes = {}                 # (variante, tipo) -> (versao, corpo_gz, etag, corpo_br): só a versão mais recente lida
 _parsed = {}                # variante -> (etag, layers, entries, último uso)
 _building = [False]
+_falhou_em = [0.0]          # última montagem que deu erro: por um tempo, o caminho direto responde
+ESPERA_APOS_FALHA_S = 600.0
+PREPARANDO = 'preparando'   # versão atual ainda sendo montada e nada que possa ser servido no lugar
 
 
 def tipo_lugares(balde):
@@ -121,17 +126,31 @@ def _versoes_guardadas():
     """Versões gravadas, da mais nova para a mais antiga."""
     from models.entomologia import EntomologiaAtlasArtefato as A
     from extensions import db
+    from services.entomologia_atlas_search import INDEX_FORMAT
+    # Só versões no formato que este código entende: depois de um deploy que muda o índice, a anterior não serve.
     rows = _consultar(lambda: A.query.with_entities(A.versao, db.func.max(A.id).label('ultimo'))
-                      .filter(A.tipo == TIPO_INDICE).group_by(A.versao)
+                      .filter(A.tipo == TIPO_INDICE, A.formato == INDEX_FORMAT).group_by(A.versao)
                       .order_by(db.desc('ultimo')).all()) or []
     return [row.versao for row in rows]
+
+
+def _pode_preparar():
+    return time.monotonic() - _falhou_em[0] >= ESPERA_APOS_FALHA_S if _falhou_em[0] else True
+
+
+def _preparar(app):
+    from flask import current_app
+    atualizar_em_segundo_plano(app if app is not None else current_app._get_current_object())
 
 
 def indice(clinical_allowed, app=None):
     """(corpo_gz, etag, corpo_br) do índice para o navegador, sem montar nada na requisição.
 
-    Versão atual se já estiver pronta; senão a anterior (e uma montagem começa em
-    segundo plano). ``None`` só quando não há nenhuma gravada ou o banco não responde.
+    * versão atual pronta: ela;
+    * senão, para quem tem acesso clínico, a anterior: essa pessoa já vê todas as camadas, então nada
+      fica exposto se uma camada mudou de visibilidade. Para os demais, ``PREPARANDO`` (o navegador
+      mostra as quadras e tenta de novo); a montagem começa em segundo plano nos dois casos;
+    * ``None``: artefatos desligados, banco fora ou última montagem com erro: o caminho direto responde.
     """
     variante = VARIANTES[bool(clinical_allowed)]
     v = versao_atual()
@@ -140,37 +159,51 @@ def indice(clinical_allowed, app=None):
     item = _ler(v, variante, TIPO_INDICE)
     if item:
         return item
-    for antiga in _versoes_guardadas():
-        if antiga != v:
-            item = _ler(antiga, variante, TIPO_INDICE, guardar=False)
-            if item:
-                if app is not None:
-                    atualizar_em_segundo_plano(app)
-                return item
-    # Nenhuma versão gravada (primeira vez): monta agora, uma única vez, e já deixa gravada.
-    if construir() == v:
-        return _ler(v, variante, TIPO_INDICE)
-    return None
+    if not _pode_preparar():
+        return None
+    _preparar(app)
+    if clinical_allowed:
+        for antiga in _versoes_guardadas():
+            if antiga != v:
+                item = _ler(antiga, variante, TIPO_INDICE, guardar=False)
+                if item:
+                    return item
+    return PREPARANDO
 
 
 def lugar(layer_id, feature_id, clinical_allowed):
-    """Geometria pronta de uma rua/área: dict do ``place()``, ``False`` se negado, ``None`` se não há pronto."""
+    """Geometria pronta de uma rua/área: dict do ``place()``, ``False`` se negado, ``PREPARANDO``, ou ``None``
+    (sem artefato pronto para ela: o caminho completo responde)."""
     v = versao_atual()
     if v is None:
         return None
     tipo = tipo_lugares(balde(layer_id, feature_id))
-    for candidata in [v] + [x for x in _versoes_guardadas() if x != v]:
-        item = _ler(candidata, VARIANTE_LUGARES, tipo, guardar=False)
-        if not item:
-            continue
-        pedaco = json.loads(gzip.decompress(item[0]))
-        achado = pedaco.get(str(layer_id) + '\x1f' + str(feature_id))
-        if achado is None:
-            return None             # a versão gravada não conhece esta feição: o caminho completo responde
-        if achado['clinical'] and not clinical_allowed:
-            return False
-        return achado['item']
-    return None
+    chave = str(layer_id) + '\x1f' + str(feature_id)
+    atual = _ler(v, VARIANTE_LUGARES, tipo, guardar=False)
+    if atual:
+        return _do_pedaco(atual, chave, clinical_allowed)
+    if not _pode_preparar():
+        return None
+    _preparar(None)
+    if clinical_allowed:                      # mesma regra do índice: a anterior só para quem vê tudo
+        for antiga in _versoes_guardadas():
+            if antiga == v:
+                continue
+            item = _ler(antiga, VARIANTE_LUGARES, tipo, guardar=False)
+            if item:
+                achado = _do_pedaco(item, chave, True)
+                if achado is not None:
+                    return achado
+    return PREPARANDO
+
+
+def _do_pedaco(item, chave, clinical_allowed):
+    achado = json.loads(gzip.decompress(item[0])).get(chave)
+    if achado is None:
+        return None
+    if achado['clinical'] and not clinical_allowed:
+        return False
+    return achado['item']
 
 
 def busca_compacta(query, clinical_allowed, app=None):
@@ -180,6 +213,8 @@ def busca_compacta(query, clinical_allowed, app=None):
     item = indice(clinical_allowed, app)
     if item is None:
         return None
+    if item == PREPARANDO:
+        return {'layers': [], 'entries': [], 'preparando': True}
     corpo, etag = item[0], item[1]
     with _lock:
         hit = _parsed.get(variante)
@@ -277,6 +312,7 @@ def _brotli(texto, qualidade):
 
 def _gravar(v, linhas, brotli_qualidade=9):
     from sqlalchemy.exc import IntegrityError
+    from services.entomologia_atlas_search import INDEX_FORMAT
     from extensions import db
     from models.entomologia import EntomologiaAtlasArtefato as A
     try:
@@ -286,7 +322,7 @@ def _gravar(v, linhas, brotli_qualidade=9):
             # Só o índice vai inteiro ao navegador; as geometrias são lidas aqui, pedaço por pedaço.
             br = _brotli(corpo, brotli_qualidade) if tipo == TIPO_INDICE else None
             db.session.add(A(versao=v, variante=variante, tipo=tipo, corpo=gz, corpo_br=br, etag=etag,
-                             bytes_crus=len(corpo.encode('utf-8'))))
+                             formato=INDEX_FORMAT, bytes_crus=len(corpo.encode('utf-8'))))
         db.session.commit()
     except IntegrityError:
         db.session.rollback()               # outro processo gravou a mesma versão antes
@@ -321,7 +357,9 @@ def atualizar_em_segundo_plano(app):
         try:
             with app.app_context():
                 construir()
+            _falhou_em[0] = 0.0
         except Exception:
+            _falhou_em[0] = time.monotonic()
             app.logger.warning('Não foi possível pré-calcular os artefatos do atlas.', exc_info=True)
         finally:
             with _lock:

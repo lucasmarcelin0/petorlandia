@@ -93,5 +93,6 @@ class EntomologiaAtlasArtefato(db.Model):
     corpo = db.Column(db.LargeBinary, nullable=False)
     corpo_br = db.Column(db.LargeBinary)        # mesma resposta em brotli (~40% menor), quando vale a pena
     etag = db.Column(db.String(40), nullable=False)
+    formato = db.Column(db.String(40), nullable=False, default='')   # INDEX_FORMAT de quem gravou
     bytes_crus = db.Column(db.Integer, nullable=False, default=0)
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)

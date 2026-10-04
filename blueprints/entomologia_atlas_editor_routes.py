@@ -118,6 +118,13 @@ def register(bp, require_access, clinical_access):
         # Pronto no banco (já em gzip): nada é montado durante a requisição. Sem versão gravada ainda, o caminho
         # anterior monta e serve, e a cópia gravada fica para as próximas.
         pronto=artefatos.indice(clinical,current_app._get_current_object())
+        if pronto==artefatos.PREPARANDO:
+            # Versão nova sendo montada em segundo plano: responde já (o navegador tenta de novo), sem
+            # prender uma das poucas threads do site esperando a montagem.
+            response=_sem_cache(jsonify({'error':'Preparando a busca de endereços.','preparando':True}))
+            response.status_code=503
+            response.headers['Retry-After']='5'
+            return response
         if pronto is not None:
             gz,etag,br=pronto
             body=None
@@ -166,6 +173,10 @@ def register(bp, require_access, clinical_access):
         layer,feature,clinical=request.args.get('layer',''),request.args.get('feature',''),bool(clinical_access())
         item=artefatos.lugar(layer,feature,clinical)
         if item is False:abort(404)
+        if item==artefatos.PREPARANDO:
+            response=reply({'error':'Preparando.','preparando':True},503)
+            response.headers['Retry-After']='5'
+            return response
         if item is None:item=search_service.place(layer,feature,clinical)
         if not item:abort(404)
         return reply(item)

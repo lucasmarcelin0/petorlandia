@@ -33,10 +33,17 @@ def ligado(app, monkeypatch):
     fast.reset()
     artefatos._bytes.clear()
     artefatos._parsed.clear()
+    artefatos._falhou_em[0] = 0.0
+    artefatos._building[0] = False
     with app.app_context():
         from models.entomologia import EntomologiaAtlasArtefato
         EntomologiaAtlasArtefato.query.delete()
     yield estado
+    import threading
+    for thread in threading.enumerate():                  # montagens em segundo plano terminam dentro do teste
+        if thread.name == 'atlas-artefatos':
+            thread.join(10)
+    artefatos._falhou_em[0] = 0.0
     app.config.pop('ATLAS_ARTEFATOS', None)
     fast.reset()
     artefatos._bytes.clear()
@@ -171,8 +178,10 @@ def test_editar_o_atlas_ja_dispara_a_montagem_nova(client, app, ligado, monkeypa
     layer = client.post(BASE + '/editor', json=dict(action='create_layer', revision=0, reason='teste',
                                                      title='Equipamentos', color='#087f81'))
     assert layer.status_code == 200 and disparos
+    with app.app_context():
+        artefatos.construir()
     disparos.clear()
-    client.get(BASE + '/busca/indice')                               # leitura não dispara nada
+    client.get(BASE + '/busca/indice')                               # versão pronta: a leitura não dispara nada
     assert not disparos
 
 
@@ -183,3 +192,69 @@ def test_versao_muda_com_os_arquivos_de_dados_e_o_formato(app, ligado, monkeypat
         assert artefatos.versao(((1, 'a'),)) != base
         monkeypatch.setattr(fast, 'INDEX_FORMAT', 'formato-novo')
         assert artefatos.versao(((1, 'a'),)) != base
+
+
+# --------------------------------------------------------------------------
+# Nenhuma requisição espera a montagem, e nada que virou clínico vaza
+# --------------------------------------------------------------------------
+
+def _esperar_versao_atual():
+    import time
+    for _ in range(200):
+        if artefatos.existe(artefatos.versao_atual()):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_sem_acesso_clinico_nunca_recebe_a_versao_anterior(client, app, ligado):
+    with app.app_context():
+        artefatos.construir()
+        ligado['assinatura'] = ((1, 'a'), (3, 'camada virou clínica'))
+        assert artefatos.indice(False, app) == artefatos.PREPARANDO      # não serve a anterior
+        assert artefatos.indice(True, app) not in (None, artefatos.PREPARANDO)   # quem vê tudo, sim
+        assert artefatos.busca_compacta('rua', False, app) == {'layers': [], 'entries': [], 'preparando': True}
+        snap = fast.snapshot()
+        (camada, feicao), _ = next(iter(fast.places(snap).items()))
+        assert artefatos.lugar(camada, feicao, False) == artefatos.PREPARANDO
+        assert _esperar_versao_atual()                                   # a montagem já tinha começado
+        assert artefatos.indice(False) not in (None, artefatos.PREPARANDO)
+
+
+def test_indice_em_preparo_responde_na_hora_com_503(client, app, ligado, monkeypatch):
+    login(client)
+    monkeypatch.setattr(artefatos, 'atualizar_em_segundo_plano', lambda a: None)   # montagem "em andamento"
+    monkeypatch.setattr(artefatos, 'indice', lambda clinico, app=None: artefatos.PREPARANDO)
+    r = client.get(BASE + '/busca/indice')
+    assert r.status_code == 503 and r.headers['Retry-After'] == '5' and r.json['preparando'] is True
+    assert 'no-store' in r.headers['Cache-Control']
+    reserva = client.get(BASE + '/busca', query_string={'q': 'rua', 'compacto': '1'})
+    assert reserva.status_code == 200
+
+
+def test_primeira_vez_nao_prende_a_requisicao(app, ligado):
+    with app.app_context():
+        assert artefatos.indice(True, app) == artefatos.PREPARANDO      # nada gravado: monta em segundo plano
+        assert _esperar_versao_atual()
+        assert artefatos.indice(True) not in (None, artefatos.PREPARANDO)
+
+
+def test_versao_anterior_de_outro_formato_nao_e_servida(app, ligado, monkeypatch):
+    with app.app_context():
+        artefatos.construir()
+        monkeypatch.setattr(fast, 'INDEX_FORMAT', 'formato-novo')        # deploy que mudou o índice
+        monkeypatch.setattr(artefatos, 'atualizar_em_segundo_plano', lambda a: None)
+        assert artefatos.indice(True, app) == artefatos.PREPARANDO
+
+
+def test_montagem_com_erro_volta_ao_caminho_direto(client, app, ligado, monkeypatch):
+    login(client)
+    with app.app_context():
+        monkeypatch.setattr(artefatos, 'construir', lambda **k: (_ for _ in ()).throw(RuntimeError('falhou')))
+        artefatos._building[0] = False
+        thread = artefatos.atualizar_em_segundo_plano(app)
+        thread.join(5)
+        assert artefatos.indice(True, app) is None                       # sem "preparando" eterno
+    r = client.get(BASE + '/busca/indice')
+    assert r.status_code == 200 and r.json['entries']
+    artefatos._falhou_em[0] = 0.0

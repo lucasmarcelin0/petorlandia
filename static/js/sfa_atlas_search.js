@@ -112,6 +112,8 @@
         const response=await fetch(urls.search+(urls.search.includes('?')?'&':'?')+'compacto=1&q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store',signal:controller.signal});
         if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw Error('Não foi possível consultar os endereços. As quadras continuam disponíveis.');
         const data=await response.json();clearTimeout(giveUp);if(seq!==run)return;
+        // Versão nova do índice ainda sendo montada: as quadras já estão na tela; tenta de novo em instantes.
+        if(data.preparando){status.textContent='Preparando a busca de endereços…';clearTimeout(timer);timer=setTimeout(()=>{if(!index&&input.value.trim()===query)serverSearch();},4000);return;}
         // Índice pronto no servidor: mesma lista, mesmo toque e mesmo ＋ Rota da busca local.
         if(Array.isArray(data.entries))count+=entries(data.entries,data);
         else{if(data.results.length)section('Endereços e locais');

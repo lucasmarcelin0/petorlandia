@@ -21,6 +21,7 @@ def upgrade():
         sa.Column('corpo', sa.LargeBinary(), nullable=False),
         sa.Column('corpo_br', sa.LargeBinary(), nullable=True),
         sa.Column('etag', sa.String(40), nullable=False),
+        sa.Column('formato', sa.String(40), nullable=False, server_default=''),
         sa.Column('bytes_crus', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('criado_em', sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint('versao', 'variante', 'tipo', name='uq_entomologia_atlas_artefato'))
