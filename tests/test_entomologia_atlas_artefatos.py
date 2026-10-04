@@ -192,6 +192,19 @@ def test_versao_muda_com_os_arquivos_de_dados_e_o_formato(app, ligado, monkeypat
         assert artefatos.versao(((1, 'a'),)) != base
         monkeypatch.setattr(fast, 'INDEX_FORMAT', 'formato-novo')
         assert artefatos.versao(((1, 'a'),)) != base
+        outra = artefatos.versao(((1, 'a'),))
+        monkeypatch.setattr(artefatos, 'ARTEFATOS_FORMATO', 'mapa-2')         # saídas novas: monta tudo de novo
+        assert artefatos.versao(((1, 'a'),)) != outra
+
+
+def test_saidas_novas_remontam_mas_o_indice_anterior_segue_para_quem_ve_tudo(app, ligado, monkeypatch):
+    with app.app_context():
+        artefatos.construir()
+        monkeypatch.setattr(artefatos, 'ARTEFATOS_FORMATO', 'mapa-proximo')   # deploy que acrescenta saídas
+        monkeypatch.setattr(artefatos, 'atualizar_em_segundo_plano', lambda a: None)
+        assert artefatos.indice(True, app) not in (None, artefatos.PREPARANDO)   # mesmo formato de índice
+        assert artefatos.indice(False, app) == artefatos.PREPARANDO
+        assert artefatos.catalogo() is None                                      # mapa: caminho direto, fresco
 
 
 # --------------------------------------------------------------------------

@@ -32,6 +32,8 @@ from functools import lru_cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent / 'data' / 'entomologia'
+# Muda quando o conjunto de saídas gravadas muda (sem mudar o índice): força uma montagem completa nova.
+ARTEFATOS_FORMATO = 'mapa-1'
 TIPO_INDICE = 'indice'
 TIPO_CATALOGO = 'catalogo'
 TIPO_ENDERECOS = 'enderecos'
@@ -77,7 +79,7 @@ def fingerprint_estatico():
 
 def versao(signature):
     from services.entomologia_atlas_search import INDEX_FORMAT
-    texto = INDEX_FORMAT + '|' + repr(signature) + '|' + fingerprint_estatico()
+    texto = INDEX_FORMAT + '|' + ARTEFATOS_FORMATO + '|' + repr(signature) + '|' + fingerprint_estatico()
     return hashlib.sha256(texto.encode('utf-8')).hexdigest()[:32]
 
 
