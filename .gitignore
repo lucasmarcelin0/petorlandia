@@ -98,3 +98,7 @@ outputs/presentation_handoff_2026/old_survey_*.json
 
 .codex/
 .codex_worktrees/
+
+# Versões comprimidas geradas no build do Heroku (bin/post_compile)
+static/**/*.br
+static/**/*.gz

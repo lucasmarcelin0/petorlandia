@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Executado pelo buildpack Python do Heroku ao fim de cada build.
+#
+# Em produção os arquivos de /static são servidos pelo WhiteNoise (app.py), que
+# não comprime na hora: ele entrega a versão .br ou .gz ao lado do arquivo,
+# quando existe, conforme o navegador aceita. Sem elas, JS e CSS iam crus ao
+# celular (ex.: sfa_atlas_nav.js 55 KB em vez de 16 KB). Gerar aqui custa ~4 s
+# por build e nada em tempo de requisição. Se falhar, o deploy segue como antes
+# (arquivos sem compressão), sem quebrar a publicação.
+set -u
+echo "-----> Comprimindo arquivos estáticos (brotli/gzip) para o WhiteNoise"
+python -m whitenoise.compress --quiet static \
+  jpg jpeg png gif webp ico heic avif zip gz tgz bz2 tbz xz br swf flv woff woff2 \
+  3gp 3gpp asf avi m4v mov mp4 mpeg mpg webm wmv mp3 \
+  pdf docx xlsx pptx odt ods \
+  || echo "       Aviso: compressão não concluída; os arquivos seguem sem compressão."
+exit 0
