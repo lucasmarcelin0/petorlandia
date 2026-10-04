@@ -89,7 +89,7 @@ class EntomologiaAtlasArtefato(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     versao = db.Column(db.String(32), nullable=False, index=True)
     variante = db.Column(db.String(16), nullable=False)
-    tipo = db.Column(db.String(24), nullable=False)
+    tipo = db.Column(db.String(80), nullable=False)
     corpo = db.Column(db.LargeBinary, nullable=False)
     corpo_br = db.Column(db.LargeBinary)        # mesma resposta em brotli (~40% menor), quando vale a pena
     etag = db.Column(db.String(40), nullable=False)

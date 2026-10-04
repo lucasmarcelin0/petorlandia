@@ -17,7 +17,7 @@ def upgrade():
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('versao', sa.String(32), nullable=False),
         sa.Column('variante', sa.String(16), nullable=False),
-        sa.Column('tipo', sa.String(24), nullable=False),
+        sa.Column('tipo', sa.String(80), nullable=False),
         sa.Column('corpo', sa.LargeBinary(), nullable=False),
         sa.Column('corpo_br', sa.LargeBinary(), nullable=True),
         sa.Column('etag', sa.String(40), nullable=False),
