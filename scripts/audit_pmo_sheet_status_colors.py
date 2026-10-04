@@ -134,6 +134,10 @@ def _fetch_sheet_rows(service, spreadsheet_id: str, sheet_title: str, sheet_gid:
                     spreadsheetId=spreadsheet_id,
                     ranges=[f"'{title}'!A:T"],
                     includeGridData=True,
+                    # Só o que as leituras usam (texto, nota e cor de fundo). Sem o filtro, o Google
+                    # devolve toda a formatação de cada célula: ~4x mais dados para a mesma aba.
+                    fields="sheets(data(rowData(values(formattedValue,note,"
+                    "effectiveFormat(backgroundColor),userEnteredFormat(backgroundColor)))))",
                 )
                 .execute()
             )
