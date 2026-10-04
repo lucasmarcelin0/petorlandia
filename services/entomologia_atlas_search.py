@@ -316,7 +316,7 @@ def client_index(clinical_allowed):
         return _build_payload(snap, variant)
 
 
-def _build_payload(snap, variant):
+def _build_payload(snap, variant, guardar=True):
     layer_index, layers, rows = {}, [], []
     for members in snap.groups():
         layer = members[0].layer
@@ -330,7 +330,7 @@ def _build_payload(snap, variant):
                       allow_nan=False)
     etag = hashlib.sha256((INDEX_FORMAT + repr(snap.signature) + str(variant) + body[:64]).encode()).hexdigest()[:24]
     payload = (body, etag if snap.signature is not None else None)
-    if snap.signature is not None:
+    if guardar and snap.signature is not None:
         with _lock:
             _payloads[(snap.signature, variant)] = payload
     return payload
@@ -400,7 +400,11 @@ def places(snap):
     Pontos já trazem a posição no próprio índice; só as entradas de traçado (tipo 2) pedem a geometria.
     Cada item leva ``clinical`` para a permissão continuar valendo na hora de responder.
     """
-    result = {}
+    return dict(iter_places(snap))
+
+
+def iter_places(snap):
+    """O mesmo que ``places()``, um item por vez (quem grava não precisa de todos na memória ao mesmo tempo)."""
     layer_index = {}
     for members in snap.groups():
         first = members[0]
@@ -408,9 +412,8 @@ def places(snap):
         if _compact(members, layer_index)[5] != 2:
             continue
         key = (first.layer['id'], str(first.feature['id']))
-        result[key] = {'clinical': bool(first.layer['clinical']),
-                       'item': _place_from(snap, members, first.layer['id'])}
-    return result
+        yield key, {'clinical': bool(first.layer['clinical']),
+                    'item': _place_from(snap, members, first.layer['id'])}
 
 
 def search_compact(entries, query, limit=RESULT_LIMIT):
