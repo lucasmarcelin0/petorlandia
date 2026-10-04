@@ -333,10 +333,13 @@ def _saidas_do_mapa(camadas):
     from services.entomologia_cnefe import active as active_cnefe
     catalogo = {'source': active_earth()['source'], 'cnefe_source': active_cnefe()['source'],
                 'cadastre_source': active_cadastre()['source'], 'items': editor.catalog(True, source=camadas)}
-    linhas = [(VARIANTE_LUGARES, TIPO_CATALOGO, _dumps(catalogo)),
-              (VARIANTE_LUGARES, TIPO_ENDERECOS, _dumps({'layers': [
-                  {'id': layer['id'], 'features': layer['features']} for layer in camadas.values()
-                  if layer['origin']['type'] == 'cnefe' and not layer['clinical']]}))]
+    linhas = [(VARIANTE_LUGARES, TIPO_CATALOGO, _dumps(catalogo))]
+    # Endereços em duas variantes, como o índice: uma camada de endereços marcada como clínica continua
+    # chegando a quem tem acesso e nunca chega aos demais.
+    for clinico, variante in VARIANTES.items():
+        linhas.append((variante, TIPO_ENDERECOS, _dumps({'layers': [
+            {'id': layer['id'], 'features': layer['features']} for layer in camadas.values()
+            if layer['origin']['type'] == 'cnefe' and (clinico or not layer['clinical'])]})))
     for layer in camadas.values():
         if layer['origin']['type'] == 'cnefe':       # o mapa pega os endereços pelo /enderecos
             continue
@@ -352,9 +355,9 @@ def catalogo():
     return json.loads(descomprimir(item[0])) if item else None
 
 
-def enderecos():
+def enderecos(clinical_allowed):
     v = versao_atual()
-    return (v and _ler(v, VARIANTE_LUGARES, TIPO_ENDERECOS, guardar=False)) or None
+    return (v and _ler(v, VARIANTES[bool(clinical_allowed)], TIPO_ENDERECOS, guardar=False)) or None
 
 
 def camada(layer_id):

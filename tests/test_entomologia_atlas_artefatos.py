@@ -347,8 +347,23 @@ def test_mapa_logo_depois_de_editar_vem_fresco_e_nao_da_versao_anterior(client, 
     with app.app_context():
         artefatos.construir()
         ligado['assinatura'] = ((9, 'nova'),)            # alguém acabou de salvar
-        assert artefatos.catalogo() is None and artefatos.enderecos() is None and artefatos.camada('ref') is None
+        assert artefatos.catalogo() is None and artefatos.enderecos(True) is None and artefatos.camada('ref') is None
     chamadas = []
     original = editor.layers
     monkeypatch.setattr(editor, 'layers', lambda *a, **k: chamadas.append(1) or original(*a, **k))
     assert client.get('/sfa/entomologia/atlas/camadas').status_code == 200 and chamadas
+
+
+def test_camada_de_enderecos_marcada_como_clinica_chega_so_a_quem_tem_acesso(app, ligado, monkeypatch):
+    layers = _synthetic_layers()
+    for layer in layers.values():
+        layer.setdefault('color', '#087f81')
+    layers['many']['clinical'] = True                    # administrador marcou os endereços como clínicos
+    monkeypatch.setattr(editor, 'layers', lambda allowed, include_deleted=False: {
+        k: v for k, v in json.loads(json.dumps(layers)).items() if allowed or not v['clinical']})
+    with app.app_context():
+        artefatos.construir()
+        com = json.loads(artefatos.descomprimir(artefatos.enderecos(True)[0]))
+        sem = json.loads(artefatos.descomprimir(artefatos.enderecos(False)[0]))
+    assert [l['id'] for l in com['layers']] == ['many'] and com['layers'][0]['features']
+    assert sem['layers'] == []

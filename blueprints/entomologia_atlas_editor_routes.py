@@ -97,7 +97,7 @@ def register(bp, require_access, clinical_access):
     @require_access
     def atlas_cnefe_layers():
         from services import entomologia_atlas_artefatos as artefatos
-        pronto=artefatos.enderecos()
+        pronto=artefatos.enderecos(bool(clinical_access()))
         if pronto is not None:return _sem_cache(artefatos.resposta(pronto))
         return reply({'layers':[{'id':layer['id'],'features':layer['features']} for layer in service.layers(clinical_access()).values() if layer['origin']['type']=='cnefe']})
 
