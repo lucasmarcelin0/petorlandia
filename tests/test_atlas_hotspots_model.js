@@ -14,3 +14,21 @@ assert.equal(M.aggregate([{feature:point('b',1,.5),kind:'larvae',key:'b'}],M.ind
 const hole=box('h');hole.geometry.coordinates.push([[.2,.2],[.8,.2],[.8,.8],[.2,.8],[.2,.2]]);assert(!M.contains([.5,.5],hole.geometry));
 assert(M.contains([.1,.1],hole.geometry));
 console.log('Hotspot model passed: exclusions, deduplication, boundaries, overlaps and holes.');
+
+// Notificações posicionadas automaticamente ficam na calçada: contam na quadra que o servidor atribuiu ao registro.
+const U=.001, named=(id,x,sector,block)=>({type:'Feature',id,properties:{sector,block},geometry:{type:'Polygon',coordinates:[[[x*U,0],[(x+1)*U,0],[(x+1)*U,U],[x*U,U],[x*U,0]]]}});
+const notice=(id,x,props)=>({feature:point(id,x*U,.5*U,props),kind:'notifications',key:id});
+const town=M.index([named('q1',0,'010','100'),named('q2',3,'010','200'),named('dup-a',6,'020','300'),named('dup-b',9,'020','300')]);
+assert(M.qualifies(point('n',.5,.5,{exam_result:'Negativo'}),'notifications'));
+const notified=M.aggregate([
+  notice('inside',.5,{sector:'010',block:'200'}),      // dentro da q1: a geometria vence a atribuição
+  notice('sidewalk',1.4,{sector:'010',block:'100'}),   // fora de todas: vale a quadra atribuída
+  notice('other',2.6,{sector:'010',block:'200'}),
+  notice('unknown',5,{sector:'099',block:'1'}),        // quadra que não existe no território
+  notice('ambiguous',8,{sector:'020',block:'300'}),    // chave repetida no território
+  notice('bare',5)],town);
+assert.equal(notified.located,3);assert.equal(notified.outside,3);
+const count=id=>notified.blocks.find(b=>b.block.id===id)?.notifications;
+assert.equal(count('q1'),2);assert.equal(count('q2'),1);
+assert.deepEqual(notified.blocks.map(b=>[b.larvae,b.cases]),[[0,0],[0,0]]);
+console.log('Hotspot model passed: automatic notifications use the assigned block only as a fallback.');

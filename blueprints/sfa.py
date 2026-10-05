@@ -212,6 +212,8 @@ def entomologia():
         'layer': url_for('sfa_routes.entomologia_atlas_camada', layer='LAYER', token=_token_admin_informado() or None),
         'sinan': url_for('sfa_routes.entomologia_atlas_sinan', token=_token_admin_informado() or None),
         'addresses':url_for('sfa_routes.atlas_cnefe_layers',token=_token_admin_informado() or None),
+        'dengue_auto': url_for('sfa_routes.atlas_dengue_auto_sync'),
+        'dengue_auto_report': url_for('sfa_routes.atlas_dengue_auto_report', token=_token_admin_informado() or None),
         'clinical_allowed': acesso_completo,
     }
     dataset['editor_urls'] = {
