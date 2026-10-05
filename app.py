@@ -1957,6 +1957,7 @@ from helpers import (
     has_veterinarian_profile,
     is_slot_available,
     is_veterinarian,
+    get_responsible_veterinarian,
     parse_data_nascimento,
     to_timezone_aware,
     unique_items_by_id,
@@ -3051,6 +3052,7 @@ app.jinja_env.globals['assinatura_de'] = assinatura_de
 # ``worker`` diretamente e deixava de fora estagiario e veterinario legado.
 app.jinja_env.globals['can_start_consulta'] = can_start_consulta
 app.jinja_env.globals['is_active_intern'] = is_active_intern
+app.jinja_env.globals['get_responsible_veterinarian'] = get_responsible_veterinarian
 
 
 def _ensure_veterinarian_profile(form=None):

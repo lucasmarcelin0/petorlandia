@@ -250,6 +250,12 @@ def is_active_intern(*args, **kwargs):
     return app_module.is_active_intern(*args, **kwargs)
 
 
+def get_responsible_veterinarian(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.get_responsible_veterinarian.
+    import app as app_module
+    return app_module.get_responsible_veterinarian(*args, **kwargs)
+
+
 def mp_sdk(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.mp_sdk.
     import app as app_module
@@ -1484,9 +1490,12 @@ def imprimir_consulta(consulta_id):
     animal = consulta.animal
     owner_access = _current_user_owns_animal(animal)
     tutor = animal.owner
-    veterinario = consulta.veterinario
+    veterinario = get_responsible_veterinarian(
+        consulta.veterinario,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica or (
-        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
+        veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
 
     return render_template(
@@ -2655,14 +2664,14 @@ def imprimir_bloco_prescricao(bloco_id):
         return redirect(url_for('index'))
 
     consulta = animal.consultas[-1] if animal and animal.consultas else None
-    veterinario = consulta.veterinario if consulta else bloco.saved_by
-    if not veterinario and is_vet:
-        veterinario = current_user
-    clinica = consulta.clinica if consulta and consulta.clinica else (
+    veterinario = get_responsible_veterinarian(
+        bloco.saved_by,
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_vet else None,
+    )
+    clinica = bloco.clinica or (consulta.clinica if consulta else None) or (
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
-    if not clinica:
-        clinica = bloco.clinica
     salvo_por = bloco.saved_by or veterinario
     prescription_next_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
     prescription_public_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
@@ -3438,9 +3447,11 @@ def imprimir_bloco_exames(bloco_id):
         return redirect(url_for('login_view', next=request.full_path or request.path))
 
     consulta = animal.consultas[-1] if animal and animal.consultas else None
-    veterinario = consulta.veterinario if consulta else None
-    if not veterinario and current_user.is_authenticated and getattr(current_user, 'worker', None) == 'veterinario':
-        veterinario = current_user
+    veterinario = get_responsible_veterinarian(
+        getattr(bloco, 'saved_by', None),
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica if consulta and consulta.clinica else None
     if not clinica and veterinario and getattr(veterinario, 'veterinario', None):
         vet = veterinario.veterinario
@@ -4006,9 +4017,11 @@ def imprimir_bloco_orcamento(bloco_id):
         ensure_clinic_access(bloco.clinica_id)
     tutor = animal.owner
     consulta = animal.consultas[-1] if animal.consultas else None
-    veterinario = consulta.veterinario if consulta else None
-    if not veterinario and is_veterinarian(current_user):
-        veterinario = current_user
+    veterinario = get_responsible_veterinarian(
+        getattr(bloco, 'saved_by', None),
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
     return render_template(
         'orcamentos/imprimir_orcamento.html',

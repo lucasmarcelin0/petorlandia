@@ -124,6 +124,12 @@ def is_veterinarian(*args, **kwargs):
     return app_module.is_veterinarian(*args, **kwargs)
 
 
+def get_responsible_veterinarian(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.get_responsible_veterinarian.
+    import app as app_module
+    return app_module.get_responsible_veterinarian(*args, **kwargs)
+
+
 def upload_to_s3(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.upload_to_s3.
     import app as app_module
@@ -2635,9 +2641,10 @@ def imprimir_vacinas(animal_id):
     if not _current_user_can_manage_vaccine_history(animal):
         abort(403)
     consulta = animal.consultas[-1] if animal.consultas else None
-    veterinario = consulta.veterinario if consulta else None
-    if not veterinario and current_user.is_authenticated and getattr(current_user, "worker", None) == "veterinario":
-        veterinario = current_user
+    veterinario = get_responsible_veterinarian(
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica if consulta and consulta.clinica else None
     if not clinica and veterinario and getattr(veterinario, "veterinario", None):
         vet = veterinario.veterinario

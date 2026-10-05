@@ -318,6 +318,9 @@ def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     if not has_veterinarian_profile(user):
         return False
 
+    if is_intern_account(user) or getattr(getattr(user, 'veterinario', None), 'is_estagiario', False):
+        return False
+
     if not require_membership:
         return True
 
@@ -325,6 +328,50 @@ def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     if membership is None:
         return False
     return membership.is_active()
+
+
+def get_responsible_veterinarian(*candidates, fallback=None):
+    """Retorna o User do médico-veterinário responsável com CRMV válido.
+
+    Examina os candidatos na ordem fornecida. Se um candidato for um médico-veterinário
+    com CRMV próprio que pode assinar (`pode_assinar=True`), ele é retornado.
+
+    Se o candidato for estagiário (ou não possuir CRMV próprio), busca o supervisor técnico
+    com CRMV associado (via `veterinario.supervisor.user` ou `clinic_roles.internship_supervisor`).
+
+    Se nenhum candidato tiver CRMV, avalia o `fallback` (ex.: `current_user`).
+    Caso nenhum tenha CRMV próprio ou de supervisor, retorna o primeiro candidato não-nulo
+    ou o próprio fallback.
+    """
+    for candidate in candidates:
+        if not candidate:
+            continue
+        vet = getattr(candidate, 'veterinario', None)
+        if vet and getattr(vet, 'pode_assinar', False):
+            return candidate
+
+        if vet:
+            supervisor = getattr(vet, 'supervisor', None)
+            if supervisor and getattr(supervisor, 'pode_assinar', False):
+                supervisor_user = getattr(supervisor, 'user', None)
+                if supervisor_user:
+                    return supervisor_user
+
+        for staff in getattr(candidate, 'clinic_roles', None) or []:
+            sup_user = getattr(staff, 'internship_supervisor', None)
+            if sup_user and getattr(getattr(sup_user, 'veterinario', None), 'pode_assinar', False):
+                return sup_user
+
+    if fallback:
+        vet = getattr(fallback, 'veterinario', None)
+        if vet and getattr(vet, 'pode_assinar', False):
+            return fallback
+
+    for candidate in candidates:
+        if candidate:
+            return candidate
+
+    return fallback
 
 
 #: Valor de ``User.role`` que marca a conta como estagiaria. Diferente de
