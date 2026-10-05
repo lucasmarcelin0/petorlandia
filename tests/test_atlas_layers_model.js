@@ -22,3 +22,16 @@ assert.equal(M.earthFilter(adjacent,'',new Set()).length,0);
 assert.equal(M.sheetFilter([{final_result:''},{final_result:'Negativo'}],{finalResult:'missing'}).length,1);
 assert.equal(M.sheetFilter([{final_result:''},{final_result:'Negativo'}],{finalResult:'Negativo'}).length,1);
 console.log('Cross-layer anchor spacing, category toggles and final-result filters passed.');
+
+const automation={rows:171,located:158,unlocated:13,methods:{exato:123,exato_sufixo:20,interpolado:12,condominio:3,sem_posicao:13},read_at:'2026-10-05T12:00:00+00:00',
+  manual:{markers:154,compared:120,median_m:14,within_25m:96,within_50m:110,within_100m:116,over_100m:4}};
+const text=M.automationSummary(automation);
+assert(text.startsWith('171 notificações · 158 no mapa · 13 sem posição.'));
+assert(text.includes('143 pelo número exato, 12 entre vizinhos, 3 em condomínio.'));
+assert(text.includes('120 pares, mediana de 14 m; 96 a até 25 m, 110 a até 50 m, 4 a mais de 100 m.'));
+assert(!text.includes('sem_posicao')&&text.includes('Planilha lida em'));
+assert(M.automationSummary({...automation,manual:{markers:154,compared:0}}).includes('Nenhum marcador de Casos Dengue pôde ser pareado'));
+assert(!M.automationSummary({...automation,manual:null,read_at:''}).includes('Casos Dengue'));
+assert.equal(M.automationSummary({rows:1,located:1,unlocated:0,methods:{equipe:1}}),'1 notificação · 1 no mapa · 0 sem posição. Posição: 1 pela equipe.');
+assert.equal(M.automationSummary(null),'');
+console.log('Automatic dengue layer summary passed.');

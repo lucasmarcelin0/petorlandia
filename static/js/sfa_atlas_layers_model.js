@@ -33,6 +33,20 @@
     });
     return groups;
   }
-  const api={earthFilter,sheetFilter,clusters};
+  function automationSummary(a) {
+    // Resumo da camada Dengue Automatizados: quantos entraram no mapa, como, e a distância para a marcação manual.
+    if(!a)return '';
+    const m=a.methods||{}, exact=(m.exato||0)+(m.exato_sufixo||0), plural=(n,one,many)=>`${n} ${n===1?one:many}`;
+    const how=[[exact,'pelo número exato'],[m.interpolado||0,'entre vizinhos'],[m.vizinho||0,'pelo vizinho mais próximo'],[m.condominio||0,'em condomínio'],[m.equipe||0,'pela equipe']]
+      .filter(p=>p[0]).map(p=>p[0]+' '+p[1]).join(', ');
+    const parts=[`${plural(a.rows,'notificação','notificações')} · ${a.located} no mapa · ${a.unlocated} sem posição.`];
+    if(how)parts.push('Posição: '+how+'.');
+    const c=a.manual;
+    if(c&&c.compared)parts.push(`Comparação com Casos Dengue: ${plural(c.compared,'par','pares')}, mediana de ${c.median_m} m; ${c.within_25m} a até 25 m, ${c.within_50m} a até 50 m, ${c.over_100m} a mais de 100 m.`);
+    else if(c)parts.push('Nenhum marcador de Casos Dengue pôde ser pareado por SINAN ou endereço: compare ligando as duas camadas.');
+    if(a.read_at&&!Number.isNaN(Date.parse(a.read_at)))parts.push('Planilha lida em '+new Date(a.read_at).toLocaleString('pt-BR')+'.');
+    return parts.join(' ');
+  }
+  const api={earthFilter,sheetFilter,clusters,automationSummary};
   if(typeof module!=='undefined')module.exports=api; else root.SfaAtlasLayersModel=api;
 })(typeof window==='undefined'?globalThis:window);
