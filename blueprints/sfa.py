@@ -301,6 +301,12 @@ def entomologia_atlas_sinan():
         response = jsonify({'error': 'Não foi possível consultar a planilha. Tente atualizar a fonte.'})
         response.status_code = 503
     else:
+        try:
+            # Registros sem SINAN marcado no Earth recebem a posição automática pelo endereço.
+            from services.entomologia_dengue_auto import apply_positions
+            data = apply_positions(data)
+        except Exception:                      # a consulta da planilha não depende da camada automática
+            current_app.logger.warning('Atlas: posições automáticas indisponíveis na consulta da planilha.', exc_info=True)
         response = jsonify(data)
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
