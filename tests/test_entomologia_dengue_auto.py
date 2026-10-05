@@ -145,6 +145,62 @@ def test_condominium_house_comes_from_the_atlas_sketch():
     assert find('CONDOMINIO TORINO CASA 9', '', layers)['geometry'] is None
 
 
+def team_layer(*points, clinical=False):
+    """Camada criada pela equipe no editor: ``(nome, endereço, [lon, lat])``."""
+    return {'id': 'local-teste', 'title': 'Endereços de referência', 'clinical': clinical, 'deleted': False,
+            'origin': {'type': 'local'}, 'folders': [], 'revision': 0, 'features': [
+        {'type': 'Feature', 'id': f'point-{i}', 'geometry': {'type': 'Point', 'coordinates': point},
+         'properties': {'name': name, 'address': address}} for i, (name, address, point) in enumerate(points)]}
+
+
+def test_gate_address_names_the_condominium():
+    torino = dengue.parse_address('RUA 20 1107-A ALAMEDA 04 CASA 57')
+    assert (torino['condominium'], torino['house']) == ('Torino', 57)
+    assert dengue.address_label(torino) == 'Rua 20, 1107-A · Condomínio Torino · Casa 57'
+    assert dengue.parse_address('RUA 20 955')['condominium'] is None      # cabe na numeração do Centro
+    paris = dengue.parse_address('RUA 26 1109 A')
+    assert (paris['condominium'], paris['other_condominium']) == (None, 'Paris')
+    # O nome escrito no endereço vale mais que o número da portaria; outros números da rua não são portaria.
+    assert dengue.parse_address('RUA 20 1107-A CASA 3 QUEBEC')['condominium'] == 'Quebec'
+    assert dengue.parse_address('RUA 20 1109')['condominium'] is None
+
+
+def test_condominium_without_house_or_sketch_goes_to_its_gate():
+    gate = east(300)
+    layers = reference(('Rua 20', '954', east(-2000), 'Centro'), condo=[('Torino', 57, east(340))])
+    layers['cnefe-teste']['features'].append(
+        {'type': 'Feature', 'id': 'cnefe-acesso', 'geometry': {'type': 'Point', 'coordinates': gate},
+         'properties': {'street': 'Acesso Sem Denominacao', 'house_number': '198A', 'neighborhood': 'Condominio Torino'}})
+    at_gate = find('RUA 20 1107-A', 'Morada do Sol', layers)
+    assert (at_gate['method'], at_gate['confidence']) == ('condominio', 'baixa')
+    assert at_gate['geometry']['coordinates'] == [round(v, 6) for v in gate] and 'a casa não foi informada' in at_gate['precision']
+    house = find('RUA 20 1107-A ALAMEDA 04 CASA 57', 'Morada do Sol', layers)
+    assert (house['confidence'], house['geometry']['coordinates']) == ('media', [round(v, 6) for v in east(340)])
+    # Paris não tem croqui nem acesso na base: fica sem posição, dizendo o que falta.
+    for address in ('RUA 26 1109-A', 'CONDOMINIO PARIS CASA 45', 'RUA 26 1109-A CONDOMINIO PARIS CASA 70'):
+        missing = find(address, 'Morada do Sol', layers)
+        assert missing['geometry'] is None and 'Rua 26, 1109-A' in missing['precision'] and 'ponto de referência' in missing['precision']
+
+
+def test_team_reference_points_teach_addresses_the_base_lacks():
+    paris, new_house = east(800), east(1500)
+    layers = reference(('Alameda 3', '1240', east(0), 'Jardim Parisi'), ('Rua 26', '1109', east(-3000), 'Jardim Cidade Alta'))
+    layers['local-teste'] = team_layer(('Portaria do Paris', 'Rua 26, 1109-A', paris), ('Alameda 3, 131', '', new_house),
+                                       ('UBS de teste', 'perto da praça', east(5)))
+    for address in ('RUA 26 1109-A', 'CONDOMINIO PARIS CASA 45', 'RUA 26 1109-A CONDOMINIO PARIS CASA 70'):
+        found = find(address, 'Morada do Sol', layers)
+        assert (found['method'], found['confidence']) == ('condominio', 'baixa'), address
+        assert found['geometry']['coordinates'] == [round(v, 6) for v in paris] and 'não tem croqui' in found['precision']
+    taught = find('ALAMEDA 3 131', 'Alto da Boa Vista', layers)
+    assert (taught['method'], taught['confidence']) == ('exato', 'alta')
+    assert taught['geometry']['coordinates'] == [round(v, 6) for v in new_house] and 'ponto de referência da equipe' in taught['precision']
+    # Camada clínica ou excluída não ensina endereços.
+    for change in ({'clinical': True}, {'deleted': True}):
+        layers['local-teste'].update(clinical=False, deleted=False)
+        layers['local-teste'].update(change)
+        assert find('ALAMEDA 3 131', 'Alto da Boa Vista', layers)['geometry'] is None
+
+
 def test_block_is_the_containing_or_the_touching_one():
     territory = json.loads((Path(dengue.__file__).parent / 'data' / 'entomologia' / 'territory.json').read_text(encoding='utf-8'))
     feature = next(f for f in territory['features'] if f['properties'].get('geometry_valid') and not f['properties'].get('duplicate_key'))

@@ -354,7 +354,15 @@ registrada em cada ponto com a confiança e as referências usadas:
   anterior e o seguinte da mesma rua (de preferência do mesmo lado), com até
   60 de diferença na numeração de cada lado e 300 m entre eles.
 - **Vizinho:** só um lado conhecido, até 30 de diferença: vale a posição dele.
-- **Condomínio:** casa do croqui do atlas, posição estimada.
+- **Condomínio:** casa do croqui do atlas, posição estimada. Sem a casa, ou sem
+  croqui (Paris), vale a portaria, com confiança baixa. Rua 20, 1107-A é a
+  portaria do Torino e Rua 26, 1109-A a do Paris (confirmadas pela coordenação
+  em 05/10/2026). A posição da portaria vem de um ponto de referência da equipe
+  ou do acesso que o CNEFE registra para o condomínio.
+- **Ponto de referência da equipe:** registro de uma camada não clínica criada
+  no editor cujo endereço (ou nome) seja "Rua X, número". Vale mais que o CNEFE
+  e é o jeito de ensinar ao atlas um endereço que a base não tem (bairro novo,
+  portaria), sem mexer no código: cadastre o ponto e atualize a camada.
 - **Sem posição:** zona rural, rua ou faixa de numeração ausentes da base,
   condomínio sem croqui. O registro fica na tabela, com o motivo.
 
@@ -390,10 +398,14 @@ mediana e ficou a até 25 m em 93% dos casos; a de confiança baixa, 12 m na
 mediana e até 50 m em 81%. A distância para os marcadores manuais só é medida
 em produção, onde está a camada Casos Dengue.
 
-Limites: o CNEFE é de 2022 (bairros e condomínios novos não aparecem); as
-portarias de condomínio na Rua 20 e na Rua 26 não estão na base; o CNEFE não é
-cadastro completo, então um número ausente pode ser atribuído a um homônimo de
-outro trecho quando só este existe na base.
+Com as portarias confirmadas no mesmo dia, mais 2 registros (Torino) passam a
+ter posição. Os 3 do Paris continuam sem posição até a portaria ser cadastrada
+como ponto de referência.
+
+Limites: o CNEFE é de 2022 (bairros e condomínios novos não aparecem); a
+portaria do Paris ainda não tem posição na base; o CNEFE não é cadastro
+completo, então um número ausente pode ser atribuído a um homônimo de outro
+trecho quando só este existe na base.
 
 ```powershell
 python -m pytest tests/test_entomologia_dengue_auto.py -q
