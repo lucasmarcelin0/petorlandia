@@ -55,6 +55,13 @@ def find(address, hood, layers):
     return dengue.locate(dengue.parse_address(address), hood, dengue.AddressIndex(layers))
 
 
+@pytest.fixture(autouse=True)
+def fresh_scheduler_state():
+    dengue._auto.update(checked=None, seen='')
+    yield
+    dengue._auto.update(checked=None, seen='')
+
+
 @pytest.fixture()
 def no_street_check(monkeypatch):
     """Os pontos fictícios não ficam sobre as ruas reais do atlas."""
@@ -251,12 +258,12 @@ def test_comparison_with_manual_markers_by_sinan_and_address(no_street_check):
                                                    marker('m2', east(10, 12), address='RUA 11 Nº 2140'),
                                                    marker('m3', east(700), address='Avenida 1, 5')]}
     values = sheet(case('001', '9000001', 'RUA 11 2130'), case('002', '9000002', 'RUA 11 2140'), case('003', '9000003', 'RUA 11 2150'))
-    layer, summary = dengue.build(values, layers, today='05/10/2026')
+    layer, summary = dengue.build(values, layers)
     one, two, three = (f['properties'] for f in layer['features'])
     assert (one['manual_match'], one['manual_distance_m']) == ('sinan', 30)
     assert (two['manual_match'], two['manual_distance_m']) == ('endereco', 12)
     assert 'manual_match' not in three and 'Sem marcador manual' in three['notes']
-    assert 'a 12 m, em 05/10/2026' in two['notes']
+    assert 'mesmo endereço) a 12 m.' in two['notes']
     assert summary['manual'] == {'markers': 3, 'compared': 2, 'median_m': 21, 'within_25m': 1, 'within_50m': 2,
                                  'within_100m': 2, 'over_100m': 0, 'rows_without_marker': 1, 'markers_without_row': 1}
 
@@ -394,3 +401,111 @@ def test_page_offers_the_update_to_administrators(client, app):
     for marker in ('id="atlas-auto-list"', 'id="atlas-auto-status"', 'id="atlas-auto-sync"', 'id="atlas-auto-report"',
                    'id="atlas-hot-notifications"', '/sfa/entomologia/atlas/dengue-automatizados'):
         assert marker in html, marker
+
+
+def _revisions():
+    from models.entomologia import EntomologiaImportacao as E
+    from services import entomologia_atlas_editor as editor
+    return E.query.filter_by(tipo=editor.TIPO, titulo='auto-dengue').count()
+
+
+def test_scheduler_creates_the_layer_alone_and_only_rewrites_when_something_changed(client, app, monkeypatch):
+    """Sem requisição e sem clique: é assim que o agendador chama."""
+    from services import entomologia_atlas_editor as editor
+    rows = [case('001', '9000001', 'RUA 11 2130'), case('002', '9000002', 'ALAMEDA 3 131', hood='Alto da Boa Vista')]
+    _served(monkeypatch, sheet(*rows), reference(('Rua 11', '2130', east(0), 'Centro')))
+    summary = dengue.sync_if_changed('Agendador · atualização automática', 0)
+    assert summary['located'] == 1 and summary['unlocated'] == 1 and _revisions() == 1
+    layer = editor.layers(True)['auto-dengue']
+    assert layer['automation']['fingerprint'] and layer['features'][0]['geometry']
+    history = editor.history('auto-dengue', True)
+    assert history[0]['actor'] == 'Agendador · atualização automática' and history[0]['action'] == 'sync_dengue'
+    # Nada mudou: nem monta as camadas de novo, mesmo depois de reiniciar o processo.
+    with monkeypatch.context() as patch:
+        patch.setattr(dengue, 'build', lambda *a, **k: pytest.fail('Não havia o que refazer'))
+        assert dengue.sync_if_changed('Agendador', 0) is None
+        dengue._auto.update(checked=None, seen='')
+        assert dengue.sync_if_changed('Agendador', 0) is None and _revisions() == 1
+    # Linha nova na planilha: revisão nova, sem ninguém clicar.
+    _served(monkeypatch, sheet(*rows, case('003', '9000003', 'RUA 11 2130', symptoms='02/03/2026')),
+            reference(('Rua 11', '2130', east(0), 'Centro')))
+    assert dengue.sync_if_changed('Agendador', 0)['rows'] == 3 and _revisions() == 2
+    # Dentro do intervalo a planilha nem é consultada.
+    monkeypatch.setattr(atlas, 'sheet_values', lambda force=False: pytest.fail('Consulta antes do intervalo'))
+    assert dengue.sync_if_changed('Agendador', 900) is None
+
+
+def test_team_reference_point_reaches_the_map_on_the_next_scheduler_pass(client, app, monkeypatch):
+    from services import entomologia_atlas_editor as editor
+    _served(monkeypatch, sheet(case('001', '9000001', 'ALAMEDA 3 131', hood='Alto da Boa Vista')),
+            reference(('Rua 11', '2130', east(0), 'Centro')))
+    assert dengue.sync_if_changed('Agendador', 0)['located'] == 0
+    login(client)
+    created = client.post('/sfa/entomologia/atlas/editor', json={'action': 'create_layer', 'revision': 0, 'reason': 'Referências',
+                                                                   'title': 'Endereços de referência', 'color': '#087f81'}).json
+    # Camada vazia: a impressão digital muda, o mapa não. Nenhuma revisão nova.
+    assert dengue.sync_if_changed('Agendador', 0) is None and _revisions() == 1
+    point = {'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': east(900)},
+             'properties': {'name': 'Casa nova', 'address': 'Alameda 3, 131'}}
+    saved = client.post('/sfa/entomologia/atlas/editor/' + created['id'], json={
+        'action': 'create_feature', 'revision': created['revision'], 'reason': 'Endereço que o CNEFE não tem', 'feature': point})
+    assert saved.status_code == 200, saved.get_data(as_text=True)
+    summary = dengue.sync_if_changed('Agendador', 0)
+    assert summary['located'] == 1 and _revisions() == 2
+    feature = editor.layers(True)['auto-dengue']['features'][0]
+    assert feature['geometry']['coordinates'] == [round(v, 6) for v in east(900)]
+    assert 'ponto de referência da equipe' in feature['properties']['precision']
+
+
+def test_scheduler_respects_a_layer_the_team_deleted(client, app, monkeypatch):
+    _served(monkeypatch, sheet(case('001', '9000001', 'RUA 11 2130')), reference(('Rua 11', '2130', east(0), 'Centro')))
+    login(client)
+    assert client.post(URL, json={}).status_code == 200
+    target = '/sfa/entomologia/atlas/editor/auto-dengue'
+    revision = client.get(target).json['revision']
+    assert client.post(target, json={'action': 'delete_layer', 'revision': revision, 'reason': 'Teste encerrado'}).status_code == 200
+    _served(monkeypatch, sheet(case('001', '9000001', 'RUA 11 2130'), case('002', '9000002', 'RUA 11 2130')),
+            reference(('Rua 11', '2130', east(0), 'Centro')))
+    assert dengue.sync_if_changed('Agendador', 0) is None
+    assert client.get('/sfa/entomologia/atlas/sinan').json['source']['mapped'] == 0
+    # O botão, que é uma decisão de quem administra, traz a camada de volta.
+    assert client.post(URL, json={}).status_code == 200 and not client.get(target).json['deleted']
+
+
+def test_live_sheet_consult_reuses_the_automatic_positions(client, app, monkeypatch):
+    values = sheet(case('001', '9000001', 'RUA 11 2130'), case('002', '9000002', 'SITIO FICTICIO'),
+                   case('003', '9000003', 'RUA 11 2130', disease='Chikungunya'))
+    _served(monkeypatch, values, reference(('Rua 11', '2130', east(0), 'Centro')))
+    login(client)
+    before = client.get('/sfa/entomologia/atlas/sinan').json
+    assert before['source']['mapped'] == 0 and all(r['geometry'] is None for r in before['records'])
+    assert dengue.sync_if_changed('Agendador', 0)['located'] == 1
+    data = client.get('/sfa/entomologia/atlas/sinan').json
+    first, second, other = data['records']
+    assert first['geometry']['coordinates'] == [round(v, 6) for v in east(0)] and first['link_status'] == 'auto_address'
+    assert 'endereço exato' in first['position_note']
+    assert second['geometry'] is None and second['link_status'] == 'unlocated'
+    assert other['geometry'] is None                                # outro agravo não entra na camada de dengue
+    assert data['source']['mapped'] == 1 and data['source']['auto_positioned'] == 1
+    assert 'PESSOA' not in json.dumps(data, ensure_ascii=False)
+    # Planilha reordenada depois da última atualização: a posição não é atribuída à linha errada.
+    _served(monkeypatch, sheet(case('009', '9000009', 'RUA 11 2130'), *values[1:]), reference(('Rua 11', '2130', east(0), 'Centro')))
+    assert client.get('/sfa/entomologia/atlas/sinan').json['source']['mapped'] == 0
+
+
+def test_scheduler_job_updates_the_layer_before_the_search_index(monkeypatch):
+    import scheduler
+    from services import entomologia_atlas_artefatos as artefatos
+    calls = []
+    monkeypatch.setattr(dengue, 'sync_if_changed', lambda actor, interval: calls.append(('dengue', actor, interval)) or None)
+    monkeypatch.setattr(artefatos, 'construir', lambda **k: calls.append(('artefatos',)) or None)
+    scheduler._run_atlas_artefatos()
+    assert calls == [('dengue', 'Agendador · atualização automática', 900), ('artefatos',)]
+    # Planilha fora do ar não impede o índice de busca.
+    calls.clear()
+    monkeypatch.setattr(dengue, 'sync_if_changed', lambda *a: (_ for _ in ()).throw(RuntimeError('sem rede')))
+    scheduler._run_atlas_artefatos()
+    assert calls == [('artefatos',)]
+    monkeypatch.setenv('ATLAS_DENGUE_AUTO_ENABLED', '0')
+    monkeypatch.setattr(dengue, 'sync_if_changed', lambda *a: pytest.fail('Desligado pela configuração'))
+    scheduler._run_atlas_artefatos()

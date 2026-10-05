@@ -165,10 +165,35 @@ def _run_pmo_doses_compile() -> None:
             )
 
 
+def _run_dengue_auto() -> None:
+    """Refaz a camada Dengue Automatizados quando a planilha ou os endereços do atlas mudam (barato quando nada mudou)."""
+    if not _env_bool("ATLAS_DENGUE_AUTO_ENABLED", True):
+        return
+    from services import entomologia_dengue_auto
+
+    try:
+        resumo = entomologia_dengue_auto.sync_if_changed(
+            'Agendador · atualização automática',
+            _env_int("ATLAS_DENGUE_AUTO_INTERVAL_MINUTES", 15, 1, 1440) * 60,
+        )
+    except Exception:
+        current_app.logger.exception("[Scheduler] Falha ao atualizar a camada Dengue Automatizados.")
+        return
+    if resumo:
+        current_app.logger.info(
+            "[Scheduler] Dengue Automatizados atualizada: %s registros, %s no mapa.", resumo['rows'], resumo['located']
+        )
+        # A atualização montou todas as camadas; devolve a memória antes de os artefatos montarem de novo.
+        _release_job_memory()
+
+
 @_memory_bounded_job
 def _run_atlas_artefatos() -> None:
     """Pré-calcula o índice de busca do atlas quando os dados mudam (barato quando nada mudou)."""
     with app.app_context():
+        # Antes dos artefatos, no mesmo job: as duas montagens pesadas nunca rodam ao mesmo tempo, e a
+        # camada nova já entra no índice montado em seguida.
+        _run_dengue_auto()
         if not _env_bool("ATLAS_ARTEFATOS_ENABLED", True):
             return
         from services import entomologia_atlas_artefatos

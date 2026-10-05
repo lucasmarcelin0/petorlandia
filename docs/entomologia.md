@@ -372,6 +372,22 @@ contém o ponto ou a encostada (até 15 m, com 3 m de folga para a segunda mais
 próxima): o endereço do CNEFE fica na calçada e só um terço dos pontos cai
 dentro do polígono da quadra. Todo ponto automático tem situação "estimada".
 
+**Sem clique:** o agendador confere a planilha a cada 15 minutos
+(`ATLAS_DENGUE_AUTO_INTERVAL_MINUTES`) e refaz a camada quando mudam as linhas
+usadas da planilha ou as referências do atlas (base de endereços, croquis,
+pontos de referência da equipe, Casos Dengue). Sem mudança, custa uma leitura
+da planilha e duas consultas pequenas; se o resultado no mapa for idêntico, não
+grava revisão. Roda no mesmo job dos artefatos do atlas, antes deles, para as
+duas montagens pesadas nunca coincidirem. A camada é criada sozinha na primeira
+passagem; se a equipe a excluir, o agendador não a recria (o botão recria).
+`ATLAS_DENGUE_AUTO_ENABLED=0` desliga. O botão continua valendo para atualizar
+na hora.
+
+**Registros da planilha** (consulta ao vivo) reaproveita essas posições: o
+registro sem SINAN marcado no Earth aparece no mapa pela posição automática do
+endereço, com a mesma linha e o mesmo SINAN da última atualização. Com a camada
+Dengue Automatizados ligada, o mesmo registro não é desenhado duas vezes.
+
 Posições que a equipe mover, remover ou confirmar no editor são mantidas nas
 atualizações seguintes; o registro passa a informar a distância para a posição
 automática. Cada atualização é uma revisão auditada (`atlas_edit`, chave

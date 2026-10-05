@@ -16,8 +16,11 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import date
 from statistics import median
+import hashlib
+import json
 import math
 import re
+import time
 
 from services import entomologia_atlas as atlas
 from services.entomologia_atlas import normalize
@@ -475,7 +478,7 @@ def _date_issue(row):
     return 'Sintomas mais de 60 dias antes da notificação: confira o ano.' if days > 60 else ''
 
 
-def build(values, layers, previous=None, read_at='', today=''):
+def build(values, layers, previous=None, read_at=''):
     """Camada completa (pastas por mês + registros) e o resumo da geocodificação."""
     rows, others = sheet_rows(values)
     index = AddressIndex(layers)
@@ -540,8 +543,7 @@ def build(values, layers, previous=None, read_at='', today=''):
                 gap = round(min(distance_m(geometry['coordinates'], f['geometry']['coordinates']) for f in candidates))
                 properties['manual_distance_m'] = gap
                 distances.append(gap)
-                notes.append(f'Marcador manual ({"mesmo SINAN" if match == "sinan" else "mesmo endereço"}) a {gap} m'
-                             + (f', em {today}.' if today else '.'))
+                notes.append(f'Marcador manual ({"mesmo SINAN" if match == "sinan" else "mesmo endereço"}) a {gap} m.')
         elif manual is not None:
             notes.append('Sem marcador manual correspondente na camada Casos Dengue.')
         properties.update(position_status=status, precision=found['precision'],
@@ -579,23 +581,108 @@ def build(values, layers, previous=None, read_at='', today=''):
     return layer, summary
 
 
+def fingerprint(values):
+    """Impressão digital de tudo o que decide a camada: linhas usadas da planilha e referências do atlas.
+
+    Entram a base de endereços, o projeto Earth e as revisões das camadas de endereços, condomínios, pontos de
+    referência da equipe e Casos Dengue. As revisões da própria camada ficam de fora.
+    """
+    from extensions import db
+    from models.entomologia import EntomologiaImportacao as E
+    from services import entomologia_atlas_editor as editor
+    from services.entomologia_atlas_artefatos import fingerprint_estatico
+    from services.entomologia_cnefe import TIPO as TIPO_CNEFE
+    manual = 'earth-' + atlas.layer_id(MANUAL_TITLE)
+    references = E.query.filter(E.status == 'ATIVA', db.or_(
+        E.tipo.in_((TIPO_CNEFE, atlas.TIPO_ATLAS)),
+        db.and_(E.tipo == editor.TIPO, db.or_(E.titulo == manual, E.titulo.like('cnefe-%'),
+                                              E.titulo.like('condo-%'), E.titulo.like('local-%'))),
+    )).with_entities(E.id, E.sha256).order_by(E.id).all()
+    text = json.dumps([VERSION, fingerprint_estatico(), sheet_rows(values)[0], [[r.id, r.sha256] for r in references]],
+                      ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:32]
+
+
+def active_layer():
+    """A camada gravada (uma linha do banco, sem montar as outras camadas do atlas); ``None`` se ainda não existe."""
+    from services import entomologia_atlas_editor as editor
+    from services.entomologia_service import consultar_sem_interromper
+    row = consultar_sem_interromper(lambda: editor.revision_rows(KEY).filter_by(status='ATIVA').first())
+    return json.loads(row.dados_json) if row else None
+
+
+def _write(actor, values, read_at, mark, reason, keep_identical):
+    from services import entomologia_atlas_editor as editor
+    from services import entomologia_folders as folders
+    with editor.write_transaction():
+        available = editor.layers(True, True)
+        previous = available.get(KEY)
+        layer, summary = build(values, available, previous, read_at)
+        summary['fingerprint'] = mark
+        if keep_identical and previous and not previous.get('deleted') and (
+                folders.ensure(layer)['features'] == previous['features'] and layer['folders'] == previous.get('folders')):
+            return None, summary               # nada mudou no mapa: não vale uma revisão nova
+        stored = editor.store_revision(
+            KEY, layer, 'sync_dengue', reason, previous['revision'] if previous else 0, actor,
+            {'rows': summary['rows'], 'located': summary['located'], 'unlocated': summary['unlocated']})
+    return stored, summary
+
+
 def sync(actor, clinical_allowed, values=None, read_at=''):
     """Lê a planilha e grava a camada como uma nova revisão auditada do atlas."""
     if not clinical_allowed:
         raise PermissionError('A planilha exige acesso SFA completo.')
-    from services import entomologia_atlas_editor as editor
-    from time_utils import now_in_brazil
     if values is None:
         values, read_at = atlas.sheet_values(force=True)       # rede antes da trava de escrita
-    with editor.write_transaction():
-        available = editor.layers(True, True)
-        previous = available.get(KEY)
-        layer, summary = build(values, available, previous, read_at, now_in_brazil().strftime('%d/%m/%Y'))
-        stored = editor.store_revision(
-            KEY, layer, 'sync_dengue', 'Atualização automática a partir da planilha Arboviroses',
-            previous['revision'] if previous else 0, actor,
-            {'rows': summary['rows'], 'located': summary['located'], 'unlocated': summary['unlocated']})
-    return stored, summary
+    return _write(actor, values, read_at, fingerprint(values), 'Atualização a partir da planilha Arboviroses', False)
+
+
+_auto = {'checked': None, 'seen': ''}
+
+
+def sync_if_changed(actor, min_interval_s=900):
+    """Para o agendador: refaz a camada só quando a planilha ou as referências do atlas mudaram.
+
+    Devolve o resumo quando gravou uma revisão nova e ``None`` quando não havia o que fazer. Quase sempre custa
+    uma leitura da planilha e duas consultas pequenas ao banco. Camada excluída pela equipe não é recriada.
+    """
+    now = time.monotonic()
+    if _auto['checked'] is not None and now - _auto['checked'] < min_interval_s:
+        return None
+    _auto['checked'] = now
+    values, read_at = atlas.sheet_values(force=True)
+    mark = fingerprint(values)
+    if mark == _auto['seen']:
+        return None
+    current = active_layer()
+    if current and (current.get('deleted') or current.get('automation', {}).get('fingerprint') == mark):
+        _auto['seen'] = mark
+        return None
+    stored, summary = _write(actor, values, read_at, mark,
+                             'Atualização automática: a planilha ou os endereços do atlas mudaram', True)
+    _auto['seen'] = mark
+    return summary if stored else None
+
+
+def apply_positions(data):
+    """Dá à consulta ao vivo da planilha as posições automáticas dos registros sem vínculo SINAN no Earth."""
+    layer = active_layer()
+    if not layer or layer.get('deleted'):
+        return data
+    # Linha e SINAN juntos: se a planilha mudou de ordem depois da última atualização, o registro fica sem posição.
+    known = {(f['properties'].get('source_row'), f['properties'].get('sinan', '')): f for f in layer['features']}
+    placed = 0
+    for record in data['records']:
+        feature = known.get((record['source_row'], record['sinan']))
+        if record['geometry'] is None and feature and (feature.get('geometry') or {}).get('type') == 'Point':
+            record.update(geometry=feature['geometry'], link_status='auto_address',
+                          position_note=feature['properties'].get('precision', ''))
+            placed += 1
+    data['source'].update(
+        mapped=sum(r['geometry'] is not None for r in data['records']), auto_positioned=placed,
+        note='Sem coordenadas na planilha. A posição vem de um SINAN explícito e único no Earth ou, na falta, do '
+             'endereço localizado na base do atlas (camada Dengue Automatizados). Os demais registros ficam na lista.')
+    return data
 
 
 def report_rows(layer):
