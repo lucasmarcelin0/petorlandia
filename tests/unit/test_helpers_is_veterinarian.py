@@ -7,6 +7,11 @@ from helpers import is_veterinarian
 @patch("helpers.ensure_veterinarian_membership")
 def test_is_veterinarian_with_explicit_user(mock_ensure_membership, mock_has_profile):
     mock_user = MagicMock()
+    # MagicMock responde qualquer atributo com outro mock (truthy): sem isso o
+    # usuário falso seria tratado como estagiário por is_veterinarian.
+    mock_user.role = 'veterinario'
+    mock_user.worker = 'veterinario'
+    mock_user.veterinario.is_estagiario = False
 
     mock_has_profile.return_value = False
     assert is_veterinarian(mock_user) is False
@@ -34,6 +39,9 @@ def test_is_veterinarian_with_explicit_user(mock_ensure_membership, mock_has_pro
 @patch("helpers.current_user")
 def test_is_veterinarian_with_current_user(mock_current_user, mock_ensure_membership, mock_has_profile):
     mock_current_user.is_authenticated = False
+    mock_current_user.role = 'veterinario'
+    mock_current_user.worker = 'veterinario'
+    mock_current_user.veterinario.is_estagiario = False
     mock_has_profile.return_value = False
 
     assert is_veterinarian() is False
