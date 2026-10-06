@@ -123,6 +123,13 @@ function planilhaFalsa(values, formulas, notes, backgrounds) {
       getFormulas: () => formulas.map(r => r.slice()),
       getNotes: () => notes.map(r => r.slice()),
       getBackgrounds: () => backgrounds.map(r => r.slice()),
+      getFontColors: () => values.map(r => r.map(() => '#000000')),
+      getFontSizes: () => values.map(r => r.map(() => 10)),
+      getFontFamilies: () => values.map(r => r.map(() => 'Arial')),
+      getFontWeights: () => values.map(r => r.map(() => 'normal')),
+      getFontStyles: () => values.map(r => r.map(() => 'normal')),
+      getFontLines: () => values.map(r => r.map(() => 'none')),
+      getRichTextValues: () => values.map(r => r.map(() => null)),
     }),
     getMaxColumns: () => values[0].length + 5,
     insertColumnsAfter: () => {},
@@ -130,6 +137,9 @@ function planilhaFalsa(values, formulas, notes, backgrounds) {
       setValues: (v) => { if (row === 1) gravado.header = v[0]; else gravado.values = v; },
       setNotes: (n) => { gravado.notes = n; },
       setBackgrounds: (b) => { gravado.backgrounds = b; },
+      setFontColors: (c) => { gravado.fontColors = c; },
+      setFontSizes: () => {}, setFontFamilies: () => {}, setFontWeights: () => {},
+      setFontStyles: () => {}, setFontLines: () => {}, setRichTextValue: () => {},
     }),
     getConditionalFormatRules: () => [],
     setConditionalFormatRules: () => {},
@@ -178,7 +188,7 @@ teste('reordenar leva nota, cor e fórmula junto com a linha', () => {
   // Arrays criados dentro do contexto do vm têm outro prototype: comparar
   // o texto evita um falso negativo de deepStrictEqual.
   const tutores = Array.from(gravado.values).map(l => l[1]);
-  // Centro (C) vem antes de Jardim Siena (E): a ordem muda de verdade.
+  // Centro (C1) vem antes de Jardim Siena (E2): a ordem muda de verdade.
   assert.strictEqual(tutores.join(' | '), 'Iraneide Maria de Sousa | Raquel Feliciano');
 
   const donoDaNota = Array.from(gravado.notes).map(n => (n[0].match(/Tutor: (.+)/) || [])[1]);

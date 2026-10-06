@@ -42,6 +42,8 @@ function onOpen() {
     .addItem("📍 Medir cobertura no atlas (PetOrlândia)", "medirCoberturaAtlas")
     .addItem("🗺️ Gerar Links do Google Maps", "gerarLinksMapa")
     .addSeparator()
+    .addItem("📇 Gerar contatos para WhatsApp", "gerarContatosWhatsApp")
+    .addSeparator()
     .addItem("📱 Adicionar Links WhatsApp", "addWhatsAppLinks")
     .addItem("🗑️ Limpar Links WhatsApp", "clearWhatsAppLinks")
     .addSeparator()
@@ -383,6 +385,7 @@ var CLUSTERS_VACINACAO = {
   "Jardim Vista Linda": "E",
   "Jardim Benini": "E",
   "Jardim José Vieira Brazão": "E",
+  "Jardim Timboré": "E",
 
   // Morada do Sol (F) - SEXTO
   "Morada do Sol": "F",
@@ -393,6 +396,9 @@ var CLUSTERS_VACINACAO = {
   "Jardim Paineiras": "F",
   "Jardim José Luiz Simões": "F",
   "1º De Maio": "F",
+  "Jardim dos Servidores": "F",
+  "Zita de Oliveira": "F",
+  "Palmito": "F",
 
   // Zona Rural (Z) - ÚLTIMO
   "Zona Rural": "Z",
@@ -455,14 +461,17 @@ var VARIACOES_BAIRRO = {
   "jd parisi": "Jardim Parisi",
   "j parisi": "Jardim Parisi",
   "parisi": "Jardim Parisi",
+  "parise": "Jardim Parisi",
   "jardim santo expedito": "Jardim Santo Expedito",
   "santo expedito": "Jardim Santo Expedito",
   "adalberto morandini": "José Adalberto Morandini",
   "jose adalberto morandini": "José Adalberto Morandini",
+  "morandi": "José Adalberto Morandini",
   "jardim aroeira": "Jardim Aroeira",
   "aroeira": "Jardim Aroeira",
   "santa helena": "Santa Helena",
   "birucao": "Birucão",
+  "biruca": "Birucão",
   "antonio martins": "Antônio Martins",
   "ant martins": "Antônio Martins",
   "alto da boa vista": "Alto da Boa Vista",
@@ -471,6 +480,8 @@ var VARIACOES_BAIRRO = {
   // Santa Rita (E)
   "jardim santa rita": "Jardim Santa Rita",
   "santa rita": "Jardim Santa Rita",
+  "sta rita": "Jardim Santa Rita",
+  "sata rita": "Jardim Santa Rita",
   "jardim siena": "Jardim Siena",
   "siena": "Jardim Siena",
   "zita siena": "Jardim Siena",
@@ -488,6 +499,8 @@ var VARIACOES_BAIRRO = {
   "jose vieira brazao": "Jardim José Vieira Brazão",
   "jose viera brazao": "Jardim José Vieira Brazão",
   "brasao": "Jardim José Vieira Brazão",
+  "brazao": "Jardim José Vieira Brazão",
+  "timbore": "Jardim Timboré",
 
   // Morada do Sol (F)
   "morada do sol": "Morada do Sol",
@@ -496,12 +509,14 @@ var VARIACOES_BAIRRO = {
   "quebec": "Condomínio Quebec",
   "condominio toruino": "Condomínio Toruino",
   "toruino": "Condomínio Toruino",
+  "torino": "Condomínio Toruino",
   "max define": "Max Define",
   "max leonardo define": "Max Define",
   "jardim das flores": "Jardim das Flores",
   "jd das flores": "Jardim das Flores",
   "jardim flores": "Jardim das Flores",
   "jd flores": "Jardim das Flores",
+  "jardim da flores": "Jardim das Flores",
   "jardim paineiras": "Jardim Paineiras",
   "paineiras": "Jardim Paineiras",
   "jose luiz simoes": "Jardim José Luiz Simões",
@@ -509,6 +524,10 @@ var VARIACOES_BAIRRO = {
   "1 de maio": "1º De Maio",
   "1o de maio": "1º De Maio",
   "primeiro de maio": "1º De Maio",
+  "servidores": "Jardim dos Servidores",
+  "zita de oliveira": "Zita de Oliveira",
+  "zita": "Zita de Oliveira",
+  "palmito": "Palmito",
 
   // Zona Rural (Z)
   "zona rural": "Zona Rural",
@@ -547,11 +566,15 @@ function normalizeNeighborhood(rawNeighborhood) {
     }
   }
 
+  // Um texto curto ou genérico ("Orlândia", "Jardim") casava com o primeiro bairro que o
+  // contivesse. Só vale o bairro inteiro dentro do texto, ou um pedaço longo do nome dele.
+  const genericos = ["jardim", "jd", "vila", "conjunto", "parque", "orlandia", "residencial", "bairro"];
   for (const knownNeighborhood in CLUSTERS_VACINACAO) {
     const knownNormalized = knownNeighborhood.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    if (cleaned.indexOf(knownNormalized) !== -1 || knownNormalized.indexOf(cleaned) !== -1) {
+    if (cleaned.indexOf(knownNormalized) !== -1 ||
+        (cleaned.length >= 6 && genericos.indexOf(cleaned) === -1 && knownNormalized.indexOf(cleaned) !== -1)) {
       return knownNeighborhood;
     }
   }
@@ -568,7 +591,7 @@ function parseStreetAddress(streetRaw, numberRaw, complementRaw) {
   let s = String(streetRaw).trim().toLowerCase();
 
   s = s.replace(/\b(av|avenida)\b\.?/g, "avenida")
-       .replace(/\b(r|rua)\b\.?/g, "rua")
+       .replace(/^(r|rua)\b\.?/, "rua")   // só no começo: em "Avenida R" o R é a letra da avenida
        .replace(/\b(trav|travessa)\b\.?/g, "travessa")
        .replace(/\b(al|alameda)\b\.?/g, "alameda")
        .replace(/\b(esquina|com|fundos|casa)\b/g, "")
@@ -628,6 +651,96 @@ function parseStreetAddress(streetRaw, numberRaw, complementRaw) {
   return { group: group, type: type, scheme: scheme, num: num, letter: letter, parity: parity, original: streetRaw };
 }
 
+// DIVISÃO DOS CLUSTERS GRANDES PELA RUA E PELO NÚMERO DA CASA
+//
+// CLUSTERS_VACINACAO dá a REGIÃO do bairro (A a F). As regiões C, E e F são divididas aqui.
+// Em Orlândia o número da casa é uma distância em metros:
+//   - numa RUA ou ALAMEDA, cresce conforme se afasta do eixo Avenida 1 / Avenida A;
+//   - numa AVENIDA ou TRAVESSA, cresce de sul para norte: ~420 na altura da Rua 1/Rua 2,
+//     ~1000 entre a Rua 10 e a Rua 12 e ~1460 entre a Rua 18 e a Rua 20.
+// As ruas pares ficam ao norte da Rua 1 e as ímpares ao sul. Os valores foram medidos nos
+// endereços do IBGE que estão no atlas do PetOrlândia.
+//
+//   C1 Centro Norte     ruas pares; avenidas com número a partir de 420
+//   C2 Centro Sul       ruas ímpares; avenidas com número abaixo de 420 (Bandeirantes)
+//   E1 Santa Rita       ruas 1 a 10, da Avenida Q em diante       (casa nº 1635 ou mais)
+//   E2 Boa Vista Leste  ruas 1 a 10, entre as avenidas I e P      (casa nº 885 a 1634)
+//   E3 Boa Vista Oeste  ruas 1 a 10, até a Avenida H              (casa nº até 884)
+//   F1 Benini / Flores  Rua 12 para cima, até a Avenida L         (casa nº até 1259)
+//   F2 Morada do Sol    Rua 20 para cima, entre as avenidas E e P, e os condomínios
+//   F3 Siena / Max Define / J. L. Simões   Rua 12 para cima, avenidas M a T (nº 1260 a 2054)
+//   F4 Brazão / Vista Linda                Rua 12 para cima, da Avenida U em diante (nº 2055+)
+//   D  Parisi           (igual) + ruas ímpares da 3 em diante do lado leste, casa nº 1000+
+var ORDEM_CLUSTERS = {"A":1, "B":2, "C1":3, "C2":4, "D":5, "E1":6, "E2":7, "E3":8,
+                      "F1":9, "F2":10, "F3":11, "F4":12, "Z":13, "ZZ":14};
+
+// Usada só quando a rua não permite decidir (rua com nome, casa sem número).
+var ZONA_PADRAO_DO_BAIRRO = {
+  "Jardim Bandeirantes": "C2",
+  "Jardim Santa Rita": "E1", "Jardim Siena": "E2", "Jardim Boa Vista": "E3", "Jardim Formoso": "E3",
+  "Jardim Leonor Degiovani": "E3", "Jardim Timboré": "E3", "Jardim Benini": "F1",
+  "Jardim Vista Linda": "F4", "Jardim José Vieira Brazão": "F4",
+  "Morada do Sol": "F2", "Condomínio Quebec": "F2", "Condomínio Toruino": "F2", "Palmito": "F2",
+  "Jardim das Flores": "F1", "Jardim Paineiras": "F1", "Jardim José Luiz Simões": "F1",
+  "Jardim dos Servidores": "F1", "Max Define": "F3", "1º De Maio": "F3", "Zita de Oliveira": "F3"
+};
+var ZONA_PADRAO_DA_REGIAO = { "C": "C1", "E": "E3", "F": "F1" };
+
+function refinarCluster_(base, bairro, info, casa, ruaDigitada, complemento) {
+  if (base !== "C" && base !== "E" && base !== "F") return base;
+  const padrao = ZONA_PADRAO_DO_BAIRRO[bairro] || ZONA_PADRAO_DA_REGIAO[base];
+  const ruaOuAlameda = info.type === "rua" || info.type === "alameda";
+  const avenidaOuTravessa = info.type === "avenida" || info.type === "travessa";
+
+  // Condomínios da Rua 20/Rua 26: a coluna "Número" traz a casa lá dentro, não o número da rua.
+  const textoLivre = (String(ruaDigitada || "") + " " + String(complemento || "") + " " + bairro)
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (base !== "C" && /\b(torino|toruino|quebec|quebeck|paris)\b/.test(textoLivre)) return "F2";
+
+  // Número da rua escrito junto com o nome ("Rua 20 - 1107", "Avenida N 1501"): é ele que
+  // diz onde a casa fica; o da coluna "Número" é a casa/apartamento.
+  const numerosNaRua = String(ruaDigitada || "").match(/\d+/g) || [];
+  const numeroExtra = info.scheme === "num" ? numerosNaRua[1] : numerosNaRua[0];
+  if (numeroExtra && parseInt(numeroExtra, 10) >= 10) casa = parseInt(numeroExtra, 10);
+
+  if (base === "C") {
+    if (ruaOuAlameda && info.scheme === "num") return info.num % 2 === 0 ? "C1" : "C2";
+    if (avenidaOuTravessa && casa > 0) return casa >= 420 ? "C1" : "C2";
+    return padrao;
+  }
+
+  // Lado leste (regiões E e F): coluna = posição leste-oeste, banda = posição norte-sul.
+  let coluna = null;      // 0: até a Av. H | 1: I a L | 2: M a P | 3: Q a T | 4: U em diante
+  let banda = null;       // "P": abaixo da Rua 1 | "S": ruas 1 a 10 | "N": ruas 12 a 18 | "NN": Rua 20 para cima
+  let morada = false;     // entre as avenidas E e P
+  let parisi = false;     // da Avenida K em diante
+
+  if (ruaOuAlameda && info.scheme === "num") {
+    const n = info.num;
+    banda = n % 2 === 1 ? (n === 1 ? "S" : "P") : (n <= 10 ? "S" : (n <= 18 ? "N" : "NN"));
+    if (casa > 0) {
+      coluna = casa < 885 ? 0 : casa < 1260 ? 1 : casa < 1635 ? 2 : casa < 2055 ? 3 : 4;
+      morada = casa >= 510 && casa < 1635;
+      parisi = casa >= 1000;
+    }
+  } else if (avenidaOuTravessa && (info.scheme === "letter" || info.num === 100)) {
+    const letra = info.scheme === "letter" ? info.letter : "Z";
+    coluna = letra <= "H" ? 0 : letra <= "L" ? 1 : letra <= "P" ? 2 : letra <= "T" ? 3 : 4;
+    morada = letra >= "E" && letra <= "P";
+    parisi = letra >= "K";
+    if (casa > 0) banda = casa < 280 ? "P" : casa < 1000 ? "S" : casa < 1460 ? "N" : "NN";
+  }
+
+  if (coluna === null || banda === null) return padrao;
+  if (banda === "P") {
+    if (parisi) return "D";
+    banda = "S";          // ponta sul do Boa Vista
+  }
+  if (banda === "NN" && morada) return "F2";
+  if (banda === "N" || banda === "NN") return coluna <= 1 ? "F1" : coluna <= 3 ? "F3" : "F4";
+  return coluna === 0 ? "E3" : coluna <= 2 ? "E2" : "E1";
+}
+
 /**
  * Reordena a aba por cluster/rota levando NOTA e COR junto com a linha.
  *
@@ -654,6 +767,13 @@ function routeOptimizeByCluster() {
     // os links de WhatsApp (=HYPERLINK) em texto morto, então as fórmulas
     // viajam junto com a linha e têm prioridade na hora de escrever.
     const formulas = range.getFormulas();
+    // Cor, tamanho e estilo da letra também viajam com a linha (ex.: vermelho = encaixe), e o
+    // texto com só um trecho colorido (rich text) é reaplicado depois.
+    const fontes = {
+      fc: range.getFontColors(), fz: range.getFontSizes(), ff: range.getFontFamilies(),
+      fw: range.getFontWeights(), fs: range.getFontStyles(), fl: range.getFontLines(),
+      rich: range.getRichTextValues()
+    };
 
     const header = data[0].slice();
     const offset = detectarOffset_(data);
@@ -664,8 +784,10 @@ function routeOptimizeByCluster() {
       const row = data[index];
       try {
         const normalized = normalizeNeighborhood(row[col.bairro] || "");
-        const cluster = CLUSTERS_VACINACAO[normalized] || "ZZ";
         const addressInfo = parseStreetAddress(row[col.endereco], row[col.numero], row[col.complemento]);
+        // Região do bairro, dividida pela rua e pelo número da casa.
+        const cluster = refinarCluster_(CLUSTERS_VACINACAO[normalized] || "ZZ", normalized, addressInfo,
+          parseInt(row[col.numero], 10) || 0, row[col.endereco], row[col.complemento]);
         const hasPhone = row[col.telefone1] && String(row[col.telefone1]).replace(/\D/g, '').length >= 10;
         const totalAnimals = (parseInt(row[col.caes]) || 0) + (parseInt(row[col.gatos]) || 0);
 
@@ -702,8 +824,7 @@ function routeOptimizeByCluster() {
     }
 
     processed.sort(function (a, b) {
-      const clusterOrder = {"A":1, "B":2, "C":3, "D":4, "E":5, "F":6, "Z":7, "ZZ":8};
-      const clusterCompare = clusterOrder[a.cluster] - clusterOrder[b.cluster];
+      const clusterCompare = ORDEM_CLUSTERS[a.cluster] - ORDEM_CLUSTERS[b.cluster];
       if (clusterCompare !== 0) return clusterCompare;
 
       if (a.addressInfo.group !== b.addressInfo.group) {
@@ -731,7 +852,9 @@ function routeOptimizeByCluster() {
           }
         }
         if (a.addressInfo.scheme === "letter" && b.addressInfo.scheme === "letter") {
-          return (b.addressInfo.letter || "").localeCompare(a.addressInfo.letter || "");
+          // Só decide aqui se as letras forem diferentes: na mesma via, segue para o número da casa.
+          const letterCompare = (b.addressInfo.letter || "").localeCompare(a.addressInfo.letter || "");
+          if (letterCompare !== 0) return letterCompare;
         }
       } else if (a.addressInfo.group === 2) {
         if (a.addressInfo.scheme === "num" && b.addressInfo.scheme === "num") {
@@ -740,16 +863,25 @@ function routeOptimizeByCluster() {
           }
         }
         if (a.addressInfo.scheme === "letter" && b.addressInfo.scheme === "letter") {
-          return (b.addressInfo.letter || "").localeCompare(a.addressInfo.letter || "");
+          // Só decide aqui se as letras forem diferentes: na mesma via, segue para o número da casa.
+          const letterCompare = (b.addressInfo.letter || "").localeCompare(a.addressInfo.letter || "");
+          if (letterCompare !== 0) return letterCompare;
         }
+      }
+
+      const streetA = (a.originalData[a.offset + 1] || "").toString();
+      const streetB = (b.originalData[b.offset + 1] || "").toString();
+
+      // Vias com nome (sem número nem letra): primeiro junta a mesma via, depois o número da casa.
+      if (a.addressInfo.scheme === "other" && b.addressInfo.scheme === "other") {
+        const nameCompare = streetA.trim().toLowerCase().localeCompare(streetB.trim().toLowerCase());
+        if (nameCompare !== 0) return nameCompare;
       }
 
       const houseA = parseInt(a.originalData[a.offset + 2], 10) || 0;
       const houseB = parseInt(b.originalData[b.offset + 2], 10) || 0;
       if (houseB !== houseA) return houseB - houseA;
 
-      const streetA = (a.originalData[a.offset + 1] || "").toString();
-      const streetB = (b.originalData[b.offset + 1] || "").toString();
       return streetA.localeCompare(streetB);
     });
 
@@ -770,6 +902,8 @@ function routeOptimizeByCluster() {
     const outValues = [];
     const outNotes = [];
     const outBackgrounds = [];
+    const outFontes = { fc: [], fz: [], ff: [], fw: [], fs: [], fl: [] };
+    const padraoFonte = { fc: "#000000", fz: 10, ff: "Arial", fw: "normal", fs: "normal", fl: "none" };
 
     processed.forEach(function (item) {
       const rowFormulas = item.originalFormulas || [];
@@ -790,6 +924,13 @@ function routeOptimizeByCluster() {
       outValues.push(values.slice(0, totalColumns));
       outNotes.push(rowNotes.slice(0, totalColumns));
       outBackgrounds.push(rowBackgrounds.slice(0, totalColumns));
+
+      const src = item.rowIndex - 1;
+      Object.keys(outFontes).forEach(function (chave) {
+        const linha = (fontes[chave][src] || []).slice(0, totalColumns);
+        while (linha.length < totalColumns) linha.push(padraoFonte[chave]);
+        outFontes[chave].push(linha);
+      });
     });
 
     if (sheet.getMaxColumns() < totalColumns) {
@@ -803,6 +944,32 @@ function routeOptimizeByCluster() {
       destino.setValues(outValues);
       destino.setNotes(outNotes);
       destino.setBackgrounds(outBackgrounds);
+      destino.setFontColors(outFontes.fc);
+      destino.setFontSizes(outFontes.fz);
+      destino.setFontFamilies(outFontes.ff);
+      destino.setFontWeights(outFontes.fw);
+      destino.setFontStyles(outFontes.fs);
+      destino.setFontLines(outFontes.fl);
+      // Reaplica o texto com trechos em outra cor (ex.: só a palavra "Encaixe" em vermelho),
+      // nas células que têm isso e não têm fórmula.
+      processed.forEach(function (item, r) {
+        const src = item.rowIndex - 1;
+        const richRow = fontes.rich[src] || [];
+        const rowFormulas = item.originalFormulas || [];
+        const baseColors = fontes.fc[src] || [];
+        richRow.forEach(function (rt, c) {
+          if (!rt || rowFormulas[c] || c >= totalColumns) return;
+          if (c === clusterCol || c === bairroCol) return;
+          if (rt.getText() === "") return;
+          const runs = rt.getRuns();
+          const base = baseColors[c];
+          const styled = runs.length > 1 || runs.some(function (run) {
+            const cor = run.getTextStyle().getForegroundColor();
+            return cor && base && cor.toLowerCase() !== String(base).toLowerCase();
+          });
+          if (styled) sheet.getRange(r + 2, c + 1).setRichTextValue(rt);
+        });
+      });
     }
 
     applyFormatting(sheet, outValues.length, clusterCol + 1);
@@ -856,10 +1023,16 @@ function applyFormatting(sheet, dataLength, clusterColumn) {
   const clusterColors = {
     "A": "#E8F5E8", // Verde claro - Vilinha
     "B": "#FFF3E0", // Laranja claro - Gruta
-    "C": "#E3F2FD", // Azul claro - Centro
+    "C1": "#E3F2FD", // Azul claro - Centro Norte
+    "C2": "#BBDEFB", // Azul - Centro Sul
     "D": "#F3E5F5", // Roxo claro - Parisi
-    "E": "#E8EAF6", // Índigo claro - Santa Rita
-    "F": "#E0F2F1", // Ciano claro - Morada do Sol
+    "E1": "#E8EAF6", // Índigo claro - Santa Rita
+    "E2": "#C5CAE9", // Índigo - Boa Vista Leste
+    "E3": "#D1C4E9", // Lilás - Boa Vista Oeste
+    "F1": "#E0F2F1", // Ciano claro - Benini / das Flores
+    "F2": "#B2DFDB", // Ciano - Morada do Sol
+    "F3": "#DCEDC8", // Verde-limão - Siena / Max Define / J. L. Simões
+    "F4": "#FFF9C4", // Amarelo claro - Brazão / Vista Linda
     "Z": "#F5F5F5", // Cinza - Rural
     "ZZ": "#FFEBEE" // Vermelho claro - Não classificado
   };
@@ -1492,4 +1665,98 @@ function extrairListaAnimais(texto) {
     .split(/[,;\/]+/)
     .map(function (item) { return item.trim(); })
     .filter(function (item) { return item.length >= 2; });
+}
+
+
+// ==============================================================================
+// 8. CONTATOS PARA O WHATSAPP
+// ==============================================================================
+/**
+ * Monta a aba "Contatos V (WhatsApp)" no formato que o Google Contatos importa.
+ * Um contato por pessoa: telefones da mesma pessoa viram Phone 1 e Phone 2, e
+ * o nome sai como "V Tutor (Animais) - Rua Numero" para identificar a origem.
+ */
+function gerarContatosWhatsApp() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const origem = ss.getSheetByName("Vacinação 2026");
+  if (!origem) { SpreadsheetApp.getUi().alert('Aba "Vacinação 2026" não encontrada.'); return; }
+  const dados = origem.getDataRange().getValues().slice(1);
+
+  function normalizarFone(valor) {
+    var d = String(valor == null ? "" : valor).replace(/\D/g, "");
+    if (!d) return "";
+    if (d.length === 13 && d.indexOf("55") === 0) d = d.slice(2);
+    if (d.length === 9 && d.charAt(0) === "9") d = "16" + d;
+    if (d.length !== 11 || d.charAt(2) !== "9") return "";
+    return "+55" + d;
+  }
+  function limparAnimais(texto) {
+    var x = String(texto || "").replace(/\s+/g, " ").trim();
+    x = x.replace(/\b(Cachorr[oa]s?|C[ãa]es|C[ãa]o|Gat[oa]s?)\s*\d*\s*[-:]\s*/gi, "");
+    x = x.replace(/[;\/]/g, ",").replace(/\s*,\s*/g, ", ").replace(/^[,\s]+|[,\s]+$/g, "");
+    var vistos = {}, saida = [];
+    x.split(/,| e /i).forEach(function (p) {
+      var t = p.trim(); if (!t) return;
+      var k = t.toLowerCase(); if (vistos[k]) return; vistos[k] = 1; saida.push(t);
+    });
+    return saida.join(", ").slice(0, 60);
+  }
+  function titulo(s) {
+    return String(s || "").replace(/\s+/g, " ").trim().split(" ").map(function (w) {
+      return w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase();
+    }).join(" ");
+  }
+
+  const porNumero = {};
+  const semCelular = [];
+  dados.forEach(function (r) {
+    const nome = titulo(r[1]);
+    if (!nome) return;
+    const endereco = (String(r[2] || "").replace(/\s+/g, " ").trim() + " " + String(r[3] || "").trim()).trim();
+    const animais = limparAnimais(r[10]);
+    const fones = [normalizarFone(r[6]), normalizarFone(r[7])].filter(function (f, i, a) { return f && a.indexOf(f) === i; });
+    if (!fones.length) { semCelular.push(nome); return; }
+    fones.forEach(function (f) {
+      if (!porNumero[f]) porNumero[f] = { nomes: [], enderecos: [], animais: [] };
+      const reg = porNumero[f];
+      if (reg.nomes.indexOf(nome) === -1) reg.nomes.push(nome);
+      if (endereco && reg.enderecos.indexOf(endereco) === -1) reg.enderecos.push(endereco);
+      if (animais && reg.animais.indexOf(animais) === -1) reg.animais.push(animais);
+    });
+  });
+
+  const porPessoa = {};
+  Object.keys(porNumero).forEach(function (fone) {
+    const reg = porNumero[fone];
+    var complemento = "";
+    const animais = limparAnimais(reg.animais.join(", "));
+    if (animais) complemento = "(" + animais + ")";
+    if (reg.enderecos[0]) complemento += (complemento ? " - " : "") + reg.enderecos[0];
+    if (reg.nomes.length > 1) complemento += " [tb " + reg.nomes.slice(1).join("; ") + "]";
+    const chave = reg.nomes[0] + "|" + complemento;
+    if (!porPessoa[chave]) porPessoa[chave] = { nome: reg.nomes[0], complemento: complemento, fones: [] };
+    if (porPessoa[chave].fones.indexOf(fone) === -1) porPessoa[chave].fones.push(fone);
+  });
+
+  const linhas = [["Name", "Given Name", "Family Name", "Phone 1 - Type", "Phone 1 - Value", "Phone 2 - Type", "Phone 2 - Value", "Notes"]];
+  Object.keys(porPessoa).sort().forEach(function (k) {
+    const c = porPessoa[k];
+    const nomeCompleto = "V " + c.nome + (c.complemento ? " " + c.complemento : "");
+    linhas.push([nomeCompleto, "V " + c.nome, c.complemento, "Mobile", c.fones[0] || "", c.fones[1] ? "Mobile" : "", c.fones[1] || "", "Cadastro da vacinacao antirrabica de Orlandia"]);
+  });
+
+  var aba = ss.getSheetByName("Contatos V (WhatsApp)");
+  if (!aba) aba = ss.insertSheet("Contatos V (WhatsApp)");
+  aba.clear();
+  aba.getRange(1, 1, linhas.length, linhas[0].length).setValues(linhas);
+  aba.setFrozenRows(1);
+
+  try { SpreadsheetApp.getUi().alert(
+    "Contatos prontos",
+    (linhas.length - 1) + " contatos na aba \"Contatos V (WhatsApp)\".\n\n" +
+    semCelular.length + " tutores ficaram sem celular válido: " + semCelular.slice(0, 10).join(", ") +
+    "\n\nPara importar: Arquivo > Fazer download > CSV com esta aba aberta, depois contacts.google.com > Importar.",
+    SpreadsheetApp.getUi().ButtonSet.OK
+  ); } catch (semUi) { Logger.log("Sem UI: " + (linhas.length - 1) + " contatos; sem celular: " + semCelular.length); }
+  return linhas.length - 1;
 }
