@@ -11,6 +11,11 @@ from flask import abort, current_app, flash, redirect, render_template, request,
 from flask_login import current_user, login_required
 
 
+# These snapshots have their own access and revision flows. Never expose or
+# mutate them through the team's ordinary file-import screens.
+TIPOS_ENVIO_RESTRITO = ('atlas_edit', 'cadastro_privado')
+
+
 def _ator():
     if current_user.is_authenticated:
         return str(current_user.get_id())
@@ -119,8 +124,10 @@ def register(bp, require_access):
         previa = None
         previa_id = request.args.get('previa', type=int)
         if previa_id:
-            previa = EntomologiaImportacao.query.filter_by(id=previa_id, status='PREVIA').first()
-        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA', EntomologiaImportacao.tipo != 'atlas_edit') \
+            previa = EntomologiaImportacao.query.filter_by(id=previa_id, status='PREVIA') \
+                .filter(EntomologiaImportacao.tipo.notin_(TIPOS_ENVIO_RESTRITO)).first()
+        envios = EntomologiaImportacao.query.filter(EntomologiaImportacao.status != 'PREVIA',
+                                                   EntomologiaImportacao.tipo.notin_(TIPOS_ENVIO_RESTRITO)) \
             .order_by(EntomologiaImportacao.id.desc()).limit(60).all()
         from services.entomologia_acesso import eh_admin, membros_ativos
         publicacoes = EntomologiaPublicacao.query.order_by(EntomologiaPublicacao.id.desc()).limit(12).all()
@@ -159,7 +166,8 @@ def register(bp, require_access):
             # Prévias esquecidas não se acumulam no banco.
             limite = utcnow() - service.PREVIA_VALIDADE
             EntomologiaImportacao.query.filter(EntomologiaImportacao.status == 'PREVIA',
-                                               EntomologiaImportacao.criado_em < limite).delete()
+                                               EntomologiaImportacao.tipo.notin_(TIPOS_ENVIO_RESTRITO),
+                                               EntomologiaImportacao.criado_em < limite).delete(synchronize_session='fetch')
             if tipo == service.TIPO_VISITAS:
                 lido = service.ler_visitas(blob, nome)
                 resumo = service.previa_visitas(lido['rows'], service.dataset_atual(), hoje_local())
@@ -212,7 +220,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.tipo == 'atlas_edit' or registro.status != 'PREVIA':
+        if not registro or registro.tipo in TIPOS_ENVIO_RESTRITO or registro.status != 'PREVIA':
             abort(404)
         try:
             responsavel = _responsavel()
@@ -244,7 +252,7 @@ def register(bp, require_access):
         from time_utils import utcnow
 
         registro = db.session.get(EntomologiaImportacao, envio_id)
-        if not registro or registro.tipo == 'atlas_edit' or registro.status not in ('PREVIA', 'ATIVA'):
+        if not registro or registro.tipo in TIPOS_ENVIO_RESTRITO or registro.status not in ('PREVIA', 'ATIVA'):
             abort(404)
         if registro.status == 'PREVIA':
             db.session.delete(registro)

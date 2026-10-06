@@ -61,9 +61,17 @@
     const where=e=>e[5]===1?'Ponto cadastrado':e[5]===2?'Trecho / referência no mapa':'Sem posição · consultar cadastro';
     function stopFor(e,layer){return {name:e[2],note:[e[3],layer.title].filter(Boolean).join(' · '),kind:e[5],x:e[6],y:e[7],bbox:e[8],layerId:layer.id,featureId:e[1]};}
 
+    // Public IBGE address selection can refine the administrator lookup.
+    // No owner, clinical record, cadastral croqui or inferred location is emitted.
+    function addressSelected(layer,address){
+      if(!String(layer?.id||'').startsWith('cnefe-')||!String(address||'').trim())return;
+      document.dispatchEvent(new CustomEvent('sfa:atlas-address-selected',{detail:{address:String(address)}}));
+    }
+
     // `source`: o índice local ou a resposta da reserva do servidor (mesmo formato: {layers, entries}).
     function showPlace(entry,source){
       const layer=(source||index).layers[entry[0]],mine=++placeRun;preview.clearLayers();
+      addressSelected(layer,entry[2]||entry[3]);
       if(entry[5]===1){
         L.geoJSON({type:'Feature',geometry:{type:'Point',coordinates:[entry[6],entry[7]]},properties:{}},highlight).addTo(preview);
         map.fitBounds(L.latLngBounds([[entry[7],entry[6]],[entry[7],entry[6]]]),{padding:[45,45],maxZoom:19});
@@ -122,6 +130,7 @@
           // Mesmo na busca de reserva dá para ir para a rota: a posição vem da própria feição devolvida.
           const stop=f.geometry?{name:p.name||p.label||item.layer_title,note:[p.address,item.layer_title].filter(Boolean).join(' · '),feature:f,layerId:item.layer_id,featureId:f.id}:undefined;
           button(p.name||p.label||item.layer_title,[p.address,item.layer_title,item.located?(f.geometry.type==='Point'?'Ponto cadastrado':'Trecho / referência no mapa'):'Sem posição · consultar cadastro'].filter(Boolean).join(' · '),()=>{
+            addressSelected({id:item.layer_id},p.name||p.address);
             preview.clearLayers();
             if(f.geometry){const layer=L.geoJSON(f,highlight).addTo(preview);const bounds=layer.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[45,45],maxZoom:19});map.fire('atlasfocusfeature',{layerId:item.layer_id,featureId:f.id});open(false);}
             else if(p.cadastre_ref){window.SfaCadastreViewer.open(dataset,p.cadastre_ref,item.layer_id,f.id);open(false);}
@@ -164,6 +173,6 @@
     function close(){run++;clearTimeout(timer);controller?.abort();open(false);}
     $('atlas-search-close').onclick=()=>{close();input.focus();};
     document.addEventListener('pointerdown',e=>{if(!e.target.closest('.field-search'))close();});
-    return {clear};
+    return {clear,search(query){input.value=String(query??'').slice(0,240);clearTimeout(timer);search();}};
   }};
 })();

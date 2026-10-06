@@ -157,6 +157,14 @@
     map.on('zoomend moveend resize atlaslayerschange', scheduleLabels);
     const atlasRoute=window.SfaAtlasRoute?.attach(map,dataset);
     const atlasSearch=window.SfaAtlasSearch.attach(map,dataset,territory,{select,fit,areaName,addStop:atlasRoute?.addStop});
+    window.SfaPropertyLookup?.init(dataset,{locateAddress:property=>{
+      const address=String(property.address||'').split(/\b(?:CEP|BAIRRO|LOTEAMENTO|QUADRA|LOTE|COMPLEMENTO)\s*:/i)[0].trim().replace(/[,\s]+$/,'');
+      const number=address.match(/,\s*(\d+)\b/);
+      if(!number||Number(number[1])===0)return {status:'unlocated',message:'O cadastro não informa um número utilizável. Confira o lote na ficha; não há posição exata para localizar no mapa.'};
+      atlasSearch.search(address);
+      $('field-search').focus();
+      return {status:'reference',message:'Selecione a referência pública correspondente na busca do mapa. A amostra não possui coordenadas do imóvel; a referência precisa ser conferida.'};
+    }});
     $('field-district').onchange = () => {updateSectors(); draw(true);};
     $('field-sector').onchange = () => draw(true);
     $('field-area-legend').onclick = e => {const button = e.target.closest('[data-district]'); if (!button) return; $('field-district').value = button.dataset.district; atlasSearch.clear(); updateSectors(); $('field-sector').value = ''; draw(true);};

@@ -147,6 +147,24 @@ def require_entomologia_access(view):
     return wrapper
 
 
+def require_cadastro_admin(view):
+    """Cadastro pessoal: somente uma sessão autenticada com papel admin."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _usuario_admin_autenticado():
+            response = jsonify({'error': 'Consulta restrita ao administrador.'})
+            response.status_code = 403 if current_user.is_authenticated else 401
+        else:
+            response = current_app.make_response(view(*args, **kwargs))
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.vary.add('Cookie')
+        return response
+
+    return wrapper
+
+
 @bp.context_processor
 def _inject_sfa_acesso_completo():
     # A equipe de combate à dengue vê só a área de território na barra lateral.
@@ -229,14 +247,40 @@ def entomologia():
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
                                'fim': publicacao.fim.isoformat()} if publicacao else None)
+    cadastral_admin_enabled = _usuario_admin_autenticado()
+    if cadastral_admin_enabled:
+        dataset['cadastre_search_url'] = url_for('sfa_routes.entomologia_cadastro_imoveis')
+        dataset['cadastre_detail_base_url'] = url_for('sfa_routes.entomologia_cadastro_imovel', property_code='CODE')
 
     response = current_app.make_response(render_template(
         "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
         acesso_completo=acesso_completo, pode_alterar=usuario_pode_alterar(),
+        cadastral_admin_enabled=cadastral_admin_enabled,
     ))
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response
+
+
+@bp.get('/entomologia/cadastro/imoveis')
+@require_cadastro_admin
+def entomologia_cadastro_imoveis():
+    from services.entomologia_cadastro import search_cadastro
+
+    return jsonify(search_cadastro(request.args.get('q', ''), request.args.get('limit', 20)))
+
+
+@bp.get('/entomologia/cadastro/imoveis/<property_code>')
+@require_cadastro_admin
+def entomologia_cadastro_imovel(property_code):
+    from services.entomologia_cadastro import get_cadastro_property
+
+    if len(property_code) > 100:
+        return jsonify({'error': 'Imóvel não encontrado.'}), 404
+    result = get_cadastro_property(property_code)
+    if result is None:
+        return jsonify({'error': 'Imóvel não encontrado.'}), 404
+    return jsonify(result)
 
 
 @bp.route('/entomologia/atlas/camadas')

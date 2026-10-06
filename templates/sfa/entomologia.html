@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_entomologia.css', v='20261004-menu') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_field_map.css', v='20260930') }}">
+{% if cadastral_admin_enabled %}<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_property_lookup.css', v='20261005') }}">{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_layers.css', v='20261002-cnefe') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_condominios.css', v='20261002-cnefe') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_editor.css', v='20261001') }}">
@@ -230,6 +231,22 @@
       {% include 'sfa/_atlas_editor_panel.html' %}
       <dialog id="atlas-cadastre-dialog" class="atlas-cadastre-dialog" aria-labelledby="atlas-cadastre-title"><header><div><small>REFERÊNCIA CADASTRAL</small><h3 id="atlas-cadastre-title">Croqui da quadra</h3></div><div class="editor-buttons"><button type="button" id="atlas-cadastre-fit">Ver quadra inteira</button><button type="button" id="atlas-cadastre-close">Fechar</button></div></header><p id="atlas-cadastre-note" role="status"></p><div id="atlas-cadastre-map" role="region" aria-label="Croqui cadastral com números dos imóveis"></div><footer>Rode o mouse para aproximar. Clique em um número para consultar ou posicionar o registro no atlas. O croqui conserva as coordenadas locais do desenho e não está alinhado ao satélite.</footer></dialog>
       <div class="field-status-line"><span id="field-count" role="status">Preparando camadas…</span><span id="field-base-status" role="status"></span></div>
+      {% if cadastral_admin_enabled %}
+      <section id="cadastre-panel" class="cadastre-panel" aria-labelledby="cadastre-title">
+        <div class="cadastre-heading"><div><div class="ento-eyebrow">CONSULTA DO ADMINISTRADOR</div><h3 id="cadastre-title">Imóveis e proprietários</h3><p id="cadastre-metadata">Amostra cadastral da Betha. Pesquise para consultar as fichas disponíveis.</p></div><span class="cadastre-access">Acesso exclusivo</span></div>
+        <form id="cadastre-search-form" class="cadastre-search-form" role="search" aria-label="Pesquisar imóveis no cadastro">
+          <div><label for="cadastre-query">Endereço, proprietário ou inscrição</label><input id="cadastre-query" type="search" maxlength="200" autocomplete="off" placeholder="Rua 28, nome do proprietário ou inscrição"></div>
+          <button id="cadastre-search-submit" type="submit" class="field-tool-button">Pesquisar cadastro</button>
+          <button id="cadastre-clear" type="button" class="field-tool-button">Limpar busca</button>
+        </form>
+        <p id="cadastre-status" class="cadastre-status" role="status" aria-live="polite"></p>
+        <div class="cadastre-body">
+          <div id="cadastre-results" class="cadastre-results" aria-label="Imóveis encontrados"></div>
+          <section id="cadastre-detail" class="cadastre-detail" aria-label="Ficha cadastral do imóvel"><h4>Selecione um imóvel</h4><p>Abra uma ficha para conferir o endereço do imóvel e os dados do proprietário.</p></section>
+        </div>
+        <p class="cadastre-footnote">Proprietário cadastrado não comprova ocupação atual. A amostra não possui coordenadas dos imóveis; a consulta no mapa usa apenas as referências territoriais disponíveis.</p>
+      </section>
+      {% endif %}
     </section>
     <p class="field-source-note">Quadras: referência operacional da equipe, com coordenadas preservadas. Correspondência com os mapas em papel e limites censitários a conferir. A imagem de satélite não é uma medição cadastral.</p>
     <div id="field-error" class="ento-notice" role="alert" hidden></div>
@@ -259,10 +276,11 @@
 <script src="{{ url_for('static', filename='js/sfa_atlas_nav.js', v='20261006-bussola') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_route.js', v='20261004-ux') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_search_model.js', v='20261007-letra') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261010-pronto') }}"></script>
+<script src="{{ url_for('static', filename='js/sfa_atlas_search.js', v='20261005-cadastro-admin') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_layers.js', v='20261002-cnefe') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-cnefe') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261002-rota') }}"></script>
+{% if cadastral_admin_enabled %}<script src="{{ url_for('static', filename='js/sfa_property_lookup.js', v='20261005') }}"></script>{% endif %}
+<script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261005-cadastro-admin') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_accordion.js', v='20261004-acordeao') }}"></script>
 {% endblock %}

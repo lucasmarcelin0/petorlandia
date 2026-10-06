@@ -113,7 +113,7 @@ def _chave_ativas():
 
     def consulta():
         rows = (E.query.with_entities(E.id, E.tipo, E.sha256, E.confirmado_em)
-                .filter(E.status == 'ATIVA').order_by(E.id).all())
+                .filter(E.status == 'ATIVA', E.tipo != 'cadastro_privado').order_by(E.id).all())
         return tuple((r.id, r.tipo, r.sha256, r.confirmado_em.isoformat() if r.confirmado_em else '')
                      for r in rows)
     return consultar_sem_interromper(consulta)
@@ -123,8 +123,8 @@ def _ler_ativas(ids):
     from extensions import db
     from models.entomologia import EntomologiaImportacao as E
     with db.session.no_autoflush:
-        rows = {r.id: r for r in E.query.filter(E.id.in_(ids)).all()}
-    return [rows[i] for i in ids]
+        rows = {r.id: r for r in E.query.filter(E.id.in_(ids), E.tipo != 'cadastro_privado').all()}
+    return [rows[i] for i in ids if i in rows]
 
 
 def resumo_envio(row):
