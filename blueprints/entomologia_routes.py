@@ -17,6 +17,9 @@ TIPOS_ENVIO_RESTRITO = ('atlas_edit', 'cadastro_privado')
 
 
 def _ator():
+    from flask import has_request_context
+    if not has_request_context():
+        return 'tarefa agendada, sem sessão'
     if current_user.is_authenticated:
         return str(current_user.get_id())
     return 'acesso interno por token/configuração'

@@ -210,10 +210,16 @@
     return `${numTxt} (${extTxt})`;
   }
 
-  // "a cada 12 horas (doze horas)"
+  // "a cada 12 horas (doze horas)" ou "a cada 30 dias (trinta dias)"
   function frequenciaFormatada(intervaloHoras) {
     const h = Number(intervaloHoras);
     if (!isFinite(h) || h <= 0) return '';
+    if (h >= 48 && h % 24 === 0) {
+      const dias = h / 24;
+      const num = `a cada ${formatarPtBR(dias)} ${dias === 1 ? 'dia' : 'dias'}`;
+      const ext = `${numeroPorExtenso(dias)} ${dias === 1 ? 'dia' : 'dias'}`;
+      return `${num} (${ext})`;
+    }
     const num = `a cada ${formatarPtBR(h)} ${h === 1 ? 'hora' : 'horas'}`;
     const ext = `${numeroPorExtenso(h)} ${h === 1 ? 'hora' : 'horas'}`;
     return `${num} (${ext})`;

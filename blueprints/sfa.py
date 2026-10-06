@@ -230,6 +230,8 @@ def entomologia():
         'layer': url_for('sfa_routes.entomologia_atlas_camada', layer='LAYER', token=_token_admin_informado() or None),
         'sinan': url_for('sfa_routes.entomologia_atlas_sinan', token=_token_admin_informado() or None),
         'addresses':url_for('sfa_routes.atlas_cnefe_layers',token=_token_admin_informado() or None),
+        'dengue_auto': url_for('sfa_routes.atlas_dengue_auto_sync'),
+        'dengue_auto_report': url_for('sfa_routes.atlas_dengue_auto_report', token=_token_admin_informado() or None),
         'clinical_allowed': acesso_completo,
     }
     dataset['editor_urls'] = {
@@ -343,6 +345,12 @@ def entomologia_atlas_sinan():
         response = jsonify({'error': 'Não foi possível consultar a planilha. Tente atualizar a fonte.'})
         response.status_code = 503
     else:
+        try:
+            # Registros sem SINAN marcado no Earth recebem a posição automática pelo endereço.
+            from services.entomologia_dengue_auto import apply_positions
+            data = apply_positions(data)
+        except Exception:                      # a consulta da planilha não depende da camada automática
+            current_app.logger.warning('Atlas: posições automáticas indisponíveis na consulta da planilha.', exc_info=True)
         response = jsonify(data)
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'

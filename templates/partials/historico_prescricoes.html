@@ -18,7 +18,7 @@
   <div class="card-body">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
       <h5 class="card-title mb-0">📜 Histórico de Prescrições</h5>
-      <span class="text-muted small">Visualize, imprima ou edite cada prescrição emitida para este paciente.</span>
+      <span class="text-muted small">Visualize, imprima, edite ou reemita cada prescrição emitida para este paciente.</span>
     </div>
 
     <div class="prescricao-history__grid">
@@ -80,7 +80,13 @@
                 <i class="fas fa-trash-alt me-1" aria-hidden="true"></i>Excluir
               </button>
             </form>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
+              <a href="{{ url_for('reemitir_bloco_prescricao', bloco_id=bloco.id) }}"
+                 class="btn btn-outline-success btn-sm"
+                 title="Emitir uma nova receita com estes medicamentos para continuar o tratamento"
+                 aria-label="Reemitir prescrição de {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}">
+                <i class="fas fa-redo me-1" aria-hidden="true"></i>Reemitir
+              </a>
               <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
                  class="btn btn-outline-secondary btn-sm" target="_blank"
                  aria-label="Imprimir prescrição de {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}">

@@ -2676,11 +2676,14 @@
   // precisa ser definida pra prescrição ter valor (250 mg comprimido é
   // farmacologicamente diferente de 250 mg/5 mL suspensão).
   function _rotuloOpcaoApresentacao(ap) {
+    if (ap.nome_variante && ap.nome_variante.includes('(')) {
+      return ap.nome_variante;
+    }
     const escolha = ap.rotulo_escolha || {};
     const principalClinico = String(ap.rotulo_principal || '').trim();
     const principalContexto = String(escolha.principal || '').trim();
     let label = principalClinico || principalContexto || String(ap.concentracao_label || '').trim();
-    if (principalContexto && principalClinico && principalContexto !== principalClinico) {
+    if (principalContexto && principalClinico && principalContexto !== principalClinico && !principalClinico.toLowerCase().includes(principalContexto.toLowerCase())) {
       label = `${principalContexto} - ${principalClinico}`;
     }
     const secundario = String(ap.rotulo_secundario || '').trim();
@@ -2890,7 +2893,9 @@
     if (!ap) return '';
     if (ap.rotulo_principal) {
       const contexto = ap.rotulo_escolha?.principal || '';
-      return contexto ? `${ap.rotulo_principal} (${contexto})` : ap.rotulo_principal;
+      return contexto && !ap.rotulo_principal.toLowerCase().includes(contexto.toLowerCase())
+        ? `${ap.rotulo_principal} (${contexto})`
+        : ap.rotulo_principal;
     }
     if (ap.nome_variante) return ap.nome_variante;
     const partes = [];

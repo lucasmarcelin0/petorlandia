@@ -21,7 +21,7 @@
     function popup(feature,title){
       const p=feature.properties||{}, row=p.sheet;
       if(p.__atlas_layer && (p.name||p.address||p.notes||p.precision))return `<div class="atlas-popup"><strong>${escape(p.name||p.label||title)}</strong><p class="atlas-popup-path">${escape((p.folder_path||[title,p.category||'Cadastro']).join(' › '))}</p>${p.address?'<p>'+escape(p.address)+'</p>':''}${p.date?'<p>'+day(p.date)+'</p>':p.period_year?'<p>Mês da pasta: '+escape(p.month||'não informado')+' / '+escape(p.period_year)+' · sem dia informado</p>':''}${p.notes?'<p>'+escape(p.notes)+'</p>':''}${p.precision?'<small>'+escape(p.precision)+'</small>':''}${p.position_status?'<small class="editor-point-state">'+escape({imported:'Posição original da fonte · a conferir',estimated:'Posição estimada',to_review:'Posição a conferir',verified:'Conferida pela equipe',unlocated:'Sem posição'}[p.position_status]||p.position_status)+'</small>':''}<p><button type="button" data-atlas-layer="${escape(p.__atlas_layer)}" data-atlas-feature="${escape(feature.id)}">Consultar / editar registro</button></p></div>`;
-      return row ? `<div class="atlas-popup"><strong>Planilha · linha ${row.source_row}</strong><p>${escape(row.disease || 'Agravo não informado')}</p><dl><dt>SINAN</dt><dd>${escape(row.sinan || 'Não informado')}</dd><dt>Notificação</dt><dd>${day(row.notification_date)}</dd><dt>Sintomas</dt><dd>${day(row.symptoms_date)}</dd><dt>Exame</dt><dd>${escape(row.exam || 'Não informado')}</dd><dt>Resultado</dt><dd>${escape(row.exam_result || 'Não informado')}</dd><dt>Resultado final</dt><dd>${escape(row.final_result || 'Não informado')}</dd><dt>Classificação</dt><dd>${escape(row.classification || 'Não informada')}</dd></dl><p>Posição vinculada por um número SINAN explícito e único no Earth.</p><a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${row.source_row}:T${row.source_row}">Consultar linha de origem ↗</a></div>`
+      return row ? `<div class="atlas-popup"><strong>Planilha · linha ${row.source_row}</strong><p>${escape(row.disease || 'Agravo não informado')}</p><dl><dt>SINAN</dt><dd>${escape(row.sinan || 'Não informado')}</dd><dt>Notificação</dt><dd>${day(row.notification_date)}</dd><dt>Sintomas</dt><dd>${day(row.symptoms_date)}</dd><dt>Exame</dt><dd>${escape(row.exam || 'Não informado')}</dd><dt>Resultado</dt><dd>${escape(row.exam_result || 'Não informado')}</dd><dt>Resultado final</dt><dd>${escape(row.final_result || 'Não informado')}</dd><dt>Classificação</dt><dd>${escape(row.classification || 'Não informada')}</dd></dl><p>${row.link_status==='auto_address'?'Posição automática pelo endereço. '+escape(row.position_note||''):'Posição vinculada por um número SINAN explícito e único no Earth.'}</p><a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${row.source_row}:T${row.source_row}">Consultar linha de origem ↗</a></div>`
         : `<div class="atlas-popup"><strong>${escape(title)}</strong><p>${escape(p.category || 'Referência operacional')}${p.month?' · mês '+p.month+' na pasta':''}</p>${p.folder_status?'<p>Rótulo da pasta: '+escape(p.folder_status)+'. A classificação da planilha é consultada separadamente.</p>':''}<p>Elemento do arquivo Earth; não representa necessariamente pessoa, imóvel ou visita únicos.</p><small>Origem: ${escape(p.source_id || feature.id || 'camada enviada')}</small>${p.__atlas_layer?'<p><button type="button" data-atlas-layer="'+escape(p.__atlas_layer)+'" data-atlas-feature="'+escape(feature.id)+'">Consultar / editar registro</button></p>':''}</div>`;
     }
     const houses=window.SfaCondominios.attach(map,{popup});
@@ -89,14 +89,16 @@
       if(sheet){
         const rows=M.sheetFilter(sheet.records,current), located=rows.filter(r=>r.geometry), unlocated=rows.filter(r=>!r.geometry);
         sheet.entry.enabled=!!active;
-        render(sheet.entry,located.map(r=>({type:'Feature',geometry:r.geometry,properties:{sheet:r}})));
+        // Com a camada Dengue Automatizados ligada, o mesmo registro não é desenhado duas vezes.
+        const autoOn=entries.some(e=>e.origin?.automatic&&e.enabled), shown=located.filter(r=>!(autoOn&&r.link_status==='auto_address'));
+        render(sheet.entry,shown.map(r=>({type:'Feature',geometry:r.geometry,properties:{sheet:r}})));
         $('atlas-sheet-count').textContent=active?`${rows.length} ${rows.length===1?'registro':'registros'} · ${located.length} localizados · ${unlocated.length} sem posição`:`${sheet.records.length} registros disponíveis`;
         $('atlas-unlocated').hidden=!active || !unlocated.length;
         $('atlas-unlocated-count').textContent=`${unlocated.length} registros sem posição`;
         $('atlas-unlocated-list').innerHTML=unlocated.slice(0,unlocatedLimit).map(r=>`<a target="_blank" rel="noopener noreferrer" href="${escape(sheet.source.url)}&range=A${r.source_row}:T${r.source_row}"><span>Linha ${r.source_row}${r.sinan?' · SINAN '+escape(r.sinan):''}</span><small>${day(r[current.dateField])} · ${escape(r.exam || 'Exame não informado')} · ${escape(r.exam_result || 'Resultado não informado')} · ${escape(r.classification || 'Classificação não informada')}</small></a>`).join('');
         $('atlas-more-unlocated').hidden=unlocated.length<=unlocatedLimit;
         $('atlas-more-unlocated').textContent=`Mostrar mais ${Math.min(50,unlocated.length-unlocatedLimit)} registros`;
-        visible+=active?located.length:0;enabled+=Number(!!active);
+        visible+=active?shown.length:0;enabled+=Number(!!active);
       }
       const addresses=entries.filter(e=>e.origin?.type==='cnefe'), selected=addresses.filter(e=>e.enabled).length;
       $('atlas-address-toggle').checked=addresses.length>0&&selected===addresses.length;$('atlas-address-toggle').indeterminate=selected>0&&selected<addresses.length;
@@ -196,14 +198,17 @@
       const data=await fetchJson(dataset.atlas_urls.catalog), previous=new Map(entries.map(e=>[e.id,e])), enabled=new Set(entries.filter(e=>e.enabled).map(e=>e.id));
       entries.forEach(e=>map.removeLayer(e.group));entries=[];
       addressPromise=null;$('atlas-address-list').replaceChildren();
-      $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();$('atlas-cadastre-list').replaceChildren();
+      $('atlas-earth-list').replaceChildren();$('atlas-local-list').replaceChildren();$('atlas-cadastre-list').replaceChildren();$('atlas-auto-list').replaceChildren();
       source=data.source;
+      const auto=data.layers.find(item=>item.origin?.automatic&&item.allowed!==false&&!item.deleted);
+      if(auto?.automation)$('atlas-auto-status').textContent=M.automationSummary(auto.automation);
+      if($('atlas-auto-report'))$('atlas-auto-report').hidden=!auto;
       const addr=data.cnefe_source||{};$('atlas-address-summary').textContent=addr.records?`${addr.number_labels.toLocaleString('pt-BR')} rótulos de imóveis · ${addr.located_records.toLocaleString('pt-BR')} referências no mapa · ${(addr.records-addr.located_records).toLocaleString('pt-BR')} com posição pendente. Organizados em ${addr.neighborhoods} localidades.`:'Base de endereços ainda não importada.';$('atlas-address-toggle').disabled=!addr.records;
       const cad=data.cadastre_source||{};$('atlas-cadastre-summary').textContent=cad.house_numbers?`${cad.house_numbers.toLocaleString('pt-BR')} rótulos de números · ${cad.readable_drawings} croquis · ${cad.street_records} referências de logradouro/CEP. ${cad.drawings_without_numbers} desenhos sem números extraídos; ${cad.unreadable.length} ${cad.unreadable.length===1?'arquivo não lido':'arquivos não lidos'}.`:'Referências cadastrais ainda não importadas.';
       $('atlas-earth-source').textContent=source.imported_at ? `${source.title || 'Google Earth'} · cópia importada em ${new Date(source.imported_at).toLocaleDateString('pt-BR')}. Edições da equipe ficam no atlas.` : 'Importe o projeto completo em Atualizar dados para disponibilizar suas camadas.';
       const loading=[];
       data.layers.forEach(item=>{const created=makeEntry(item,null,previous.get(item.id));entries.push(created.entry);
-        $(item.origin?.type==='cnefe'?'atlas-address-list':item.origin?.type==='earth'?'atlas-earth-list':['cadastre','street_catalog'].includes(item.origin?.type)?'atlas-cadastre-list':'atlas-local-list').append(created.wrapper);
+        $(item.origin?.automatic?'atlas-auto-list':item.origin?.type==='cnefe'?'atlas-address-list':item.origin?.type==='earth'?'atlas-earth-list':['cadastre','street_catalog'].includes(item.origin?.type)?'atlas-cadastre-list':'atlas-local-list').append(created.wrapper);
         if(enabled.has(item.id)||activate===item.id||!catalogInitialized&&item.default_visible){created.entry.input.checked=true;loading.push(created.entry.input.onchange());}
       });catalogInitialized=true;rebuildYears();
       document.querySelectorAll('[data-atlas-condo]').forEach(button=>{
@@ -212,33 +217,45 @@
       });
       await Promise.allSettled(loading);await loadHotspots();redraw();
     }
+    if($('atlas-auto-sync'))$('atlas-auto-sync').onclick=async()=>{
+      const button=$('atlas-auto-sync'),label=button.textContent;button.disabled=true;button.textContent='Lendo a planilha e posicionando…';
+      try{
+        const response=await fetch(dataset.atlas_urls.dengue_auto,{method:'POST',credentials:'same-origin',cache:'no-store',referrerPolicy:'strict-origin',
+          headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||$('atlas-collaboration').dataset.csrf},body:'{}'});
+        if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Sessão encerrada ou acesso indisponível. Entre novamente antes de atualizar.');
+        const data=await response.json();if(!response.ok)throw Error(data.error||'Não foi possível atualizar a camada.');
+        await refreshCatalog(data.layer_id);notice('');
+      }catch(error){notice(error.message);}
+      finally{button.disabled=false;button.textContent=label;}
+    };
     $('atlas-address-toggle').onchange=async()=>{const checked=$('atlas-address-toggle').checked,items=entries.filter(e=>e.origin?.type==='cnefe');if(checked)try{await addressData();}catch(e){notice(e.message);return;}await Promise.allSettled(items.map(async e=>{e.input.checked=checked;if(checked)e.selectedFolders=new Set(['',...(e.folders||[]).map(f=>f.id)]);await e.input.onchange();}));redraw();};
     map.on('atlasfocusfeature',async event=>{const entry=entries.find(e=>e.id===event.layerId);if(!entry)return;entry.input.checked=true;entry.selectedFolders=new Set(['',...(entry.folders||[]).map(f=>f.id)]);await entry.input.onchange();});
     const H=window.SfaAtlasHotspotsModel, spatial=H.index(territory.features), hotLayer=L.layerGroup().addTo(map);
     let hotKey='',hotSummary=null;
-    const hotKind=e=>H.kind(e.title), hotWanted=k=>$(k==='larvae'?'atlas-hot-larvae':'atlas-hot-cases').checked;
-    $('atlas-hot-cases').disabled=!dataset.atlas_urls.clinical_allowed;
+    const hotInputs={larvae:'atlas-hot-larvae',cases:'atlas-hot-cases',notifications:'atlas-hot-notifications'}, hotNames={larvae:'Larvas',cases:'Dengue positivo',notifications:'Notificação de dengue'};
+    const hotKind=e=>e.origin?.automatic?'notifications':H.kind(e.title), hotWanted=k=>$(hotInputs[k]).checked;
+    $('atlas-hot-cases').disabled=$('atlas-hot-notifications').disabled=!dataset.atlas_urls.clinical_allowed;
     async function loadHotspots(){
       const wanted=entries.filter(e=>hotKind(e)&&hotWanted(hotKind(e))&&!e.input.disabled);
       try{await Promise.all(wanted.map(e=>e.load()));notice('');}catch(e){notice(e.message+' A concentração inclui apenas fontes carregadas.');}
       hotKey='';
     }
     function renderHotspots(){
-      const enabled=$('atlas-hot-larvae').checked||$('atlas-hot-cases').checked;
+      const enabled=Object.values(hotInputs).some(id=>$(id).checked), notified=$('atlas-hot-notifications').checked;
       $('atlas-hot-legend').hidden=!enabled;
       const rows=entries.filter(e=>hotKind(e)&&hotWanted(hotKind(e))).flatMap(e=>filteredRows(e,filters()).filter(f=>H.qualifies(f,hotKind(e))).map(f=>({feature:f,kind:hotKind(e),key:e.id+':'+f.id})));
       const key=rows.map(r=>r.key+':'+JSON.stringify(r.feature.geometry)).join('|');
       if(key===hotKey&&hotSummary)return;
       hotKey=key;hotLayer.clearLayers();hotSummary=H.aggregate(rows,spatial);
       hotSummary.blocks.forEach(row=>{
-        const p=row.block.properties,total=row.larvae+row.cases,color=total>=5?'#a92e38':total>=2?'#ee8328':'#f5bb66';
+        const p=row.block.properties,total=row.larvae+row.cases+row.notifications,color=total>=5?'#a92e38':total>=2?'#ee8328':'#f5bb66';
         const shape=L.geoJSON(row.block,{pane:'field-hotspots',style:{color,weight:2,fillColor:color,fillOpacity:.48}}).addTo(hotLayer);
-        shape.bindTooltip(`<strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><br>Larvas: ${row.larvae} · Dengue positivo: ${row.cases}`,{sticky:true});
-        shape.bindPopup(`<div class="atlas-popup"><strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><p>${row.larvae} registros de larvas · ${row.cases} dengue positivo</p><small>Registros no período e nas pastas selecionadas. Eventos distintos no mesmo imóvel continuam contados separadamente.</small><details><summary>Consultar registros</summary>${row.items.map(r=>popup(r.feature,r.kind==='larvae'?'Larvas':'Dengue positivo')).join('<hr>')}</details></div>`);
+        shape.bindTooltip(`<strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><br>Larvas: ${row.larvae} · Dengue positivo: ${row.cases}${notified?' · Notificações: '+row.notifications:''}`,{sticky:true});
+        shape.bindPopup(`<div class="atlas-popup"><strong>Quadra ${escape(p.block)} · SC ${escape(p.sector)}</strong><p>${row.larvae} registros de larvas · ${row.cases} dengue positivo${notified?' · '+row.notifications+' notificações de dengue':''}</p><small>Registros no período e nas pastas selecionadas. Eventos distintos no mesmo imóvel continuam contados separadamente.</small><details><summary>Consultar registros</summary>${row.items.map(r=>popup(r.feature,hotNames[r.kind])).join('<hr>')}</details></div>`);
       });
       $('atlas-hot-status').textContent=`${hotSummary.blocks.length} quadras · ${hotSummary.located} registros incluídos${hotSummary.outside?' · '+hotSummary.outside+' sem quadra única':''}`;
     }
-    ['atlas-hot-larvae','atlas-hot-cases'].forEach(id=>$(id).onchange=async()=>{await loadHotspots();redraw();});
+    Object.values(hotInputs).forEach(id=>$(id).onchange=async()=>{await loadHotspots();redraw();});
     window.SfaAtlasLayers.refresh=refreshCatalog;
     refreshCatalog().catch(error=>{notice(error.message+' Quadras e mapas originais continuam disponíveis.');});
     redraw();

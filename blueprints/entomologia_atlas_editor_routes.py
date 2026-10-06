@@ -83,6 +83,39 @@ def register(bp, require_access, clinical_access):
         except LookupError:abort(404)
         except ValueError as exc:return reply({'error':str(exc)},400)
 
+    @bp.route('/entomologia/atlas/dengue-automatizados', methods=['POST'])
+    @require_access
+    @login_required
+    def atlas_dengue_auto_sync():
+        """Refaz a camada Dengue Automatizados: planilha + endereços do próprio atlas, sem geocodificador externo."""
+        from services import entomologia_atlas as atlas
+        from services import entomologia_dengue_auto as dengue
+        ensure_entomologia_editor()
+        if not eh_admin(current_user): return reply({'error':'A planilha exige acesso SFA completo.'},403)
+        try: values,read_at=atlas.sheet_values(force=True)
+        except ValueError as exc: return reply({'error':str(exc)},400)
+        except Exception as exc:
+            current_app.logger.warning('Atlas: fonte Sheets indisponível (%s)',type(exc).__name__)
+            return reply({'error':'Não foi possível consultar a planilha. Tente de novo em instantes.'},503)
+        try: layer,summary=dengue.sync(f'{current_user.get_id()} · {current_user.name or "Equipe"}',True,values,read_at)
+        except ValueError as exc: return reply({'error':str(exc)},400)
+        return reply({'layer_id':layer['id'],'revision':layer['revision'],'summary':summary})
+
+    @bp.route('/entomologia/atlas/dengue-automatizados/conferencia.csv')
+    @require_access
+    def atlas_dengue_auto_report():
+        """Tabela para comparar a posição automática com a marcação manual (sem nome, telefone ou nascimento)."""
+        from services import entomologia_dengue_auto as dengue
+        layer=service.layers(clinical_access()).get(dengue.KEY)
+        if not layer:abort(404)
+        # Texto digitado na planilha não pode virar fórmula ao abrir no Excel.
+        cell=lambda v:'"'+('\t' if str(v)[:1] in ('=','+','@','-') and not isinstance(v,(int,float)) else '')+str(v).replace('"','""')+'"'
+        body='\ufeff'+'\r\n'.join(';'.join(cell(v) for v in row) for row in dengue.report_rows(layer))
+        response=current_app.response_class(body,mimetype='text/csv; charset=utf-8')
+        response.headers['Content-Disposition']='attachment; filename="dengue-automatizados-conferencia.csv"'
+        response.headers['X-Content-Type-Options']='nosniff'
+        return _sem_cache(response)
+
     @bp.route('/entomologia/atlas/croquis/<code>')
     @require_access
     def atlas_cadastre_drawing(code):

@@ -253,7 +253,8 @@ def sheet_records(values, earth):
     return rows
 
 
-def live_sheet(earth, force=False):
+def sheet_values(force=False):
+    """Linhas da aba (A:T), com o mesmo cache de 90 s; devolve ``(linhas, lido_em)``."""
     from services.sfa_service import _get_sheets_service
     with _sheet_lock:
         if force or time.monotonic() - _sheet_cache.get('time', -1000) > 90:
@@ -273,7 +274,12 @@ def live_sheet(earth, force=False):
             if not values or any(len(values[0]) <= index or normalize(values[0][index]) != name for index,name in expected.items()):
                 raise ValueError('O cabeçalho da planilha mudou. Confira a fonte antes de integrar.')
             _sheet_cache.update(time=time.monotonic(), values=values, read_at=datetime.now(timezone.utc).isoformat())
-        rows = sheet_records(_sheet_cache['values'], earth)
-        return {'records': rows, 'source': {'title': 'Arboviroses 2026 · planilha', 'url': SHEET_URL,
-            'read_at': _sheet_cache['read_at'], 'rows': len(rows), 'mapped': sum(r['geometry'] is not None for r in rows),
-            'note': 'Sem coordenadas na planilha. Apenas um número SINAN explícito e único no Earth recebe posição. Demais registros ficam na lista.'}}
+        return _sheet_cache['values'], _sheet_cache['read_at']
+
+
+def live_sheet(earth, force=False):
+    values, read_at = sheet_values(force)
+    rows = sheet_records(values, earth)
+    return {'records': rows, 'source': {'title': 'Arboviroses 2026 · planilha', 'url': SHEET_URL,
+        'read_at': read_at, 'rows': len(rows), 'mapped': sum(r['geometry'] is not None for r in rows),
+        'note': 'Sem coordenadas na planilha. Apenas um número SINAN explícito e único no Earth recebe posição. Demais registros ficam na lista.'}}

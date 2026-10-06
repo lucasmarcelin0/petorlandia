@@ -319,3 +319,112 @@ e sem posição. Alterar coordenadas invalida a conferência anterior até a equ
 confirmá-la. Consultas de conferência, inclusive rascunhos, não alteram o banco
 nem enviam endereços a terceiros. CSRF estrito, autorização, bloqueio de escrita,
 auditoria e histórico são os mesmos do editor compartilhado.
+
+
+## Dengue Automatizados: notificações posicionadas pelo próprio atlas (5 de outubro de 2026)
+
+A camada **Dengue Automatizados** (grupo Planilha · Arboviroses) é refeita pelo
+botão **Atualizar Dengue Automatizados**, exclusivo de administradores
+identificados. Cada linha de dengue da planilha vira um registro, numa pasta por
+mês de início dos sintomas (a data de notificação só entra quando falta a de
+sintomas), como nas colunas Mês da própria planilha. Serve para comparar com a
+marcação manual da camada Casos Dengue antes de decidir pela automação; ela não
+substitui a camada manual nem a consulta ao vivo da planilha.
+
+O endereço digitado é lido no servidor e procurado **somente na base de
+endereços do atlas**: CNEFE 2022 com as correções da equipe e as casas dos
+croquis Quebec e Torino. Nenhum endereço, nome ou identificador é enviado a um
+geocodificador externo. A camada guarda logradouro, número, bairro, SINAN,
+ficha, datas, exame, resultados e classificação. Nome, telefone, nascimento,
+local de trabalho e texto livre não entram; do complemento ficam só casa,
+apartamento e condomínio. Isto substitui, para esta camada, a regra anterior de
+não posicionar a planilha por endereço.
+
+Como a posição é obtida (`services/entomologia_dengue_auto.py`), sempre
+registrada em cada ponto com a confiança e as referências usadas:
+
+- **Endereço exato:** mesma rua e mesmo número na base. A letra ("353-A") é
+  indício fraco: planilha e CNEFE divergem nela em cerca de um a cada sete
+  endereços, então o mesmo número com letra diferente vale, com o aviso.
+- **Trechos:** a mesma numeração pode existir em trechos distantes da mesma rua
+  (referências a mais de 180 m). Decidem, nesta ordem, número e letra iguais, o
+  número, o bairro da planilha e a letra predominante. Empate fica **sem
+  posição**, com o motivo; letra e bairro em conflito ficam com confiança baixa.
+- **Interpolado:** sem o número na base, a posição é calculada entre o imóvel
+  anterior e o seguinte da mesma rua (de preferência do mesmo lado), com até
+  60 de diferença na numeração de cada lado e 300 m entre eles.
+- **Vizinho:** só um lado conhecido, até 30 de diferença: vale a posição dele.
+- **Condomínio:** casa do croqui do atlas, posição estimada. Sem a casa, ou sem
+  croqui (Paris), vale a portaria, com confiança baixa. Rua 20, 1107-A é a
+  portaria do Torino e Rua 26, 1109-A a do Paris (confirmadas pela coordenação
+  em 05/10/2026). A posição da portaria vem de um ponto de referência da equipe
+  ou do acesso que o CNEFE registra para o condomínio.
+- **Ponto de referência da equipe:** registro de uma camada não clínica criada
+  no editor cujo endereço (ou nome) seja "Rua X, número". Vale mais que o CNEFE
+  e é o jeito de ensinar ao atlas um endereço que a base não tem (bairro novo,
+  portaria), sem mexer no código: cadastre o ponto e atualize a camada.
+- **Sem posição:** zona rural, rua ou faixa de numeração ausentes da base,
+  condomínio sem croqui. O registro fica na tabela, com o motivo.
+
+Uma conferência independente compara o ponto com a rua de mesmo nome na malha
+OSM local; mais de 60 m rebaixa a confiança. A quadra operacional é a que
+contém o ponto ou a encostada (até 15 m, com 3 m de folga para a segunda mais
+próxima): o endereço do CNEFE fica na calçada e só um terço dos pontos cai
+dentro do polígono da quadra. Todo ponto automático tem situação "estimada".
+
+**Sem clique:** o agendador confere a planilha a cada 15 minutos
+(`ATLAS_DENGUE_AUTO_INTERVAL_MINUTES`) e refaz a camada quando mudam as linhas
+usadas da planilha ou as referências do atlas (base de endereços, croquis,
+pontos de referência da equipe, Casos Dengue). Sem mudança, custa uma leitura
+da planilha e duas consultas pequenas; se o resultado no mapa for idêntico, não
+grava revisão. Roda no mesmo job dos artefatos do atlas, antes deles, para as
+duas montagens pesadas nunca coincidirem. A camada é criada sozinha na primeira
+passagem; se a equipe a excluir, o agendador não a recria (o botão recria).
+`ATLAS_DENGUE_AUTO_ENABLED=0` desliga. O botão continua valendo para atualizar
+na hora.
+
+**Registros da planilha** (consulta ao vivo) reaproveita essas posições: o
+registro sem SINAN marcado no Earth aparece no mapa pela posição automática do
+endereço, com a mesma linha e o mesmo SINAN da última atualização. Com a camada
+Dengue Automatizados ligada, o mesmo registro não é desenhado duas vezes.
+
+Posições que a equipe mover, remover ou confirmar no editor são mantidas nas
+atualizações seguintes; o registro passa a informar a distância para a posição
+automática. Cada atualização é uma revisão auditada (`atlas_edit`, chave
+`auto-dengue`), recuperável no histórico. A leitura da planilha acontece antes
+da trava de escrita; cabeçalho diferente ou fonte indisponível não alteram nada.
+
+**Comparação com a marcação manual:** na atualização, cada registro é pareado
+com o marcador de Casos Dengue de mesmo SINAN explícito ou, na falta, de mesmo
+logradouro e número, e recebe a distância em metros. O painel resume pares,
+mediana e faixas (25, 50, 100 m); **Baixar conferência (CSV)** lista linha a
+linha método, confiança, referências, quadra e distância. A comparação roda no
+servidor; os dados clínicos não saem do site.
+
+**Áreas com ocorrências:** em Concentração por quadra, **Notificações de
+dengue** conta todas as notificações da camada (negativas, pendentes e
+positivas) por quadra, respeitando pastas, período e resultado. É contagem de
+notificações, não incidência nem casos confirmados.
+
+Medição em 05/10/2026 com a planilha (171 linhas) e a cópia local do CNEFE:
+158 posicionadas (143 pelo número exato, 12 interpoladas, 3 em condomínio) e
+13 sem posição; 138 com quadra. Escondendo 3.000 endereços conhecidos e
+recalculando pelos vizinhos, a interpolação de confiança média errou 7 m na
+mediana e ficou a até 25 m em 93% dos casos; a de confiança baixa, 12 m na
+mediana e até 50 m em 81%. A distância para os marcadores manuais só é medida
+em produção, onde está a camada Casos Dengue.
+
+Com as portarias confirmadas no mesmo dia, mais 2 registros (Torino) passam a
+ter posição. Os 3 do Paris continuam sem posição até a portaria ser cadastrada
+como ponto de referência.
+
+Limites: o CNEFE é de 2022 (bairros e condomínios novos não aparecem); a
+portaria do Paris ainda não tem posição na base; o CNEFE não é cadastro
+completo, então um número ausente pode ser atribuído a um homônimo de outro
+trecho quando só este existe na base.
+
+```powershell
+python -m pytest tests/test_entomologia_dengue_auto.py -q
+node tests/test_atlas_layers_model.js
+node tests/test_atlas_hotspots_model.js
+```

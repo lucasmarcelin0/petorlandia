@@ -250,6 +250,12 @@ def is_active_intern(*args, **kwargs):
     return app_module.is_active_intern(*args, **kwargs)
 
 
+def get_responsible_veterinarian(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.get_responsible_veterinarian.
+    import app as app_module
+    return app_module.get_responsible_veterinarian(*args, **kwargs)
+
+
 def mp_sdk(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.mp_sdk.
     import app as app_module
@@ -1484,9 +1490,12 @@ def imprimir_consulta(consulta_id):
     animal = consulta.animal
     owner_access = _current_user_owns_animal(animal)
     tutor = animal.owner
-    veterinario = consulta.veterinario
+    veterinario = get_responsible_veterinarian(
+        consulta.veterinario,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica or (
-        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
+        veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
 
     return render_template(
@@ -2430,6 +2439,29 @@ def salvar_prescricoes_lote(consulta_id):
     return jsonify({'status': 'ok', 'historico_html': historico_html})
 
 
+def _campos_item_prescricao(item):
+    """Campos de um medicamento do bloco: estruturado OU texto livre, nunca os dois."""
+    dosagem = item.get('dosagem')
+    frequencia = item.get('frequencia')
+    duracao = item.get('duracao')
+    observacoes = item.get('observacoes')
+
+    # Se qualquer campo estruturado estiver presente, descartamos o texto livre
+    if dosagem or frequencia or duracao:
+        observacoes = None
+    # Caso contrário, usamos apenas o texto livre e ignoramos os outros
+    elif observacoes:
+        dosagem = frequencia = duracao = None
+
+    return {
+        'medicamento': item.get('medicamento'),
+        'dosagem': dosagem,
+        'frequencia': frequencia,
+        'duracao': duracao,
+        'observacoes': observacoes,
+    }
+
+
 @bp.route('/consulta/<int:consulta_id>/bloco_prescricao', methods=['POST'])
 @login_required
 def salvar_bloco_prescricao(consulta_id):
@@ -2472,26 +2504,10 @@ def salvar_bloco_prescricao(consulta_id):
     db.session.flush()  # Garante o ID do bloco
 
     for item in lista_prescricoes:
-        dosagem = item.get('dosagem')
-        frequencia = item.get('frequencia')
-        duracao = item.get('duracao')
-        observacoes = item.get('observacoes')
-
-        # Se qualquer campo estruturado estiver presente, descartamos o texto livre
-        if dosagem or frequencia or duracao:
-            observacoes = None
-        # Caso contrário, usamos apenas o texto livre e ignoramos os outros
-        elif observacoes:
-            dosagem = frequencia = duracao = None
-
         nova = Prescricao(
             animal_id=consulta.animal_id,
             bloco_id=bloco.id,
-            medicamento=item.get('medicamento'),
-            dosagem=dosagem,
-            frequencia=frequencia,
-            duracao=duracao,
-            observacoes=observacoes
+            **_campos_item_prescricao(item),
         )
         db.session.add(nova)
 
@@ -2566,26 +2582,10 @@ def atualizar_bloco_prescricao(bloco_id):
 
     # Adiciona os novos medicamentos ao bloco
     for item in novos_medicamentos:
-        dosagem = item.get('dosagem')
-        frequencia = item.get('frequencia')
-        duracao = item.get('duracao')
-        observacoes = item.get('observacoes')
-
-        # Se qualquer campo estruturado estiver presente, descartamos o texto livre
-        if dosagem or frequencia or duracao:
-            observacoes = None
-        # Caso contrário, usamos apenas o texto livre e ignoramos os outros
-        elif observacoes:
-            dosagem = frequencia = duracao = None
-
         nova = Prescricao(
             animal_id=bloco.animal_id,
             bloco_id=bloco.id,
-            medicamento=item.get('medicamento'),
-            dosagem=dosagem,
-            frequencia=frequencia,
-            duracao=duracao,
-            observacoes=observacoes
+            **_campos_item_prescricao(item),
         )
         db.session.add(nova)
 
@@ -2594,6 +2594,80 @@ def atualizar_bloco_prescricao(bloco_id):
     bloco.saved_by_id = current_user.id
     db.session.commit()
     return jsonify({'success': True})
+
+
+# Reemitir = continuar o tratamento com uma receita NOVA (data de hoje,
+# assinada por quem reemite). A receita original fica intacta no histórico:
+# ela já pode ter sido impressa, enviada ao tutor ou usada na farmácia.
+@bp.route('/bloco_prescricao/<int:bloco_id>/reemitir', methods=['GET'])
+@login_required
+def reemitir_bloco_prescricao(bloco_id):
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
+
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem reemitir prescrições.', 'danger')
+        return redirect(url_for('index'))
+
+    return render_template('orcamentos/editar_bloco.html', bloco=bloco, modo_reemissao=True)
+
+
+@bp.route('/bloco_prescricao/<int:bloco_id>/reemitir', methods=['POST'])
+@login_required
+def salvar_reemissao_bloco_prescricao(bloco_id):
+    original = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(original.clinica_id)
+
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem reemitir prescrições.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    if 'medicamentos' in data:
+        itens = data.get('medicamentos') or []
+        instrucoes = _normalizar_instrucoes_prescricao(data.get('instrucoes_gerais'))
+    else:
+        # Sem ajustes enviados: reemite exatamente o que estava na receita.
+        itens = [
+            {
+                'medicamento': p.medicamento,
+                'dosagem': p.dosagem,
+                'frequencia': p.frequencia,
+                'duracao': p.duracao,
+                'observacoes': p.observacoes,
+            }
+            for p in original.prescricoes
+        ]
+        instrucoes = original.instrucoes_gerais or ''
+
+    if any(not (item.get('medicamento') or '').strip() for item in itens):
+        return jsonify({'success': False, 'message': 'Informe o nome de todos os medicamentos.'}), 400
+    if not itens and not instrucoes.strip():
+        return jsonify({'success': False, 'message': 'Informe ao menos uma prescrição ou instruções gerais.'}), 400
+
+    nova_receita = BlocoPrescricao(
+        animal_id=original.animal_id,
+        clinica_id=original.clinica_id,
+        instrucoes_gerais=instrucoes,
+    )
+    nova_receita.saved_by = current_user
+    nova_receita.saved_by_id = current_user.id
+    db.session.add(nova_receita)
+    db.session.flush()  # Garante o ID da nova receita
+
+    for item in itens:
+        db.session.add(Prescricao(
+            animal_id=original.animal_id,
+            bloco_id=nova_receita.id,
+            **_campos_item_prescricao(item),
+        ))
+
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': 'Receita reemitida com sucesso!',
+        'bloco_id': nova_receita.id,
+        'redirect_url': url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=nova_receita.id),
+    })
 
 
 # Os links curtos são só um atalho de URL: quem decide quem pode ver é a
@@ -2655,14 +2729,14 @@ def imprimir_bloco_prescricao(bloco_id):
         return redirect(url_for('index'))
 
     consulta = animal.consultas[-1] if animal and animal.consultas else None
-    veterinario = consulta.veterinario if consulta else bloco.saved_by
-    if not veterinario and is_vet:
-        veterinario = current_user
-    clinica = consulta.clinica if consulta and consulta.clinica else (
+    veterinario = get_responsible_veterinarian(
+        bloco.saved_by,
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_vet else None,
+    )
+    clinica = bloco.clinica or (consulta.clinica if consulta else None) or (
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
-    if not clinica:
-        clinica = bloco.clinica
     salvo_por = bloco.saved_by or veterinario
     prescription_next_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
     prescription_public_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
@@ -3438,9 +3512,11 @@ def imprimir_bloco_exames(bloco_id):
         return redirect(url_for('login_view', next=request.full_path or request.path))
 
     consulta = animal.consultas[-1] if animal and animal.consultas else None
-    veterinario = consulta.veterinario if consulta else None
-    if not veterinario and current_user.is_authenticated and getattr(current_user, 'worker', None) == 'veterinario':
-        veterinario = current_user
+    veterinario = get_responsible_veterinarian(
+        getattr(bloco, 'saved_by', None),
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica if consulta and consulta.clinica else None
     if not clinica and veterinario and getattr(veterinario, 'veterinario', None):
         vet = veterinario.veterinario
@@ -4006,9 +4082,11 @@ def imprimir_bloco_orcamento(bloco_id):
         ensure_clinic_access(bloco.clinica_id)
     tutor = animal.owner
     consulta = animal.consultas[-1] if animal.consultas else None
-    veterinario = consulta.veterinario if consulta else None
-    if not veterinario and is_veterinarian(current_user):
-        veterinario = current_user
+    veterinario = get_responsible_veterinarian(
+        getattr(bloco, 'saved_by', None),
+        consulta.veterinario if consulta else None,
+        fallback=current_user if is_veterinarian(current_user) else None,
+    )
     clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
     return render_template(
         'orcamentos/imprimir_orcamento.html',

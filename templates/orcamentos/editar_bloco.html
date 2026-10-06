@@ -1,7 +1,17 @@
 {% extends 'layout.html' %}
 {% block main %}
 <div class="container py-4">
+  {% if modo_reemissao %}
+  <h2 class="mb-3">Reemitir receita</h2>
+  <div class="alert alert-info mb-4" role="note">
+    Uma <strong>nova receita</strong> será emitida com a data de hoje, a partir da receita de
+    {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }}.
+    A receita original continua no histórico sem alterações.
+    Revise doses e duração antes de emitir.
+  </div>
+  {% else %}
   <h2 class="mb-4">Editar Bloco de Prescricao</h2>
+  {% endif %}
 
   <div id="form-edicao">
     <div id="prescricao-lista" class="mb-3"></div>
@@ -12,7 +22,13 @@
     </div>
 
     <button type="button" class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">Adicionar Medicamento</button>
+    {% if modo_reemissao %}
+    <button type="button" id="btn-emitir-reemissao" class="btn btn-success mb-3" onclick="salvarReemissaoBloco({{ bloco.id }})">
+      <i class="fas fa-redo me-1" aria-hidden="true"></i>Emitir nova receita
+    </button>
+    {% else %}
     <button type="button" class="btn btn-success mb-3" onclick="salvarEdicaoBloco({{ bloco.id }})">Salvar alteracoes</button>
+    {% endif %}
     <button type="button" class="btn btn-secondary mb-3" onclick="history.back()">Cancelar</button>
   </div>
 </div>
@@ -205,6 +221,46 @@ function salvarEdicaoBloco(bloco_id) {
     } else {
       window.showAppToast ? window.showAppToast('Nao foi possivel atualizar a prescricao.', 'danger') : alert('Nao foi possivel atualizar a prescricao.');
     }
+  });
+}
+
+function salvarReemissaoBloco(bloco_id) {
+  const avisar = (msg, tipo) => window.showAppToast ? window.showAppToast(msg, tipo) : alert(msg);
+  const erro = validarMedicamentos();
+  if (erro) {
+    avisar(erro, 'warning');
+    return;
+  }
+  const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
+  if (!medicamentos.length && !instrucoesGerais.trim()) {
+    avisar('Informe ao menos um medicamento ou instrucoes gerais.', 'warning');
+    return;
+  }
+  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: m.medicamento, dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
+
+  // Cada clique cria uma receita nova: trava o botao para nao duplicar.
+  const botao = document.getElementById('btn-emitir-reemissao');
+  if (botao) botao.disabled = true;
+
+  fetch(`/bloco_prescricao/${bloco_id}/reemitir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: JSON.stringify({ medicamentos: payload, instrucoes_gerais: instrucoesGerais })
+  })
+  .then(res => res.json().catch(() => ({})))
+  .then(data => {
+    if (data.success) {
+      avisar(data.message || 'Receita reemitida com sucesso.', 'success');
+      localStorage.setItem('abaAtivaConsulta', 'medicamentos');
+      window.location.href = data.redirect_url || `/consulta/${ANIMAL_ID}`;
+    } else {
+      avisar(data.message || 'Nao foi possivel reemitir a receita.', 'danger');
+      if (botao) botao.disabled = false;
+    }
+  })
+  .catch(() => {
+    avisar('Nao foi possivel reemitir a receita. Verifique a conexao e tente novamente.', 'danger');
+    if (botao) botao.disabled = false;
   });
 }
 

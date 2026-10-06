@@ -303,7 +303,7 @@ _RE_CONC_PERCENT = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%')
 _RE_CONC_DOSE_3 = re.compile(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b')
 _RE_VOL_EXTRACT = re.compile(r'(?i)\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)')
 _RE_WEIGHT_ATE = re.compile(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg')
-_RE_WEIGHT_FAIXA = re.compile(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg')
+_RE_WEIGHT_FAIXA = re.compile(r'(\d+(?:[.,]\d+)?)\s*(?:kg\s*)?(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg')
 _RE_WEIGHT_ACIMA = re.compile(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg')
 _RE_SPECIES_CAES = re.compile(r'\bcae?s?\b|\bcaes\b|\bcachorr')
 _RE_SPECIES_GATOS = re.compile(r'\bgat[oa]s?\b|\bfelin')
@@ -1349,7 +1349,7 @@ def _forma_categoria_apresentacao_servico(forma: Optional[str], concentracao: Op
         return ('otico', 'Oticos')
     if any(k in texto for k in ('injet', 'ampola', 'frasco ampola', 'frasco-ampola')):
         return ('injetavel', 'Injetaveis')
-    if any(k in texto for k in ('pomada', 'creme', 'gel', 'spray', 'locao', 'shampoo', 'xampu')):
+    if any(k in texto for k in ('pomada', 'creme', 'gel', 'spray', 'locao', 'shampoo', 'xampu', 'pipeta', 'spot-on', 'spot on', 'pour-on', 'pour on', 'coleira')):
         return ('topico', 'Topicos')
     if 'suspens' in texto:
         return ('suspensao_oral', 'Suspensoes orais')
@@ -1628,10 +1628,15 @@ def _rotulo_principal_apresentacao(ap, categoria: str, unidade_pratica: str) -> 
     conc = _concentracao_principal_apresentacao(ap)
     forma = _forma_principal_apresentacao(ap, categoria, unidade_pratica)
     volume = _volume_apresentacao_label(ap)
+    conc_txt = _normalizar_concentracao_textual(getattr(ap, 'concentracao', None))
     if conc and forma:
         label = f"{conc} {forma}"
+    elif conc:
+        label = conc
+    elif conc_txt and any(k in _texto_norm(conc_txt) for k in ('kg', 'gato', 'cao', 'caes', 'peso', 'filhote', 'adulto', 'pipeta')):
+        label = conc_txt
     else:
-        label = conc or forma
+        label = forma
     if not conc and _tipo_origem_apresentacao(getattr(ap, 'fabricante', None)) == 'manipulado':
         manipulados = {
             'cápsula': 'cápsulas manipuladas',
@@ -1647,7 +1652,7 @@ def _rotulo_principal_apresentacao(ap, categoria: str, unidade_pratica: str) -> 
     if volume and volume not in label:
         label = f"{label} ({volume})" if label else volume
     if not label:
-        label = _normalizar_concentracao_textual(getattr(ap, 'concentracao', None))
+        label = conc_txt
     return re.sub(r'\s+', ' ', label or '').strip()
 
 
@@ -1701,6 +1706,45 @@ def _extrair_faixa_peso_apresentacao(ap) -> Optional[str]:
         if m:
             return f'acima de {m.group(1).replace(".", ",")} kg'
     return None
+
+
+def _extrair_faixa_peso_numerica(ap) -> Tuple[Optional[float], Optional[float]]:
+    """Extrai limites numericos de peso (peso_min, peso_max) em kg a partir dos textos da apresentacao."""
+    textos = [
+        getattr(ap, 'nome_variante', None),
+        getattr(ap, 'concentracao', None),
+        getattr(ap, 'forma', None),
+    ]
+    if isinstance(ap, dict):
+        textos = [
+            ap.get('nome_variante'),
+            ap.get('concentracao_texto'),
+            ap.get('rotulo_principal'),
+            ap.get('forma'),
+        ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        m = _RE_WEIGHT_ATE.search(norm)
+        if m:
+            try:
+                return (None, float(m.group(1).replace(',', '.')))
+            except ValueError:
+                pass
+        m = _RE_WEIGHT_FAIXA.search(norm)
+        if m:
+            try:
+                return (float(m.group(1).replace(',', '.')), float(m.group(2).replace(',', '.')))
+            except ValueError:
+                pass
+        m = _RE_WEIGHT_ACIMA.search(norm)
+        if m:
+            try:
+                return (float(m.group(1).replace(',', '.')), None)
+            except ValueError:
+                pass
+    return (None, None)
 
 
 def _extrair_especie_apresentacao(ap) -> Optional[str]:
@@ -2487,7 +2531,15 @@ def sugerir_dose(
     if tem_faixa_freq:
         freq_texto = f"a cada {freq_min_h}–{freq_max_h}h"
     elif proto.intervalo_horas:
-        freq_texto = f"a cada {proto.intervalo_horas}h"
+        if proto.intervalo_horas >= 48:
+            if proto.frequencia:
+                freq_texto = proto.frequencia
+            elif proto.intervalo_horas % 24 == 0:
+                freq_texto = f"a cada {proto.intervalo_horas // 24} dias"
+            else:
+                freq_texto = f"a cada {proto.intervalo_horas}h"
+        else:
+            freq_texto = f"a cada {proto.intervalo_horas}h"
     elif proto.frequencia:
         freq_texto = proto.frequencia
     else:
@@ -2641,6 +2693,22 @@ def sugerir_dose(
                 apresentacao_preferida_id = ap.get('id')
                 apresentacao_preferida_nome = ap.get('nome_variante') or ''
                 break
+    elif peso is not None and proto is not None:
+        for ap in apres_info:
+            esp_ap = (ap.get('especie_label') or _extrair_especie_apresentacao(ap) or '').upper()
+            if esp_ap and esp_code:
+                if esp_code == 'CAES' and 'CAES' not in esp_ap:
+                    continue
+                if esp_code == 'GATOS' and 'GATOS' not in esp_ap:
+                    continue
+            p_min, p_max = _extrair_faixa_peso_numerica(ap)
+            if p_min is not None or p_max is not None:
+                min_ok = p_min is None or peso >= p_min
+                max_ok = p_max is None or peso <= p_max
+                if min_ok and max_ok:
+                    apresentacao_preferida_id = ap.get('id')
+                    apresentacao_preferida_nome = ap.get('nome_variante') or ap.get('rotulo_principal') or ap.get('concentracao_texto') or ''
+                    break
 
     origem = _resumo_origem_dose(proto, duracao_e_padrao=duracao_e_padrao, proto_ind=proto_ind)
     flags_risco: List[Dict[str, str]] = []

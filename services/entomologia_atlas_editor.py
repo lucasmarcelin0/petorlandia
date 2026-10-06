@@ -220,10 +220,6 @@ def write_transaction():
             raise
 
 def save(key, command, allowed_clinical, actor):
-    from extensions import db
-    from models.entomologia import EntomologiaImportacao as E
-    from blueprints.entomologia_routes import _auditar
-    from time_utils import utcnow
     if not isinstance(command,dict): raise ValueError('Comando inválido.')
     action=command.get('action')
     reason=text(command.get('reason',''), 'notes',True)
@@ -297,21 +293,29 @@ def save(key, command, allowed_clinical, actor):
                     changed['properties']['position_status']='to_review'
             folders.ensure(layer)
         else: raise ValueError('Ação inválida.')
-        if len({str(f['id']) for f in layer['features']})!=len(layer['features']):
-            raise ValueError('Há identificadores repetidos. Confira a fonte.')
-        folders.ensure(layer)
-        layer.pop('revision',None);layer.pop('updated_at',None)
-        encoded=dumps(layer)
-        if len(encoded.encode())>15_000_000: raise ValueError('Camada maior que 15 MB.')
-        revision_rows(key).filter_by(status='ATIVA').order_by(None).update({'status':'DESFEITA'},synchronize_session=False)
-        now=utcnow()
-        entry=E(tipo=TIPO,status='ATIVA',titulo=key,nome_arquivo='Edição no atlas',sha256=hashlib.sha256(encoded.encode()).hexdigest(),
-                linhas=len(layer['features']),dados_json=encoded,resumo_json=dumps({'action':action,'reason':reason,'previous':revision}),
-                responsavel=actor[:160],ator=actor[:160],confirmado_em=now)
-        db.session.add(entry);db.session.flush()
-        _auditar('atlas_editar','Camada do atlas revisada',{'layer_id':key,'revision':entry.id,'previous':revision,'action':action})
-        db.session.commit()
-        return {**layer,'revision':entry.id,'updated_at':now.isoformat()}
+        return store_revision(key,layer,action,reason,revision,actor)
+
+def store_revision(key, layer, action, reason, previous, actor, summary=None):
+    """Grava ``layer`` como a revisão ativa de ``key``. Chame dentro de ``write_transaction()``."""
+    from extensions import db
+    from models.entomologia import EntomologiaImportacao as E
+    from blueprints.entomologia_routes import _auditar
+    from time_utils import utcnow
+    if len({str(f['id']) for f in layer['features']})!=len(layer['features']):
+        raise ValueError('Há identificadores repetidos. Confira a fonte.')
+    folders.ensure(layer)
+    layer.pop('revision',None);layer.pop('updated_at',None)
+    encoded=dumps(layer)
+    if len(encoded.encode())>15_000_000: raise ValueError('Camada maior que 15 MB.')
+    revision_rows(key).filter_by(status='ATIVA').order_by(None).update({'status':'DESFEITA'},synchronize_session=False)
+    now=utcnow()
+    entry=E(tipo=TIPO,status='ATIVA',titulo=key,nome_arquivo='Edição no atlas',sha256=hashlib.sha256(encoded.encode()).hexdigest(),
+            linhas=len(layer['features']),dados_json=encoded,resumo_json=dumps({**(summary or {}),'action':action,'reason':reason,'previous':previous}),
+            responsavel=actor[:160],ator=actor[:160],confirmado_em=now)
+    db.session.add(entry);db.session.flush()
+    _auditar('atlas_editar','Camada do atlas revisada',{'layer_id':key,'revision':entry.id,'previous':previous,'action':action})
+    db.session.commit()
+    return {**layer,'revision':entry.id,'updated_at':now.isoformat()}
 
 def history(key, allowed_clinical):
     layer=layers(allowed_clinical,True).get(key)

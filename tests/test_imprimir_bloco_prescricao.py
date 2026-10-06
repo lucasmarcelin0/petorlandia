@@ -147,9 +147,155 @@ def test_short_prescription_url_nao_autentica_visitante_sem_token(app):
     assert 'Max' not in corpo
     assert 'Isabela Abreu' not in corpo
 
-    # E a sessão segue anônima: nada de cookie de "lembrar" como o tutor.
     with anonimo.session_transaction() as sessao:
         assert '_user_id' not in sessao
+
+    with app.app_context():
+        db.drop_all()
+
+
+def test_imprimir_bloco_prescricao_mostra_veterinario_que_salvou_mesmo_com_consulta_de_estagiaria(app):
+    """Quando uma consulta é aberta por estagiária mas a receita é feita pelo veterinário,
+    a receita impressa DEVE mostrar o veterinário responsável (com CRMV), nunca a estagiária.
+    """
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica Prescricao')
+        db.session.add(clinica)
+        db.session.flush()
+
+        # Veterinário supervisor
+        vet = _create_veterinarian('Dr. Lucas Marcelino', 'lucas@example.com', 'pw_lucas', 'SP-65152', clinic=clinica)
+        vet_profile = vet.veterinario
+
+        # Estagiária supervisionada
+        estagiaria_user = User(name='Estagiaria Laiane', email='laiane@example.com', role='estagiario', worker='estudante')
+        estagiaria_user.set_password('pw_laiane')
+        db.session.add(estagiaria_user)
+        db.session.flush()
+
+        estagiaria_profile = Veterinario(
+            user=estagiaria_user,
+            crmv=None,
+            habilitacao='estagiario',
+            supervisor=vet_profile,
+            clinica=clinica,
+        )
+        db.session.add(estagiaria_profile)
+
+        tutor = User(name='Tutor Carlos', email='carlos@example.com')
+        tutor.set_password('pw_tutor')
+        animal = Animal(name='Pipoca', owner=tutor, clinica=clinica)
+        db.session.add_all([tutor, animal])
+        db.session.flush()
+
+        # Estagiária abriu o atendimento
+        consulta = Consulta(animal_id=animal.id, created_by=estagiaria_user.id, status='in_progress', clinica_id=clinica.id)
+        # Veterinário fez e salvou a prescrição
+        bloco = BlocoPrescricao(animal=animal, saved_by=vet, clinica=clinica)
+        db.session.add_all([consulta, bloco])
+        db.session.commit()
+        bloco_id = bloco.id
+
+    client = app.test_client()
+    with client:
+        # Veterinário acessa a receita
+        login_resp = client.post(
+            '/login',
+            data={'email': 'lucas@example.com', 'password': 'pw_lucas'},
+            follow_redirects=True,
+        )
+        assert login_resp.status_code == 200
+
+        resp = client.get(f'/bloco_prescricao/{bloco_id}/imprimir')
+        assert resp.status_code == 200
+
+        html = resp.get_data(as_text=True)
+        # O profissional responsável deve ser o Dr. Lucas, com CRMV SP-65152
+        assert 'Dr. Lucas Marcelino' in html
+        assert 'SP-65152' in html
+        assert 'Salvo por Dr. Lucas Marcelino' in html
+        # A estagiária NÃO pode ser exibida como profissional responsável nem na assinatura
+        assert 'Profissional Responsável' in html
+        assert 'Estagiaria Laiane' not in html
+
+    # Agora o tutor do animal acessa a receita
+    with client:
+        client.get('/logout', follow_redirects=True)
+        login_resp = client.post(
+            '/login',
+            data={'email': 'carlos@example.com', 'password': 'pw_tutor'},
+            follow_redirects=True,
+        )
+        assert login_resp.status_code == 200
+
+        resp = client.get(f'/bloco_prescricao/{bloco_id}/imprimir')
+        assert resp.status_code == 200
+
+        html = resp.get_data(as_text=True)
+        # Para o tutor, a receita DEVE mostrar o Dr. Lucas (CRMV SP-65152), e NUNCA a estagiária
+        assert 'Dr. Lucas Marcelino' in html
+        assert 'SP-65152' in html
+        assert 'Estagiaria Laiane' not in html
+
+    with app.app_context():
+        db.drop_all()
+
+
+def test_imprimir_bloco_prescricao_legado_sem_saved_by_resolve_supervisor_da_estagiaria(app):
+    """Se uma receita legada não tem saved_by e a consulta foi aberta por estagiária,
+    deve resolver para o supervisor com CRMV da estagiária em vez do nome dela."""
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica Prescricao')
+        db.session.add(clinica)
+        db.session.flush()
+
+        vet = _create_veterinarian('Dr. Lucas Marcelino', 'lucas@example.com', 'pw_lucas', 'SP-65152', clinic=clinica)
+        estagiaria_user = User(name='Estagiaria Laiane', email='laiane@example.com', role='estagiario', worker='estudante')
+        estagiaria_user.set_password('pw_laiane')
+        db.session.add(estagiaria_user)
+        db.session.flush()
+
+        estagiaria_profile = Veterinario(
+            user=estagiaria_user,
+            crmv=None,
+            habilitacao='estagiario',
+            supervisor=vet.veterinario,
+            clinica=clinica,
+        )
+        db.session.add(estagiaria_profile)
+
+        tutor = User(name='Tutor Carlos', email='carlos@example.com')
+        tutor.set_password('pw_tutor')
+        animal = Animal(name='Pipoca', owner=tutor, clinica=clinica)
+        db.session.add_all([tutor, animal])
+        db.session.flush()
+
+        consulta = Consulta(animal_id=animal.id, created_by=estagiaria_user.id, status='in_progress', clinica_id=clinica.id)
+        # saved_by é None (bloco legado)
+        bloco = BlocoPrescricao(animal=animal, saved_by=None, clinica=clinica)
+        db.session.add_all([consulta, bloco])
+        db.session.commit()
+        bloco_id = bloco.id
+
+    client = app.test_client()
+    with client:
+        client.post(
+            '/login',
+            data={'email': 'lucas@example.com', 'password': 'pw_lucas'},
+            follow_redirects=True,
+        )
+        resp = client.get(f'/bloco_prescricao/{bloco_id}/imprimir')
+        assert resp.status_code == 200
+
+        html = resp.get_data(as_text=True)
+        # O profissional responsável deve ter resolvido para o supervisor (Dr. Lucas)
+        assert 'Dr. Lucas Marcelino' in html
+        assert 'SP-65152' in html
+        assert 'Estagiaria Laiane' not in html
 
     with app.app_context():
         db.drop_all()
