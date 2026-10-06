@@ -1,0 +1,254 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Mapa da fila · Vacina PMO{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+<style>
+  #pmo-mapa { height: 72vh; min-height: 440px; border-radius: 14px; border: 1px solid #e5e7eb; }
+  .pmo-mapa-chip { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 14px; background: #fff; }
+  .pmo-mapa-chip .n { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+  .pmo-mapa-chip .l { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+  .pmo-mapa-lado { max-height: 72vh; overflow-y: auto; }
+  .pmo-mapa-dia { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px solid #e5e7eb;
+                  background: #fff; border-radius: 10px; padding: 7px 10px; margin-bottom: 6px; font-size: .88rem; }
+  .pmo-mapa-dia.ativo { border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(29, 78, 216, .18); }
+  .pmo-mapa-cor { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; border: 1px solid rgba(0, 0, 0, .25); }
+  .pmo-mapa-titulo { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280;
+                     border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin: 14px 0 8px; }
+  .pmo-mapa-rotulo { background: transparent; border: 0; box-shadow: none; font-weight: 700; font-size: 11px; color: #111; }
+  .pmo-mapa-rotulo::before { display: none; }
+  .pmo-mapa-dias-semana label { margin-right: 10px; font-size: .88rem; }
+</style>
+{% endblock %}
+
+{% block main %}
+<div class="container-fluid py-4">
+  <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-3 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Mapa da fila de vacinação</h1>
+      <p class="text-muted mb-0" id="pmo-mapa-sub">Lendo a aba “Inscrição a agendar” e procurando cada endereço no atlas…</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary" id="pmo-mapa-atualizar"><i class="fas fa-rotate me-1"></i> Atualizar</button>
+      <a href="{{ source_sheet_url }}" class="btn btn-outline-success" target="_blank" rel="noopener"><i class="fas fa-table me-1"></i> Abrir planilha</a>
+      <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i> Vacina PMO</a>
+    </div>
+  </div>
+
+  <div class="alert alert-danger d-none" id="pmo-mapa-erro"></div>
+
+  <div class="row g-2 mb-3" id="pmo-mapa-resumo"></div>
+
+  <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+    <div>
+      <label class="form-label small mb-1" for="pmo-mapa-fila">Fila</label>
+      <select class="form-select form-select-sm" id="pmo-mapa-fila">
+        <option value="previsao_planilha">Ordem da planilha (vale hoje)</option>
+        <option value="previsao_proposta">Ordem proposta por zonas</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label small mb-1" for="pmo-mapa-cor">Cor dos pontos</label>
+      <select class="form-select form-select-sm" id="pmo-mapa-cor">
+        <option value="dia">Dia previsto</option>
+        <option value="zona">Zona proposta</option>
+        <option value="cluster">Cluster da planilha</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label small mb-1" for="pmo-mapa-inicio">Primeiro dia</label>
+      <input type="date" class="form-control form-control-sm" id="pmo-mapa-inicio">
+    </div>
+    <div class="pmo-mapa-dias-semana">
+      <div class="form-label small mb-1">Dias de vacinação na semana</div>
+      <div id="pmo-mapa-semana"></div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-xl-9">
+      <div id="pmo-mapa"></div>
+      <p class="text-muted small mt-2 mb-0">
+        O tamanho do ponto é o número de animais. Contorno tracejado: posição de baixa confiança (interpolada ou vizinho mais próximo).
+        A previsão supõe que a fila siga esta ordem, com a regra do “Criar dia de vacinação” e os dias da semana marcados;
+        encaixes, remarcações e novas inscrições mudam as datas.
+      </p>
+    </div>
+    <div class="col-xl-3">
+      <div class="pmo-mapa-lado">
+        <div class="pmo-mapa-titulo mt-0">Calendário previsto</div>
+        <div id="pmo-mapa-dias"></div>
+        <div class="pmo-mapa-titulo">Zonas propostas</div>
+        <div id="pmo-mapa-zonas"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pmo-mapa-titulo mt-4">Endereços sem posição no mapa</div>
+  <div id="pmo-mapa-sem"></div>
+</div>
+
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script>
+(() => {
+  const DADOS_URL = {{ url_for('vacina_pmo_mapa_dados')|tojson }};
+  const SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const CORES_DIA = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#f781bf', '#00a6c8', '#b89b00', '#005a3c', '#6400a0', '#6e6e6e'];
+  const CORES_CLUSTER = { A: '#e41a1c', B: '#ff7f00', C: '#377eb8', D: '#984ea3', E: '#4daf4a', F: '#00a6c8', Z: '#6e6e6e', ZZ: '#111111' };
+  const el = (id) => document.getElementById(id);
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  let dados = null, diaAtivo = null, camada = null;
+  const mapa = L.map('pmo-mapa').setView([-20.7205, -47.8750], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19,
+  }).addTo(mapa);
+
+  // Preferências (dias da semana e campos) ficam só neste navegador.
+  const guardado = (() => { try { return JSON.parse(localStorage.getItem('pmoMapa') || '{}'); } catch (e) { return {}; } })();
+  const semana = new Set(Array.isArray(guardado.semana) ? guardado.semana : [2, 3, 4]);
+  const guardar = () => { try { localStorage.setItem('pmoMapa', JSON.stringify({ semana: [...semana] })); } catch (e) { /* sem armazenamento */ } };
+
+  el('pmo-mapa-semana').innerHTML = [1, 2, 3, 4, 5, 6].map((d) =>
+    `<label><input type="checkbox" class="form-check-input me-1" value="${d}" ${semana.has(d) ? 'checked' : ''}>${SEMANA[d]}</label>`).join('');
+  el('pmo-mapa-semana').addEventListener('change', (ev) => {
+    const d = Number(ev.target.value);
+    if (ev.target.checked) semana.add(d); else semana.delete(d);
+    guardar(); desenhar();
+  });
+  const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+  el('pmo-mapa-inicio').value = new Date(amanha.getTime() - amanha.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  ['pmo-mapa-fila', 'pmo-mapa-cor', 'pmo-mapa-inicio'].forEach((id) => el(id).addEventListener('change', () => { diaAtivo = null; desenhar(); }));
+  el('pmo-mapa-atualizar').addEventListener('click', carregar);
+
+  // Data do n-ésimo dia de vacinação a partir do primeiro dia, só nos dias da semana marcados.
+  function datas(total) {
+    const lista = [];
+    const partes = (el('pmo-mapa-inicio').value || '').split('-').map(Number);
+    if (partes.length !== 3 || !semana.size) return lista;
+    const dia = new Date(partes[0], partes[1] - 1, partes[2]);
+    for (let guarda = 0; lista.length < total && guarda < 1500; guarda++) {
+      if (semana.has(dia.getDay())) lista.push(new Date(dia));
+      dia.setDate(dia.getDate() + 1);
+    }
+    return lista;
+  }
+  const dataCurta = (d) => d ? `${SEMANA[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` : '';
+
+  function corDe(casa, campo, modo) {
+    if (casa.agendada) return '#9ca3af';
+    if (modo === 'zona') return (dados.zonas.find((z) => z.id === casa.zona) || {}).cor || '#111';
+    if (modo === 'cluster') return CORES_CLUSTER[casa.cluster_planilha] || '#111';
+    const p = casa[campo];
+    return p ? CORES_DIA[(p.dia - 1) % CORES_DIA.length] : '#111';
+  }
+
+  function desenhar(ajustar) {
+    if (!dados) return;
+    const campo = el('pmo-mapa-fila').value, modo = el('pmo-mapa-cor').value;
+    const fila = dados.casas.filter((c) => !c.agendada);
+    const totalDias = fila.reduce((m, c) => Math.max(m, c[campo] ? c[campo].dia : 0), 0);
+    const quando = datas(totalDias);
+    const nomeZona = (id) => { const z = dados.zonas.find((x) => x.id === id); return z ? `${z.id} · ${z.nome}` : 'sem zona'; };
+
+    if (camada) camada.remove();
+    camada = L.layerGroup().addTo(mapa);
+    L.circleMarker([dados.origem.lat, dados.origem.lng], { radius: 8, color: '#111', weight: 2, fillColor: '#ffd200', fillOpacity: 1 })
+      .bindTooltip('Vigilância Sanitária (saída)').addTo(camada);
+    const limites = [];
+    dados.casas.forEach((casa) => {
+      if (casa.lat == null) return;
+      const p = casa[campo];
+      const apagado = casa.agendada || (diaAtivo && (!p || p.dia !== diaAtivo));
+      const cor = corDe(casa, campo, modo);
+      const ponto = L.circleMarker([casa.lat, casa.lng], {
+        radius: 5 + Math.min(casa.animais, 8), color: '#111', weight: 1.2, dashArray: casa.confianca === 'baixa' ? '3 3' : null,
+        fillColor: cor, fillOpacity: apagado ? 0.18 : 0.85, opacity: apagado ? 0.25 : 1,
+      }).addTo(camada);
+      const previsao = casa.agendada ? 'Já agendada (linha pintada na planilha)'
+        : p ? `${p.dia}º dia da fila${quando[p.dia - 1] ? ' · ' + dataCurta(quando[p.dia - 1]) : ''} · ${p.turno === 'Manha' ? 'manhã' : 'tarde'} (${p.ordem}ª casa)` : 'Sem previsão';
+      ponto.bindPopup(
+        `<strong>${esc(casa.tutor)}</strong><br>${esc(casa.endereco)}${casa.bairro ? ' · ' + esc(casa.bairro) : ''}<br>` +
+        `${casa.caes} cão(es), ${casa.gatos} gato(s) · linha ${casa.linha}<br>` +
+        `<strong>${esc(previsao)}</strong><br>Zona ${esc(nomeZona(casa.zona))}` +
+        `${casa.cluster_planilha ? ' · cluster da planilha ' + esc(casa.cluster_planilha) : ''}<br>` +
+        `<span class="text-muted">${esc(casa.precisao)}</span>` +
+        (casa.avisos && casa.avisos.length ? `<br><span class="text-danger">${esc(casa.avisos.join(' '))}</span>` : ''));
+      if (p && !apagado && modo === 'dia') {
+        ponto.bindTooltip(String(p.dia), { permanent: true, direction: 'center', className: 'pmo-mapa-rotulo' });
+      }
+      if (!apagado) limites.push([casa.lat, casa.lng]);
+    });
+    if (ajustar && limites.length) mapa.invalidateSize().fitBounds(limites, { padding: [30, 30], maxZoom: 17 });
+
+    // Calendário: um botão por dia previsto.
+    const porDia = new Map();
+    fila.forEach((c) => {
+      const p = c[campo]; if (!p) return;
+      const d = porDia.get(p.dia) || { casas: 0, animais: 0, sem: 0, zonas: new Set() };
+      d.casas += 1; d.animais += c.animais; if (c.lat == null) d.sem += 1; if (c.zona) d.zonas.add(c.zona);
+      porDia.set(p.dia, d);
+    });
+    el('pmo-mapa-dias').innerHTML = [...porDia.keys()].sort((a, b) => a - b).map((n) => {
+      const d = porDia.get(n);
+      return `<button type="button" class="pmo-mapa-dia ${diaAtivo === n ? 'ativo' : ''}" data-dia="${n}">` +
+        `<span class="pmo-mapa-cor" style="background:${CORES_DIA[(n - 1) % CORES_DIA.length]}"></span>` +
+        `<span><strong>${n}º dia${quando[n - 1] ? ' · ' + dataCurta(quando[n - 1]) : ''}</strong><br>` +
+        `${d.casas} casas · ${d.animais} animais${d.zonas.size ? ' · zona ' + [...d.zonas].sort().join(', ') : ''}` +
+        `${d.sem ? ` · <span class="text-danger">${d.sem} fora do mapa</span>` : ''}</span></button>`;
+    }).join('') || '<p class="text-muted small">Nenhuma casa na fila.</p>';
+
+    el('pmo-mapa-zonas').innerHTML = dados.zonas.map((z) =>
+      `<div class="d-flex gap-2 align-items-start mb-2 small"><span class="pmo-mapa-cor mt-1" style="background:${z.cor}"></span>` +
+      `<span><strong>${z.id} · ${esc(z.nome)}</strong> — ${z.casas} casas, ${z.animais} animais<br><span class="text-muted">${esc(z.limites)}</span></span></div>`).join('');
+  }
+
+  el('pmo-mapa-dias').addEventListener('click', (ev) => {
+    const botao = ev.target.closest('[data-dia]'); if (!botao) return;
+    const n = Number(botao.dataset.dia);
+    diaAtivo = diaAtivo === n ? null : n;
+    desenhar(true);
+  });
+
+  function resumo() {
+    const r = dados.resumo, pct = r.casas ? Math.round(100 * r.no_mapa / r.casas) : 0;
+    const chip = (n, l, cls) => `<div class="col-6 col-md-4 col-xl-2"><div class="pmo-mapa-chip"><div class="n ${cls || ''}">${n}</div><div class="l">${l}</div></div></div>`;
+    el('pmo-mapa-resumo').innerHTML =
+      chip(r.casas, 'casas a agendar') + chip(r.animais, 'animais') +
+      chip(`${r.no_mapa} <small class="text-muted">(${pct}%)</small>`, 'no mapa', 'text-success') +
+      chip(r.sem_posicao, 'sem posição', r.sem_posicao ? 'text-danger' : '') +
+      chip(r.confianca_baixa, 'posição a conferir') +
+      chip(`${r.dias_planilha} <small class="text-muted">/ ${r.dias_proposta}</small>`, 'dias: planilha / proposta');
+    el('pmo-mapa-sub').textContent = `Aba “${dados.aba}” lida em ${dados.lido_em}. ${r.ja_agendadas} linha(s) já agendada(s) ficam em cinza. ` +
+      `Base do atlas: ${r.enderecos_no_atlas.toLocaleString('pt-BR')} endereços.`;
+    const sem = dados.casas.filter((c) => !c.agendada && c.lat == null);
+    el('pmo-mapa-sem').innerHTML = sem.length
+      ? '<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Linha</th><th>Tutor</th><th>Endereço</th><th>Bairro</th><th>Por que não entrou</th></tr></thead><tbody>' +
+        sem.map((c) => `<tr><td>${c.linha}</td><td>${esc(c.tutor)}</td><td>${esc(c.endereco)}</td><td>${esc(c.bairro)}</td><td>${esc(c.precisao)}</td></tr>`).join('') +
+        '</tbody></table></div>'
+      : '<p class="text-success mb-0">Todos os endereços da fila entraram no mapa.</p>';
+  }
+
+  async function carregar() {
+    const botao = el('pmo-mapa-atualizar');
+    botao.disabled = true; el('pmo-mapa-erro').classList.add('d-none');
+    try {
+      const resposta = await fetch(DADOS_URL, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      const corpo = await resposta.json();
+      if (!corpo.success) throw new Error(corpo.message || 'Não foi possível montar o mapa.');
+      dados = corpo; diaAtivo = null;
+      resumo(); desenhar(true);
+    } catch (erro) {
+      el('pmo-mapa-erro').textContent = erro.message || String(erro);
+      el('pmo-mapa-erro').classList.remove('d-none');
+      el('pmo-mapa-sub').textContent = 'O mapa não pôde ser montado agora.';
+    } finally {
+      botao.disabled = false;
+    }
+  }
+  carregar();
+})();
+</script>
+{% endblock %}

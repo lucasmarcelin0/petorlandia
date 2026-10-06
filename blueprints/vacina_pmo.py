@@ -852,6 +852,30 @@ def vacina_pmo_cobertura_ativa():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@bp.route('/vacina-pmo/mapa')
+@login_required
+def vacina_pmo_mapa():
+    """Casca do mapa da fila; a planilha e o atlas são lidos depois, por fetch."""
+    _pmo_painel_guard()
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL
+    return render_template(
+        'vacina_pmo/mapa.html',
+        source_sheet_url=os.getenv('PMO_VACCINE_SHEET_URL', DEFAULT_SHEET_URL),
+    )
+
+
+@bp.route('/vacina-pmo/mapa/dados')
+@login_required
+def vacina_pmo_mapa_dados():
+    _pmo_painel_guard()
+    try:
+        from services.vacina_pmo_mapa import dados_do_mapa
+        return jsonify(dados_do_mapa())
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar o mapa da fila PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 def _pmo_resolve_sheet_gid(date_str, sheet_title):
     """gid da aba viva daquele dia, ou "" se a planilha nao puder ser lida."""
     try:
