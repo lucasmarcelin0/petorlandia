@@ -60,6 +60,24 @@ const DOCUMENT_SOURCES = {
     { text: "Resolucao CFMV 1.562/2023, art. 3", url: CFMV1562_URL },
   ],
 };
+// Redacao dos incisos do art. 11 da LC 84/2024 (Jornal Oficial de Orlandia,
+// ed. 1844, 19/06/2024), na ordem da lei. A tela de Documentos mostra a lista
+// inteira porque o registro so e concedido depois de todos eles (art. 12).
+const ART11_ITEMS = [
+  { inciso: "I", documentId: "requerimento-assinado", text: "Requerimento, dirigido ao Serviço de Inspeção Municipal – S.I.M., solicitando o registro", note: "É o Anexo I preenchido no portal, salvo em PDF e assinado." },
+  { inciso: "II", documentId: "plantas-baixas", text: "Planta baixa ou croqui das construções/reformas, acompanhadas do memorial descritivo da construção", note: "São duas peças: a planta baixa ou croqui e o memorial descritivo da construção (Anexo III) assinado." },
+  { inciso: "III", documentId: "contrato-social-cnpj", text: "Cópia do contrato ou estatuto social da firma, registrada no órgão competente (no caso de firma constituída)" },
+  { inciso: "IV", documentId: "cpf-cnpj", text: "Cópia do registro no Cadastro Nacional de Pessoa Física – CPF ou Cadastro Nacional de Pessoa Jurídica – CNPJ, conforme for o caso" },
+  { inciso: "V", documentId: "inscricao-estadual", text: "Registro no Cadastro de Contribuintes do ICMS ou inscrição de Produtor Rural na Secretaria de Estado da Fazenda, conforme o caso" },
+  { inciso: "VI", documentId: "alvara-prefeitura", text: "Alvará de licença para construção e/ou alvará de localização e funcionamento ou documento equivalente, fornecido pela prefeitura municipal" },
+  { inciso: "VII", documentId: "certidoes-ambientais", text: "Licença ambiental ou dispensa de licença ambiental fornecida pelo órgão ambiental competente" },
+  { inciso: "VIII", documentId: "exames-agua", text: "Boletim de exames físico-químico e microbiológico da água de abastecimento, fornecido por laboratório credenciado" },
+  { inciso: "IX", documentId: "memorial-economico-sanitario", text: "Memorial descritivo econômico e sanitário do estabelecimento", note: "É o Anexo II (MTSE) preenchido no portal, salvo em PDF e assinado." },
+  { inciso: "X", documentId: "manual-bpf", text: "Manual de Boas Práticas de Fabricação de Alimentos – BPF" },
+  { inciso: "XI", documentId: "registro-crmv", text: "Registro do estabelecimento junto ao Conselho de Medicina Veterinária de São Paulo, se aplicável", note: "Só é exigido quando a atividade pede registro no conselho; confirme com o responsável técnico." },
+  { inciso: "XII", documentId: "comprovante-taxa", text: "Comprovante de pagamento da respectiva Taxa de Inspeção Sanitária", note: "Dispensado em 2026 pela LC 104/2026, art. 3º, parágrafo único." },
+];
+const ART11_BY_DOCUMENT = new Map(ART11_ITEMS.map((item) => [item.documentId, item]));
 const OFFICIAL_ANNEXES = [
   {
     documentId: "requerimento-assinado",
@@ -943,10 +961,109 @@ function art11Docs() {
   return state.documents.filter((doc) => doc.group === "art11");
 }
 
+// Situacao do documento para quem envia. O "Em correcao" definido pelo SIM
+// prevalece sobre a existencia de arquivo: envio devolvido continua pendente.
+function docSituation(doc) {
+  const status = doc.status || "";
+  if (doc.id === "comprovante-taxa" || /dispensad/i.test(status)) return { key: "waived", tone: "approved", label: "Dispensado em 2026" };
+  if (/corre/i.test(status)) return { key: "corrections", tone: "corrections", label: "Corrigir e reenviar" };
+  if (docReceived(doc)) return { key: "sent", tone: "approved", label: "Enviado" };
+  if (!doc.required) return { key: "optional", tone: "pending", label: "Se aplicável" };
+  return { key: "missing", tone: "pending", label: "Falta enviar" };
+}
+
 function art11Progress() {
   const required = art11Docs().filter((doc) => doc.required);
-  const sent = required.filter(docReceived).length;
+  const sent = required.filter((doc) => docSituation(doc).key === "sent").length;
   return { sent, total: required.length };
+}
+
+function art11Checklist() {
+  const docs = new Map(art11Docs().map((doc) => [doc.id, doc]));
+  return ART11_ITEMS
+    .filter((item) => docs.has(item.documentId))
+    .map((item) => ({ ...item, situation: docSituation(docs.get(item.documentId)) }));
+}
+
+function art11Pending() {
+  return art11Checklist().filter((item) => ["missing", "corrections"].includes(item.situation.key));
+}
+
+function art11PendingLabel(count) {
+  return count === 1 ? "Falta 1 documento do art. 11" : `Faltam ${count} documentos do art. 11`;
+}
+
+function art11Ref(doc) {
+  const item = ART11_BY_DOCUMENT.get(doc.id);
+  return item ? ` · art. 11, ${item.inciso}` : "";
+}
+
+function renderArt11Panel() {
+  const items = art11Checklist();
+  if (!items.length) return "";
+  const pending = items.filter((item) => ["missing", "corrections"].includes(item.situation.key));
+  const isSim = state.role === "sim";
+  const actionLabel = (key) => {
+    if (isSim) return "Ver item";
+    if (key === "missing") return "Enviar";
+    return key === "corrections" ? "Corrigir" : "Ver item";
+  };
+  return `
+    <section class="span-12 panel art11-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Documentos que a lei exige para o registro</h2>
+          <p class="muted">LC 84/2024, art. 11: “Para obter o registro no serviço de inspeção o estabelecimento deverá apresentar o pedido instruído pelos seguintes documentos”. O registro só é concedido depois da apresentação de todos eles e do Laudo de Vistoria Final favorável (art. 12).</p>
+        </div>
+        <a class="btn" href="${LC84_URL}#page=3" target="_blank" rel="noreferrer">${icon("file")}Ler o art. 11</a>
+      </div>
+      ${pending.length ? `
+        <div class="art11-summary pending">
+          <strong>${art11PendingLabel(pending.length)}</strong>
+          <span>Incisos ${pending.map((item) => item.inciso).join(", ")}. Enquanto faltar algum, o registro não pode ser concedido.</span>
+        </div>
+      ` : `
+        <div class="art11-summary done">
+          <strong>Todos os documentos do art. 11 foram enviados</strong>
+          <span>O SIM confere cada um e realiza a vistoria final (art. 12).</span>
+        </div>
+      `}
+      <ol class="art11-list">
+        ${items.map((item) => `
+          <li class="art11-item ${item.situation.key}">
+            <span class="art11-inciso">${item.inciso}</span>
+            <div class="art11-copy">
+              <strong>${item.text}</strong>
+              ${item.note ? `<span>${item.note}</span>` : ""}
+            </div>
+            <span class="status ${item.situation.tone}">${item.situation.label}</span>
+            ${item.situation.key === "waived" ? `<span></span>` : `<button class="btn" data-goto-doc="${item.documentId}">${actionLabel(item.situation.key)}</button>`}
+          </li>
+        `).join("")}
+      </ol>
+    </section>
+  `;
+}
+
+function renderArt11Alert() {
+  const pending = art11Pending();
+  if (!pending.length) return "";
+  return `
+    <div class="span-12 art11-alert">
+      <div>
+        <strong>${art11PendingLabel(pending.length)} da LC 84/2024</strong>
+        <span>Sem eles o SIM não pode conceder o registro (art. 12).</span>
+        <ul>
+          ${pending.map((item) => `<li><b>${item.inciso}</b> ${item.text}${item.situation.key === "corrections" ? " (devolvido para correção)" : ""}</li>`).join("")}
+        </ul>
+      </div>
+      <button class="btn primary" data-view="documents">Ver e enviar documentos</button>
+    </div>
+  `;
+}
+
+function goToDocument(docId) {
+  document.querySelector(`#doc-card-${docId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function journeySteps() {
@@ -1046,6 +1163,7 @@ function renderDashboard() {
   return `
     <div class="grid">
       ${simServicePanel()}
+      ${state.role === "establishment" ? renderArt11Alert() : ""}
       ${state.role === "establishment" ? renderJourney() : ""}
       <div class="span-12 metrics">
         <div class="metric"><strong>${statusLabel()}</strong><span>Status atual</span></div>
@@ -1278,6 +1396,7 @@ function renderDocuments() {
   const percent = progress.total ? Math.round((progress.sent / progress.total) * 100) : 0;
   return `
     <div class="grid">
+      ${renderArt11Panel()}
       <div class="span-12 banner-warn">
         <strong>Taxa do SIM em 2026: nao e preciso pagar nada.</strong>
         A Taxa de Inspecao Sanitaria esta dispensada neste ano (LC 104/2026, art. 3, par. unico). O item 12 do checklist fica sem exigencia em 2026.
@@ -1385,10 +1504,13 @@ function documentCard(doc, options = {}) {
 
 function registryDocumentCard(doc, context) {
   const { versions, canUpload, isTaxWaived, received } = context;
-  const statusTone = received || isTaxWaived
-    ? "approved"
-    : (/corre/i.test(doc.status || "") ? "corrections" : "pending");
-  const statusText = isTaxWaived ? "Dispensado em 2026" : (received ? "Recebido" : (doc.status || "Pendente"));
+  const inCorrection = docSituation(doc).key === "corrections";
+  const statusTone = inCorrection
+    ? "corrections"
+    : (received || isTaxWaived ? "approved" : "pending");
+  const statusText = isTaxWaived
+    ? "Dispensado em 2026"
+    : (inCorrection ? "Corrigir e reenviar" : (received ? "Recebido" : (doc.status || "Pendente")));
   const category = doc.internal
     ? "Documento interno do SIM"
     : (doc.item ? `Item ${doc.item} do checklist` : "Documento complementar");
@@ -1416,12 +1538,12 @@ function registryDocumentCard(doc, context) {
     </details>
   `;
   return `
-    <article class="document-card registry-document ${doc.internal ? "internal" : ""} ${doc.required ? "required" : ""} ${received ? "received" : ""}">
+    <article class="document-card registry-document ${doc.internal ? "internal" : ""} ${doc.required ? "required" : ""} ${received ? "received" : ""}" id="doc-card-${doc.id}">
       <header class="registry-card-head">
         <div class="registry-card-identity">
           <span class="registry-document-number">${received ? icon("check") : (doc.item || icon("file"))}</span>
           <div>
-            <span class="registry-card-kicker">${category} · ${obligation}</span>
+            <span class="registry-card-kicker">${category} · ${obligation}${art11Ref(doc)}</span>
             <h3>${doc.name}</h3>
           </div>
         </div>
@@ -1501,10 +1623,13 @@ function registryDocumentCard(doc, context) {
 
 function officialAnnexCard(doc, annex, context) {
   const { versions, canUpload, isProductForm, products, received } = context;
-  const statusTone = received
-    ? "approved"
-    : (/corre/i.test(doc.status || "") ? "corrections" : "pending");
-  const statusText = received ? "Documento enviado" : (doc.status || "Pendente");
+  const inCorrection = docSituation(doc).key === "corrections";
+  const statusTone = inCorrection
+    ? "corrections"
+    : (received ? "approved" : "pending");
+  const statusText = inCorrection
+    ? "Corrigir e reenviar"
+    : (received ? "Documento enviado" : (doc.status || "Pendente"));
   const productCount = `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}`;
   const currentFile = !isProductForm && doc.uploadId ? `
     <div class="annex-current-file">
@@ -1564,12 +1689,12 @@ function officialAnnexCard(doc, annex, context) {
     </details>
   `;
   return `
-    <article class="document-card official-annex ${received ? "received" : ""}">
+    <article class="document-card official-annex ${received ? "received" : ""}" id="doc-card-${doc.id}">
       <header class="annex-card-head">
         <div class="annex-card-identity">
           <span class="official-annex-number">${received ? icon("check") : annex.number}</span>
           <div>
-            <span class="annex-card-kicker">Anexo ${annex.number}${doc.required ? " · obrigatório" : ""}</span>
+            <span class="annex-card-kicker">Anexo ${annex.number}${doc.required ? " · obrigatório" : ""}${art11Ref(doc)}</span>
             <h3>${annex.title}</h3>
           </div>
         </div>
@@ -3677,6 +3802,9 @@ function bindEvents() {
   document.querySelectorAll("[data-role]").forEach((el) => el.addEventListener("click", () => setRole(el.dataset.role)));
   document.querySelectorAll("[data-view]").forEach((el) => {
     el.addEventListener("click", () => setView(el.dataset.view, el.dataset.formFocus || ""));
+  });
+  document.querySelectorAll("[data-goto-doc]").forEach((el) => {
+    el.addEventListener("click", () => goToDocument(el.dataset.gotoDoc));
   });
   document.querySelectorAll("[data-preview-account]").forEach((el) => {
     el.addEventListener("click", () => startAccountPreview(el.dataset.previewAccount));

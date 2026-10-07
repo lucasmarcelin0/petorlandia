@@ -3377,3 +3377,119 @@ table select:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Checklist do art. 11 da LC 84/2024 --- */
+.art11-panel .panel-header p {
+  max-width: 860px;
+  margin: 4px 0 0;
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+.art11-summary,
+.art11-alert {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff4f1;
+  border: 1px solid #f1c1b8;
+  color: #7a2a1d;
+  font-size: .88rem;
+  line-height: 1.5;
+}
+
+.art11-summary strong,
+.art11-alert strong { display: block; font-size: .98rem; }
+
+.art11-summary.done {
+  background: #f0fdf4;
+  border-color: #a7f3d0;
+  color: #14533d;
+}
+
+.art11-list {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  overflow: hidden;
+}
+
+.art11-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto 96px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+}
+
+.art11-item + .art11-item { border-top: 1px solid #e7ecea; }
+.art11-item.missing,
+.art11-item.corrections { background: #fffaf8; }
+
+.art11-inciso {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 8px;
+  background: #edf4f1;
+  color: #236555;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.art11-copy strong {
+  display: block;
+  color: #203a35;
+  font-size: .88rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.art11-copy span {
+  display: block;
+  margin-top: 2px;
+  color: #687773;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+
+.art11-item .btn { justify-content: center; }
+
+.art11-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.art11-alert ul {
+  margin: 8px 0 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: .84rem;
+}
+
+.art11-alert li b {
+  display: inline-block;
+  min-width: 30px;
+}
+
+.document-card { scroll-margin-top: 96px; }
+
+@media (max-width: 600px) {
+  .art11-item {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .art11-item .status,
+  .art11-item .btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
