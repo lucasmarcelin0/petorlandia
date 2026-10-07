@@ -668,12 +668,13 @@
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-back {
-  max-width: min(220px, 60vw);
+  max-width: min(240px, 70vw);
+  white-space: nowrap;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-back-text {
   display: inline-block;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.2;
   text-align: left;
 }
@@ -691,11 +692,18 @@
 
 #{{ component_id }} .tutor-calendar__day-detail-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
-  padding-right: clamp(2.5rem, 6vw, 9rem);
+  padding-right: clamp(2.5rem, 6vw, 3.5rem);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail.has-back .tutor-calendar__day-detail-header,
+#{{ component_id }} .tutor-calendar__day-detail-controls.has-back ~ .tutor-calendar__day-detail-content .tutor-calendar__day-detail-header,
+#{{ component_id }} .tutor-calendar__day-detail-header--event {
+  padding-right: clamp(13.5rem, 25vw, 17.5rem);
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-actions {
@@ -716,6 +724,7 @@
 #{{ component_id }} .tutor-calendar__day-detail-date {
   font-weight: 700;
   font-size: 1rem;
+  line-height: 1.35;
   text-transform: capitalize;
   color: var(--bs-gray-900);
 }
@@ -729,6 +738,10 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  line-height: 1.25;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-empty {
@@ -2031,6 +2044,23 @@
     top: 0.85rem;
     right: 0.75rem;
   }
+
+  #{{ component_id }} .tutor-calendar__day-detail.has-back .tutor-calendar__day-detail-controls,
+  #{{ component_id }} .tutor-calendar__day-detail-controls.has-back {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail.has-back .tutor-calendar__day-detail-header,
+  #{{ component_id }} .tutor-calendar__day-detail-controls.has-back ~ .tutor-calendar__day-detail-content .tutor-calendar__day-detail-header,
+  #{{ component_id }} .tutor-calendar__day-detail-header--event {
+    padding-right: 0;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1199.98px) {
@@ -2307,6 +2337,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (dayDetailControls) {
       dayDetailControls.classList.toggle('has-back', shouldShowBack);
+    }
+    if (dayDetailContainer) {
+      dayDetailContainer.classList.toggle('has-back', shouldShowBack);
     }
   }
 
@@ -4514,7 +4547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dayDetailContent.innerHTML = '';
 
     const header = document.createElement('div');
-    header.className = 'tutor-calendar__day-detail-header';
+    header.className = 'tutor-calendar__day-detail-header tutor-calendar__day-detail-header--day';
 
     const dateEl = document.createElement('div');
     dateEl.className = 'tutor-calendar__day-detail-date';
@@ -4614,7 +4647,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dayDetailContent.innerHTML = '';
 
     const header = document.createElement('div');
-    header.className = 'tutor-calendar__day-detail-header';
+    header.className = 'tutor-calendar__day-detail-header tutor-calendar__day-detail-header--event';
 
     const dateEl = document.createElement('div');
     dateEl.className = 'tutor-calendar__day-detail-date';
