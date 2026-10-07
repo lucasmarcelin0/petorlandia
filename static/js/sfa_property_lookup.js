@@ -5,6 +5,10 @@
   const normalize = value => text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isDocument = label => /cpf|cnpj|documento|\brg\b|identidade|registro geral/.test(normalize(label));
   const maskDocument = value => text(value).replace(/[A-Za-z0-9]/g, '•');
+  function contactKind(label) {
+    const key = normalize(label).replace(/[\s()-]/g, '');
+    return /^telefones?$/.test(key) ? 'phone' : /^emails?$/.test(key) ? 'email' : '';
+  }
   function queryForSearch(value) {
     const model = root.SfaAtlasSearchModel;
     const query = model && typeof model.searchText === 'function' ? model.searchText(text(value)) : text(value);
@@ -112,7 +116,21 @@
       field(list, 'Código do imóvel', property.property_code);
       field(list, 'Matrícula', property.registry_number);
       field(list, 'Código do proprietário', property.owner_code);
-      detail.replaceChildren(title, list);
+      detail.replaceChildren(title, node('h5', 'Dados do proprietário', 'cadastre-owner-heading'),
+        node('p', display(owner.owner_name || property.owner_name)));
+      const ownerFields = Array.isArray(owner.fields) ? owner.fields : [];
+      const contacts = node('dl', undefined, 'cadastre-owner-contacts');
+      [['phone', 'Telefone'], ['email', 'E-mail']].forEach(([kind, label]) => {
+        const matching = ownerFields.filter(item => contactKind(item.label) === kind);
+        const values = owner.status === 'consultado'
+          ? matching.map(item => text(item.value).trim()).filter(Boolean) : [];
+        const value = values.length ? values.join('\n') : owner.status !== 'consultado'
+          ? 'Ainda não consultado' : matching.length
+            ? 'Não informado na Betha' : 'Não consta na ficha consultada';
+        const group = node('div', undefined, values.length ? '' : 'is-empty');
+        group.append(node('dt', label), node('dd', value)); contacts.append(group);
+      });
+      detail.append(contacts, list);
       if (options && typeof options.locateAddress === 'function') {
         const locate = node('button', 'Consultar endereço no mapa', 'field-tool-button cadastre-locate');
         const note = node('p', '', 'cadastre-locate-status');
@@ -128,12 +146,11 @@
         });
         detail.append(locate, note);
       }
-      detail.append(node('h5', 'Dados do proprietário'), node('p', display(owner.owner_name || property.owner_name)));
       if (owner.status !== 'consultado') {
         detail.append(node('p', 'A ficha deste proprietário não foi consultada na amostra.'));
       } else {
         const fields = node('dl', undefined, 'cadastre-owner-fields');
-        (Array.isArray(owner.fields) ? owner.fields : []).forEach(item => ownerField(fields, item));
+        ownerFields.filter(item => !contactKind(item.label)).forEach(item => ownerField(fields, item));
         if (fields.children.length) detail.append(fields);
         else detail.append(node('p', 'Nenhum campo adicional informado na coleta.'));
       }

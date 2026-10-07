@@ -124,6 +124,39 @@ function setup(handler, omitPanel = false, territory = false) {
   await pendingDetail;
   assert.ok(!state.elements['cadastre-detail'].textContent.includes('Pessoa de teste'));
 
+  // Contact summaries distinguish source absence from an unconsulted owner.
+  const contactCases = [
+    {status:'consultado', fields:[{label:'Telefone(s)', value:'  '}, {label:'E-mail(s)', value:''}],
+      expected:['Não informado na Betha', 'Não informado na Betha']},
+    {status:'consultado', phone:'CONTATO_FORA_CAMPOS', email:'contato-fora@example.test',
+      fields:[{label:'Tipo', value:'Física'}],
+      expected:['Não consta na ficha consultada', 'Não consta na ficha consultada']},
+    {status:'nao_consultado', fields:[{label:'Telefone', value:'CONTATO_NAO_VERIFICADO'}],
+      expected:['Ainda não consultado', 'Ainda não consultado']},
+    {status:'consultado', fields:[{label:'Telefone(s)', value:'<img src=x onerror=alert(2)>'},
+      {label:'E-mail(s)', value:'contato@example.test'}, {label:'CPF', value:'987.654.321-00'}],
+      expected:['<img src=x onerror=alert(2)>', 'contato@example.test']},
+    {status:'consultado', fields:[{label:'Telefone', value:'CONTATO_A'}, {label:'Telefone(s)', value:'CONTATO_B'}],
+      expected:['CONTATO_A\nCONTATO_B', 'Não consta na ficha consultada']}
+  ];
+  for (const item of contactCases) {
+    state = setup(url => url.endsWith('/7') ? success({property, owner:{...owner, ...item}}) :
+      success({available:true, metadata, results:new URL(url).searchParams.get('q') ? [property] : []}));
+    const handle = init(dataset); await settle(); await handle.search('Rua');
+    await state.elements['cadastre-results'].children[0].click();
+    const rendered = state.elements['cadastre-detail'];
+    const contacts = rendered.children.find(element => element.className === 'cadastre-owner-contacts');
+    assert.equal(rendered.children.find(element => element.tag === 'dl'), contacts);
+    assert.deepEqual(contacts.children.map(group => group.children[0].textContent), ['Telefone', 'E-mail']);
+    assert.deepEqual(contacts.children.map(group => group.children[1].textContent), item.expected);
+    const otherFields = rendered.children.find(element => element.className === 'cadastre-owner-fields');
+    assert.ok(!otherFields || !otherFields.children.some(group => /Telefone|E-mail/.test(group.children[0].textContent)));
+    assert.ok(!rendered.textContent.includes('CONTATO_NAO_VERIFICADO'));
+    assert.ok(!rendered.textContent.includes('CONTATO_FORA_CAMPOS'));
+    assert.ok(!rendered.textContent.includes('contato-fora@example.test'));
+    assert.ok(!rendered.textContent.includes('987.654.321'));
+  }
+
   // Sidecar hooks preserve the atlas handler and only refine the cadastral list.
   state = setup(() => success({available:true, metadata, results:[]}), false, true);
   let atlasInputCalls = 0;
@@ -143,15 +176,17 @@ function setup(handler, omitPanel = false, territory = false) {
 
   // Revoked sessions clear already rendered personal data and cannot retry in place.
   for (const status of [401, 403]) {
-    state = setup(url => url.endsWith('/7') ? success({property, owner}) :
+    state = setup(url => url.endsWith('/7') ? success({property, owner:{...owner, fields:[{label:'Telefone', value:'CONTATO_REVOGADO'}]}}) :
       success({available:true, metadata, results:new URL(url).searchParams.get('q') ? [property] : []}));
     const handle = init(dataset); await settle(); await handle.search('Rua');
     await state.elements['cadastre-results'].children[0].click();
     assert.ok(state.elements['cadastre-detail'].textContent.includes('Pessoa de teste'));
+    assert.ok(state.elements['cadastre-detail'].textContent.includes('CONTATO_REVOGADO'));
     global.fetch = async () => denied(status);
     await handle.search('outro');
     assert.equal(state.elements['cadastre-results'].children.length, 0);
     assert.ok(!state.elements['cadastre-detail'].textContent.includes('Pessoa de teste'));
+    assert.ok(!state.elements['cadastre-detail'].textContent.includes('CONTATO_REVOGADO'));
     assert.equal(state.elements['cadastre-query'].disabled, true);
     assert.equal(state.elements['cadastre-search-submit'].disabled, true);
   }
