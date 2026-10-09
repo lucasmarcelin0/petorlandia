@@ -210,7 +210,9 @@ function formatDateToBrazil(value) {
 
 /*
  * Contrato de datas da agenda:
- * - valores de <input type="date"> e das APIs usam ISO: aaaa-mm-dd;
+ * - valores de <input type="date"> e das APIs usam ISO: aaaa-mm-dd
+ *   (o campo aparece em dd/mm/aaaa por causa de static/js/date_br.js,
+ *   mas `.value` continua ISO);
  * - textos apresentados ao usuário usam pt-BR: dd/mm/aaaa.
  *
  * Não use `new Date('aaaa-mm-dd')` nem `toISOString()` para converter uma
@@ -1578,8 +1580,8 @@ function initScheduleOverview(root) {
       summaryBadge.classList.remove('text-bg-light');
       summaryBadge.classList.add('text-bg-success');
     } else {
-      const formattedDate = displayDate ? longFormatter.format(displayDate) : 'a data selecionada';
-      summaryBadge.textContent = `Sem horários livres em ${formattedDate}.`;
+      const formattedDate = displayDate ? `em ${longFormatter.format(displayDate)}` : 'na data selecionada';
+      summaryBadge.textContent = `Sem horários livres ${formattedDate}.`;
       summaryBadge.classList.remove('text-bg-light');
       summaryBadge.classList.add('text-bg-warning');
     }

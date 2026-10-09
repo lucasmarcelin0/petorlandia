@@ -68,15 +68,17 @@
       </div>
       <div class="col-md-6">
         <label class="form-label">Telefone</label>
-        <input name="phone" class="form-control">
+        <input name="phone" type="tel" class="form-control" placeholder="(00) 00000-0000" data-campo-br="telefone">
+        <div class="invalid-feedback">Informe o telefone com DDD (10 ou 11 dígitos)</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">CPF</label>
-        <input name="cpf" class="form-control">
+        <input name="cpf" class="form-control" placeholder="000.000.000-00" data-campo-br="cpf">
+        <div class="invalid-feedback">Informe o CPF com 11 dígitos</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">RG</label>
-        <input name="rg" class="form-control">
+        <input name="rg" class="form-control" data-campo-br="rg">
       </div>
       <div class="col-md-6">
         <label class="form-label">Data de Nascimento</label>

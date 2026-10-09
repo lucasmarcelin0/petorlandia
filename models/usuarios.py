@@ -245,6 +245,18 @@ class User(UserMixin, db.Model):
 
 
     @property
+    def email_informado(self):
+        """E-mail de verdade da pessoa; ``''`` quando só existe o interno.
+
+        Decide pelo endereço, não por ``email_is_placeholder``: a coluna ficou
+        desatualizada nos dois sentidos (contas da campanha com endereço
+        interno e sem a marca; tutores que receberam e-mail real depois e
+        continuaram marcados).
+        """
+        email = (self.email or '').strip()
+        return '' if is_placeholder_email(email) else email
+
+    @property
     def added_by_display(self):
         return self.added_by.name if self.added_by else "N/A"
 
