@@ -9,6 +9,8 @@
   <meta property="og:description" content="Boletim agregado por região: visitas, quarteirões percorridos e focos encontrados. Veja como proteger sua casa em 10 minutos.">
   <meta name="theme-color" content="#0b7a75">
   {% if previa %}<meta name="robots" content="noindex">{% endif %}
+  {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vigilancia_aedes.css') }}">
 </head>

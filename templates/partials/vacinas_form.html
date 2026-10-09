@@ -339,11 +339,11 @@
 
       const base = { nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia };
       if (aplicada && aplicada_em) {
-        const primeiraData = new Date(aplicada_em);
+        const primeiraData = window.PetDateBR.parseDateLocal(aplicada_em);
         for (let i = 0; i < doses_totais; i++) {
           const d = new Date(primeiraData);
           d.setDate(d.getDate() + i * intervalo_dias);
-          const dataStr = d.toISOString().split('T')[0];
+          const dataStr = window.PetDateBR.dateToIso('date', d);
           const aplicadaDose = i === 0;
           vacinas.push({ ...base, aplicada: aplicadaDose, aplicada_em: dataStr, dose_numero: i + 1 });
         }
@@ -376,7 +376,7 @@
         const div = document.createElement('div');
         div.className = 'border p-2 mb-2 bg-light rounded shadow-sm';
         div.innerHTML = `
-          💉 <strong>${v.nome}</strong> — ${v.tipo} ${v.aplicada ? `em ${v.aplicada_em}` : '(não aplicada)'}
+          💉 <strong>${v.nome}</strong> — ${v.tipo} ${v.aplicada ? `em ${window.PetDateBR.toDisplay('date', v.aplicada_em) || v.aplicada_em}` : '(não aplicada)'}
           ${v.fabricante ? ` - ${v.fabricante}` : ''}
           ${v.doses_totais ? ` - dose ${v.dose_numero}/${v.doses_totais}` : ''}
           ${v.intervalo_dias ? ` - intervalo ${v.intervalo_dias}d` : ''}

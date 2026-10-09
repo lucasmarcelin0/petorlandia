@@ -214,6 +214,10 @@
       .wrap { width: min(100% - 1rem, 100%); margin-top: 1rem; }
     }
   </style>
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
 </head>
 <body>
   <main class="wrap">

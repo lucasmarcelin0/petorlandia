@@ -2279,7 +2279,8 @@ function formatDay(value) {
 }
 
 function isOverdue(value) {
-  return value && String(value).slice(0, 10) < new Date().toISOString().slice(0, 10);
+  // Comparar com o "hoje" de UTC marcava itens como vencidos a partir das 21h.
+  return value && String(value).slice(0, 10) < window.PetDateBR.todayIso();
 }
 
 function latestInspectionByEstablishment() {

@@ -63,7 +63,7 @@
         <a class="list-group-item list-group-item-action {% if selected_version and selected_version.id == version.id %}active{% endif %}"
            href="{{ url_for('sfa_routes.historico_instrumentos', versao=version.id, etapa='t0') }}">
           <span class="fw-semibold">{{ version.label }}</span>
-          {% if version.archived_at %}<small class="ms-2">{{ version.archived_at }}</small>{% endif %}
+          {% if version.archived_at %}<small class="ms-2">{{ version.archived_at|data_br }}</small>{% endif %}
         </a>
         {% endfor %}
       </div>

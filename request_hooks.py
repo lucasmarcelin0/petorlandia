@@ -27,6 +27,7 @@ from werkzeug.exceptions import HTTPException, NotFound
 from extensions import db
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 
 def _attach_request_id():
@@ -221,6 +222,11 @@ def handle_csrf_error(err):
     # Uma falha de CSRF pode acontecer após muito tempo com o formulário
     # aberto ou durante uma troca de sessão. Para HTML, devolvemos a pessoa ao
     # próprio formulário em vez de expor uma página técnica "400 Bad Request".
+    return redirect(_back_to_form_target(), code=303)
+
+
+def _back_to_form_target():
+    """Endereço do formulário de onde o envio partiu (mesma origem), ou "/"."""
     redirect_target = None
     if request.referrer:
         parsed_referrer = urlsplit(request.referrer)
@@ -240,7 +246,7 @@ def handle_csrf_error(err):
         rule_methods = getattr(request.url_rule, "methods", None) or set()
         redirect_target = request.path if "GET" in rule_methods else "/"
 
-    return redirect(redirect_target, code=303)
+    return redirect_target
 
 
 def _fresh_csrf_token_response():
@@ -262,7 +268,52 @@ def _fresh_csrf_token_response():
     return response
 
 
+# Dados que o banco exige únicos e que a pessoa digita num formulário. O nome
+# vem do Postgres ("user_email_key"); a segunda forma é a do SQLite dos testes.
+_DADO_DUPLICADO = (
+    (("user_email_key", "user.email"), "Este e-mail já está em uso por outro cadastro."),
+    (("user_cpf_key", "user.cpf"), "Este CPF já está em uso por outro cadastro."),
+)
+
+
+def _mensagem_de_dado_duplicado(err):
+    if not isinstance(err, IntegrityError):
+        return None
+    detalhe = str(getattr(err, "orig", None) or err).lower()
+    if "unique" not in detalhe and "duplicate" not in detalhe:
+        return None
+    for marcas, mensagem in _DADO_DUPLICADO:
+        if any(marca in detalhe for marca in marcas):
+            return mensagem
+    return None
+
+
 def handle_unhandled_exception(err):
+    # E-mail ou CPF repetido não é falha do sistema: é um dado que a pessoa
+    # precisa corrigir. As rotas devem conferir antes de gravar; esta é a rede
+    # para a que esquecer, no lugar de um 500 "erro inesperado" sem pista.
+    duplicado = _mensagem_de_dado_duplicado(err)
+    if duplicado:
+        db.session.rollback()
+        current_app.logger.warning(
+            "duplicate_record",
+            extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
+        )
+        if (
+            request.accept_mimetypes["application/json"]
+            >= request.accept_mimetypes["text/html"]
+        ):
+            payload = {
+                "success": False,
+                "error": "Conflict",
+                "message": duplicado,
+                "category": "warning",
+                "request_id": getattr(g, "request_id", None),
+            }
+            return jsonify(payload), 409
+        flash(duplicado, "warning")
+        return redirect(_back_to_form_target(), code=303)
+
     current_app.logger.exception(
         "unhandled_error",
         extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
@@ -288,7 +339,7 @@ def handle_unhandled_exception(err):
     if wants_json:
         payload = {
             "error": "Internal Server Error",
-            "message": "Unexpected error.",
+            "message": "Erro inesperado. Tente de novo; se continuar, avise o suporte.",
             "request_id": getattr(g, "request_id", None),
         }
         return jsonify(payload), 500
