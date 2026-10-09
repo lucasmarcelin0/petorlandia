@@ -28,7 +28,7 @@
           <h5 class="card-title">Validação de comunicação fiscal</h5>
           <p class="text-muted">Confirma que a integração está preparada para falar com os provedores.</p>
           {% if comm_tested_at %}
-          <div class="alert alert-success">Última validação registrada em {{ comm_tested_at }}.</div>
+          <div class="alert alert-success">Última validação registrada em {{ comm_tested_at|data_br }}.</div>
           {% else %}
           <div class="alert alert-warning">Validação pendente.</div>
           {% endif %}

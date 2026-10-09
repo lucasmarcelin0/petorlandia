@@ -77,18 +77,22 @@
 
             <div class="col-lg-5">
               <label for="tutor-phone" class="form-label">Telefone</label>
+              {# Sem pattern: o banco guarda telefone com e sem máscara e com
+                 +55; quem formata e valida é static/js/campos_br.js. #}
               <input type="tel" id="tutor-phone" name="phone" class="form-control"
-                     placeholder="Apenas numeros"
-                     pattern="[0-9]{10,11}"
-                     value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
-              <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
+                     placeholder="(00) 00000-0000" data-campo-br="telefone"
+                     value="{{ (tutor.phone|telefone_br) if has_tutor and tutor.phone else '' }}">
+              <div class="invalid-feedback">Informe o telefone com DDD (10 ou 11 dígitos)</div>
             </div>
 
             <div class="col-12">
               <label for="tutor-email" class="form-label">E-mail</label>
+              {# Tutor sem e-mail tem um endereço interno não entregável: ele
+                 não aparece no campo e não torna o e-mail obrigatório. #}
               <input type="email" id="tutor-email" name="email" class="form-control"
-                     placeholder="exemplo@email.com" required
-                     value="{{ tutor.email|default('', true) if has_tutor else '' }}">
+                     placeholder="exemplo@email.com"
+                     {% if not has_tutor or tutor.email_informado %}required{% endif %}
+                     value="{{ tutor.email_informado if has_tutor else '' }}">
               <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
             </div>
           </div>
@@ -96,22 +100,21 @@
       </div>
     </div>
 
-    <!-- CPF - Aceita apenas números -->
+    <!-- CPF: com ou sem pontuação (static/js/campos_br.js) -->
     <div class="col-sm-6 col-xl-3">
       <label for="tutor-cpf" class="form-label">CPF</label>
-      <input type="text" id="tutor-cpf" name="cpf" class="form-control" 
-             placeholder="Apenas numeros"
-             pattern="[0-9]{11}"
-             value="{{ tutor.cpf|default('', true) if has_tutor else '' }}">
-      <div class="invalid-feedback">Por favor, insira um CPF válido (11 dígitos)</div>
+      <input type="text" id="tutor-cpf" name="cpf" class="form-control"
+             placeholder="000.000.000-00" data-campo-br="cpf"
+             value="{{ (tutor.cpf|cpf_br) if has_tutor and tutor.cpf else '' }}">
+      <div class="invalid-feedback">Informe o CPF com 11 dígitos</div>
     </div>
 
     <div class="col-sm-6 col-xl-3">
       <label for="tutor-rg" class="form-label">RG</label>
       <input type="text" id="tutor-rg" name="rg" class="form-control"
-             placeholder="Documento de identidade" pattern="[A-Za-z0-9]+"
+             placeholder="Documento de identidade" data-campo-br="rg"
              value="{{ tutor.rg|default('', true) if has_tutor else '' }}">
-      <div class="invalid-feedback">Por favor, insira um RG válido (apenas letras ou números)</div>
+      <div class="invalid-feedback">Informe o RG com letras e números (3 a 20 caracteres)</div>
     </div>
     
     <!-- Data de nascimento + Idade - Com cálculo automático -->
@@ -180,19 +183,8 @@
       }, false);
     });
 
-    // Removidas as máscaras complexas
-    // Agora só permitimos números nesses campos
-    document.getElementById('tutor-phone')?.addEventListener('input', function(e) {
-      this.value = this.value.replace(/\D/g, '');
-    });
-    
-    document.getElementById('tutor-cpf')?.addEventListener('input', function(e) {
-      this.value = this.value.replace(/\D/g, '');
-    });
-    
-    document.getElementById('tutor-rg')?.addEventListener('input', function(e) {
-      this.value = this.value.replace(/[^0-9A-Za-z]/g, '');
-    });
+    // Telefone, CPF e RG são formatados e validados por static/js/campos_br.js
+    // (data-campo-br), que aceita o valor com ou sem máscara.
 
     // Cálculo de idade
     function calcularIdadeTutor() {
@@ -201,7 +193,13 @@
       
       if (dataNasc) {
         const hoje = new Date();
-        const nascimento = new Date(dataNasc);
+        // `new Date('2026-09-22')` é meia-noite em UTC, ou seja, 21h do dia
+        // anterior no Brasil: a idade subia um dia antes do aniversário.
+        const nascimento = window.PetDateBR.parseDateLocal(dataNasc);
+        if (!nascimento) {
+          idadeInput.value = '';
+          return;
+        }
         let idade = hoje.getFullYear() - nascimento.getFullYear();
         const mes = hoje.getMonth() - nascimento.getMonth();
         
@@ -345,7 +343,11 @@
     
     if (dataNascimento) {
       const hoje = new Date();
-      const nascimento = new Date(dataNascimento);
+      const nascimento = window.PetDateBR.parseDateLocal(dataNascimento);
+      if (!nascimento) {
+        campoIdade.value = "";
+        return;
+      }
       let idade = hoje.getFullYear() - nascimento.getFullYear();
       
       // Ajuste para caso ainda não tenha feito aniversário este ano

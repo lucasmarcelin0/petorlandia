@@ -57,16 +57,16 @@
           </div>
           <p class="text-muted mb-3">Dados completos, contatos e histórico de animais deste tutor.</p>
           <div class="d-flex flex-wrap gap-2 mb-3 tutor-chips">
-            {% if tutor.email and not tutor.email_is_placeholder %}
-              <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email }}</span>
+            {% if tutor.email_informado %}
+              <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email_informado }}</span>
             {% else %}
               <span class="chip text-muted"><i class="fas fa-envelope-open"></i> Sem e-mail informado</span>
             {% endif %}
             {% if tutor.phone %}
-              <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone }}</span>
+              <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone|telefone_br }}</span>
             {% endif %}
             {% if tutor.cpf %}
-              <span class="chip"><i class="fas fa-id-card"></i> CPF {{ tutor.cpf }}</span>
+              <span class="chip"><i class="fas fa-id-card"></i> CPF {{ tutor.cpf|cpf_br }}</span>
             {% endif %}
           </div>
           <div class="d-flex flex-wrap gap-3">
@@ -129,22 +129,31 @@
             </div>
             <div class="col-md-4">
               <label class="form-label" for="tutor-email">E‑mail</label>
-              <input id="tutor-email" name="email" type="email" class="form-control" value="{{ '' if tutor.email_is_placeholder else (tutor.email or '') }}">
+              <input id="tutor-email" name="email" type="email" class="form-control" value="{{ tutor.email_informado }}">
+              <div class="invalid-feedback">Informe um e-mail válido</div>
             </div>
             <div class="col-md-4">
               <label class="form-label" for="tutor-phone">Telefone</label>
-              <input id="tutor-phone" name="phone" class="form-control" value="{{ tutor.phone or '' }}"
-                     data-mask="(99) 99999-9999" pattern="\(\d{2}\) \d{5}-\d{4}">
+              {# Sem pattern nem data-mask: o banco guarda telefone, CPF e RG
+                 com e sem máscara. Quem formata e valida é
+                 static/js/campos_br.js, que aceita as duas formas. #}
+              <input id="tutor-phone" name="phone" type="tel" class="form-control"
+                     value="{{ (tutor.phone|telefone_br) if tutor.phone else '' }}"
+                     placeholder="(00) 00000-0000" data-campo-br="telefone">
+              <div class="invalid-feedback">Informe o telefone com DDD (10 ou 11 dígitos)</div>
             </div>
             <div class="col-md-4">
               <label class="form-label" for="tutor-cpf">CPF</label>
-              <input id="tutor-cpf" name="cpf" class="form-control" value="{{ tutor.cpf or '' }}"
-                     data-mask="999.999.999-99" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}">
+              <input id="tutor-cpf" name="cpf" class="form-control"
+                     value="{{ (tutor.cpf|cpf_br) if tutor.cpf else '' }}"
+                     placeholder="000.000.000-00" data-campo-br="cpf">
+              <div class="invalid-feedback">Informe o CPF com 11 dígitos</div>
             </div>
             <div class="col-md-4">
               <label class="form-label" for="tutor-rg">RG</label>
               <input id="tutor-rg" name="rg" class="form-control" value="{{ tutor.rg or '' }}"
-                     data-mask="99.999.999-9" pattern="\d{2}\.\d{3}\.\d{3}-\d">
+                     data-campo-br="rg">
+              <div class="invalid-feedback">Informe o RG com letras e números (3 a 20 caracteres)</div>
             </div>
             <div class="col-md-4">
               <label class="form-label" for="tutor_dob">Data de Nascimento</label>

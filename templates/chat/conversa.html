@@ -21,7 +21,7 @@ async function loadMessages() {
         wrapper.innerHTML = `<div class="p-2 rounded ${m.sender_id === currentUserId ? 'bg-info-subtle' : 'bg-light'}">
             <small>${m.sender_id === currentUserId ? 'Você' : 'Eles'}:</small><br>
             ${m.content}
-            <div class="text-muted small">${new Date(m.timestamp).toLocaleString()}</div>
+            <div class="text-muted small">${new Date(m.timestamp).toLocaleString('pt-BR')}</div>
         </div>`;
         container.appendChild(wrapper);
     });

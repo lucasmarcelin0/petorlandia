@@ -10,6 +10,7 @@
 </div>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/dist/index.global.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales/pt-br.global.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('{{ calendar_dom_id }}');
@@ -27,6 +28,7 @@
       console.warn('Não foi possível carregar os eventos do calendário da clínica.', error);
     }
     var calendar = new FullCalendar.Calendar(calendarEl, {
+      locale: 'pt-br',
       initialView: 'dayGridMonth',
       height: 'auto',
       events: events,

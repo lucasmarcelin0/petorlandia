@@ -40,9 +40,14 @@ from flask import (
     current_app,
 )
 from flask_login import current_user
+from template_filters import data_br
 
 bp = Blueprint("sfa_routes", __name__, url_prefix="/sfa",
                template_folder="../templates/sfa")
+
+# Os testes do SFA montam um Flask cru só com este blueprint, sem a factory:
+# filtro usado em template do SFA precisa estar registrado aqui também.
+bp.add_app_template_filter(data_br, "data_br")
 
 
 def get_blueprint():

@@ -51,6 +51,7 @@
 {% if include_assets|default(True) %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/dist/index.global.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales/pt-br.global.min.js"></script>
 {% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -644,6 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   calendar = new FullCalendar.Calendar(calendarEl, {
+    locale: 'pt-br',
     initialView: 'dayGridMonth',
     selectable: true,
     selectMirror: true,

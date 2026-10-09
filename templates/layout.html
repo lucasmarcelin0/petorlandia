@@ -72,6 +72,12 @@
      CSRF em fetch/XHR mutantes same-origin. Sem isto, chamadas AJAX que
      esquecem o header levam 400 e falham em silencio. #}
   <script src="{{ url_for('static', filename='csrf_fetch.js', v='2') }}"></script>
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
+  {# CPF, telefone e RG: máscara que aceita o valor com ou sem pontuação. #}
+  <script src="{{ url_for('static', filename='js/campos_br.js', v='20261009') }}" defer></script>
 
   <link href="{{ url_for('static', filename='vendor/poppins/style.css', v='1') }}" rel="stylesheet">
 
@@ -637,7 +643,6 @@
   {% endif %}
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
   {% if current_user.is_authenticated %}
-  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
   <script src="{{ url_for('static', filename='js/search_filters.js') }}" defer></script>
   {% endif %}
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>

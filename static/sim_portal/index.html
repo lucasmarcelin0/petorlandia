@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal SIM Orlandia</title>
     <link rel="stylesheet" href="./styles.css" />
+    <!-- Datas e horas sempre no padrao brasileiro; sem defer porque o app.js
+         usa window.PetDateBR ja durante a montagem da tela. -->
+    <script src="/static/js/date_br.js?v=20260922"></script>
+    <script type="module" src="/static/js/time24.js"></script>
   </head>
   <body>
     <div id="app"></div>

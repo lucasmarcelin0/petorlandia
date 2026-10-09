@@ -10,8 +10,8 @@
           <div class="card-body">
             <h3 class="h6 mb-2">{{ tutor.name }}</h3>
             <dl class="small mb-3">
-              {% if tutor.cpf %}<div><dt class="visually-hidden">CPF</dt><dd class="mb-1">CPF: {{ tutor.cpf }}</dd></div>{% endif %}
-              {% if tutor.phone %}<div><dt class="visually-hidden">Telefone</dt><dd class="mb-1">Telefone: {{ tutor.phone }}</dd></div>{% endif %}
+              {% if tutor.cpf %}<div><dt class="visually-hidden">CPF</dt><dd class="mb-1">CPF: {{ tutor.cpf|cpf_br }}</dd></div>{% endif %}
+              {% if tutor.phone %}<div><dt class="visually-hidden">Telefone</dt><dd class="mb-1">Telefone: {{ tutor.phone|telefone_br }}</dd></div>{% endif %}
               {% if tutor.email and not tutor.email_is_placeholder %}<div><dt class="visually-hidden">E-mail</dt><dd class="mb-1 text-break">{{ tutor.email }}</dd></div>{% endif %}
               {% if tutor.address %}<div><dt class="visually-hidden">Endereço</dt><dd class="mb-0 text-break">{{ tutor.address }}</dd></div>{% endif %}
             </dl>
