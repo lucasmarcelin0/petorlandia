@@ -95,6 +95,10 @@ def test_bulario_search_and_filter_a11y():
     assert 'aria-label="Limpar busca"' in content
     assert 'aria-expanded=' in content
     assert 'aria-controls="drawer-' in content
+    assert 'aria-label="Para cães"' in content
+    assert 'aria-label="Para gatos"' in content
+    assert '<i class="fas fa-dog" aria-hidden="true"></i>' in content
+    assert '<i class="fas fa-cat" aria-hidden="true"></i>' in content
 
 
 def test_form_macros_accessibility_attributes():
