@@ -64,8 +64,9 @@
     <div class="d-flex align-items-center gap-2">
       <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Painel operacional</a>
       <button type="button" id="pmo-refresh" class="btn btn-outline-primary"
-              title="Relê a planilha agora, ignorando o cache de alguns minutos">
-        <i class="fa-solid fa-rotate me-1"></i>Atualizar
+              title="Relê a planilha agora, ignorando o cache de alguns minutos"
+              aria-label="Atualizar dados da planilha">
+        <i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Atualizar
       </button>
     </div>
   </div>
@@ -100,12 +101,12 @@
     </div>
   </div>
 
-  <div class="pmo-vac-filters mb-3" id="pmo-vac-filters">
-    <button type="button" class="btn btn-sm btn-primary pmo-vac-filter" data-status="todos">Todos</button>
-    <button type="button" class="btn btn-sm btn-outline-success pmo-vac-filter" data-status="protected">Protegidos</button>
-    <button type="button" class="btn btn-sm btn-outline-warning pmo-vac-filter" data-status="expiring">Expirando</button>
-    <button type="button" class="btn btn-sm btn-outline-danger pmo-vac-filter" data-status="expired">Expirados</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary pmo-vac-filter" data-status="sem_data">Sem data</button>
+  <div class="pmo-vac-filters mb-3" id="pmo-vac-filters" role="group" aria-label="Filtrar por status de vacinação">
+    <button type="button" class="btn btn-sm btn-primary pmo-vac-filter" data-status="todos" aria-label="Filtrar por todos os status">Todos</button>
+    <button type="button" class="btn btn-sm btn-outline-success pmo-vac-filter" data-status="protected" aria-label="Filtrar por animais protegidos">Protegidos</button>
+    <button type="button" class="btn btn-sm btn-outline-warning pmo-vac-filter" data-status="expiring" aria-label="Filtrar por animais com proteção expirando">Expirando</button>
+    <button type="button" class="btn btn-sm btn-outline-danger pmo-vac-filter" data-status="expired" aria-label="Filtrar por animais com proteção expirada">Expirados</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary pmo-vac-filter" data-status="sem_data" aria-label="Filtrar por animais sem data de vacinação">Sem data</button>
   </div>
 
   <div id="pmo-vac-reconcile" class="alert alert-light border small d-none"></div>
@@ -244,14 +245,14 @@
       ? ''
       : '<span class="pmo-vac-badge" style="background:#e0e7ff;color:#3730a3;">dose anterior</span>';
     const ficha = animal.profile_url
-      ? `<a href="${esc(animal.profile_url)}" class="btn btn-outline-primary"><i class="fa-solid fa-file-medical me-1"></i>Ficha</a>`
+      ? `<a href="${esc(animal.profile_url)}" class="btn btn-outline-primary" aria-label="Ver ficha clínica de ${esc(animal.animal_name)}"><i class="fa-solid fa-file-medical me-1" aria-hidden="true"></i>Ficha</a>`
       : '';
     const carteirinha = animal.card_url
-      ? `<a href="${esc(animal.card_url)}" class="btn btn-outline-secondary" target="_blank" rel="noopener"><i class="fa-solid fa-id-card me-1"></i>Carteirinha</a>`
+      ? `<a href="${esc(animal.card_url)}" class="btn btn-outline-secondary" target="_blank" rel="noopener" aria-label="Ver carteirinha de vacinação de ${esc(animal.animal_name)}"><i class="fa-solid fa-id-card me-1" aria-hidden="true"></i>Carteirinha</a>`
       : '';
     const zap = animal.phone_wa
       ? `<a href="https://wa.me/${encodeURIComponent(animal.phone_wa)}?text=${encodeURIComponent(animal.wa_msg)}"
-            target="_blank" rel="noopener" class="btn btn-outline-success"><i class="fa-brands fa-whatsapp me-1"></i>Avisar</a>`
+            target="_blank" rel="noopener" class="btn btn-outline-success" aria-label="Avisar ${esc(animal.tutor)} pelo WhatsApp sobre a vacina de ${esc(animal.animal_name)}"><i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>Avisar</a>`
       : '';
 
     return `
