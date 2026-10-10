@@ -44,3 +44,7 @@
 **Prevention:** Never pass raw `request.referrer` to `redirect()`.
 
 
+## 2026-10-09 - Maintainer triage: fix vulnerability classes repo-wide, with a guard
+**Vulnerability:** Not a new vulnerability: a process learning from the 2026-10-09 triage, in which the maintainer closed 23 of the 24 open Sentinel PRs.
+**Learning:** Most fixes were already on `main`, and several PRs fixed one file while the same pattern stayed open in other blueprints. SSRF checks on hardcoded URLs (Nominatim, Google Geocoding) were rejected again: validating a constant prevents nothing and adds a failure path.
+**Prevention:** Read `.jules/protocol.md` sections 4 to 6 before every session. Fix a class across the whole repository in one PR and add a static guard test in `tests/` that fails when the pattern returns. Pick work from section 6.1. If nothing there applies, end the session without a PR.
