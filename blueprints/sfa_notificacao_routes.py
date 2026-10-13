@@ -9,7 +9,7 @@ import re
 from functools import wraps
 
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
 _CAMPO = re.compile(r"[a-z0-9_]{1,80}")
 
@@ -80,9 +80,14 @@ def register(bp):
     def _inject_notificacao():
         return {'sfa_acesso_notificacao': usuario_pode_acessar, 'sfa_notificacao_admin': usuario_administra}
 
-    def _ficha_ou_404(ficha_id):
+    def ensure_ficha_da_unidade(ficha_id):
+        """A ficha, se é de uma unidade ao alcance da conta; senão 404, sem revelar que ela existe."""
         from services.sfa_notificacao import ficha_visivel
         return ficha_visivel(current_user, ficha_id) or abort(404)
+
+    def ensure_unidade_da_conta(unidades, unidade_id):
+        """A unidade pedida, se a conta pode registrar em nome dela (a única, quando nenhuma foi pedida)."""
+        return next((u for u in unidades if unidade_id in (None, u.id)), None) or abort(404)
 
     def _formulario(schema, submitted, form_action, contexto, error='', error_field=''):
         return _sem_cache(render_template('sfa/pre_t0_form.html', schema=schema, error=error,
@@ -92,6 +97,7 @@ def register(bp):
     # ------------------------------------------------------------------ fichas da unidade
     @bp.route('/notificacao')
     @require_notificacao_access
+    @login_required
     def notificacao_fichas():
         from services.sfa_notificacao import listar_fichas, unidades_para_registrar
 
@@ -108,6 +114,7 @@ def register(bp):
     # ------------------------------------------------------------------ nova ficha
     @bp.route('/notificacao/ficha', methods=['GET', 'POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_nova():
         from services.sfa_notificacao import ficha_ja_registrada, ficha_visivel, nome_da_conta, unidades_para_registrar
         from services.sfa_pre_t0 import CampoInvalido, carregar_esquema_pre_t0, coletar_respostas_pre_t0, salvar_ficha_pre_t0
@@ -120,7 +127,7 @@ def register(bp):
         unidade_id = request.args.get('unidade', type=int)
         if unidade_id is None and len(unidades) > 1:
             return _sem_cache(render_template('sfa/notificacao_escolher.html', unidades=unidades))
-        unidade = next((u for u in unidades if unidade_id in (None, u.id)), None) or abort(404)
+        unidade = ensure_unidade_da_conta(unidades, unidade_id)
 
         schema = carregar_esquema_pre_t0()
         acao = url_for('sfa_routes.notificacao_nova', unidade=unidade.id)
@@ -160,6 +167,7 @@ def register(bp):
     # ------------------------------------------------------------------ uma ficha
     @bp.route('/notificacao/fichas/<int:ficha_id>')
     @require_notificacao_access
+    @login_required
     def notificacao_ficha(ficha_id):
         from extensions import db
         from models import User
@@ -167,7 +175,7 @@ def register(bp):
                                               pode_completar)
         from services.sfa_pre_t0 import carregar_esquema_pre_t0, obter_ficha_do_log
 
-        log_entry = _ficha_ou_404(ficha_id)
+        log_entry = ensure_ficha_da_unidade(ficha_id)
         schema = carregar_esquema_pre_t0()
         ficha = obter_ficha_do_log(log_entry, schema)
         faltam = pendencias(ficha['respostas'], schema)
@@ -188,12 +196,13 @@ def register(bp):
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/completar', methods=['GET', 'POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_completar(ficha_id):
         from services.sfa_notificacao import pendencias, pendencias_por_grupo, pode_completar
         from services.sfa_pre_t0 import (atualizar_ficha_pre_t0, carregar_esquema_pre_t0, coletar_respostas_pre_t0,
                                          obter_ficha_do_log, respostas_para_formulario)
 
-        log_entry = _ficha_ou_404(ficha_id)
+        log_entry = ensure_ficha_da_unidade(ficha_id)
         if not pode_completar(current_user, log_entry):
             abort(404)
         schema = carregar_esquema_pre_t0()
@@ -224,11 +233,12 @@ def register(bp):
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/imprimir')
     @require_notificacao_access
+    @login_required
     def notificacao_imprimir(ficha_id):
         """Ficha na disposição da folha oficial do SINAN, pronta para imprimir."""
         from services.sfa_pre_t0 import montar_folha_pre_t0, obter_ficha_do_log
 
-        log_entry = _ficha_ou_404(ficha_id)
+        log_entry = ensure_ficha_da_unidade(ficha_id)
         ficha = obter_ficha_do_log(log_entry)
         return _sem_cache(render_template(
             'sfa/pre_t0_print.html', folha=montar_folha_pre_t0(ficha['respostas']),
@@ -238,6 +248,7 @@ def register(bp):
     # ------------------------------------------------------------------ panorama
     @bp.route('/notificacao/panorama')
     @require_notificacao_access
+    @login_required
     def notificacao_panorama():
         from services.sfa_notificacao import panorama, unidades_do_usuario
         from services.sfa_workflow import hoje_local
@@ -254,6 +265,7 @@ def register(bp):
 
     @bp.route('/notificacao/unidades')
     @require_notificacao_access
+    @login_required
     def notificacao_unidades():
         ensure_notificacao_admin()
         from models.sfa import SfaUnidadeSaude
@@ -262,6 +274,7 @@ def register(bp):
 
     @bp.route('/notificacao/unidades', methods=['POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_unidade_criar():
         ensure_notificacao_admin()
         from extensions import db
@@ -279,6 +292,7 @@ def register(bp):
 
     @bp.route('/notificacao/unidades/<int:unidade_id>', methods=['POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_unidade_editar(unidade_id):
         ensure_notificacao_admin()
         from extensions import db
@@ -300,6 +314,7 @@ def register(bp):
 
     @bp.route('/notificacao/unidades/<int:unidade_id>/responsaveis', methods=['POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_responsavel_conceder(unidade_id):
         ensure_notificacao_admin()
         from extensions import db
@@ -324,6 +339,7 @@ def register(bp):
 
     @bp.route('/notificacao/responsaveis/<int:vinculo_id>/revogar', methods=['POST'])
     @require_notificacao_access
+    @login_required
     def notificacao_responsavel_revogar(vinculo_id):
         ensure_notificacao_admin()
         from extensions import db
