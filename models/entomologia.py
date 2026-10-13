@@ -96,3 +96,52 @@ class EntomologiaAtlasArtefato(db.Model):
     formato = db.Column(db.String(40), nullable=False, default='')   # INDEX_FORMAT de quem gravou
     bytes_crus = db.Column(db.Integer, nullable=False, default=0)
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class EntomologiaQuarteiraoTrabalho(db.Model):
+    """Estado de planejamento e trabalho dos quarteirões pela equipe de campo."""
+    __tablename__ = "entomologia_quarteirao_trabalho"
+    __table_args__ = (
+        db.UniqueConstraint("setor", "quarteirao", "ciclo", name="uq_entomologia_quarteirao_ciclo"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    setor = db.Column(db.String(20), nullable=False, index=True)
+    quarteirao = db.Column(db.String(20), nullable=False, index=True)
+    ciclo = db.Column(db.String(40), nullable=False, default="vigente", index=True)
+    cor = db.Column(db.String(30))
+    responsavel = db.Column(db.String(160))
+    status = db.Column(db.String(30), nullable=False, default="PLANEJADO", index=True)  # PLANEJADO, EM_ANDAMENTO, TRABALHADO
+    trabalhado_em = db.Column(db.DateTime(timezone=True))
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class EntomologiaVisitaDomiciliar(db.Model):
+    """Visita casa a casa registrada pelo agente (online ou sincronizada do modo offline)."""
+    __tablename__ = "entomologia_visita_domiciliar"
+    __table_args__ = (
+        db.UniqueConstraint("uuid_local", name="uq_entomologia_visita_uuid"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    uuid_local = db.Column(db.String(64), nullable=False, index=True)
+    setor = db.Column(db.String(20), nullable=False, index=True)
+    quarteirao = db.Column(db.String(20), nullable=False, index=True)
+    logradouro = db.Column(db.String(200))
+    numero = db.Column(db.String(50))
+    cnefe_id = db.Column(db.String(100), index=True)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    situacao = db.Column(db.String(30), nullable=False, default="ABERTA")  # ABERTA, FECHADA, RECUSA, DESABITADO
+    criadouros_json = db.Column(db.Text)  # lista JSON dos tipos de recipientes encontrados: ["A1", "B", ...]
+    larvas_encontradas = db.Column(db.Boolean, nullable=False, default=False)
+    larvas_quantidade_tubitos = db.Column(db.Integer, default=0)
+    larvas_especie = db.Column(db.String(50))
+    agente = db.Column(db.String(160))
+    data_visita = db.Column(db.Date)
+    horario_visita = db.Column(db.DateTime(timezone=True))
+    observacao = db.Column(db.Text)
+    sincronizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
