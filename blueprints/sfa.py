@@ -2061,8 +2061,11 @@ def pre_t0_ficha():
             return page_response("sfa/pre_t0_submitted.html")
         try:
             answers = coletar_respostas_pre_t0(request.form, schema)
-            salvar_ficha_pre_t0(answers)
-            return page_response("sfa/pre_t0_submitted.html")
+            saved = salvar_ficha_pre_t0(answers)
+            return page_response(
+                "sfa/pre_t0_submitted.html",
+                print_url=url_for("sfa_routes.paciente_pre_t0_imprimir", id_estudo=saved["id_estudo"]),
+            )
         except ValueError as exc:
             error = str(exc)
             error_field = getattr(exc, "campo", "")
@@ -2411,6 +2414,32 @@ def paciente_pre_t0_ficha(id_estudo: str):
         "sfa/pre_t0_detail.html",
         p=paciente,
         ficha=ficha,
+    ))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@bp.route("/paciente/<id_estudo>/ficha-pre-t0/imprimir")
+@require_sfa_internal_access
+def paciente_pre_t0_imprimir(id_estudo: str):
+    """Ficha digital na disposição da folha oficial do SINAN, pronta para imprimir."""
+    from models.sfa import SfaPaciente
+    from services.sfa_pre_t0 import montar_folha_pre_t0, obter_ficha_pre_t0
+
+    SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    ficha = obter_ficha_pre_t0(id_estudo)
+    if ficha is None:
+        abort(404)
+    response = current_app.make_response(render_template(
+        "sfa/pre_t0_print.html",
+        folha=montar_folha_pre_t0(ficha["respostas"]),
+        recebida_em=ficha["submitted_at"],
+        voltar_url=url_for("sfa_routes.paciente_pre_t0_ficha", id_estudo=id_estudo),
+        voltar_rotulo="Voltar à ficha",
+        simulacao=None,
+        oculto="",
     ))
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Referrer-Policy"] = "no-referrer"

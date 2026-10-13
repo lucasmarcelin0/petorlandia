@@ -610,5 +610,133 @@ def obter_ficha_pre_t0(id_estudo: str) -> dict | None:
             "version": full_form.get("versao", ""),
             "submitted_at": timestamp.strftime("%d/%m/%Y %H:%M") if timestamp else "",
             "ficha_sinan": log_entry.ficha_sinan or "",
+            "respostas": answers,
         }
     return None
+
+
+# ---------------------------------------------------------------------------
+# Folha para impressão, na disposição da ficha oficial
+# ---------------------------------------------------------------------------
+
+# Casas dos "pentes" da folha: (mínimo, máximo). Valor mais longo, ou com algo além de
+# dígitos, sai escrito por extenso no mesmo espaço em vez de ser cortado.
+_CASAS_CODIGO = {
+    "codigo_municipio_notificacao": (6, 7), "codigo_municipio_residencia": (6, 7),
+    "codigo_municipio_hospital": (6, 7), "codigo_municipio_local_infeccao": (6, 7),
+    "codigo_unidade_notificante": (7, 7), "codigo_hospital": (7, 7), "investigador__codigo_unidade": (7, 7),
+    "codigo_logradouro": (5, 6), "cartao_sus": (15, 15), "cep": (8, 8),
+    "telefone": (10, 11), "telefone_hospital": (10, 11),
+}
+_CASAS_UF = {"uf_notificacao", "uf_residencia", "uf_hospital", "uf_local_infeccao"}
+_DATA_FOLHA = re.compile(r"\d{2}/\d{2}/\d{4}")
+# Observações: (linhas por pauta da folha, caracteres por linha). A letra diminui antes de o texto ser cortado.
+_DENSIDADES_OBSERVACOES = ((1, 108), (2, 138), (3, 168))
+_PAUTAS_OBSERVACOES = 9
+
+
+def _casas(valor: object, minimo: int, maximo: int, *, letras: bool = False, direita: bool = False) -> list[str] | str:
+    texto = str(valor or "").strip()
+    compacto = _SEPARADORES_NUMERICOS.sub("", texto)
+    cabe = (compacto.isalpha() if letras else compacto.isdigit()) and len(compacto) <= maximo
+    if texto and not cabe:
+        return texto
+    vazias = [""] * (minimo - len(compacto))
+    return vazias + list(compacto) if direita else list(compacto) + vazias
+
+
+def _casas_data(valor: object) -> list[str] | str:
+    texto = str(valor or "").strip()
+    if not texto:
+        return [""] * 8
+    return list(texto.replace("/", "")) if _DATA_FOLHA.fullmatch(texto) else texto
+
+
+def _codigos_dos_sinais(status: str, marcados: set[str], itens: list[str]) -> dict[str, str]:
+    """A folha tem uma casa por sinal; a ficha digital guarda a resposta geral e os sinais marcados."""
+    demais = {"1": "2" if marcados else "", "2": "2", "9": "9"}.get(status, "")
+    return {item: "1" if item in marcados else demais for item in itens}
+
+
+def montar_folha_pre_t0(answers: dict, schema: dict | None = None) -> dict:
+    """Respostas na forma em que a folha oficial as recebe: texto, código da opção e casas de data ou de código."""
+    schema = schema or carregar_esquema_pre_t0()
+    valores: dict[str, object] = {}
+    legendas: dict[str, list[str]] = {}
+    itens: dict[str, list] = {}
+
+    def texto(value: object) -> str:
+        return str(value or "").strip()
+
+    def grupo(key: str) -> dict:
+        value = answers.get(key)
+        return value if isinstance(value, dict) else {}
+
+    def escrito(key: str, value: object) -> object:
+        if key in _CASAS_CODIGO:
+            return _casas(value, *_CASAS_CODIGO[key])
+        if key in _CASAS_UF:
+            return _casas(value, 2, 2, letras=True)
+        return texto(value)
+
+    for section in schema["sections"]:
+        for field in section["fields"]:
+            key, kind, number = field["key"], field["type"], field["number"]
+            if number and field.get("options"):
+                legendas[number] = [option["label"] for option in field["options"]]
+            if kind == "fixed":
+                valores[key] = field["value"]
+            elif kind in {"text", "tel", "textarea"}:
+                valores[key] = escrito(key, answers.get(key))
+            elif kind == "date":
+                valores[key] = _casas_data(answers.get(key))
+            elif kind == "radio":
+                valores[key] = texto(answers.get(key))
+            elif kind == "paired_text":
+                valores[key] = texto(grupo(key).get("valor"))
+                valores[field["extra_key"]] = escrito(field["extra_key"], grupo(key).get("codigo"))
+            elif kind == "age":
+                legendas[number] = [option["label"] for option in field["units"]]
+                valores["idade_valor"] = _casas(grupo(key).get("valor"), 3, 4, direita=True)
+                valores["idade_unidade"] = texto(grupo(key).get("unidade"))
+            elif kind == "matrix":
+                itens[key] = list(field["items"])
+                for item_key, _label in field["items"]:
+                    valores[f"{key}__{item_key}"] = texto(grupo(key).get(item_key))
+            elif kind == "test_result":
+                itens[key] = list(field["samples"])
+                por_exame = grupo(key).get("resultados") if isinstance(grupo(key).get("resultados"), dict) else {}
+                amostras = grupo(key).get("amostras") or []
+                for sample_key, _label in field["samples"]:
+                    # Fichas antigas guardavam um só resultado para as amostras marcadas.
+                    antigo = grupo(key).get("resultado") if sample_key in amostras else ""
+                    valores[f"{key}__{sample_key}"] = texto(por_exame.get(sample_key) or antigo)
+            elif kind in {"flag_matrix", "severity"}:
+                marcas = grupo(key).get("sinais_marcados") or []
+                if kind == "severity":
+                    itens[key] = [(group_label, list(items)) for group_label, items in field["groups"]]
+                    chaves = [item_key for _group, items in field["groups"] for item_key, _label in items]
+                    marcados = {item for item, flag in marcas.items() if flag == "1"} if isinstance(marcas, dict) else set()
+                    valores["outros_orgaos_especificar"] = texto(grupo(key).get("outros_orgaos_especificar"))
+                else:
+                    itens[key] = list(field["items"])
+                    chaves = [item_key for item_key, _label in field["items"]]
+                    marcados = {str(item) for item in marcas} if isinstance(marcas, list) else set()
+                valores[key] = texto(grupo(key).get("status"))
+                for item_key, code in _codigos_dos_sinais(valores[key], marcados, chaves).items():
+                    valores[f"{key}__{item_key}"] = code
+            elif kind == "investigator":
+                for item_key, _label, _maximum in field["items"]:
+                    valores[f"{key}__{item_key}"] = escrito(f"{key}__{item_key}", grupo(key).get(item_key))
+            else:
+                raise RuntimeError(f"Campo SINAN sem lugar na folha impressa: {number or key}")
+
+    observacoes = str(valores.get("observacoes_adicionais") or "")
+    densidade = _DENSIDADES_OBSERVACOES[-1][0]
+    for linhas_por_pauta, por_linha in _DENSIDADES_OBSERVACOES:
+        linhas = sum(max(1, -(-len(paragrafo) // por_linha)) for paragrafo in observacoes.splitlines())
+        if linhas <= _PAUTAS_OBSERVACOES * linhas_por_pauta:
+            densidade = linhas_por_pauta
+            break
+    return {"definicoes": schema["definitions"], "valores": valores, "legendas": legendas, "itens": itens,
+            "pautas": _PAUTAS_OBSERVACOES, "densidade_observacoes": densidade}
