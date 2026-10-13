@@ -52,6 +52,7 @@ _TOLERANCIA_M = 30.0     # ponto na calçada, logo fora do polígono, ainda é d
 _lock = threading.Lock()
 _memo: dict = {}
 _VALIDADE_S = 600
+_CONFERIR_S = 30         # de quanto em quanto tempo olhar se o atlas mudou
 
 
 # ---------------------------------------------------------------------------
@@ -85,14 +86,20 @@ def esquecer_base() -> None:
 
 def base() -> dict:
     """Quarteirões e imóveis prontos para o aparelho; refeita quando o atlas muda."""
-    chave, agora = _assinatura(), time.monotonic()
+    agora = time.monotonic()
+    with _lock:
+        pronto = _memo.get("base")
+        if pronto and agora - pronto["conferido"] < _CONFERIR_S:
+            return pronto["dados"]
+    chave = _assinatura()
     with _lock:
         pronto = _memo.get("base")
         if pronto and pronto["chave"] == chave and (chave is not None or agora - pronto["em"] < _VALIDADE_S):
+            pronto["conferido"] = agora
             return pronto["dados"]
     dados = _montar_base()
     with _lock:
-        _memo["base"] = {"chave": chave, "em": agora, "dados": dados}
+        _memo["base"] = {"chave": chave, "em": agora, "conferido": agora, "dados": dados}
         _memo.pop("indice", None)
     return dados
 
@@ -543,6 +550,11 @@ def _csv(cabecalho: list[str], linhas) -> str:
     return saida.getvalue()
 
 
+def _texto_de_planilha(valor) -> str:
+    texto = " ".join(str(valor or "").split())
+    return "'" + texto if texto[:1] in ("=", "+", "-", "@") else texto
+
+
 def visitas_csv(inicio: date, fim: date) -> str:
     """Uma linha por visita, com todos os campos registrados na rua."""
     sim = lambda valor: "SIM" if valor else "NAO"
@@ -551,10 +563,11 @@ def visitas_csv(inicio: date, fim: date) -> str:
          "REC. EXIST.", "REC. AGUA", "REC. LARVA", "IM. LARVA", "TUBITOS", "IM MECANICO", "IM ALTERNATIVO",
          "IM FOCAL", "RECUPERACAO", "AGENTE", "OBSERVACAO"],
         ([v.data_visita.isoformat(), (_iso(v.horario_visita) or "")[11:16], v.setor, v.quarteirao,
-          v.logradouro or "", v.numero or "", v.complemento or "", SITUACOES.get(v.situacao, v.situacao),
+          _texto_de_planilha(v.logradouro), v.numero or "", _texto_de_planilha(v.complemento),
+          SITUACOES.get(v.situacao, v.situacao),
           v.recipientes_existentes, v.recipientes_agua, v.recipientes_larva, sim(v.larvas_encontradas), v.tubitos,
           sim(v.controle_mecanico), sim(v.controle_alternativo), sim(v.tratamento_focal), sim(v.recuperacao),
-          v.agente or "", " ".join((v.observacao or "").split())]
+          _texto_de_planilha(v.agente), _texto_de_planilha(v.observacao)]
          for v in _visitas_do_periodo(inicio, fim)))
 
 

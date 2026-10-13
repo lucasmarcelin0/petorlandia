@@ -305,6 +305,9 @@ def test_boletim_usa_as_colunas_do_arquivo_oficial(client, base):
     assert texto.splitlines()[0].lstrip('﻿').startswith('DATA;SETOR;QUARTEIRAO;IM TRAB;IM FECH') and len(texto.splitlines()) == 2
     visitas = client.get(RAIZ + '/visitas.csv', **HTTPS).get_data(as_text=True).splitlines()
     assert len(visitas) == 5 and 'Trabalhado' in visitas[2] and 'Ana Agente' in visitas[1]
+    # Texto digitado na rua não vira fórmula na planilha.
+    enviar(client, visita(base['a'], '1002', 'FECHADO', 'visita-b5', observacao='=SOMA(A1:A9)'))
+    assert ";'=SOMA(A1:A9)" in client.get(RAIZ + '/visitas.csv', **HTTPS).get_data(as_text=True)
     assert client.get(RAIZ + '/boletim.csv?inicio=2026-13-40', **HTTPS).status_code == 400
 
 

@@ -715,7 +715,7 @@
     return [h('section', { class: 'cac-cartao' }, h('h2', {}, 'Equipe hoje'),
       ativos.length ? ativos.map((a, posicao) => h('div', { class: 'cac-placar' + (eu() && a.id === eu().id ? ' eu' : '') },
         h('span', { class: 'cac-posicao' }, ['🥇', '🥈', '🥉'][posicao] || String(posicao + 1)),
-        h('div', { class: 'cac-linha-meio' }, h('strong', {}, a.nome || eu().nome), barra(Math.round(100 * a.hoje / maior))),
+        h('div', { class: 'cac-linha-meio' }, h('strong', {}, a.nome || (eu() && eu().nome) || 'Sem nome'), barra(Math.round(100 * a.hoje / maior))),
         h('span', { class: 'cac-linha-fim' }, plural(a.hoje, 'imóvel', 'imóveis'), a.quarteiroes_hoje ? h('small', {}, ` · ${a.quarteiroes_hoje} 🏁`) : null)))
         : h('p', { class: 'cac-vazio' }, 'Ninguém registrou imóvel hoje ainda. A primeira casa abre o placar!'))];
   }
