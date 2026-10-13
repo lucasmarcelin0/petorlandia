@@ -1,0 +1,20 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Nova ficha · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Nova ficha{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+{% endblock %}
+
+{% block content %}
+<div class="notif-cabecalho"><div><h1>Nova ficha</h1><p>Por qual unidade esta notificação está sendo feita?</p></div></div>
+<div class="notif-painel">
+  <div class="d-grid gap-2" style="max-width:520px">
+    {% for u in unidades %}
+    <a class="btn btn-outline-primary text-start" href="{{ url_for('sfa_routes.notificacao_nova', unidade=u.id) }}">{{ u.nome }}{% if u.cnes %} <small class="text-muted">· CNES {{ u.cnes }}</small>{% endif %}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -170,10 +170,17 @@ def require_cadastro_admin(view):
     return wrapper
 
 
+def _acesso_territorio_liberado() -> bool:
+    from services.entomologia_acesso import membro_equipe
+    return _acesso_interno_sfa_liberado() or membro_equipe(current_user)
+
+
 @bp.context_processor
 def _inject_sfa_acesso_completo():
-    # A equipe de combate à dengue vê só a área de território na barra lateral.
-    return {"sfa_acesso_completo": _acesso_interno_sfa_liberado}
+    # A barra lateral mostra só as áreas da conta: a equipe de combate à dengue vê o território;
+    # quem responde por uma unidade de saúde vê a notificação SINAN (blueprints.sfa_notificacao_routes).
+    return {"sfa_acesso_completo": _acesso_interno_sfa_liberado,
+            "sfa_acesso_territorio": _acesso_territorio_liberado}
 
 
 # ---------------------------------------------------------------------------
@@ -2978,6 +2985,9 @@ _register_workflow_routes(bp, require_sfa_internal_access)
 
 from blueprints.entomologia_routes import register as _register_entomologia_routes
 _register_entomologia_routes(bp, require_entomologia_access)
+
+from blueprints.sfa_notificacao_routes import register as _register_notificacao_routes
+_register_notificacao_routes(bp)
 
 
 @bp.route('/p/<token>/t10', methods=['GET', 'POST'])

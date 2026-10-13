@@ -1,0 +1,76 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Fichas da unidade · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Fichas da unidade{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+{% endblock %}
+
+{% block content %}
+{% set filtrado = busca or so_pendentes or unidade_id %}
+<div class="notif-cabecalho">
+  <div>
+    <h1>Fichas da unidade</h1>
+    <p>{% if unidades|length == 1 %}{{ unidades[0].nome }}{% elif unidades %}{{ unidades|length }} unidades{% else %}Nenhuma unidade ativa{% endif %}</p>
+  </div>
+  {% if unidades %}
+  <a class="btn btn-primary" href="{{ url_for('sfa_routes.notificacao_nova', unidade=unidade_id or (unidades[0].id if unidades|length == 1 else none)) }}"><i class="fas fa-file-circle-plus me-1" aria-hidden="true"></i>Nova ficha</a>
+  {% endif %}
+</div>
+
+{% if com_pendencia and not so_pendentes %}
+<div class="notif-falta mb-3" role="status">
+  <strong>{{ com_pendencia }} {{ 'ficha ainda tem' if com_pendencia == 1 else 'fichas ainda têm' }} campos a completar.</strong>
+  <a class="ms-1" href="{{ url_for('sfa_routes.notificacao_fichas', pendentes=1, unidade=unidade_id, busca=busca or none) }}">Ver só {{ 'essa' if com_pendencia == 1 else 'essas' }}</a>
+</div>
+{% endif %}
+
+<form class="notif-painel notif-form-linha mb-3" method="get" action="{{ url_for('sfa_routes.notificacao_fichas') }}" role="search">
+  <div><label for="notif-busca">Número da ficha ou nome</label><input class="form-control form-control-sm" type="search" id="notif-busca" name="busca" maxlength="80" value="{{ busca }}"></div>
+  {% if unidades|length > 1 %}
+  <div><label for="notif-unidade">Unidade</label><select class="form-select form-select-sm" id="notif-unidade" name="unidade"><option value="">Todas</option>{% for u in unidades %}<option value="{{ u.id }}" {% if u.id == unidade_id %}selected{% endif %}>{{ u.nome }}</option>{% endfor %}</select></div>
+  {% endif %}
+  <div class="form-check" style="flex:0 0 auto"><input class="form-check-input" type="checkbox" id="notif-pendentes" name="pendentes" value="1" {% if so_pendentes %}checked{% endif %}><label class="form-check-label mb-0" for="notif-pendentes" style="font-size:.85rem;font-weight:500;color:inherit">Só com algo a completar</label></div>
+  <div style="flex:0 0 auto"><button class="btn btn-sm btn-outline-primary">Filtrar</button>{% if filtrado %} <a class="btn btn-sm btn-link" href="{{ url_for('sfa_routes.notificacao_fichas') }}">Limpar</a>{% endif %}</div>
+</form>
+
+<div class="notif-painel p-0">
+  {% if fichas %}
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 notif-tabela">
+      <thead><tr><th>Ficha</th><th>Paciente</th><th class="d-none d-md-table-cell">Notificação</th><th class="d-none d-md-table-cell">Agravo</th>{% if unidades|length > 1 %}<th class="d-none d-md-table-cell">Unidade</th>{% endif %}<th class="d-none d-md-table-cell">Preenchida por</th><th>Ainda falta</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for f in fichas %}
+        <tr>
+          <td><a class="fw-semibold" href="{{ url_for('sfa_routes.notificacao_ficha', ficha_id=f.id) }}">{{ f.ficha_sinan or 'sem número' }}</a></td>
+          <td>{{ f.nome or '—' }}</td>
+          <td class="text-nowrap d-none d-md-table-cell">{{ f.data_notificacao or '—' }}</td>
+          <td class="d-none d-md-table-cell">{{ f.agravo or '—' }}</td>
+          {% if unidades|length > 1 %}<td class="d-none d-md-table-cell">{{ f.unidade }}</td>{% endif %}
+          <td class="d-none d-md-table-cell">{{ f.autor or '—' }}</td>
+          <td>
+            {% if f.total_faltam %}
+              {% if f.faltam.get('notificacao') %}<span class="notif-chip">Notificação · {{ f.faltam.get('notificacao') }}</span>{% endif %}
+              {% if f.faltam.get('exames') %}<span class="notif-chip">Exames · {{ f.faltam.get('exames') }}</span>{% endif %}
+              {% if f.faltam.get('encerramento') %}<span class="notif-chip">Encerramento · {{ f.faltam.get('encerramento') }}</span>{% endif %}
+            {% else %}<span class="notif-completa">Completa</span>{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if f.pode_completar and f.total_faltam %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=f.id) }}">Completar</a>{% endif %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sfa_routes.notificacao_ficha', ficha_id=f.id) }}">Abrir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif filtrado %}
+  <p class="notif-vazio mb-0">Nenhuma ficha com esse filtro.</p>
+  {% else %}
+  <p class="notif-vazio mb-0">Nenhuma ficha registrada ainda. A primeira aparece aqui assim que for enviada.</p>
+  {% endif %}
+</div>
+{% if limitado %}<p class="notif-nota mt-2">Mostrando as {{ fichas|length }} fichas mais recentes. Use a busca para achar uma ficha anterior.</p>{% endif %}
+{% endblock %}

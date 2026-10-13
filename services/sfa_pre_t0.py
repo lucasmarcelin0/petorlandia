@@ -358,8 +358,86 @@ def _option_label(field: dict, value: str) -> str:
     return next((item["label"].split(" - ", 1)[-1] for item in field.get("options", []) if item["value"] == value), "")
 
 
-def salvar_ficha_pre_t0(answers: dict) -> dict:
-    """Cria ou complementa o caso pendente de T0 a partir da ficha digital."""
+FULL_KEY = "formulario_pre_t0"
+
+
+def chave_dedup_da_ficha(numero: object) -> str:
+    """Mesma chave da sincronização da planilha: a ficha digital e a linha da planilha são um caso só."""
+    digitos = re.sub(r"\D", "", str(numero or ""))
+    return f"FICHA-{digitos}" if len(digitos) >= 5 else ""
+
+
+def _texto_resposta(answers: dict, key: str) -> str:
+    value = answers.get(key)
+    if isinstance(value, dict):
+        value = value.get("valor")
+    return str(value or "")
+
+
+def _identificacao_da_ficha(answers: dict) -> dict[str, str]:
+    """Dados de contato que a ficha leva para o cadastro do caso."""
+    from services.sfa_service import normalizar_telefone
+
+    endereco = " ".join(part for part in [_texto_resposta(answers, "logradouro"), answers.get("numero_residencia"),
+                                          answers.get("complemento")] if part).strip()[:300]
+    return {
+        "nome": str(answers.get("nome") or ""),
+        "data_nascimento": str(answers.get("data_nascimento") or ""),
+        "telefone": normalizar_telefone(answers.get("telefone") or ""),
+        "bairro": str(answers.get("bairro") or ""),
+        "endereco": endereco,
+    }
+
+
+def _variaveis_analiticas(answers: dict) -> dict[str, object]:
+    """Somente as variáveis autorizadas para a base analítica, derivadas das respostas."""
+    from services.sfa_service import normalizar_dados_estruturados_sinan
+
+    fields_by_number = {}
+    for section in carregar_esquema_pre_t0()["sections"]:
+        for field in section["fields"]:
+            if field["number"]:
+                fields_by_number[field["number"]] = field
+
+    def marcados(number: str, key: str) -> list[str]:
+        respostas = answers.get(key) if isinstance(answers.get(key), dict) else {}
+        return [label for item_key, label in fields_by_number[number]["items"] if respostas.get(item_key) == "1"]
+
+    idade = answers.get("idade") if isinstance(answers.get("idade"), dict) else {}
+    structured = normalizar_dados_estruturados_sinan({
+        "numero_controle": str(answers.get("ficha_sinan") or "").strip(),
+        "agravo": _option_label(fields_by_number["2"], str(answers.get("agravo") or "")),
+        "data_investigacao": answers.get("data_investigacao") or "",
+        "unidade_notificante": _texto_resposta(answers, "unidade_notificante"),
+        "sexo": _option_label(fields_by_number["11"], str(answers.get("sexo") or "")),
+        "idade_anos": idade.get("valor") if idade.get("unidade") == "4" else None,
+        "raca_cor": _option_label(fields_by_number["13"], str(answers.get("raca_cor") or "")),
+        "zona": _option_label(fields_by_number["29"], str(answers.get("zona") or "")),
+        "ocupacao": answers.get("ocupacao") or "",
+        "sintomas": marcados("33", "sinais_clinicos"),
+        "comorbidades": marcados("34", "doencas_preexistentes"),
+        "ns1_data_coleta": answers.get("ns1_data_coleta") or "",
+        "ns1_resultado": _option_label(fields_by_number["42"], str(answers.get("ns1_resultado") or "")),
+    })
+    if answers.get("doencas_preexistentes"):
+        structured["comorbidades_status"] = "Informado na ficha digital"
+    return structured
+
+
+def _carregar_payload(log_entry) -> dict:
+    try:
+        loaded = json.loads(getattr(log_entry, "dados_json", None) or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def salvar_ficha_pre_t0(answers: dict, *, autor_id: int | None = None, unidade=None) -> dict:
+    """Cria ou complementa o caso pendente de T0 a partir da ficha digital.
+
+    ``autor_id`` e ``unidade`` vêm da área das unidades de saúde: registram quem
+    preencheu e por qual unidade cadastrada.
+    """
     from extensions import db
     from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
     from time_utils import now_in_brazil
@@ -371,17 +449,13 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
     )
 
     ficha = str(answers.get("ficha_sinan") or "").strip()
-    ficha_digits = re.sub(r"\D", "", ficha)
-    if len(ficha_digits) < 5:
+    dedup_key = chave_dedup_da_ficha(ficha)
+    if not dedup_key:
         raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", "ficha_sinan")
-    dedup_key = f"FICHA-{ficha_digits}"
-    full_key = "formulario_pre_t0"
+    full_key = FULL_KEY
 
     def answer_value(key: str) -> str:
-        value = answers.get(key)
-        if isinstance(value, dict):
-            value = value.get("valor")
-        return str(value or "")
+        return _texto_resposta(answers, key)
 
     existing_log = SfaSinanLog.query.filter_by(chave_dedup=dedup_key).with_for_update().first()
     existing_patient = None
@@ -435,37 +509,7 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
         if not patient.status_geral:
             patient.status_geral = "SINAN_Notificado"
 
-    fields_by_number = {}
-    schema = carregar_esquema_pre_t0()
-    for section in schema["sections"]:
-        for field in section["fields"]:
-            if field["number"]:
-                fields_by_number[field["number"]] = field
-
-    symptoms_field = fields_by_number["33"]
-    symptoms = [label for key, label in symptoms_field["items"] if answers.get("sinais_clinicos", {}).get(key) == "1"]
-    conditions_field = fields_by_number["34"]
-    conditions = [label for key, label in conditions_field["items"] if answers.get("doencas_preexistentes", {}).get(key) == "1"]
-    ns1_date = answers.get("ns1_data_coleta") or ""
-    ns1_result = _option_label(fields_by_number["42"], str(answers.get("ns1_resultado") or ""))
-    analytic = {
-        "numero_controle": ficha,
-        "agravo": _option_label(fields_by_number["2"], str(answers.get("agravo") or "")),
-        "data_investigacao": answers.get("data_investigacao") or "",
-        "unidade_notificante": answer_value("unidade_notificante"),
-        "sexo": _option_label(fields_by_number["11"], str(answers.get("sexo") or "")),
-        "idade_anos": answers.get("idade", {}).get("valor") if answers.get("idade", {}).get("unidade") == "4" else None,
-        "raca_cor": _option_label(fields_by_number["13"], str(answers.get("raca_cor") or "")),
-        "zona": _option_label(fields_by_number["29"], str(answers.get("zona") or "")),
-        "ocupacao": answers.get("ocupacao") or "",
-        "sintomas": symptoms,
-        "comorbidades": conditions,
-        "ns1_data_coleta": ns1_date,
-        "ns1_resultado": ns1_result,
-    }
-    structured = normalizar_dados_estruturados_sinan(analytic)
-    if answers.get("doencas_preexistentes"):
-        structured["comorbidades_status"] = "Informado na ficha digital"
+    structured = _variaveis_analiticas(answers)
     structured[full_key] = {
         "versao": "sinan-online-svs-2016-pre-t0-2026-09",
         "recebido_em": now_in_brazil().isoformat(timespec="seconds"),
@@ -488,6 +532,14 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
     log_entry.revisao_status = "TRANSCRITO"
     if not log_entry.grupo:
         log_entry.grupo = "PENDENTE_REVISAO"
+    log_entry.agravo = log_entry.agravo or str(structured.get("agravo") or "")[:40] or None
+    log_entry.unidade_notificante = (log_entry.unidade_notificante
+                                     or answer_value("unidade_notificante").strip()[:180] or None)
+    if unidade is not None:
+        log_entry.unidade_id = unidade.id
+        log_entry.unidade_notificante = unidade.nome
+    if autor_id:
+        log_entry.preenchido_por_id = autor_id
     db.session.add(log_entry)
 
     atualizar_operacional_paciente(patient)
@@ -497,7 +549,8 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
         funcao="salvar_ficha_pre_t0",
         id_estudo=patient.id_estudo,
         mensagem="Ficha SINAN digital recebida antes do T0.",
-        detalhes_json=json.dumps({"campos": len(answers), "novo_caso": created}, ensure_ascii=False),
+        detalhes_json=json.dumps({"campos": len(answers), "novo_caso": created, "user_id": autor_id,
+                                  "unidade_id": getattr(unidade, "id", None)}, ensure_ascii=False),
     ))
     try:
         db.session.commit()
@@ -505,7 +558,241 @@ def salvar_ficha_pre_t0(answers: dict) -> dict:
         db.session.rollback()
         current_app.logger.exception("Falha ao gravar ficha SINAN digital pré-T0.")
         raise RuntimeError("Não foi possível registrar a ficha agora. Tente novamente em instantes.")
-    return {"id_estudo": patient.id_estudo, "created": created}
+    return {"id_estudo": patient.id_estudo, "created": created, "log_id": log_entry.id}
+
+
+def atualizar_ficha_pre_t0(log_id: int, answers: dict, *, autor_id: int | None = None,
+                           preservar: tuple[str, ...] = ()) -> dict:
+    """Completa ou corrige uma ficha já enviada.
+
+    O número da ficha não muda. Cada gravação guarda, junto da própria ficha,
+    quem alterou, quando, quais campos e o conteúdo anterior deles.
+    """
+    from extensions import db
+    from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
+    from time_utils import now_in_brazil
+    from services.sfa_service import atualizar_operacional_paciente, normalizar_dados_estruturados_sinan
+
+    log_entry = SfaSinanLog.query.filter_by(id=log_id).with_for_update().first()
+    payload = _carregar_payload(log_entry)
+    full_form = payload.get(FULL_KEY)
+    if log_entry is None or not isinstance(full_form, dict) or not isinstance(full_form.get("respostas"), dict):
+        raise ValueError("Ficha não encontrada.")
+
+    antigas = full_form["respostas"]
+    novas = dict(answers)
+    for key in ("ficha_sinan", *preservar):
+        novas[key] = antigas.get(key)
+    alterados = sorted(key for key in set(antigas) | set(novas) if antigas.get(key) != novas.get(key))
+    resultado = {"id_estudo": log_entry.id_estudo_vinculado, "log_id": log_entry.id, "alterados": alterados}
+    if not alterados:
+        return resultado
+
+    agora = now_in_brazil().isoformat(timespec="seconds")
+    revisoes = list(full_form["revisoes"]) if isinstance(full_form.get("revisoes"), list) else []
+    revisoes.append({"em": agora, "por": autor_id, "campos": alterados,
+                     "antes": {key: antigas.get(key) for key in alterados}})
+    full_form = {**full_form, "respostas": novas, "atualizado_em": agora, "revisoes": revisoes}
+
+    # O cadastro do caso acompanha a correção só onde ainda guardava o que a ficha tinha
+    # informado: o que a equipe do SFA ajustou à mão depois não é sobrescrito.
+    def acompanhar(alvo, valores_antes: dict, valores_depois: dict) -> None:
+        for campo, novo in valores_depois.items():
+            antigo = valores_antes.get(campo, "")
+            atual = str(getattr(alvo, campo, "") or "").strip()
+            if novo and novo != antigo and atual in ("", antigo):
+                setattr(alvo, campo, novo)
+
+    antes, depois = _identificacao_da_ficha(antigas), _identificacao_da_ficha(novas)
+    patient = (SfaPaciente.query.filter_by(id_estudo=log_entry.id_estudo_vinculado).first()
+               if log_entry.id_estudo_vinculado else None)
+    if patient is not None:
+        acompanhar(patient, antes, depois)
+    datas = ("data_notificacao", "data_inicio_sintomas")
+    acompanhar(log_entry,
+               {**{k: antes[k] for k in ("nome", "telefone", "bairro")}, **{k: str(antigas.get(k) or "") for k in datas}},
+               {**{k: depois[k] for k in ("nome", "telefone", "bairro")}, **{k: str(novas.get(k) or "") for k in datas}})
+
+    derivados_antes, derivados_depois = _variaveis_analiticas(antigas), _variaveis_analiticas(novas)
+    estruturado = normalizar_dados_estruturados_sinan(payload)
+    for key, value in derivados_antes.items():
+        if key not in derivados_depois and estruturado.get(key) == value:
+            estruturado.pop(key)
+    estruturado.update(derivados_depois)
+    estruturado[FULL_KEY] = full_form
+    log_entry.dados_json = json.dumps(estruturado, ensure_ascii=False, sort_keys=True)
+    if "agravo" in alterados and derivados_depois.get("agravo"):
+        log_entry.agravo = str(derivados_depois["agravo"])[:40]
+
+    if patient is not None:
+        atualizar_operacional_paciente(patient)
+    db.session.add(SfaAuditoria(
+        nivel="INFO",
+        categoria="SINAN_PRE_T0_DIGITAL",
+        funcao="atualizar_ficha_pre_t0",
+        id_estudo=log_entry.id_estudo_vinculado,
+        mensagem="Ficha SINAN digital completada depois do envio.",
+        detalhes_json=json.dumps({"campos_alterados": alterados, "user_id": autor_id}, ensure_ascii=False),
+    ))
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao atualizar ficha SINAN digital.")
+        raise RuntimeError("Não foi possível salvar as alterações agora. Tente novamente em instantes.")
+    return resultado
+
+
+def respostas_para_formulario(answers: dict, schema: dict | None = None) -> dict[str, str]:
+    """Inverso de ``coletar_respostas_pre_t0``: os valores na forma que o formulário envia."""
+    schema = schema or carregar_esquema_pre_t0()
+    form: dict[str, str] = {}
+
+    def grupo(key: str) -> dict:
+        value = answers.get(key)
+        return value if isinstance(value, dict) else {}
+
+    for section in schema["sections"]:
+        for field in section["fields"]:
+            key, kind = field["key"], field["type"]
+            if kind in {"text", "tel", "textarea", "radio"}:
+                form[key] = str(answers.get(key) or "")
+            elif kind == "date":
+                value = str(answers.get(key) or "")
+                try:
+                    form[key] = datetime.strptime(value, "%d/%m/%Y").strftime("%Y-%m-%d") if value else ""
+                except ValueError:
+                    form[key] = ""
+            elif kind == "paired_text":
+                form[key] = str(grupo(key).get("valor") or "")
+                form[field["extra_key"]] = str(grupo(key).get("codigo") or "")
+            elif kind == "age":
+                form["idade_valor"] = str(grupo(key).get("valor") or "")
+                form["idade_unidade"] = str(grupo(key).get("unidade") or "")
+            elif kind == "matrix":
+                for item_key, _label in field["items"]:
+                    form[f"{key}__{item_key}"] = str(grupo(key).get(item_key) or "")
+            elif kind == "test_result":
+                por_exame = grupo(key).get("resultados") if isinstance(grupo(key).get("resultados"), dict) else {}
+                amostras = grupo(key).get("amostras") or []
+                for sample_key, _label in field["samples"]:
+                    # Fichas antigas guardavam um só resultado para as amostras marcadas.
+                    antigo = grupo(key).get("resultado") if sample_key in amostras else ""
+                    form[f"{key}__res__{sample_key}"] = str(por_exame.get(sample_key) or antigo or "")
+            elif kind in {"flag_matrix", "severity"}:
+                form[key] = str(grupo(key).get("status") or "")
+                marcas = grupo(key).get("sinais_marcados") or []
+                marcados = ({item for item, flag in marcas.items() if flag == "1"} if isinstance(marcas, dict)
+                            else {str(item) for item in marcas})
+                for item in marcados:
+                    form[f"{key}__{item}"] = "1"
+                if kind == "severity":
+                    form["outros_orgaos_especificar"] = str(grupo(key).get("outros_orgaos_especificar") or "")
+            elif kind == "investigator":
+                for item_key, _label, _maximum in field["items"]:
+                    form[f"{key}__{item_key}"] = str(grupo(key).get(item_key) or "")
+    return form
+
+
+def _ficha_do_log(log_entry, schema: dict) -> dict | None:
+    """Leitura da ficha completa guardada em um registro; ``None`` quando ele não tem ficha digital."""
+    full_form = _carregar_payload(log_entry).get(FULL_KEY)
+    if not isinstance(full_form, dict) or not isinstance(full_form.get("respostas"), dict):
+        return None
+    answers = full_form["respostas"]
+
+    def option_text(options: list[dict], value: object) -> str:
+        value = str(value or "")
+        return next((item["label"] for item in options if item["value"] == value), "Não informado")
+
+    def present(field: dict) -> str:
+        key, kind = field["key"], field["type"]
+        value = answers.get(key)
+        if kind == "fixed":
+            return option_text(field.get("options", []), field.get("value"))
+        if kind in {"text", "tel", "date", "textarea"}:
+            return str(value or "Não informado")
+        if kind == "paired_text":
+            value = value if isinstance(value, dict) else {}
+            details = [str(value.get("valor") or "Não informado")]
+            if value.get("codigo"):
+                details.append(f"{field['extra_label']}: {value['codigo']}")
+            return " · ".join(details)
+        if kind == "radio":
+            return option_text(field.get("options", []), value)
+        if kind == "age":
+            value = value if isinstance(value, dict) else {}
+            amount = str(value.get("valor") or "").strip()
+            unit = option_text(field.get("units", []), value.get("unidade"))
+            return f"{amount} · {unit}" if amount else "Não informado"
+        if kind == "matrix":
+            value = value if isinstance(value, dict) else {}
+            lines = [f"{label}: {option_text(field['options'], value.get(item_key))}"
+                     for item_key, label in field["items"]]
+            return "; ".join(lines) if any(item_key in value for item_key, _label in field["items"]) else "Não informado"
+        if kind == "flag_matrix":
+            value = value if isinstance(value, dict) else {}
+            status = option_text(field["options"], value.get("status"))
+            labels = dict(field["items"])
+            marked = [labels[item] for item in value.get("sinais_marcados", []) if item in labels]
+            return status + (" · " + ", ".join(marked) if marked else "")
+        if kind == "test_result":
+            value = value if isinstance(value, dict) else {}
+            samples = dict(field["samples"])
+            por_exame = value.get("resultados") if isinstance(value.get("resultados"), dict) else {}
+            if por_exame:
+                return "; ".join(f"{label}: {option_text(field['options'], por_exame[key_])}"
+                                 for key_, label in field["samples"] if key_ in por_exame)
+            marked = [samples[item] for item in value.get("amostras", []) if item in samples]
+            result = option_text(field["options"], value.get("resultado"))
+            return (", ".join(marked) + " · " if marked else "") + result
+        if kind == "severity":
+            value = value if isinstance(value, dict) else {}
+            status = option_text(field["options"], value.get("status"))
+            labels = {item_key: label for _group, items in field["groups"] for item_key, label in items}
+            marks = value.get("sinais_marcados") if isinstance(value.get("sinais_marcados"), dict) else {}
+            marked = [labels[item] for item, enabled in marks.items() if enabled == "1" and item in labels]
+            details = str(value.get("outros_orgaos_especificar") or "").strip()
+            if details:
+                marked.append(f"Outros órgãos: {details}")
+            return status + (" · " + ", ".join(marked) if marked else "")
+        if kind == "investigator":
+            value = value if isinstance(value, dict) else {}
+            return "; ".join(f"{label}: {value.get(item_key) or 'Não informado'}"
+                              for item_key, label, _maximum in field["items"])
+        return "Não informado"
+
+    sections = []
+    for section in schema["sections"]:
+        sections.append({
+            "title": section["title"],
+            "fields": [{"number": field["number"], "label": field["campo"], "value": present(field),
+                        "key": field["key"]}
+                       for field in section["fields"]],
+        })
+    timestamp = log_entry.timestamp_importacao
+    received_at = full_form.get("recebido_em")
+    if received_at:
+        try:
+            timestamp = datetime.fromisoformat(str(received_at))
+        except ValueError:
+            pass
+    if timestamp and timestamp.tzinfo is not None:
+        from time_utils import coerce_to_brazil_tz
+        timestamp = coerce_to_brazil_tz(timestamp)
+    return {
+        "sections": sections,
+        "version": full_form.get("versao", ""),
+        "submitted_at": timestamp.strftime("%d/%m/%Y %H:%M") if timestamp else "",
+        "ficha_sinan": log_entry.ficha_sinan or "",
+        "respostas": answers,
+        "atualizado_em": str(full_form.get("atualizado_em") or ""),
+        "revisoes": full_form.get("revisoes") if isinstance(full_form.get("revisoes"), list) else [],
+    }
+
+
+def obter_ficha_do_log(log_entry, schema: dict | None = None) -> dict | None:
+    return _ficha_do_log(log_entry, schema or carregar_esquema_pre_t0())
 
 
 def obter_ficha_pre_t0(id_estudo: str) -> dict | None:
@@ -518,100 +805,9 @@ def obter_ficha_pre_t0(id_estudo: str) -> dict | None:
             .order_by(SfaSinanLog.timestamp_importacao.desc(), SfaSinanLog.id.desc())
             .all())
     for log_entry in logs:
-        try:
-            payload = json.loads(log_entry.dados_json or "{}")
-        except (TypeError, json.JSONDecodeError):
-            continue
-        full_form = payload.get("formulario_pre_t0") if isinstance(payload, dict) else None
-        if not isinstance(full_form, dict) or not isinstance(full_form.get("respostas"), dict):
-            continue
-        answers = full_form["respostas"]
-
-        def option_text(options: list[dict], value: object) -> str:
-            value = str(value or "")
-            return next((item["label"] for item in options if item["value"] == value), "Não informado")
-
-        def present(field: dict) -> str:
-            key, kind = field["key"], field["type"]
-            value = answers.get(key)
-            if kind == "fixed":
-                return option_text(field.get("options", []), field.get("value"))
-            if kind in {"text", "tel", "date", "textarea"}:
-                return str(value or "Não informado")
-            if kind == "paired_text":
-                value = value if isinstance(value, dict) else {}
-                details = [str(value.get("valor") or "Não informado")]
-                if value.get("codigo"):
-                    details.append(f"{field['extra_label']}: {value['codigo']}")
-                return " · ".join(details)
-            if kind == "radio":
-                return option_text(field.get("options", []), value)
-            if kind == "age":
-                value = value if isinstance(value, dict) else {}
-                amount = str(value.get("valor") or "").strip()
-                unit = option_text(field.get("units", []), value.get("unidade"))
-                return f"{amount} · {unit}" if amount else "Não informado"
-            if kind == "matrix":
-                value = value if isinstance(value, dict) else {}
-                lines = [f"{label}: {option_text(field['options'], value.get(item_key))}"
-                         for item_key, label in field["items"]]
-                return "; ".join(lines) if any(item_key in value for item_key, _label in field["items"]) else "Não informado"
-            if kind == "flag_matrix":
-                value = value if isinstance(value, dict) else {}
-                status = option_text(field["options"], value.get("status"))
-                labels = dict(field["items"])
-                marked = [labels[item] for item in value.get("sinais_marcados", []) if item in labels]
-                return status + (" · " + ", ".join(marked) if marked else "")
-            if kind == "test_result":
-                value = value if isinstance(value, dict) else {}
-                samples = dict(field["samples"])
-                por_exame = value.get("resultados") if isinstance(value.get("resultados"), dict) else {}
-                if por_exame:
-                    return "; ".join(f"{label}: {option_text(field['options'], por_exame[key_])}"
-                                     for key_, label in field["samples"] if key_ in por_exame)
-                marked = [samples[item] for item in value.get("amostras", []) if item in samples]
-                result = option_text(field["options"], value.get("resultado"))
-                return (", ".join(marked) + " · " if marked else "") + result
-            if kind == "severity":
-                value = value if isinstance(value, dict) else {}
-                status = option_text(field["options"], value.get("status"))
-                labels = {item_key: label for _group, items in field["groups"] for item_key, label in items}
-                marks = value.get("sinais_marcados") if isinstance(value.get("sinais_marcados"), dict) else {}
-                marked = [labels[item] for item, enabled in marks.items() if enabled == "1" and item in labels]
-                details = str(value.get("outros_orgaos_especificar") or "").strip()
-                if details:
-                    marked.append(f"Outros órgãos: {details}")
-                return status + (" · " + ", ".join(marked) if marked else "")
-            if kind == "investigator":
-                value = value if isinstance(value, dict) else {}
-                return "; ".join(f"{label}: {value.get(item_key) or 'Não informado'}"
-                                  for item_key, label, _maximum in field["items"])
-            return "Não informado"
-
-        sections = []
-        for section in schema["sections"]:
-            sections.append({
-                "title": section["title"],
-                "fields": [{"number": field["number"], "label": field["campo"], "value": present(field)}
-                           for field in section["fields"]],
-            })
-        timestamp = log_entry.timestamp_importacao
-        received_at = full_form.get("recebido_em")
-        if received_at:
-            try:
-                timestamp = datetime.fromisoformat(str(received_at))
-            except ValueError:
-                pass
-        if timestamp and timestamp.tzinfo is not None:
-            from time_utils import coerce_to_brazil_tz
-            timestamp = coerce_to_brazil_tz(timestamp)
-        return {
-            "sections": sections,
-            "version": full_form.get("versao", ""),
-            "submitted_at": timestamp.strftime("%d/%m/%Y %H:%M") if timestamp else "",
-            "ficha_sinan": log_entry.ficha_sinan or "",
-            "respostas": answers,
-        }
+        ficha = _ficha_do_log(log_entry, schema)
+        if ficha is not None:
+            return ficha
     return None
 
 

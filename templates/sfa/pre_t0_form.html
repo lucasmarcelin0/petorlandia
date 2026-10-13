@@ -6,25 +6,35 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#103f46">
-  <title>Ficha SINAN antes do T0 · SFA Orlândia</title>
+  {# Área das unidades de saúde (blueprints.sfa_notificacao_routes): mesma ficha, com a unidade fixa e a opção de completar depois. #}
+  {% set u = unidade_ctx if unidade_ctx is defined else none %}
+  {% set completar = u and u.modo == 'completar' %}
+  <title>{% if completar %}Completar ficha {{ u.ficha_sinan }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20260930b">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261013">
 </head>
 <body>
   <main class="pre-t0-shell">
     <header class="brand-row" aria-label="Sistema SFA Orlândia">
       <span class="brand-mark" aria-hidden="true">S</span>
       <span><strong>SFA Orlândia</strong><small>Vigilância em saúde</small></span>
-      <span class="brand-status"><span></span> Ficha digital</span>
+      {% if u %}<a class="brand-status" href="{{ u.voltar_url }}">← {{ 'Voltar à ficha' if completar else 'Fichas da unidade' }}</a>
+      {% else %}<span class="brand-status"><span></span> Ficha digital</span>{% endif %}
     </header>
     {% if simulacao %}{% include "sfa/_simulacao_banner.html" %}{% endif %}
 
     <section class="hero-card">
       <div class="hero-copy">
-        <p class="eyebrow">NOTIFICAÇÃO · ETAPA ANTERIOR AO T0</p>
+        <p class="eyebrow">{% if u %}NOTIFICAÇÃO SINAN · {{ u.unidade_nome|upper }}{% else %}NOTIFICAÇÃO · ETAPA ANTERIOR AO T0{% endif %}</p>
         <h1>Ficha de investigação<br><em>Dengue e Febre de Chikungunya</em></h1>
+        {% if completar %}
+        <p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
+        {% elif u %}
+        <p class="hero-lede">Registre a notificação com o que já se sabe. O que ficar em branco pode ser completado depois, em Fichas da unidade. Use “Ignorado” quando essa opção existir.</p>
+        {% else %}
         <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Se um dado ainda não estiver disponível, deixe o campo em branco; use “Ignorado” quando essa opção existir.</p>
+        {% endif %}
         <div class="hero-tags"><span>71 campos do modelo</span><span>Etapas curtas</span><span>Funciona no celular</span></div>
         {% if simulacao %}
         <p class="form-scope-note">Simulação: o envio fica registrado somente neste grupo de teste. Nada vai para o SFA municipal nem para o SINAN.</p>
@@ -32,7 +42,7 @@
         <p class="form-scope-note">O envio registra a ficha no SFA municipal para consulta da equipe. Não há transmissão automática ao sistema federal SINAN.</p>
         {% endif %}
       </div>
-      <div class="hero-stamp" aria-hidden="true"><span>PRÉ</span><strong>T0</strong><small>SINAN</small></div>
+      {% if not u %}<div class="hero-stamp" aria-hidden="true"><span>PRÉ</span><strong>T0</strong><small>SINAN</small></div>{% endif %}
     </section>
 
     <details class="definition-card">
@@ -46,6 +56,19 @@
 
     {% if error %}<div class="form-alert" role="alert"><span aria-hidden="true">!</span><div><strong>Confira antes de continuar</strong><p>{{ error }}</p></div></div>{% endif %}
 
+    {% if completar and u.grupos %}
+    <section class="pending-card" aria-labelledby="pending-title">
+      <h2 id="pending-title">O que ainda falta nesta ficha</h2>
+      <p>Toque em um item para ir direto ao campo.</p>
+      {% for grupo in u.grupos %}
+      <div class="pending-group">
+        <h3>{{ grupo.titulo }}</h3>
+        <ul>{% for item in grupo.itens %}<li><a href="#campo-{{ item.chave }}" data-ir-para="{{ item.campo }}"><span class="question-number">{{ item.numero }}</span>{{ item.rotulo }}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}</a></li>{% endfor %}</ul>
+      </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
     <section class="journey-card" aria-label="Progresso do formulário">
       <div class="journey-top"><div><strong data-step-label>Etapa 1 de {{ schema.sections|length }}</strong></div><span class="journey-percent" data-progress-label>0%</span></div>
       <div class="progress-track" role="progressbar" aria-label="Progresso pelas etapas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-track><span data-progress-fill></span></div>
@@ -56,7 +79,7 @@
       </nav>
     </section>
 
-    <form action="{{ form_action }}" method="post" novalidate data-step-form data-error-field="{{ error_field|default('') }}" data-error-message="{{ error }}">
+    <form action="{{ form_action }}" method="post" novalidate data-step-form data-error-field="{{ error_field|default('') }}" data-error-message="{{ error }}"{% if u and u.focar %} data-focus-field="{{ u.focar }}"{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <datalist id="sugestoes-municipio">
         <option value="Orlândia" data-codigo="3534708" data-uf="SP">Orlândia/SP · 3534708</option>
@@ -82,6 +105,7 @@
           {% if field.number %}<span class="question-number">{{ field.number }}</span>{% endif %}
           <span>{{ field.campo }}</span>
           {% if field.required %}<span class="required-mark" title="Obrigatório">Obrigatório</span>{% endif %}
+          {% if completar and field.key in u.faltando %}<span class="pending-mark">Falta</span>{% endif %}
         </span>
       {%- endmacro %}
 
@@ -92,7 +116,7 @@
 
         <div class="field-grid">
           {% for field in section.fields %}
-          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}" data-field-card="{{ field.key }}">
+          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}{% if completar and field.key in u.faltando %} is-pending{% endif %}" id="campo-{{ field.key }}" data-field-card="{{ field.key }}">
             {% if field.type == 'fixed' %}
               {{ question_label(field) }}
               <input type="hidden" name="{{ field.key }}" value="{{ field.value }}">
@@ -100,11 +124,11 @@
 
             {% elif field.type == 'paired_text' %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <div class="paired-text-row{% if field.key == 'logradouro' %} paired-stacked{% endif %}"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'unidade_notificante' %} list="sugestoes-unidade" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'logradouro' %} autocomplete="address-line1"{% elif field.key == 'nome_hospital' %} list="sugestoes-hospital" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}" data-telefone-alvo="input-telefone_hospital"{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" autocomplete="off" data-numeric maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"></label></div>
+              <div class="paired-text-row{% if field.key == 'logradouro' %} paired-stacked{% endif %}"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'unidade_notificante' %} list="sugestoes-unidade" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'logradouro' %} autocomplete="address-line1"{% elif field.key == 'nome_hospital' %} list="sugestoes-hospital" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}" data-telefone-alvo="input-telefone_hospital"{% endif %}{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" autocomplete="off" data-numeric maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}></label></div>
 
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}>
+              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}{% if completar and field.key == 'ficha_sinan' %} readonly{% endif %}>
 
             {% elif field.type == 'radio' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -169,17 +193,17 @@
       </fieldset>
       {% endfor %}
 
-      <div class="nojs-submit"><p>As etapas estão abertas para preenchimento. Revise os campos obrigatórios e envie ao final.</p><button class="button-primary" type="submit">Enviar ficha</button></div>
+      <div class="nojs-submit"><p>As etapas estão abertas para preenchimento. Revise os campos obrigatórios e envie ao final.</p><button class="button-primary" type="submit">{{ 'Salvar alterações' if completar else 'Enviar ficha' }}</button></div>
       <div class="step-actions" data-step-actions>
         <button class="button-secondary" type="button" data-previous disabled><span aria-hidden="true">←</span> Anterior</button>
         <span class="step-actions-note">Você pode voltar antes de enviar</span>
         <button class="button-primary" type="button" data-next>Próxima etapa <span aria-hidden="true">→</span></button>
-        <button class="button-primary" type="submit" data-submit hidden>Finalizar ficha <span aria-hidden="true">✓</span></button>
+        <button class="button-primary" type="submit" data-submit hidden>{{ 'Salvar alterações' if completar else 'Finalizar ficha' }} <span aria-hidden="true">✓</span></button>
       </div>
     </form>
 
-    <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>Preenchimento anterior ao T0</span></footer>
+    <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>{{ u.unidade_nome if u else 'Preenchimento anterior ao T0' }}</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20260930b" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20261013" defer></script>
 </body>
 </html>

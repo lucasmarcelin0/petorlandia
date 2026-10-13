@@ -1,0 +1,46 @@
+/* Área "Notificação SINAN" das unidades de saúde (fichas, panorama, unidades). Usa o layout do SFA. */
+.notif-cabecalho { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .75rem 1rem; margin-bottom: 1rem; }
+.notif-cabecalho h1 { margin: 0 0 .15rem; font-size: 1.35rem; font-weight: 700; color: #12343b; }
+.notif-cabecalho p { margin: 0; color: #5d7378; font-size: .9rem; }
+.notif-painel { padding: 1rem 1.1rem; border: 1px solid #e1e8e6; border-radius: .75rem; background: #fff; }
+.notif-painel + .notif-painel { margin-top: 1rem; }
+.notif-painel h2 { margin: 0 0 .5rem; font-size: 1.02rem; font-weight: 700; color: #12343b; }
+
+/* O que ainda falta: só aparece quando há algo a completar. */
+.notif-falta { padding: .9rem 1.1rem; border: 1px solid #f0dcb8; border-radius: .75rem; background: #fff7e8; color: #5c3a10; }
+.notif-falta h2 { margin: 0 0 .25rem; font-size: 1.02rem; font-weight: 700; color: #6f4513; }
+.notif-falta h3 { margin: .75rem 0 .35rem; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #85531c; }
+.notif-falta ul { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.notif-falta li > a, .notif-falta li > span { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .6rem; border: 1px solid #ecd3a6; border-radius: .6rem; background: #fff; color: #5c3a10; font-size: .82rem; font-weight: 600; text-decoration: none; }
+.notif-falta li > a:hover, .notif-falta li > a:focus-visible { border-color: #e59b46; box-shadow: 0 0 0 3px rgba(229,155,70,.2); outline: 0; }
+.notif-falta small { color: #8b6f45; font-weight: 500; }
+.notif-numero { display: inline-grid; place-items: center; min-width: 22px; height: 21px; padding: 0 .25rem; border-radius: 6px; color: #15525a; background: #e7f2ef; font-size: .68rem; font-weight: 800; }
+
+.notif-chip { display: inline-block; margin: 0 .2rem .2rem 0; padding: .15rem .5rem; border-radius: 999px; background: #fde9c7; color: #6f4513; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.notif-completa { color: #5d7378; font-size: .82rem; }
+.notif-tabela th { color: #5d7378; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.notif-tabela td { font-size: .9rem; }
+.notif-vazio { padding: 2rem 1rem; text-align: center; color: #5d7378; }
+
+/* Leitura da ficha */
+.notif-resposta { height: 100%; padding: .7rem .85rem; border: 1px solid #e3eae7; border-radius: .65rem; background: #fff; }
+.notif-resposta.falta { border-color: #ecc98f; background: #fffdf8; }
+.notif-resposta-rotulo { margin-bottom: .3rem; color: #557075; font-size: .76rem; font-weight: 700; }
+.notif-resposta-valor { color: #18383e; font-size: .9rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Panorama */
+.notif-panorama td, .notif-panorama th { vertical-align: middle; }
+.notif-panorama .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.notif-panorama tr.minha > * { background: #eef7f4; }
+.notif-panorama tfoot > tr > * { border-top: 2px solid #cfdbd8; font-weight: 700; }
+.notif-barra { display: block; height: 6px; margin-top: .25rem; border-radius: 999px; background: #e7eeec; overflow: hidden; }
+.notif-barra > span { display: block; height: 100%; border-radius: 999px; background: #0d6971; }
+.notif-selo { display: inline-block; margin-left: .4rem; padding: .1rem .45rem; border-radius: 999px; background: #0d6971; color: #fff; font-size: .68rem; font-weight: 700; vertical-align: middle; }
+.notif-nota { color: #5d7378; font-size: .82rem; }
+
+/* Unidades */
+.notif-unidade.inativa { opacity: .72; }
+.notif-unidade summary { cursor: pointer; color: #0d6971; font-size: .85rem; font-weight: 600; }
+.notif-form-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; }
+.notif-form-linha > div { flex: 1 1 180px; min-width: 0; }
+.notif-form-linha label { display: block; margin-bottom: .2rem; color: #557075; font-size: .76rem; font-weight: 700; }
