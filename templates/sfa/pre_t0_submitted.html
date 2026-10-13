@@ -15,7 +15,7 @@
     .success-card h1 { margin: 9px 0 13px; color: #17333b; font-size: clamp(26px,5vw,38px); }
     .success-card p { max-width: 510px; margin: 0 auto; color: #637b80; font-size: 14px; line-height: 1.65; }
     .success-note { margin: 24px auto!important; padding: 14px 17px; border-radius: 12px; color: #47665e!important; background: #f0f7f1; font-size: 12px!important; }
-    .success-card .button-primary { margin-top: 8px; text-decoration: none; }
+    .success-card .button-primary, .success-card .button-secondary { margin: 8px 4px 0; text-decoration: none; }
   </style>
 </head>
 <body>
@@ -27,7 +27,8 @@
       <h1>Etapa concluída!</h1>
       <p>A ficha de investigação foi recebida e vinculada ao acompanhamento anterior ao T0.</p>
       <p class="success-note">As respostas foram registradas para a equipe de vigilância. Você pode fechar esta página com segurança.</p>
-      <a class="button-primary" href="{{ url_for('sfa_routes.pre_t0_ficha') }}">Preencher outra ficha <span aria-hidden="true">→</span></a>
+      {% if print_url %}<a class="button-primary" href="{{ print_url }}">Imprimir no formato SINAN</a>{% endif %}
+      <a class="{{ 'button-secondary' if print_url else 'button-primary' }}" href="{{ url_for('sfa_routes.pre_t0_ficha') }}">Preencher outra ficha <span aria-hidden="true">→</span></a>
     </section>
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · etapa anterior ao T0</p></footer>
   </main>
