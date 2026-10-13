@@ -464,10 +464,7 @@ def coletar_etapa(etapa: str, schema: dict, form, participante) -> tuple[dict, d
         try:
             return coletar_respostas_pre_t0(form, schema), {}
         except ValueError as exc:
-            erro = {"__all__": str(exc)}
-            if getattr(exc, "campo", ""):
-                erro["__campo__"] = exc.campo
-            return {}, erro
+            return {}, {"__all__": str(exc)}
     from services import sfa_service
 
     coletor = {"t0": sfa_service.coletar_resposta_t0_nativa,
@@ -481,15 +478,8 @@ def _ocultar(valor) -> str:
 
 
 def redigir_sinan(respostas: dict) -> dict:
-    limpo = copy.deepcopy(respostas)
-    for chave in SINAN_IDENTIFICADORES & set(limpo):
-        valor = limpo[chave]
-        limpo[chave] = {k: _ocultar(v) for k, v in valor.items()} if isinstance(valor, dict) else _ocultar(valor)
-    investigador = limpo.get("investigador")
-    if isinstance(investigador, dict):
-        for chave in SINAN_INVESTIGADOR_IDENTIFICADORES & set(investigador):
-            investigador[chave] = _ocultar(investigador[chave])
-    return limpo
+    """Nas simulações, os dados preenchidos são preservados integralmente para conferência."""
+    return copy.deepcopy(respostas)
 
 
 def limpar_payload_formulario(etapa: str, dados: dict, schema: dict) -> dict:
@@ -497,8 +487,6 @@ def limpar_payload_formulario(etapa: str, dados: dict, schema: dict) -> dict:
 
     chaves = {campo["key"] for campo in iterar_campos_form(schema)}
     limpo = {k: v for k, v in dados.items() if not (k in CAMPOS_TECNICOS and k not in chaves)}
-    for chave in FORM_IDENTIFICADORES & chaves:
-        limpo[chave] = _ocultar(limpo.get(chave))
     limpo["_origem"] = f"simulacao_{etapa}"
     return limpo
 
@@ -548,8 +536,6 @@ def acumular_erros(valor_anterior: str, erros: dict[str, str]) -> str:
     tentativas = _tentativas_validas(valor_anterior)
     atual = []
     for chave, mensagem in erros.items():
-        if chave == "__campo__":  # só indica onde focar na tela; não é um erro a mais
-            continue
         atual.append(str(mensagem if chave == "__all__" else chave)[:160])
     if atual:
         tentativas.append(sorted(atual))
@@ -643,18 +629,17 @@ def _variaveis_sinan(schema: dict) -> list[dict]:
             tipo, chave = campo["type"], campo["key"]
             numero = str(campo.get("number") or "")
             rotulo = f"{numero}. {campo.get('campo', chave)}" if numero else campo.get("campo", chave)
-            oculto = chave in SINAN_IDENTIFICADORES
             opcoes = [(o["value"], o["label"]) for o in campo.get("options", [])]
             if tipo == "fixed":
                 continue
             if tipo in ("text", "tel", "textarea"):
-                variaveis.append(_var(chave, rotulo, titulo, "oculto" if oculto else "texto", _get(chave)))
+                variaveis.append(_var(chave, rotulo, titulo, "texto", _get(chave)))
             elif tipo == "date":
                 variaveis.append(_var(chave, rotulo, titulo, "data", _get(chave)))
             elif tipo == "paired_text":
-                variaveis.append(_var(chave, rotulo, titulo, "oculto" if oculto else "texto", _get(chave, "valor")))
+                variaveis.append(_var(chave, rotulo, titulo, "texto", _get(chave, "valor")))
                 variaveis.append(_var(f"{chave}__codigo", f"{rotulo} — {campo.get('extra_label', 'Código')}",
-                                      titulo, "oculto" if oculto else "texto", _get(chave, "codigo")))
+                                      titulo, "texto", _get(chave, "codigo")))
             elif tipo == "radio":
                 variaveis.append(_var(chave, rotulo, titulo, "categorica", _get(chave), opcoes))
             elif tipo == "age":
@@ -673,13 +658,6 @@ def _variaveis_sinan(schema: dict) -> list[dict]:
                 variaveis.append(_var(chave, f"{rotulo} — resultado", titulo, "categorica", _get(chave, "resultado"), opcoes))
                 variaveis.append(_var(f"{chave}__amostras", f"{rotulo} — amostras", titulo, "multipla",
                                       _get(chave, "amostras"), campo["samples"]))
-                for amostra, amostra_rotulo in campo["samples"]:
-                    def resultado_da_amostra(payload, chave=chave, amostra=amostra):
-                        valor = payload.get(chave) if isinstance(payload.get(chave), dict) else {}
-                        por_exame = valor.get("resultados") if isinstance(valor.get("resultados"), dict) else {}
-                        return por_exame.get(amostra, "")
-                    variaveis.append(_var(f"{chave}__res__{amostra}", f"{rotulo} — resultado {amostra_rotulo}",
-                                          titulo, "categorica", resultado_da_amostra, opcoes))
             elif tipo == "severity":
                 itens = [item for _grupo, grupo_itens in campo["groups"] for item in grupo_itens]
 
@@ -694,8 +672,7 @@ def _variaveis_sinan(schema: dict) -> list[dict]:
             elif tipo == "investigator":
                 for item, item_rotulo, _maximo in campo["items"]:
                     variaveis.append(_var(f"{chave}__{item}", f"Investigador — {item_rotulo}", titulo,
-                                          "oculto" if item in SINAN_INVESTIGADOR_IDENTIFICADORES else "texto",
-                                          _get(chave, item)))
+                                          "texto", _get(chave, item)))
     return variaveis
 
 
@@ -722,8 +699,7 @@ def _variaveis_formulario(etapa: str, schema: dict) -> list[dict]:
             elif tipo == "date":
                 variaveis.append(_var(chave, campo.get("label", chave), titulo, "data", _get(chave), visivel=visivel))
             else:
-                variaveis.append(_var(chave, campo.get("label", chave), titulo,
-                                      "oculto" if chave in FORM_IDENTIFICADORES else "texto", _get(chave), visivel=visivel))
+                variaveis.append(_var(chave, campo.get("label", chave), titulo, "texto", _get(chave), visivel=visivel))
     variaveis.append(_var("_dia_doenca", f"Dia da doença no envio do {ETAPA_ROTULOS[etapa]} (D0 = início dos sintomas)",
                           "Calendário da simulação", "numerica",
                           lambda payload: (payload.get("_simulacao") or {}).get("dia_doenca")))
@@ -786,9 +762,14 @@ def respostas_legiveis(etapa: str, resposta, respostas_participante: dict, varia
         valor = _normalizar(var, var["extrair"](payload))
         if not exibida and not _preenchido(valor):
             continue
+        if var["tipo"] == "oculto":
+            valor_fmt = "Preenchido (conteúdo não guardado)" if _preenchido(valor) else ""
+        elif valor == MARCADOR_OCULTO:
+            valor_fmt = "[preenchido]"
+        else:
+            valor_fmt = valor_legivel(var, valor)
         linhas.append({"secao": var["secao"], "rotulo": var["rotulo"], "tipo": var["tipo"],
-                       "valor": valor_legivel(var, valor) if var["tipo"] != "oculto" else
-                       ("Preenchido (conteúdo não guardado)" if _preenchido(valor) else ""),
+                       "valor": valor_fmt,
                        "vazio": not _preenchido(valor)})
     return linhas
 

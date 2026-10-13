@@ -53,34 +53,14 @@ Exportações: **CSV por participante** (uma linha por pessoa, etapas lado a
 lado) e **CSV por pergunta** (formato longo, uma linha por pergunta de cada
 etapa, pronto para tabela dinâmica ou R).
 
-## Impressão no formato da folha SINAN
+## Dados e privacidade na simulação
 
-Na página de um participante (`/sfa/simulacoes/participante/<id>`), o cartão
-da Ficha SINAN tem o botão **Imprimir no formato SINAN**. Ele abre a ficha
-preenchida na disposição da folha oficial (Sinan Online, SVS 14/03/2016): as
-mesmas faixas, a mesma numeração de 1 a 71 e as mesmas duas páginas A4, com os
-códigos nas casas e as datas nos pentes. O mesmo vale para a ficha real: o
-botão aparece ao concluir `/sfa/pre-t0` e na ficha do caso.
-
-- Valor longo diminui a letra até caber; nada é cortado. Código que não cabe
-  nas casas (ex.: telefone com ramal) sai escrito por extenso no mesmo espaço.
-- Nos campos 68 e 70 a folha tem uma casa por sinal: os marcados saem "1" e os
-  demais seguem a resposta geral, que fica circulada na legenda.
-- Na simulação, os identificadores não guardados saem como `[preenchido]`.
-  Para mostrar a folha completa, clique no campo tracejado e digite antes de
-  imprimir; o que for digitado ali não é salvo. A folha da simulação leva no
-  rodapé o aviso "SIMULAÇÃO · dados fictícios, sem valor de notificação".
-
-Um campo novo no esquema da ficha precisa de lugar em
-`templates/sfa/pre_t0_print.html`; `tests/test_sfa_pre_t0_impressao.py` falha
-enquanto ele não estiver na folha.
-
-## Privacidade
-
-Os formulários pedem para usar dados fictícios, mas os identificadores diretos
-nunca são gravados, mesmo se alguém digitar dados reais: nome, nome da mãe,
-cartão SUS, telefone, endereço (logradouro, número, complemento, CEP, ponto de
-referência, georreferência), nome e assinatura do investigador e o nome de
-quem responde por outra pessoa no T0/T30. Fica só a marca `[preenchido]`, que
-permite medir o preenchimento. O número da ficha digitado não é cruzado com o
-SINAN real.
+Os formulários pedem para usar dados fictícios. Como se trata de simulação com
+casos de teste e as respostas ficam estritamente isoladas nas tabelas
+`sfa_simulacao_*` (sem criar registros em `SfaPaciente`, SINAN oficial ou
+coorte real), todos os dados preenchidos são gravados exatamente como
+informados pelos participantes (incluindo nome, mãe, endereço, investigador e
+respondente). Isso assegura que a equipe possa conferir as fichas preenchidas,
+verificar a exatidão em relação aos casos simulados e exportar os dados
+completos para análise. O número da ficha digitado não é cruzado com o SINAN
+real.
