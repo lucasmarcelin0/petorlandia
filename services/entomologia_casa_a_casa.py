@@ -47,6 +47,10 @@ COLUNA_SITUACAO = {"TRABALHADO": "IM TRAB", "FECHADO": "IM FECH", "DESOCUPADO": 
 _UUID = re.compile(r"[A-Za-z0-9-]{8,64}")
 _IMOVEL = re.compile(r"[A-Za-z0-9_.:-]{1,80}")
 _CELULA = 0.003          # ~300 m: grade para achar o quarteirão de um ponto sem testar os 946
+_PASSO_NOME_M = 70.0     # um ponto para o nome da rua a cada tanto, ao longo do eixo
+_PASSO_RODOVIA_M = 240.0  # rodovia é comprida e vista de longe: basta um nome a cada quadra grande
+# Vias principais primeiro: quando os nomes disputam espaço na tela, elas ganham.
+_ORDEM_DAS_VIAS = ("motorway", "trunk", "primary", "secondary", "tertiary")
 _TOLERANCIA_M = 30.0     # ponto na calçada, logo fora do polígono, ainda é do quarteirão ao lado
 
 _lock = threading.Lock()
@@ -139,6 +143,65 @@ def _distancia_m(x: float, y: float, anel: list) -> float:
     return menor
 
 
+def nome_de_rua(nome: object) -> str:
+    """O nome como aparece na lista de casas: "Rua Vinte e Seis" vira "Rua 26"."""
+    from services.entomologia_cnefe import street_number
+
+    nome = " ".join(str(nome or "").split())
+    tipo, _, resto = nome.partition(" ")
+    if resto:
+        numero = street_number(resto)
+        if numero != resto:
+            return f"{tipo} {numero}"
+    return nome
+
+
+def _vias() -> dict:
+    """Onde escrever o nome de cada rua no mapa em branco.
+
+    Sai dos eixos de rua do atlas (OpenStreetMap, ``atlas-referencias/lugares.json``),
+    que fazem parte do projeto: vale também sem internet. Cada ponto leva o
+    ângulo do trecho, já pronto para girar o texto na tela e sempre legível
+    (nunca de cabeça para baixo).
+    """
+    from services import entomologia_atlas_editor as editor
+    from services.entomologia_atlas_malha import NOT_BUILT
+
+    nomes, pontos = {}, []
+    ruas = []
+    for feature in editor.references().get("features", []):
+        p, g = feature.get("properties") or {}, feature.get("geometry") or {}
+        categoria = str(p.get("category") or "").lower()
+        nome = nome_de_rua(p.get("name") or p.get("label"))
+        if g.get("type") != "LineString" or not nome or categoria in NOT_BUILT:
+            continue
+        ordem = _ORDEM_DAS_VIAS.index(categoria) if categoria in _ORDEM_DAS_VIAS else len(_ORDEM_DAS_VIAS)
+        ruas.append((ordem, nome, g["coordinates"]))
+    for ordem, nome, linha in sorted(ruas, key=lambda rua: rua[0]):
+        passo = _PASSO_RODOVIA_M if ordem < 3 else _PASSO_NOME_M
+        trechos, total = [], 0.0
+        for (ax, ay), (bx, by) in zip(linha, linha[1:]):
+            dx = (bx - ax) * 111_320.0 * math.cos(math.radians((ay + by) / 2))
+            dy = (by - ay) * 110_540.0
+            comprimento = math.hypot(dx, dy)
+            if comprimento:
+                trechos.append((total, comprimento, ax, ay, bx, by, dx, dy))
+                total += comprimento
+        if total < 25:
+            continue
+        alvo = min(passo / 2, total / 2)
+        for inicio, comprimento, ax, ay, bx, by, dx, dy in trechos:
+            while alvo <= inicio + comprimento:
+                t = (alvo - inicio) / comprimento
+                # Na tela o eixo y cresce para baixo: o giro em CSS é o ângulo do trecho com o sinal trocado.
+                giro = -math.degrees(math.atan2(dy, dx))
+                giro = giro - 180 if giro > 90 else (giro + 180 if giro < -90 else giro)
+                pontos.append([round(ax + (bx - ax) * t, 6), round(ay + (by - ay) * t, 6), round(giro),
+                               nomes.setdefault(nome, len(nomes))])
+                alvo += passo
+    return {"nomes": list(nomes), "pontos": pontos}
+
+
 def _montar_base() -> dict:
     from services.entomologia_cnefe import inside
     from services.entomologia_service import load_field_territory
@@ -213,7 +276,7 @@ def _montar_base() -> dict:
                               key=lambda casa: (-math.atan2(casa[2] - cy, (casa[1] - cx) * escala), casa[4])))
 
     dados = {"blocos": blocos, "ruas": list(ruas), "imoveis": imoveis, "sem_quarteirao": fora,
-             "janela_dias": JANELA_DIAS}
+             "janela_dias": JANELA_DIAS, "vias": _vias()}
     dados["versao"] = hashlib.sha1(json.dumps(dados, ensure_ascii=False, sort_keys=True,
                                               separators=(",", ":")).encode()).hexdigest()[:16]
     return dados

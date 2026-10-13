@@ -10,7 +10,7 @@
   {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
      dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261013d') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261013e') }}">
 </head>
 <body class="cac" data-modo="rua">
   <header class="cac-topo">
@@ -69,6 +69,6 @@
   <script type="application/json" id="cac-config">{{ config | tojson }}</script>
   <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
   <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261013b') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261013c') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261013e') }}"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
   const CACHE_APP = 'petorlandia-casa-a-casa-v1';
   const CACHE_DADOS = 'petorlandia-casa-a-casa-dados-v1';
   const FILA = 'cac:fila:v1', ACOES = 'cac:acoes:v1', RECUSADAS = 'cac:recusadas:v1', PREFS = 'cac:prefs:v1';
-  const ZOOM_CASAS = 16.5, ZOOM_NUMEROS = 17.5, ZOOM_ROTULOS = 14.5;
+  const ZOOM_CASAS = 16.5, ZOOM_NUMEROS = 17.5, ZOOM_ROTULOS = 14.5, ZOOM_RUAS = 15.5;
   const $ = id => document.getElementById(id);
 
   // ---------------------------------------------------------------- utilidades
@@ -60,7 +60,7 @@
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     aoVivo: false, enviando: false, precisaEntrar: false, pronto: false, novas: new Set(),
-    mapa: null, tela: null, poligonos: new Map(), camadaRotulos: null, camadaCasas: null, camadaRuas: null, eu: null,
+    mapa: null, tela: null, poligonos: new Map(), camadaRotulos: null, camadaCasas: null, camadaRuas: null, camadaVias: null, eu: null,
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
   const eu = () => cfg.usuario;
@@ -89,6 +89,7 @@
   // ---------------------------------------------------------------- dados
   function prepararBase(base) {
     S.base = base;
+    S.vias = base.vias && base.vias.pontos ? base.vias : { nomes: [], pontos: [] };
     S.porId.clear(); S.casaPorId.clear();
     S.blocos = base.blocos.map((bloco, posicao) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -269,6 +270,7 @@
     L.control.zoom({ position: 'bottomright', zoomInTitle: 'Aproximar', zoomOutTitle: 'Afastar' }).addTo(S.mapa);
     S.tela = L.canvas({ padding: 0.4 });
     S.camadaQuarteiroes = L.layerGroup().addTo(S.mapa);
+    S.camadaVias = L.layerGroup().addTo(S.mapa);
     S.camadaCasas = L.layerGroup().addTo(S.mapa);
     S.camadaRotulos = L.layerGroup().addTo(S.mapa);
     S.mapa.on('moveend', () => {
@@ -309,11 +311,41 @@
     return caixa[2] >= limites.getWest() && caixa[0] <= limites.getEast() && caixa[3] >= limites.getSouth() && caixa[1] <= limites.getNorth();
   }
 
+  /* Nome das ruas, escrito ao longo do eixo quando o mapa está aproximado. Cada rua tem pontos a cada ~70 m;
+     entra na tela o que não encosta em outro nome, e o mesmo nome não se repete a poucos passos. */
+  function desenharNomesDeRua(zoom, limites) {
+    S.camadaVias.clearLayers();
+    if (zoom < ZOOM_RUAS || !S.vias.pontos.length) return;
+    const letra = zoom >= 18.5 ? 15 : (zoom >= 17.5 ? 13.5 : (zoom >= 16.5 ? 12 : 11));
+    const repeticao = zoom >= 18 ? 300 : 220;
+    const postos = [];
+    for (const [x, y, giro, indice] of S.vias.pontos) {
+      if (!limites.contains([y, x])) continue;
+      const nome = S.vias.nomes[indice];
+      const ponto = S.mapa.latLngToContainerPoint([y, x]);
+      const meia = nome.length * letra * 0.29 + 4;
+      let cabe = true;
+      for (const outro of postos) {
+        const dx = ponto.x - outro.x, dy = ponto.y - outro.y, distancia = dx * dx + dy * dy;
+        const minima = outro.indice === indice ? repeticao : (meia + outro.meia) * 0.72;
+        if (distancia < minima * minima) { cabe = false; break; }
+      }
+      if (!cabe) continue;
+      postos.push({ x: ponto.x, y: ponto.y, meia, indice });
+      const icone = L.divIcon({ className: 'cac-via', html: '<span></span>', iconSize: [0, 0] });
+      const marcador = L.marker([y, x], { icon: icone, interactive: false, keyboard: false, zIndexOffset: 4000 }).addTo(S.camadaVias);
+      const texto = marcador.getElement() && marcador.getElement().querySelector('span');
+      if (texto) { texto.textContent = nome; texto.style.cssText = `font-size:${letra}px;transform:translate(-50%,-50%) rotate(${giro}deg)`; }
+      if (postos.length >= 150) break;
+    }
+  }
+
   function desenharDetalhes() {
     if (!S.mapa || !S.base) return;
     const zoom = S.mapa.getZoom(), limites = S.mapa.getBounds().pad(0.08);
     S.camadaRotulos.clearLayers();
     S.camadaCasas.clearLayers();
+    desenharNomesDeRua(zoom, limites);
     const visiveis = S.blocos.filter(bloco => naVista(bloco.caixa, limites));
     // Número do quarteirão: sempre que couber; afastado, só os que têm trabalho.
     let rotulos = 0;
@@ -339,12 +371,18 @@
     const casas = [];
     for (const bloco of visiveis) for (const casa of casasDe(bloco)) if (limites.contains([casa.y, casa.x])) casas.push(casa);
     const comNumero = zoom >= ZOOM_NUMEROS && casas.length <= 420;
+    const recuo = comNumero ? 13 : 7;
+    const centros = new Map();
     for (const casa of casas) {
       const visita = S.ultimas.get(casa.id);
       const cor = M.corDaCasa(visita, casa.bloco.estado.inicio);
+      if (!centros.has(casa.bloco)) centros.set(casa.bloco, S.mapa.latLngToContainerPoint([casa.bloco.c[1], casa.bloco.c[0]]));
+      const naTela = S.mapa.latLngToContainerPoint([casa.y, casa.x]), centro = centros.get(casa.bloco);
+      const dx = centro.x - naTela.x, dy = centro.y - naTela.y, distancia = Math.hypot(dx, dy);
+      const lugar = distancia > recuo * 2 ? S.mapa.containerPointToLatLng([naTela.x + dx / distancia * recuo, naTela.y + dy / distancia * recuo]) : [casa.y, casa.x];
       if (comNumero) {
         const icone = L.divIcon({ className: 'cac-casa' + (cor.vazia ? ' vazia' : '') + (cor.apagada ? ' apagada' : '') + (S.novas.has(casa.id) ? ' nova' : ''), html: '<span></span>', iconSize: [0, 0] });
-        const marcador = L.marker([casa.y, casa.x], { icon: icone, keyboard: false }).addTo(S.camadaCasas);
+        const marcador = L.marker(lugar, { icon: icone, keyboard: false }).addTo(S.camadaCasas);
         const no = marcador.getElement();
         if (no) {
           const etiqueta = no.querySelector('span');
@@ -354,7 +392,7 @@
         }
         marcador.on('click', () => abrirCasa(casa));
       } else {
-        L.circleMarker([casa.y, casa.x], { renderer: S.tela, radius: 5, color: cor.cor, weight: 1.5, fillColor: cor.fundo, fillOpacity: 1 })
+        L.circleMarker(lugar, { renderer: S.tela, radius: 5, color: cor.cor, weight: 1.5, fillColor: cor.fundo, fillOpacity: 1 })
           .on('click', () => abrirCasa(casa)).addTo(S.camadaCasas);
       }
     }

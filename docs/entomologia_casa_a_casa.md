@@ -9,6 +9,10 @@ barra lateral do SFA. Tela própria, leve, pensada primeiro para o celular.
 - **Mapa em branco**: só os quarteirões da malha de campo (`territory.json`),
   com o número de cada um. Ao aproximar aparecem as casas (endereços numerados
   do atlas, CNEFE com as correções da equipe) e, bem perto, o número de cada casa.
+  A partir de uma aproximação média, o **nome de cada rua** é escrito ao longo do
+  eixo dela (eixos do OpenStreetMap que já fazem parte do atlas, com o nome no
+  mesmo formato da lista de casas: "Rua 26"). Vai junto na base guardada no
+  aparelho, então aparece também sem internet.
   Não depende de imagem de fundo; "ruas ao fundo" é opcional e precisa de internet.
 - **Escritório**: escolhe o dia e o agente e clica nos quarteirões para pôr ou
   tirar do plano. O painel "Ao vivo" mostra totais do dia, quarteirões em aberto,

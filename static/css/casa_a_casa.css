@@ -66,6 +66,8 @@ h2, h3, h4, p { margin: 0; }
 .cac-rotulo i { font-size: .62rem; font-style: normal; font-weight: 700; opacity: .8; }
 .cac-rotulo-livre b, .cac-rotulo-anterior b { color: #6c7a7d; font-weight: 700; }
 .cac-rotulo.ativo > div { color: #fff; background: var(--cac-verde); }
+/* Nome da rua: gira com o eixo, tem contorno branco para ser lido por cima das cores e não recebe toque. */
+.cac-via > span { position: absolute; color: #3d4b4f; font-weight: 700; letter-spacing: .02em; line-height: 1; white-space: nowrap; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff, 0 0 4px #fff; pointer-events: none; }
 .cac-casa > span { position: absolute; transform: translate(-50%, -50%); min-width: 1.7rem; padding: .1rem .3rem; border: 2px solid; border-radius: .45rem; font-size: .72rem; font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, .22); cursor: pointer; }
 .cac-casa.vazia > span { border-style: dashed; box-shadow: none; }
 .cac-casa.nova > span { animation: cac-pulso 1.6s ease-out 2; }

@@ -106,6 +106,28 @@ def test_base_tem_quarteiroes_e_imoveis_no_quarteirao_certo(base):
     assert servico.indice()['casas'][base['a']] == 4 and servico.indice()['casas'][base['b']] == 0
 
 
+def test_base_leva_o_nome_das_ruas_para_o_mapa_em_branco(base):
+    vias = servico.base()['vias']
+    assert len(vias['nomes']) > 200 and len(vias['pontos']) > 1500
+    # Mesmo formato da lista de casas: número em algarismo, não por extenso.
+    assert 'Rua 12' in vias['nomes'] and 'Rua 26' in vias['nomes'] and 'Rua Doze' not in vias['nomes']
+    assert servico.nome_de_rua('Rua  Vinte e Seis') == 'Rua 26' and servico.nome_de_rua('Avenida do Café') == 'Avenida do Café'
+    for x, y, giro, indice in vias['pontos']:
+        # Dentro do município, texto nunca de cabeça para baixo, nome existente.
+        assert -48.2 < x < -47.6 and -21.0 < y < -20.4 and -90 <= giro <= 90 and 0 <= indice < len(vias['nomes'])
+    # Rua comprida tem o nome repetido ao longo dela; via que ainda não existe fica de fora.
+    por_nome = {}
+    for _x, _y, _giro, indice in vias['pontos']:
+        por_nome[vias['nomes'][indice]] = por_nome.get(vias['nomes'][indice], 0) + 1
+    assert por_nome['Rua 12'] >= 5 and min(por_nome.values()) >= 1
+    from services import entomologia_atlas_editor as editor
+    propostas = {servico.nome_de_rua(f['properties']['name']) for f in editor.references()['features']
+                 if f['properties'].get('category') == 'proposed'}
+    construidas = {servico.nome_de_rua(f['properties']['name']) for f in editor.references()['features']
+                   if f['geometry']['type'] == 'LineString' and f['properties'].get('category') != 'proposed'}
+    assert not (propostas - construidas) & set(vias['nomes'])
+
+
 def test_base_responde_304_quando_nao_mudou(client, base):
     entrar(client, conta('admin@example.test', role='admin'))
     primeira = client.get(RAIZ + '/base.json', **HTTPS)
