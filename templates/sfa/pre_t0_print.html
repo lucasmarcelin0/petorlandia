@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Ficha SINAN{% if folha.valores.ficha_sinan and folha.valores.ficha_sinan != oculto %} nº {{ folha.valores.ficha_sinan }}{% endif %} · impressão</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0_print.css') }}?v=20261013a">
+</head>
+<body>
+{#- A disposição segue a folha oficial (Sinan Online, SVS 14/03/2016): mesmas faixas, mesma ordem e mesma
+    divisão em duas páginas. --h e --w são as proporções de altura e largura medidas na folha. -#}
+{%- set v = folha.valores -%}
+{%- set L = folha.legendas -%}
+{%- macro n(numero) -%}<b class="n">{{ numero }}</b>{%- endmacro -%}
+{%- macro solto(chave, valor, classe='') -%}
+<span class="v {{ classe }}{% if oculto and valor == oculto %} nao-guardado{% endif %}" data-campo="{{ chave }}"{% if oculto and valor == oculto %} contenteditable="true" spellcheck="false" title="Não guardado na simulação. Clique para digitar antes de imprimir."{% endif %}>{{ valor }}</span>
+{%- endmacro -%}
+{%- macro t(chave, classe='') -%}{{ solto(chave, v[chave], classe) }}{%- endmacro -%}
+{%- macro p(chave, classe='') -%}
+{%- if v[chave] is string -%}{{ solto(chave, v[chave], 'sem-pente') }}
+{%- else -%}<span class="pente {{ classe }}" data-campo="{{ chave }}">{% for casa in v[chave] %}<i>{{ casa }}</i>{% endfor %}</span>
+{%- endif -%}
+{%- endmacro -%}
+{%- macro c(chave) -%}<span class="cx{% if v[chave]|length > 1 %} longo{% endif %}" data-campo="{{ chave }}">{{ v[chave] }}</span>{%- endmacro -%}
+{%- macro leg(numero) -%}{% for opcao in L[numero] %}<span>{{ opcao }}</span>{% endfor %}{%- endmacro -%}
+{%- macro resposta_geral(chave, numero) -%}
+<span class="leg forte" data-campo="{{ chave }}" data-valor="{{ v[chave] }}">{% for opcao in L[numero] %}<span{% if opcao.split(' - ')[0] == v[chave] %} class="marcada"{% endif %}>{{ opcao }}</span>{% endfor %}</span>
+{%- endmacro -%}
+{%- macro sinal(campo, chave, rotulo) -%}<span class="item">{{ c(campo ~ '__' ~ chave) }}<span>{{ rotulo }}</span></span>{%- endmacro -%}
+{%- macro margem() -%}
+{%- if simulacao -%}<p class="margem simulada">SIMULAÇÃO · {{ simulacao.grupo }} · {{ simulacao.participante }} · dados fictícios, sem valor de notificação</p>
+{%- else -%}<p class="margem">Impressa da ficha digital do SFA Orlândia{% if recebida_em %} · recebida em {{ recebida_em }}{% endif %}</p>
+{%- endif -%}
+{%- endmacro -%}
+{%- macro rodape() -%}
+<footer class="rodape"><span>Chikungunya/Dengue</span><span>Sinan <i>Online</i></span><span>SVS&emsp;&emsp;14/03/2016</span></footer>
+{{ margem() }}
+{%- endmacro %}
+
+  <nav class="barra" aria-label="Impressão da ficha">
+    <a href="{{ voltar_url }}">← {{ voltar_rotulo }}</a>
+    <span>Ficha no formato da folha SINAN · 2 páginas A4</span>
+    <button type="button" data-imprimir>Imprimir</button>
+  </nav>
+  {% if simulacao %}
+  <p class="aviso">Na simulação, nome, telefone, endereço e os demais identificadores não são guardados: aparecem como “{{ oculto }}”. Para mostrar a folha completa, clique em um campo tracejado e digite antes de imprimir. O que for digitado aqui não é salvo.</p>
+  {% endif %}
+
+  <section class="folha" data-pagina="1">
+    <header class="topo">
+      <div class="republica">República Federativa do Brasil<br>Ministério da Saúde</div>
+      <div class="centro">
+        <strong>SINAN</strong>
+        <span class="sistema">SISTEMA DE INFORMAÇÃO DE AGRAVOS DE NOTIFICAÇÃO</span>
+        <span class="nome-ficha"><small>FICHA DE INVESTIGAÇÃO</small> DENGUE E FEBRE DE CHIKUNGUNYA</span>
+      </div>
+      <div class="numero"><b>Nº</b>{{ t('ficha_sinan') }}</div>
+    </header>
+    {% for item in folha.definicoes %}
+    <p class="definicao"><b>{{ item.termo }}:</b> {{ item.texto }}</p>
+    {% endfor %}
+
+    <div class="secao" style="--h:40.7">
+      <div class="aba"><span>Dados Gerais</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:8.7">
+          <div class="campo">
+            <div class="rot">{{ n('1') }}<span class="nome">Tipo de Notificação</span></div>
+            <span class="fixo" data-campo="tipo_notificacao" data-valor="{{ v.tipo_notificacao }}">{{ L['1'][0] }}</span>
+          </div>
+        </div>
+        <div class="linha" style="--h:9.9">
+          <div class="campo" style="--w:580">
+            <div class="rot">{{ n('2') }}<span class="nome">Agravo/doença</span><span class="leg agravo">{{ leg('2') }}</span>{{ c('agravo') }}<span class="cid"><small>Código (CID10)</small><b>A 90&nbsp;&nbsp;A 92</b></span></div>
+          </div>
+          <div class="campo" style="--w:197"><div class="rot">{{ n('3') }}<span class="nome">Data da Notificação</span></div>{{ p('data_notificacao', 'data') }}</div>
+        </div>
+        <div class="linha" style="--h:10">
+          <div class="campo" style="--w:40"><div class="rot">{{ n('4') }}<span class="nome">UF</span></div>{{ p('uf_notificacao', 'cinza') }}</div>
+          <div class="campo duplo" style="--w:739">
+            <div class="parte"><div class="rot">{{ n('5') }}<span class="nome">Município de Notificação</span></div>{{ t('municipio_notificacao') }}</div>
+            <div class="cod"><span>Código (IBGE)</span>{{ p('codigo_municipio_notificacao') }}</div>
+          </div>
+        </div>
+        <div class="linha" style="--h:10.6">
+          <div class="campo duplo" style="--w:586">
+            <div class="parte"><div class="rot">{{ n('6') }}<span class="nome">Unidade de Saúde (ou outra fonte notificadora)</span></div>{{ t('unidade_notificante') }}</div>
+            <div class="cod"><span>Código</span>{{ p('codigo_unidade_notificante') }}</div>
+          </div>
+          <div class="campo" style="--w:190"><div class="rot">{{ n('7') }}<span class="nome">Data dos Primeiros Sintomas</span></div>{{ p('data_inicio_sintomas', 'data') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao" style="--h:42.8">
+      <div class="aba"><span>Notificação Individual</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:10">
+          <div class="campo" style="--w:587"><div class="rot">{{ n('8') }}<span class="nome">Nome do Paciente</span></div>{{ t('nome') }}</div>
+          <div class="campo" style="--w:190"><div class="rot">{{ n('9') }}<span class="nome">Data de Nascimento</span></div>{{ p('data_nascimento', 'data') }}</div>
+        </div>
+        <div class="linha" style="--h:10.6">
+          <div class="campo duplo" style="--w:144">
+            <div class="parte"><div class="rot">{{ n('10') }}<span class="nome">(ou) Idade</span></div><div class="base">{{ p('idade_valor') }}{{ c('idade_unidade') }}</div></div>
+            <span class="leg pilha">{{ leg('10') }}</span>
+          </div>
+          <div class="campo" style="--w:140"><div class="rot">{{ n('11') }}<span class="nome">Sexo</span><span class="leg pilha">{{ leg('11') }}</span>{{ c('sexo') }}</div></div>
+          <div class="campo duplo" style="--w:297"><div class="parte"><div class="rot">{{ n('12') }}<span class="nome">Gestante</span></div><span class="leg italica">{{ leg('12') }}</span></div>{{ c('gestante') }}</div>
+          <div class="campo duplo" style="--w:184"><div class="parte"><div class="rot">{{ n('13') }}<span class="nome">Raça/Cor</span></div><span class="leg italica">{{ leg('13') }}</span></div>{{ c('raca_cor') }}</div>
+        </div>
+        <div class="linha" style="--h:10.6">
+          <div class="campo duplo"><div class="parte"><div class="rot">{{ n('14') }}<span class="nome">Escolaridade</span></div><span class="leg miuda">{{ leg('14') }}</span></div>{{ c('escolaridade') }}</div>
+        </div>
+        <div class="linha" style="--h:10.8">
+          <div class="campo" style="--w:267"><div class="rot">{{ n('15') }}<span class="nome">Número do Cartão SUS</span></div>{{ p('cartao_sus', 'estreito') }}</div>
+          <div class="campo" style="--w:512"><div class="rot">{{ n('16') }}<span class="nome">Nome da mãe</span></div>{{ t('nome_mae') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao" style="--h:47">
+      <div class="aba"><span>Dados de Residência</span></div>
+      <div class="corpo">
+        <div class="linha">
+          <div class="campo" style="--w:40"><div class="rot">{{ n('17') }}<span class="nome">UF</span></div>{{ p('uf_residencia', 'cinza') }}</div>
+          <div class="campo duplo" style="--w:500">
+            <div class="parte"><div class="rot">{{ n('18') }}<span class="nome">Município de Residência</span></div>{{ t('municipio_residencia') }}</div>
+            <div class="cod"><span>Código (IBGE)</span>{{ p('codigo_municipio_residencia') }}</div>
+          </div>
+          <div class="campo" style="--w:235"><div class="rot">{{ n('19') }}<span class="nome">Distrito</span></div>{{ t('distrito_residencia') }}</div>
+        </div>
+        <div class="linha">
+          <div class="campo" style="--w:212"><div class="rot">{{ n('20') }}<span class="nome">Bairro</span></div>{{ t('bairro') }}</div>
+          <div class="campo duplo" style="--w:568">
+            <div class="parte"><div class="rot">{{ n('21') }}<span class="nome">Logradouro (rua, avenida,...)</span></div>{{ t('logradouro') }}</div>
+            <div class="cod"><span>Código</span>{{ p('codigo_logradouro') }}</div>
+          </div>
+        </div>
+        <div class="linha">
+          <div class="campo" style="--w:82"><div class="rot">{{ n('22') }}<span class="nome">Número</span></div>{{ t('numero_residencia') }}</div>
+          <div class="campo" style="--w:454"><div class="rot">{{ n('23') }}<span class="nome">Complemento (apto., casa, ...)</span></div>{{ t('complemento') }}</div>
+          <div class="campo" style="--w:238"><div class="rot">{{ n('24') }}<span class="nome">Geo campo 1</span></div>{{ t('geo_campo_1') }}</div>
+        </div>
+        <div class="linha">
+          <div class="campo" style="--w:242"><div class="rot">{{ n('25') }}<span class="nome">Geo campo 2</span></div>{{ t('geo_campo_2') }}</div>
+          <div class="campo" style="--w:360"><div class="rot">{{ n('26') }}<span class="nome">Ponto de Referência</span></div>{{ t('ponto_referencia') }}</div>
+          <div class="campo" style="--w:170"><div class="rot">{{ n('27') }}<span class="nome">CEP</span></div>{{ p('cep', 'cep') }}</div>
+        </div>
+        <div class="linha">
+          <div class="campo" style="--w:227"><div class="rot">{{ n('28') }}<span class="nome">(DDD) Telefone</span></div>{{ p('telefone') }}</div>
+          <div class="campo" style="--w:222"><div class="rot">{{ n('29') }}<span class="nome">Zona</span><span class="leg duas">{{ leg('29') }}</span>{{ c('zona') }}</div></div>
+          <div class="campo" style="--w:324"><div class="rot">{{ n('30') }}<span class="nome">País (se residente fora do Brasil)</span></div>{{ t('pais_residencia') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faixa">Dados clínicos e laboratoriais</div>
+
+    <div class="secao" style="--h:10">
+      <div class="aba"><span>Inv.</span></div>
+      <div class="corpo">
+        <div class="linha">
+          <div class="campo" style="--w:173"><div class="rot">{{ n('31') }}<span class="nome">Data da Investigação</span></div>{{ p('data_investigacao', 'data') }}</div>
+          <div class="campo" style="--w:590"><div class="rot">{{ n('32') }}<span class="nome">Ocupação</span></div>{{ t('ocupacao') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao" style="--h:34.6">
+      <div class="aba"><span>Dados clínicos</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:17">
+          <div class="campo">
+            <div class="rot">{{ n('33') }}<span class="nome forte">Sinais clínicos</span><span class="leg forte">{{ leg('33') }}</span></div>
+            <div class="itens" style="--linhas:2">{% for chave, rotulo in folha.itens.sinais_clinicos %}{{ sinal('sinais_clinicos', chave, rotulo) }}{% endfor %}</div>
+          </div>
+        </div>
+        <div class="linha" style="--h:16">
+          <div class="campo">
+            <div class="rot">{{ n('34') }}<span class="nome forte">Doenças pré-existentes</span><span class="leg forte">{{ leg('34') }}</span></div>
+            <div class="itens" style="--linhas:2">{% for chave, rotulo in folha.itens.doencas_preexistentes %}{{ sinal('doencas_preexistentes', chave, rotulo) }}{% endfor %}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao" style="--h:57.6">
+      <div class="aba"><span>Dados laboratoriais</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:17">
+          <div class="campo titulado" style="--w:182"><b class="titulo">Sorologia (IgM) Chikungunya</b><div class="rot">{{ n('35') }}<span class="nome quebra">Data da Coleta da 1ª Amostra (S1)</span></div>{{ p('chikungunya_s1_data', 'data') }}</div>
+          <div class="campo titulado" style="--w:184"><b class="titulo"></b><div class="rot">{{ n('36') }}<span class="nome quebra">Data da Coleta da 2ª Amostra (S2)</span></div>{{ p('chikungunya_s2_data', 'data') }}</div>
+          <div class="campo titulado" style="--w:182"><b class="titulo">Exame PRNT</b><div class="rot">{{ n('37') }}<span class="nome">Data da Coleta</span></div>{{ p('prnt_data', 'data') }}</div>
+          <div class="campo" style="--w:214">
+            <div class="rot">{{ n('38') }}<span class="nome">Resultado</span></div>
+            <div class="amostras">{% for chave, rotulo in folha.itens.prnt_resultado %}<span class="item"><span>{{ rotulo }}</span>{{ c('prnt_resultado__' ~ chave) }}</span>{% endfor %}</div>
+            <span class="leg">{{ leg('38') }}</span>
+          </div>
+        </div>
+        <div class="linha" style="--h:14.8">
+          <div class="campo titulado" style="--w:190"><b class="titulo">Sorologia (IgM) Dengue</b><div class="rot">{{ n('39') }}<span class="nome">Data da Coleta</span></div>{{ p('dengue_igm_data', 'data') }}</div>
+          <div class="campo titulado" style="--w:197"><b class="titulo"></b><div class="rot">{{ n('40') }}<span class="nome">Resultado</span>{{ c('dengue_igm_resultado') }}</div><span class="leg duas">{{ leg('40') }}</span></div>
+          <div class="campo titulado" style="--w:190"><b class="titulo">Exame NS1</b><div class="rot">{{ n('41') }}<span class="nome">Data da Coleta</span></div>{{ p('ns1_data_coleta', 'data') }}</div>
+          <div class="campo titulado" style="--w:185"><b class="titulo"></b><div class="rot">{{ n('42') }}<span class="nome">Resultado</span>{{ c('ns1_resultado') }}</div><span class="leg duas">{{ leg('42') }}</span></div>
+        </div>
+        <div class="linha" style="--h:11.8">
+          <div class="campo" style="--w:175"><div class="rot">{{ n('43') }}<span class="nome"><b class="exame">Isolamento</b><br>Data da Coleta</span></div>{{ p('isolamento_data', 'data') }}</div>
+          <div class="campo" style="--w:213"><div class="rot">{{ n('44') }}<span class="nome">Resultado</span>{{ c('isolamento_resultado') }}</div><span class="leg duas">{{ leg('44') }}</span></div>
+          <div class="campo" style="--w:180"><div class="rot">{{ n('45') }}<span class="nome"><b class="exame">RT-PCR</b><br>Data da Coleta</span></div>{{ p('rt_pcr_data', 'data') }}</div>
+          <div class="campo" style="--w:190"><div class="rot">{{ n('46') }}<span class="nome">Resultado</span>{{ c('rt_pcr_resultado') }}</div><span class="leg duas">{{ leg('46') }}</span></div>
+        </div>
+        <div class="linha" style="--h:11.8">
+          <div class="campo" style="--w:175"><div class="rot">{{ n('47') }}<span class="nome">Sorotipo</span>{{ c('sorotipo') }}</div><span class="leg duas">{{ leg('47') }}</span></div>
+          <div class="campo" style="--w:204"><div class="rot">{{ n('48') }}<span class="nome"><b class="exame">Histopatologia</b></span>{{ c('histopatologia_resultado') }}</div><span class="leg duas">{{ leg('48') }}</span></div>
+          <div class="campo" style="--w:194"><div class="rot">{{ n('49') }}<span class="nome"><b class="exame">Imunohistoquímica</b></span>{{ c('imunohistoquimica_resultado') }}</div><span class="leg duas">{{ leg('49') }}</span></div>
+          <div class="vago" style="--w:190"></div>
+        </div>
+      </div>
+    </div>
+
+    {{ rodape() }}
+  </section>
+
+  <section class="folha" data-pagina="2">
+    <div class="secao" style="--h:24">
+      <div class="aba"><span>Hospitalização</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:11.8">
+          <div class="campo" style="--w:202"><div class="rot">{{ n('50') }}<span class="nome forte">Ocorreu Hospitalização?</span></div><div class="base"><span class="leg">{{ leg('50') }}</span>{{ c('hospitalizacao') }}</div></div>
+          <div class="campo" style="--w:183"><div class="rot">{{ n('51') }}<span class="nome forte">Data da Internação</span></div>{{ p('data_internacao', 'data') }}</div>
+          <div class="campo" style="--w:53"><div class="rot">{{ n('52') }}<span class="nome forte">UF</span></div>{{ p('uf_hospital', 'cinza') }}</div>
+          <div class="campo duplo" style="--w:329">
+            <div class="parte"><div class="rot">{{ n('53') }}<span class="nome forte">Município do Hospital</span></div>{{ t('municipio_hospital') }}</div>
+            <div class="cod"><span class="forte">Código (IBGE)</span>{{ p('codigo_municipio_hospital') }}</div>
+          </div>
+        </div>
+        <div class="linha" style="--h:10.6">
+          <div class="campo duplo" style="--w:575">
+            <div class="parte"><div class="rot">{{ n('54') }}<span class="nome forte">Nome do Hospital</span></div>{{ t('nome_hospital') }}</div>
+            <div class="cod"><span class="forte">Código</span>{{ p('codigo_hospital') }}</div>
+          </div>
+          <div class="campo" style="--w:202"><div class="rot">{{ n('55') }}<span class="nome forte">(DDD) Telefone</span></div>{{ p('telefone_hospital') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao" style="--h:53">
+      <div class="aba"><span>Conclusão</span></div>
+      <div class="corpo">
+        <div class="subtitulo">Local Provável de Infecção (no período de 15 dias)</div>
+        <div class="linha" style="--h:9.4">
+          <div class="campo" style="--w:430"><div class="rot">{{ n('56') }}<span class="nome forte">O caso é autóctone do município de residência?</span>{{ c('caso_autoctone') }}</div><span class="leg centro">{{ leg('56') }}</span></div>
+          <div class="campo" style="--w:47"><div class="rot">{{ n('57') }}<span class="nome forte">UF</span></div>{{ p('uf_local_infeccao', 'cinza') }}</div>
+          <div class="campo" style="--w:292"><div class="rot">{{ n('58') }}<span class="nome forte">País</span></div>{{ t('pais_local_infeccao') }}</div>
+        </div>
+        <div class="linha" style="--h:9.4">
+          <div class="campo duplo" style="--w:362">
+            <div class="parte"><div class="rot">{{ n('59') }}<span class="nome forte">Município</span></div>{{ t('municipio_local_infeccao') }}</div>
+            <div class="cod"><span class="forte">Código (IBGE)</span>{{ p('codigo_municipio_local_infeccao') }}</div>
+          </div>
+          <div class="campo" style="--w:213"><div class="rot">{{ n('60') }}<span class="nome forte">Distrito</span></div>{{ t('distrito_local_infeccao') }}</div>
+          <div class="campo" style="--w:197"><div class="rot">{{ n('61') }}<span class="nome forte">Bairro</span></div>{{ t('bairro_local_infeccao') }}</div>
+        </div>
+        <div class="linha" style="--h:14.3">
+          <div class="campo" style="--w:375"><div class="rot">{{ n('62') }}<span class="nome forte">Classificação</span>{{ c('classificacao') }}</div><span class="leg">{{ leg('62') }}</span></div>
+          <div class="campo" style="--w:224"><div class="rot">{{ n('63') }}<span class="nome forte quebra">Critério de Confirmação/Descarte</span>{{ c('criterio_confirmacao') }}</div><span class="leg">{{ leg('63') }}</span></div>
+          <div class="campo" style="--w:176"><div class="rot">{{ n('64') }}<span class="nome forte">Apresentação clínica</span></div><div class="base">{{ c('apresentacao_clinica') }}<span class="leg pilha media">{{ leg('64') }}</span></div></div>
+        </div>
+        <div class="linha" style="--h:13">
+          <div class="campo" style="--w:385"><div class="rot">{{ n('65') }}<span class="nome forte">Evolução do Caso</span>{{ c('evolucao_caso') }}</div><span class="leg">{{ leg('65') }}</span></div>
+          <div class="campo" style="--w:188"><div class="rot">{{ n('66') }}<span class="nome forte">Data do Óbito</span></div>{{ p('data_obito', 'data') }}</div>
+          <div class="campo" style="--w:198"><div class="rot">{{ n('67') }}<span class="nome forte">Data do Encerramento</span></div>{{ p('data_encerramento', 'data') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faixa">Preencher os sinais clínicos para Dengue com Sinais de Alarme e Dengue Grave</div>
+
+    <div class="secao" style="--h:74">
+      <div class="aba longa"><span>Dados Clínicos - Dengue com Sinais de Alarme e Dengue Grave</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:21.6">
+          <div class="campo" style="--w:610">
+            {%- set alarme = folha.itens.sinais_alarme %}
+            <div class="colunas">
+              {% for parte in (alarme[:2], alarme[2:6], alarme[6:]) %}
+              <div>
+                {% if loop.first %}<div class="rot">{{ n('68') }}<span class="nome forte">Dengue com sinais de alarme</span></div>{{ resposta_geral('sinais_alarme', '68') }}{% endif %}
+                {% for chave, rotulo in parte %}{{ sinal('sinais_alarme', chave, rotulo) }}{% endfor %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="campo" style="--w:167"><div class="rot">{{ n('69') }}<span class="nome forte quebra">Data de início dos sinais de alarme:</span></div>{{ p('data_inicio_sinais_alarme', 'data') }}</div>
+        </div>
+        <div class="linha" style="--h:35.7">
+          <div class="campo">
+            <div class="rot">{{ n('70') }}<span class="nome forte">Dengue grave</span>{{ resposta_geral('dengue_grave', '70') }}</div>
+            <div class="gravidade">
+              {% for grupo, sinais in folha.itens.dengue_grave %}
+              <div class="grupo g{{ loop.index }}">
+                <b>{{ grupo }}:</b>
+                <div class="itens" style="--linhas:{{ 4 if loop.first else 2 }}">
+                  {%- for chave, rotulo in sinais %}{{ sinal('dengue_grave', chave, rotulo ~ (':' if chave == 'outros_orgaos' else '')) }}{% endfor -%}
+                </div>
+                {% if loop.last %}{{ t('outros_orgaos_especificar', 'especificar') }}{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="linha" style="--h:13">
+          <div class="campo" style="--w:182"><div class="rot">{{ n('71') }}<span class="nome forte quebra">Data de início dos sinais de gravidade:</span></div>{{ p('data_inicio_sinais_gravidade', 'data') }}</div>
+          <div class="vago" style="--w:600"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faixa cinza">Informações complementares e observações</div>
+    <div class="subtitulo">Observações Adicionais</div>
+    <div class="pautas" style="--pautas:{{ folha.pautas }};--densidade:{{ folha.densidade_observacoes }}">{% for _pauta in range(folha.pautas) %}<i></i>{% endfor %}<div class="v obs" data-campo="observacoes_adicionais">{{ v.observacoes_adicionais }}</div></div>
+
+    <div class="secao" style="--h:21.6">
+      <div class="aba"><span>Investigador</span></div>
+      <div class="corpo">
+        <div class="linha" style="--h:10.3">
+          <div class="campo raso" style="--w:615"><div class="rot"><span class="nome">Município/Unidade de Saúde</span></div>{{ t('investigador__municipio_unidade') }}</div>
+          <div class="campo raso" style="--w:162"><div class="rot"><span class="nome">Cód. da Unid. de Saúde</span></div>{{ p('investigador__codigo_unidade', 'cinza') }}</div>
+        </div>
+        <div class="linha" style="--h:9.4">
+          <div class="campo raso" style="--w:298"><div class="rot"><span class="nome">Nome</span></div>{{ t('investigador__nome') }}</div>
+          <div class="campo raso" style="--w:326"><div class="rot"><span class="nome">Função</span></div>{{ t('investigador__funcao') }}</div>
+          <div class="campo raso" style="--w:148"><div class="rot"><span class="nome">Assinatura</span></div>{{ t('investigador__assinatura') }}</div>
+        </div>
+      </div>
+    </div>
+
+    {{ rodape() }}
+  </section>
+
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0_print.js') }}?v=20261013a" defer></script>
+</body>
+</html>

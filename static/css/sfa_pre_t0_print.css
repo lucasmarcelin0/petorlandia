@@ -1,0 +1,255 @@
+/* Ficha SINAN (Dengue e Febre de Chikungunya, SVS 14/03/2016) preenchida, para impressão.
+   A folha oficial é reproduzida em mm: cada .secao e cada .linha recebe em --h a altura
+   medida na folha e as divide na mesma proporção, de modo que cada página ocupa um A4 exato. */
+
+@page { size: A4 portrait; margin: 0; }
+
+:root { --tinta: #0b2c86; --traco: .25mm; --cinza: #e2e2e2; --escala: 1; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: #596267;
+  color: #000;
+  font: 7pt/1.12 Arial, Helvetica, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ---- Tela: barra e aviso (não saem no papel) ---- */
+.barra {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px;
+  background: #17333b; color: #fff;
+  font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.barra a { color: #cfe7e2; text-decoration: none; }
+.barra a:hover { text-decoration: underline; }
+.barra span { flex: 1; text-align: center; color: #b9cfd1; }
+.barra button {
+  padding: 8px 18px; border: 0; border-radius: 8px;
+  background: #f4d596; color: #17333b; font: inherit; font-weight: 700; cursor: pointer;
+}
+.aviso {
+  max-width: 210mm; margin: 12px auto 0; padding: 10px 14px; border-radius: 8px;
+  background: #fff4d6; color: #5a4300;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---- Folha ---- */
+.folha {
+  display: flex; flex-direction: column; gap: .9mm;
+  width: 210mm; height: 297mm;
+  margin: 6mm auto; padding: 5mm 8mm 5mm 10mm;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2mm 8mm rgba(0, 0, 0, .35);
+  zoom: var(--escala);
+  break-after: page;
+}
+
+.topo { display: flex; align-items: flex-end; gap: 3mm; flex: none; }
+.republica { font-weight: 700; font-size: 6.6pt; text-align: center; line-height: 1.15; padding-bottom: 1mm; }
+.topo .centro { flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.topo .centro strong { font-size: 10pt; margin-bottom: 1.6mm; }
+.sistema { font-weight: 700; font-size: 7pt; }
+.nome-ficha { font-weight: 700; font-size: 9.6pt; white-space: nowrap; }
+.nome-ficha small { font-size: 6.6pt; margin-right: 3mm; }
+.numero {
+  flex: none; display: flex; align-items: center; gap: 2mm;
+  width: 40mm; height: 7.6mm; padding: 0 2mm;
+  border-radius: 1.4mm; background: var(--cinza);
+}
+.numero > b { font-size: 8pt; }
+.numero .v { margin: 0; }
+
+.definicao {
+  flex: none; margin: 0; padding: .7mm 4mm .9mm;
+  border: var(--traco) solid #000; border-radius: 2mm;
+  font-size: 8.2pt; line-height: 1.14;
+}
+
+.secao { display: flex; gap: 1mm; flex: var(--h) 1 0; min-height: 0; }
+.aba {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 6.2mm; overflow: hidden;
+  border: .3mm solid #000; background: var(--cinza);
+}
+.aba span {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font: 700 7.2pt/1.05 "Times New Roman", Times, serif; white-space: nowrap;
+}
+.aba.longa span { white-space: normal; text-align: center; max-height: 100%; }
+.corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .5mm; }
+.linha { display: flex; gap: 1mm; flex: var(--h, 10) 1 0; min-height: 0; }
+
+.faixa {
+  flex: none; padding: .7mm 0 .8mm;
+  border: var(--traco) solid #000; border-radius: 1.8mm;
+  font-weight: 700; font-size: 9.4pt; text-align: center;
+}
+.faixa.cinza { border-color: var(--cinza); background: var(--cinza); }
+.subtitulo { flex: none; font-weight: 700; font-size: 8.4pt; padding-left: .6mm; }
+
+/* ---- Campo: caixa aberta em cima, número no canto, valor embaixo ---- */
+.campo, .vago { flex: var(--w, 1) 1 0; min-width: 0; }
+.campo { position: relative; display: flex; flex-direction: column; padding: 0 1mm .6mm 1.1mm; }
+.campo::before {
+  content: ""; position: absolute; inset: 1.7mm 0 0;
+  border: var(--traco) solid #000; border-top: 0; border-radius: 0 0 1.6mm 1.6mm;
+  pointer-events: none;
+}
+.campo.raso::before { top: .4mm; }
+.campo.raso { padding-top: .2mm; }
+.campo.duplo { flex-direction: row; gap: 1.4mm; }
+.parte { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cod { flex: none; display: flex; flex-direction: column; align-items: center; padding-top: 2mm; font-size: 7pt; }
+.cod .sem-pente { max-width: 34mm; }
+.base { display: flex; align-items: flex-end; gap: 1.2mm; margin-top: auto; min-width: 0; }
+.base > .pente, .base > .v { margin-top: 0; }
+
+.rot { display: flex; align-items: flex-start; gap: .9mm; min-width: 0; }
+.n {
+  position: relative; flex: none;
+  min-width: 4mm; height: 3.7mm; padding: 0 .4mm;
+  border: var(--traco) solid #000; background: #fff;
+  font-size: 7pt; line-height: 3.3mm; text-align: center;
+}
+.nome { padding-top: .6mm; white-space: nowrap; }
+.nome.quebra { white-space: normal; }
+.forte { font-weight: 700; }
+.nome.forte { font-size: 7.8pt; }
+.exame, .titulo { font-size: 8.6pt; }
+.rot > .cx { margin-left: auto; margin-top: .5mm; }
+.fixo { margin-top: auto; text-align: center; font-size: 7.4pt; }
+
+.campo.titulado { padding-top: 3.6mm; }
+.campo.titulado::before { top: 5.2mm; }
+.titulo { position: absolute; top: 0; left: 1.6mm; white-space: nowrap; }
+
+/* ---- Valores preenchidos ---- */
+.v {
+  display: block; margin-top: auto; min-width: 0; min-height: 4mm;
+  overflow: hidden; white-space: nowrap;
+  color: var(--tinta);
+  font: 600 calc(9.6pt * var(--f, 1))/1.15 Arial, Helvetica, sans-serif;
+}
+.v.quebrado { white-space: normal; overflow-wrap: anywhere; line-height: 1; }
+.cx {
+  position: relative; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 4.5mm; height: 4.5mm;
+  border: var(--traco) solid #000; background: #fff;
+  color: var(--tinta); font: 700 9pt/1 Arial, Helvetica, sans-serif;
+}
+.cx.longo { font-size: 7.2pt; letter-spacing: -.2pt; }
+
+.pente {
+  display: inline-flex; align-self: flex-start; margin-top: auto;
+  height: 5mm; border-bottom: var(--traco) solid #000;
+  color: var(--tinta); font: 600 9pt/1 Arial, Helvetica, sans-serif;
+}
+.pente i {
+  position: relative; display: flex; align-items: flex-end; justify-content: center;
+  width: 4mm; padding-bottom: .5mm; font-style: normal;
+}
+/* Traços por borda, não por fundo: saem no papel mesmo com "gráficos de fundo" desligado. */
+.pente i::before, .pente i:last-child::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 1.9mm;
+  border-left: var(--traco) solid #000;
+}
+.pente i:last-child::after { left: auto; right: 0; }
+.pente.data i:nth-child(3)::before, .pente.data i:nth-child(5)::before { height: 3.1mm; border-left-width: .55mm; }
+.pente.estreito i { width: 3.6mm; }
+.pente.cinza { background-color: var(--cinza); }
+.pente.cep i:nth-child(6) { margin-left: 2.4mm; }
+.pente.cep i:nth-child(6)::after { content: "-"; position: absolute; left: -1.9mm; bottom: .5mm; color: #000; }
+.cod .pente, .campo > .pente { align-self: center; }
+
+/* ---- Legendas de opções ---- */
+.leg { font-size: 5.7pt; line-height: 1.12; }
+.leg span { display: inline-block; margin-right: 1.8mm; white-space: nowrap; }
+.leg.pilha span { display: block; margin-right: 0; }
+.leg.pilha.media { font-size: 7.6pt; }
+.leg.italica { font-style: italic; padding-left: 4.6mm; font-size: 5.2pt; line-height: 1.06; }
+.leg.miuda { font-size: 5pt; line-height: 1.06; }
+.leg.centro { text-align: center; font-size: 6.6pt; }
+.leg.duas { font-size: 6.4pt; }
+.leg.forte { padding-top: .6mm; font-size: 7.8pt; margin-left: 5mm; }
+.leg.agravo { padding-top: .2mm; margin-left: 5mm; font-weight: 700; font-size: 9pt; }
+.leg.agravo span { margin-right: 4mm; }
+.rot > .leg.pilha { padding-top: .4mm; }
+.rot > .leg.duas { padding-top: .9mm; white-space: normal; }
+.campo > .leg, .parte > .leg { position: relative; margin-top: auto; }
+.duplo > .cx { margin-top: 2.2mm; }
+.duplo > .leg.pilha { flex: none; align-self: center; padding-top: 1.6mm; }
+.marcada { border: .3mm solid var(--tinta); border-radius: 50%; padding: .1mm 1.1mm; margin-left: -1.1mm; }
+.cid { flex: none; display: flex; flex-direction: column; align-items: center; margin-left: 12mm; font-size: 7pt; }
+.cid b {
+  padding: .3mm 1.6mm; border: var(--traco) solid #000; background: var(--cinza);
+  font: 700 8.6pt/1.1 "Times New Roman", Times, serif;
+}
+
+/* ---- Listas de sinais ---- */
+.itens {
+  flex: 1; display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--linhas, 2), auto);
+  align-content: center; justify-content: space-between; gap: .5mm 2mm;
+  font-size: 8.2pt;
+}
+.item { display: flex; align-items: center; gap: 1mm; min-width: 0; }
+.amostras { display: flex; justify-content: center; gap: 3mm; margin: .4mm 0; font-size: 7.4pt; }
+.colunas { flex: 1; display: flex; gap: 1.5mm; min-height: 0; font-size: 7.8pt; }
+.colunas > div { flex: 34 1 0; min-width: 0; display: flex; flex-direction: column; gap: .45mm; }
+.colunas > div:first-child { flex-grow: 36; justify-content: flex-end; }
+.colunas > div:last-child { flex-grow: 30; line-height: 1; }
+.colunas > div:first-child > .leg { margin: 0 0 auto 5mm; }
+/* Como na folha: o último sinal da coluna do meio avança sobre a casa vazia ao lado. */
+.colunas > div:nth-child(2) .item > span:last-child { white-space: nowrap; }
+.colunas .cx, .gravidade .cx { width: 4.1mm; height: 4.1mm; font-size: 8.4pt; }
+.gravidade {
+  flex: 1; display: grid; grid-template-columns: 54fr 46fr; grid-template-rows: auto 1fr;
+  gap: .4mm 3mm; padding-top: .8mm; font-size: 8pt;
+}
+.grupo { display: flex; flex-direction: column; gap: .5mm; min-width: 0; }
+.grupo > b { font-size: 8pt; }
+.grupo .itens { flex: none; justify-content: start; gap: .45mm 5mm; font-size: 8pt; }
+.grupo.g1 { grid-row: 1 / 3; }
+.grupo.g3 { position: relative; }
+.grupo.g3 .itens { grid-auto-flow: row; grid-template-rows: none; grid-template-columns: repeat(3, auto); }
+.grupo.g3 .item:last-child { grid-column: 1 / 3; }
+.especificar {
+  position: absolute; right: 0; bottom: 0; width: 44%;
+  border-bottom: var(--traco) solid #000; border-right: var(--traco) solid #000; border-radius: 0 0 1.4mm 0;
+  padding: 0 1mm .2mm;
+}
+
+/* ---- Observações: pautas da folha; a letra diminui em vez de o texto ser cortado ---- */
+.pautas {
+  --pauta: 8.5mm;
+  position: relative; flex: none; height: calc(var(--pautas) * var(--pauta) + 2 * var(--traco));
+  border: var(--traco) solid #777;
+}
+.pautas > i { display: block; height: var(--pauta); border-bottom: var(--traco) solid #777; }
+.pautas > i:last-of-type { border-bottom: 0; }
+.obs {
+  position: absolute; inset: 0; margin: 0; padding: 0 1.6mm;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: calc(9.6pt * var(--f, 1) / (1 + (var(--densidade) - 1) * .28));
+  line-height: calc(var(--pauta) / var(--densidade));
+}
+
+.rodape { flex: none; display: flex; justify-content: space-between; padding: .6mm 12mm 0 9mm; font-size: 7pt; }
+.margem { flex: none; margin: 0; text-align: center; color: #6b6b6b; font-size: 5.4pt; }
+.margem.simulada { color: var(--tinta); font-weight: 700; font-size: 6.4pt; letter-spacing: .2pt; }
+
+/* ---- Simulação: identificadores não guardados podem ser digitados na tela ---- */
+.nao-guardado { min-width: 8mm; outline: .3mm dashed #c77700; outline-offset: .2mm; cursor: text; font-weight: 400; font-style: italic; }
+.nao-guardado[data-digitado] { font-weight: 600; font-style: normal; }
+
+@media print {
+  body { background: #fff; }
+  .barra, .aviso { display: none !important; }
+  .folha { margin: 0; box-shadow: none; zoom: 1; height: 296.6mm; }
+  .folha:last-of-type { break-after: auto; }
+  .nao-guardado { outline: 0; }
+}

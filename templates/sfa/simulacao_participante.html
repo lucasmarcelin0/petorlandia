@@ -29,7 +29,7 @@
 {% set resposta = bloco.resposta %}
 <div class="card shadow-sm border-0 mb-4" id="etapa-{{ bloco.etapa }}">
   <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <h5 class="mb-0">{{ ETAPA_ROTULOS[bloco.etapa] }}</h5>
+    <h5 class="mb-0">{{ ETAPA_ROTULOS[bloco.etapa] }}{% if bloco.etapa == 'sinan' %} <a class="btn btn-sm btn-primary ms-2" href="{{ url_for('sfa_routes.simulacao_participante_ficha_sinan', participante_id=participante.id) }}"><i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir no formato SINAN</a>{% endif %}</h5>
     <div class="small text-muted">Enviado em {{ fmt_dt(resposta.enviado_em) }} · {{ fmt_dur(resposta.duracao_segundos) }} · {{ bloco.erros|length }} tentativa{{ '' if bloco.erros|length == 1 else 's' }} com erro · versão {{ resposta.instrument_version or '–' }}</div>
   </div>
   <div class="card-body">

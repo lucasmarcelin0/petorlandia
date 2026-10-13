@@ -53,6 +53,28 @@ Exportações: **CSV por participante** (uma linha por pessoa, etapas lado a
 lado) e **CSV por pergunta** (formato longo, uma linha por pergunta de cada
 etapa, pronto para tabela dinâmica ou R).
 
+## Impressão no formato da folha SINAN
+
+Na página de um participante (`/sfa/simulacoes/participante/<id>`), o cartão
+da Ficha SINAN tem o botão **Imprimir no formato SINAN**. Ele abre a ficha
+preenchida na disposição da folha oficial (Sinan Online, SVS 14/03/2016): as
+mesmas faixas, a mesma numeração de 1 a 71 e as mesmas duas páginas A4, com os
+códigos nas casas e as datas nos pentes. O mesmo vale para a ficha real: o
+botão aparece ao concluir `/sfa/pre-t0` e na ficha do caso.
+
+- Valor longo diminui a letra até caber; nada é cortado. Código que não cabe
+  nas casas (ex.: telefone com ramal) sai escrito por extenso no mesmo espaço.
+- Nos campos 68 e 70 a folha tem uma casa por sinal: os marcados saem "1" e os
+  demais seguem a resposta geral, que fica circulada na legenda.
+- Na simulação, os identificadores não guardados saem como `[preenchido]`.
+  Para mostrar a folha completa, clique no campo tracejado e digite antes de
+  imprimir; o que for digitado ali não é salvo. A folha da simulação leva no
+  rodapé o aviso "SIMULAÇÃO · dados fictícios, sem valor de notificação".
+
+Um campo novo no esquema da ficha precisa de lugar em
+`templates/sfa/pre_t0_print.html`; `tests/test_sfa_pre_t0_impressao.py` falha
+enquanto ele não estiver na folha.
+
 ## Privacidade
 
 Os formulários pedem para usar dados fictícios, mas os identificadores diretos

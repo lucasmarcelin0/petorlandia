@@ -18,6 +18,7 @@
 
 {% block content %}
 <a class="btn btn-outline-secondary mb-3" href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Voltar ao caso</a>
+<a class="btn btn-primary mb-3" href="{{ url_for('sfa_routes.paciente_pre_t0_imprimir', id_estudo=p.id_estudo) }}"><i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir no formato SINAN</a>
 
 <section class="card shadow-sm pre-t0-detail-hero mb-3">
   <div class="card-body p-4">
