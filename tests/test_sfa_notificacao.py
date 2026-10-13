@@ -136,6 +136,38 @@ def test_admin_cadastra_unidade_e_indica_responsavel(app, client):
     assert funcoes == ['criar_unidade', 'conceder_responsavel', 'revogar_responsavel']
 
 
+def test_unidade_recebe_varios_responsaveis_de_uma_vez(app, client, ubs):
+    admin = conta('admin5@example.test', role='admin', name='Admin')
+    ana, bia, caio = (conta(f'{n}@example.test', name=n.title()) for n in ('ana', 'bia', 'caio'))
+    entrar(client, admin)
+    url = f'/sfa/notificacao/unidades/{ubs.id}/responsaveis'
+
+    def ativos():
+        return sorted(v.user.name for v in SfaUnidadeResponsavel.query.filter_by(unidade_id=ubs.id, revogado_em=None))
+
+    client.post(url, data={'email': 'ana@example.test'}, **HTTPS)
+    varios = 'Bia@Example.test, ana@example.test;\ncaio@example.test  fantasma@example.test'
+    resposta = client.post(url, data={'email': varios}, follow_redirects=True, **HTTPS)
+    assert ativos() == ['Ana', 'Bia', 'Caio']
+    pagina = BeautifulSoup(resposta.data, 'html.parser')
+    avisos = ' | '.join(a.get_text(' ', strip=True) for a in pagina.select('.alert'))
+    assert 'Bia e Caio agora respondem por UBS Teste.' in avisos and 'Ana já respondia por esta unidade.' in avisos
+    assert 'Nenhuma conta no site com este e-mail: fantasma@example.test.' in avisos
+    secao = pagina.select_one(f'#unidade-{ubs.id}').get_text(' ')
+    assert '3 responsáveis' in secao and 'Adicionar mais responsáveis' in secao
+    assert [u.id for u in notificacao.unidades_do_usuario(bia)] == [ubs.id]
+    assert SfaAuditoria.query.filter_by(funcao='conceder_responsavel').count() == 3
+
+    client.post(url, data={'email': '  '}, **HTTPS)
+    client.post(url, data={'email': ' '.join(f'p{n}@example.test' for n in range(31))}, **HTTPS)
+    assert ativos() == ['Ana', 'Bia', 'Caio']
+    # A mesma pessoa também pode responder por outra unidade.
+    outra = unidade('UBS Vizinha', '1111111')
+    client.post(f'/sfa/notificacao/unidades/{outra.id}/responsaveis', data={'email': 'caio@example.test'}, **HTTPS)
+    g.pop('_sfa_unidades_usuario', None)
+    assert sorted(u.nome for u in notificacao.unidades_do_usuario(caio)) == ['UBS Teste', 'UBS Vizinha']
+
+
 def test_unidade_desativada_suspende_o_acesso(app, client, ubs):
     admin = conta('admin2@example.test', role='admin')
     pessoa = responsavel(ubs, 'pessoa@example.test')

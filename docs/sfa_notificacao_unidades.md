@@ -14,7 +14,8 @@ e chikungunya nas unidades. Usa a mesma ficha digital de `/sfa/pre-t0`
 | Demais contas | Nenhum acesso (404) |
 
 Ser responsável é um papel **adicional** (`sfa_unidade_responsavel`): não altera
-`User.role`, e uma conta pode responder por mais de uma unidade. Desativar a
+`User.role`. Cada unidade pode ter vários responsáveis (a tela aceita vários
+e-mails de uma vez) e uma conta pode responder por mais de uma unidade. Desativar a
 unidade suspende o acesso dos responsáveis; as fichas continuam guardadas.
 
 O administrador cuida disso em **Unidades e responsáveis**

@@ -12,6 +12,7 @@ from flask import abort, current_app, flash, redirect, render_template, request,
 from flask_login import current_user, login_required
 
 _CAMPO = re.compile(r"[a-z0-9_]{1,80}")
+_LIMITE_EMAILS = 30
 
 
 def _usuario():
@@ -64,6 +65,11 @@ def _data_hora(iso):
         return datetime.fromisoformat(str(iso)).strftime('%d/%m/%Y %H:%M')
     except ValueError:
         return ''
+
+
+def _enumerar(itens):
+    itens = list(itens)
+    return itens[0] if len(itens) == 1 else ', '.join(itens[:-1]) + ' e ' + itens[-1]
 
 
 def _auditar(funcao, mensagem, detalhes, id_estudo=None):
@@ -316,26 +322,46 @@ def register(bp):
     @require_notificacao_access
     @login_required
     def notificacao_responsavel_conceder(unidade_id):
+        """Indica uma ou várias contas de uma vez: a unidade pode ter quantos responsáveis precisar."""
         ensure_notificacao_admin()
         from extensions import db
         from models.sfa import SfaUnidadeSaude
         from services.entomologia_acesso import buscar_conta
         from services.sfa_notificacao import conceder, nome_da_conta
         unidade = db.session.get(SfaUnidadeSaude, unidade_id) or abort(404)
-        try:
-            conta = buscar_conta(request.form.get('email'))
-        except ValueError as exc:
-            flash(str(exc), 'danger')
-            return _voltar_unidades(f'#unidade-{unidade_id}')
-        _, criado = conceder(unidade, conta, nome_da_conta(current_user)[:160])
-        if criado:
-            _auditar('conceder_responsavel', f'Conta #{conta.id} passou a responder pela unidade #{unidade.id}',
-                     {'unidade_id': unidade.id, 'user_id': conta.id})
+        destino = f'#unidade-{unidade_id}'
+        digitados = re.split(r'[\s,;]+', str(request.form.get('email') or ''))
+        emails = list(dict.fromkeys(email.lower() for email in digitados if email))
+        if not emails:
+            flash('Informe o e-mail de pelo menos uma conta.', 'danger')
+            return _voltar_unidades(destino)
+        if len(emails) > _LIMITE_EMAILS:
+            flash(f'Indique até {_LIMITE_EMAILS} e-mails por vez.', 'danger')
+            return _voltar_unidades(destino)
+        novos, repetidos, sem_conta = [], [], []
+        for email in emails:
+            try:
+                conta = buscar_conta(email)
+            except ValueError:
+                sem_conta.append(email[:254])
+                continue
+            _, criado = conceder(unidade, conta, nome_da_conta(current_user)[:160])
+            (novos if criado else repetidos).append(nome_da_conta(conta))
+            if criado:
+                _auditar('conceder_responsavel', f'Conta #{conta.id} passou a responder pela unidade #{unidade.id}',
+                         {'unidade_id': unidade.id, 'user_id': conta.id})
+        if novos:
             db.session.commit()
-            flash(f'{nome_da_conta(conta)} agora responde por {unidade.nome}.', 'success')
-        else:
-            flash('Essa conta já responde por esta unidade.', 'info')
-        return _voltar_unidades(f'#unidade-{unidade_id}')
+            flash(f"{_enumerar(novos)} agora {'responde' if len(novos) == 1 else 'respondem'} por {unidade.nome}.",
+                  'success')
+        if repetidos:
+            flash(f"{_enumerar(repetidos)} já {'respondia' if len(repetidos) == 1 else 'respondiam'} por esta unidade.",
+                  'info')
+        if sem_conta:
+            flash(f"Nenhuma conta no site com {'este e-mail' if len(sem_conta) == 1 else 'estes e-mails'}: "
+                  f"{', '.join(sem_conta)}. Peça para a pessoa criar a conta com esse endereço e indique de novo.",
+                  'danger')
+        return _voltar_unidades(destino)
 
     @bp.route('/notificacao/responsaveis/<int:vinculo_id>/revogar', methods=['POST'])
     @require_notificacao_access

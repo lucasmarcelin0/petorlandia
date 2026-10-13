@@ -40,6 +40,7 @@
 
 /* Unidades */
 .notif-unidade.inativa { opacity: .72; }
+.notif-subtitulo { margin: .9rem 0 .35rem; color: #557075; font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .notif-unidade summary { cursor: pointer; color: #0d6971; font-size: .85rem; font-weight: 600; }
 .notif-form-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; }
 .notif-form-linha > div { flex: 1 1 180px; min-width: 0; }
