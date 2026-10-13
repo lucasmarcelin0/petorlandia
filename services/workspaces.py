@@ -34,7 +34,8 @@ class Experience:
         return self.workspaces
 
 
-def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False):
+def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False,
+                       sinan=False):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -92,6 +93,14 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
              action('Painel do território', 'sfa_routes.entomologia', 'fa-map-location-dot'),
              action('Atualizar dados', 'sfa_routes.entomologia_atualizar', 'fa-upload'),
              action('Página pública', 'vigilancia_publica.painel_aedes_publico', 'fa-bullhorn'))
+    if sinan or admin:
+        # Responsáveis por unidade de saúde (services.sfa_notificacao): papel adicional, como o da dengue.
+        acoes = [action('Nova ficha', 'sfa_routes.notificacao_nova', 'fa-file-circle-plus'),
+                 action('Fichas da unidade', 'sfa_routes.notificacao_fichas', 'fa-folder-open'),
+                 action('Panorama das unidades', 'sfa_routes.notificacao_panorama', 'fa-chart-column')]
+        if admin:
+            acoes.append(action('Unidades e responsáveis', 'sfa_routes.notificacao_unidades', 'fa-hospital-user'))
+        area('sinan', 'Notificação SINAN', 'fa-file-medical', *acoes)
     if internship:
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
@@ -118,6 +127,7 @@ def current_experience():
         from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao
         from helpers import _user_can_access_accounting, is_veterinarian
         from services.entomologia_acesso import membro_equipe
+        from services.sfa_notificacao import unidades_do_usuario
 
         g.user_experience = resolve_experience(
             current_user,
@@ -126,6 +136,7 @@ def current_experience():
             store=inject_minha_casa_de_racao()['minha_casa_de_racao'],
             clinic_access=inject_has_clinic_access()['has_clinic_access'],
             dengue=membro_equipe(current_user),
+            sinan=bool(unidades_do_usuario(current_user)),
         )
     return g.user_experience
 

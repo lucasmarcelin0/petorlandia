@@ -18,6 +18,17 @@ FORBIDDEN_PATH_FRAGMENTS = (
 )
 
 
+def is_sensitive_artifact(path: str) -> bool:
+    normalized = path.replace('\\', '/').lower().lstrip('./')
+    if any(fragment in normalized for fragment in FORBIDDEN_PATH_FRAGMENTS):
+        return True
+    # The local Betha preview embeds personal data, including in HTML and CSV.
+    # Its ignore rule is safe to track; the preview and downloads are not.
+    if normalized.startswith('output/betha-access-test/'):
+        return normalized != 'output/betha-access-test/.gitignore'
+    return normalized.rsplit('/', 1)[-1] == 'sfa_cadastro.json'
+
+
 def tracked_files() -> list[str]:
     result = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -31,7 +42,7 @@ def main() -> int:
     violations = [
         path
         for path in tracked_files()
-        if any(fragment in path for fragment in FORBIDDEN_PATH_FRAGMENTS)
+        if is_sensitive_artifact(path)
     ]
     if violations:
         print("Arquivos sensíveis rastreados no Git:", file=sys.stderr)

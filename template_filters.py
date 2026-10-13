@@ -17,7 +17,11 @@ from decimal import Decimal
 from functools import lru_cache
 from urllib.parse import quote_plus
 
-from document_utils import format_cnpj as format_cnpj_value
+from document_utils import (
+    format_cnpj as format_cnpj_value,
+    format_cpf,
+    format_phone_br,
+)
 from services.health_plan import coverage_badge, coverage_label
 from time_utils import BR_TZ, coerce_to_brazil_tz
 
@@ -57,6 +61,40 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
         return value.strftime(fmt)
 
     return value
+
+
+_ISO_DATA_RE = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
+)
+
+
+def data_br(value, com_hora=None):
+    """Mostra qualquer data no padrão brasileiro: dd/mm/aaaa (ou com hh:mm).
+
+    Aceita ``date``/``datetime`` e também string ISO — vários campos vêm de
+    planilhas e JSONs como texto "aaaa-mm-dd". O que não for data reconhecível
+    volta sem alteração, para nunca esconder um valor que a tela precisa
+    mostrar (``com_hora`` força ou remove a hora).
+    """
+    if value is None or value == "":
+        return ""
+
+    if isinstance(value, datetime):
+        mostrar_hora = True if com_hora is None else com_hora
+        return format_datetime_brazil(value, "%d/%m/%Y %H:%M" if mostrar_hora else "%d/%m/%Y")
+
+    if isinstance(value, date):
+        return value.strftime("%d/%m/%Y")
+
+    texto = str(value).strip()
+    match = _ISO_DATA_RE.match(texto)
+    if not match:
+        return value
+
+    ano, mes, dia, hora, minuto = match.groups()
+    data = f"{dia}/{mes}/{ano}"
+    mostrar_hora = (hora is not None) if com_hora is None else com_hora
+    return f"{data} {hora}:{minuto}" if mostrar_hora and hora is not None else data
 
 
 def isoformat_with_tz(value):
@@ -158,6 +196,16 @@ def normalize_phone(value: str | None) -> str | None:
 def format_cnpj(value):
     """Return a formatted CNPJ (00.000.000/0000-00)."""
     return format_cnpj_value(value)
+
+
+def cpf_br(value):
+    """CPF como 000.000.000-00, qualquer que seja a forma gravada."""
+    return format_cpf(value)
+
+
+def telefone_br(value):
+    """Telefone como (16) 99269-0405, qualquer que seja a forma gravada."""
+    return format_phone_br(value)
 
 
 _DECIMAL_ZERO = Decimal("0")
@@ -338,12 +386,15 @@ def catalog_image_sources(source):
 _FILTERS = {
     "catalog_image_sources": catalog_image_sources,
     "date_now": date_now,
+    "data_br": data_br,
     "datetime_brazil": datetime_brazil,
     "format_datetime_brazil": format_datetime_brazil,
     "isoformat_with_tz": isoformat_with_tz,
     "format_timedelta": format_timedelta,
     "digits_only": digits_only,
     "format_cnpj": format_cnpj,
+    "cpf_br": cpf_br,
+    "telefone_br": telefone_br,
     "currency_br": currency_br,
     "payment_status_label": payment_status_label,
     "payer_label": payer_label_filter,

@@ -260,3 +260,19 @@ form { margin-top: 15px; }
   .paired-text-row { grid-template-columns: minmax(0, 1fr); }
 }
 .test-result-row .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Área das unidades de saúde: voltar, campos fixos e o que ainda falta na ficha. */
+a.brand-status { text-decoration: none; }
+a.brand-status:hover, a.brand-status:focus-visible { border-color: var(--teal); color: var(--teal-deep); outline: 0; }
+.field-card input[readonly] { color: var(--muted); background: #f3f6f4; cursor: default; }
+.pending-card { margin-top: 15px; padding: 18px 20px; border: 1px solid #f0dcb8; border-radius: 18px; background: var(--orange-pale); }
+.pending-card h2 { margin: 0 0 4px; color: #6f4513; font: 800 16px Manrope, sans-serif; }
+.pending-card > p { margin: 0 0 12px; color: #7d6238; font-size: 12px; line-height: 1.5; }
+.pending-group + .pending-group { margin-top: 12px; }
+.pending-group h3 { margin: 0 0 6px; color: #85531c; font: 800 10px Manrope, sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+.pending-group ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pending-group a { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid #ecd3a6; border-radius: 10px; color: #5c3a10; background: #fff; font-size: 12px; font-weight: 600; text-decoration: none; }
+.pending-group a:hover, .pending-group a:focus-visible { border-color: var(--orange); outline: 0; box-shadow: 0 0 0 3px rgba(229,155,70,.2); }
+.pending-group a small { color: #8b6f45; font-weight: 500; }
+.field-card.is-pending { border-color: #ecc98f; background: #fffdf8; }
+.pending-mark { flex: 0 0 auto; margin-left: auto; padding: 3px 7px; border-radius: 999px; color: #85531c; background: #fde9c7; font-size: 9px; font-weight: 700; white-space: nowrap; }

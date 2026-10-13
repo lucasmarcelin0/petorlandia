@@ -89,6 +89,15 @@ class Animal(db.Model):
 
     removido_em = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Régua do anúncio de adoção (services/adocao_lembretes.py): quando o
+    # responsável confirmou pela última vez que o animal segue disponível,
+    # quando saíram a pergunta mensal e o pedido de foto/telefone, e quando o
+    # anúncio saiu da lista por falta de resposta (pendência ainda aberta).
+    adocao_revisada_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    adocao_lembrete_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    adocao_pedido_dados_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    adocao_expirada_em = db.Column(db.DateTime(timezone=True), nullable=True)
+
     added_by_id = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='SET NULL'),
@@ -395,6 +404,23 @@ def _normalize_animal_name_before_insert(mapper, connection, target):
 @event.listens_for(Animal, "before_update")
 def _normalize_animal_name_before_update(mapper, connection, target):
     _normalize_model_name(target)
+
+
+@event.listens_for(Animal.modo, "set", active_history=True)
+def _restart_adoption_review_clock(target, value, oldvalue, initiator):
+    """Mantém a régua do anúncio coerente com qualquer troca de modo.
+
+    Animal que volta a ser anunciado recomeça a contagem: sem isto um pet
+    cadastrado há um ano e colocado para adoção hoje já nasceria "vencido".
+    E quem mexe no modo (edição, transferência de tutoria) já decidiu o
+    destino do animal, então a pendência de "saiu da lista sem resposta" se
+    encerra — o pop-up não deve perguntar de novo, muito menos ao novo tutor.
+    """
+    if not isinstance(oldvalue, str):
+        return
+    target.adocao_expirada_em = None
+    if value == 'doação' and oldvalue != value:
+        target.adocao_revisada_em = now_in_brazil()
 
 
 # ──────────────────── Serviço de Vacinas Pagas ────────────────────

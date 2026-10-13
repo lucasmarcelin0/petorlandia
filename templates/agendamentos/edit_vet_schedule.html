@@ -193,9 +193,11 @@
                 <div class="col-md-6">
                   {#
                     Contrato de datas da agenda:
-                    - o navegador mostra este campo no padrão local pt-BR (dd/mm/aaaa);
-                    - por ser um <input type="date">, o valor enviado ao JavaScript e
-                      ao servidor é SEMPRE ISO (aaaa-mm-dd), conforme o padrão HTML.
+                    - quem desenha o campo em dd/mm/aaaa é static/js/date_br.js;
+                      o <input type="date"> nativo seguiria o idioma do NAVEGADOR
+                      (mm/dd/yyyy num Chrome em inglês);
+                    - o valor entregue ao JavaScript e ao servidor continua SEMPRE
+                      ISO (aaaa-mm-dd), conforme o padrão HTML.
                     Nunca converta esse valor para dd/mm/aaaa antes de chamar a API:
                     isso troca dia e mês em datas ambíguas (por exemplo, 03/08).
                   #}

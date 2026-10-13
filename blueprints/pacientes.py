@@ -41,7 +41,15 @@ from models import (
     VacinaModelo,
     Veterinario,
 )
-from models.usuarios import build_placeholder_email
+from document_utils import (
+    is_valid_cpf_length,
+    is_valid_phone,
+    normalize_cpf,
+    normalize_phone,
+    same_cpf,
+    same_phone,
+)
+from models.usuarios import build_placeholder_email, is_placeholder_email
 from services.animal_search import search_animals
 from services.pet_growth import build_pet_opportunities
 from services.product_analytics import track_event
@@ -72,6 +80,7 @@ from app import (  # noqa: E402
     _resolve_record_panel,
     _resolve_shared_access_for_animal,
     _resolve_shared_access_for_user,
+    _sanitize_login_next_url,
     _serialize_share_request,
     _serialize_tutor_share_payload,
     _update_coordinates_from_request,
@@ -85,6 +94,7 @@ from app import (  # noqa: E402
     bake_image_rotation,
     current_user_clinic_id,
     enviar_mensagem_whatsapp,
+    find_users_by_phone,
     formatar_telefone,
     get_animal_or_404,
     get_user_or_404,
@@ -585,6 +595,122 @@ def adotar_animal(animal_id):
     db.session.commit()
     flash(f'Você adotou {animal.name} com sucesso!', 'success')
     return redirect(url_for('list_animals'))
+
+
+#: Mesmas extensões aceitas pelo AnimalForm na edição do animal.
+_FOTO_ANUNCIO_EXTENSOES = {'jpg', 'jpeg', 'png', 'gif'}
+
+
+@bp.route('/adocao/revisar', methods=['GET', 'POST'])
+@login_required
+def revisar_adocao():
+    """Tela em que o responsável confirma, encerra e completa seus anúncios.
+
+    É também o destino do pop-up mensal do layout e dos e-mails de
+    services/adocao_lembretes.py.
+    """
+    from context_processors import _invalidate_cached_context
+    from services import adocao_lembretes
+
+    if request.method == 'POST':
+        destino = _sanitize_login_next_url(
+            request.form.get('next'), fallback=url_for('revisar_adocao')
+        )
+        animais = adocao_lembretes.ensure_own_adoption_listings(
+            current_user, request.form.getlist('animal_id')
+        )
+        confirmados, devolvidos, adotados, fotos, avisos = [], [], [], [], []
+        for animal in animais:
+            resposta = request.form.get(f'resposta_{animal.id}')
+            if resposta == 'adotado':
+                adocao_lembretes.mark_adopted(animal)
+                adotados.append(animal.name)
+                continue
+
+            foto = request.files.get(f'foto_{animal.id}')
+            foto_salva = False
+            if foto and getattr(foto, 'filename', ''):
+                extensao = foto.filename.rsplit('.', 1)[-1].lower() if '.' in foto.filename else ''
+                image_url = None
+                if extensao in _FOTO_ANUNCIO_EXTENSOES:
+                    filename = f"{uuid.uuid4().hex}_{secure_filename(foto.filename)}"
+                    image_url = upload_to_s3(foto, filename, folder="animals")
+                if image_url:
+                    animal.image = image_url
+                    # Enquadramento era da foto antiga; a nova começa do zero.
+                    animal.photo_rotation = 0
+                    animal.photo_zoom = 1
+                    animal.photo_offset_x = 0
+                    animal.photo_offset_y = 0
+                    foto_salva = True
+                    fotos.append(animal.name)
+                else:
+                    avisos.append(
+                        f'Não foi possível salvar a foto de {animal.name}. '
+                        'Envie uma imagem JPG, PNG ou GIF.'
+                    )
+
+            # Quem manda foto nova está dizendo que o animal segue disponível.
+            if resposta == 'disponivel' or foto_salva:
+                # Anúncio que saiu da lista por falta de resposta volta a ela.
+                fora_da_lista = animal.modo != adocao_lembretes.ADOPTION_MODE
+                adocao_lembretes.confirm_still_available(animal)
+                (devolvidos if fora_da_lista else confirmados).append(animal.name)
+
+        telefone = (request.form.get('telefone') or '').strip()
+        telefone_salvo = False
+        if telefone and adocao_lembretes.needs_phone(current_user):
+            if not is_valid_phone(telefone):
+                avisos.append('Telefone inválido. Informe o DDD e o número.')
+            elif find_users_by_phone(telefone, exclude_user_id=current_user.id):
+                avisos.append('Este telefone já está em uso em outra conta.')
+            else:
+                current_user.phone = normalize_phone(telefone)
+                telefone_salvo = True
+
+        db.session.commit()
+        _invalidate_cached_context(current_user.id, 'adoption_review')
+
+        feito = []
+        if adotados:
+            verbo = 'saiu' if len(adotados) == 1 else 'saíram'
+            feito.append(
+                f'Que notícia boa! {adocao_lembretes.join_names(adotados)} '
+                f'{verbo} da lista de adoção.'
+            )
+        if confirmados:
+            verbo = 'continua' if len(confirmados) == 1 else 'continuam'
+            feito.append(
+                f'{adocao_lembretes.join_names(confirmados)} {verbo} na lista de '
+                'adoção; perguntamos de novo daqui a um mês.'
+            )
+        if devolvidos:
+            verbo = 'voltou' if len(devolvidos) == 1 else 'voltaram'
+            feito.append(
+                f'{adocao_lembretes.join_names(devolvidos)} {verbo} para a lista de adoção.'
+            )
+        if fotos:
+            feito.append(f'Foto nova de {adocao_lembretes.join_names(fotos)} salva.')
+        if telefone_salvo:
+            feito.append('Telefone salvo.')
+        if feito:
+            flash(' '.join(feito), 'success')
+        for aviso in avisos:
+            flash(aviso, 'warning')
+        if not (feito or avisos):
+            flash('Nada foi alterado.', 'info')
+        return redirect(destino)
+
+    return render_template(
+        'animais/adocao_revisar.html',
+        review_animals=adocao_lembretes.review_cards(
+            adocao_lembretes.listings_of(current_user)
+            + adocao_lembretes.expired_listings_of(current_user)
+        ),
+        review_needs_phone=adocao_lembretes.needs_phone(current_user),
+        # A própria tela já é o formulário: o pop-up por cima seria redundante.
+        adoption_review_modal_disabled=True,
+    )
 
 
 @bp.route('/animal/<int:animal_id>/editar', methods=['GET', 'POST'])
@@ -1403,7 +1529,7 @@ def tutor_detail(tutor_id):
     return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
 
-def _find_user_by_cpf(cpf: str | None) -> User | None:
+def _find_user_by_cpf(cpf: str | None, *, exclude_id: int | None = None) -> User | None:
     """Localiza um tutor pelo CPF ignorando a máscara.
 
     O mesmo documento aparece como ``123.456.789-00`` e ``12345678900`` conforme
@@ -1416,7 +1542,26 @@ def _find_user_by_cpf(cpf: str | None) -> User | None:
     normalized_column = User.cpf
     for char in ('.', '-', '/', ' '):
         normalized_column = func.replace(normalized_column, char, '')
-    return User.query.filter(normalized_column == digits).first()
+    query = User.query.filter(normalized_column == digits)
+    if exclude_id is not None:
+        query = query.filter(User.id != exclude_id)
+    return query.first()
+
+
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def _cadastro_em_conflito(existing: User) -> str:
+    """Quem já usa o dado, para a equipe abrir o cadastro certo.
+
+    Só identifica a pessoa quando quem está editando já pode ver esse
+    cadastro; fora disso o nome de um tutor de outra clínica vazaria aqui.
+    """
+    try:
+        get_user_or_404(existing.id)
+    except Exception:
+        return ''
+    return f'{existing.name} (cadastro nº {existing.id})'
 
 
 @bp.route('/tutores', methods=['GET', 'POST'])
@@ -1489,8 +1634,8 @@ def tutores():
         novo.set_password(secrets.token_urlsafe(32))
 
         # Campos opcionais
-        novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
-        novo.cpf = cpf
+        novo.phone = normalize_phone(request.form.get('tutor_phone') or request.form.get('phone')) or None
+        novo.cpf = normalize_cpf(cpf) or None
         novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
         novo.address = None
 
@@ -1803,30 +1948,72 @@ def update_tutor(user_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    # 📋 Campos básicos (exceto CPF)
-    for field in ['name', 'email', 'phone', 'rg']:
-        value = request.form.get(field)
+    def _recusar(message, status=400, category='warning'):
+        if wants_json:
+            return jsonify(success=False, message=message, category=category), status
+        flash(message, category)
+        return redirect(request.referrer or url_for('index'))
+
+    # E-mail, telefone e CPF são conferidos ANTES de qualquer alteração no
+    # objeto: uma consulta com o cadastro já modificado dispara o autoflush, e
+    # a duplicata estourava ali como IntegrityError (erro 500 "Unexpected
+    # error") em vez de virar um aviso para quem está digitando.
+    #
+    # Cada um só é validado quando o valor realmente mudou. O banco guarda o
+    # mesmo dado com e sem máscara, com e sem +55; reenviar o que já está
+    # gravado nunca pode impedir o salvamento dos outros campos.
+    email = (request.form.get('email') or '').strip().lower()
+    email_changed = bool(email) and email != (user.email or '').strip().lower()
+    if email_changed:
+        if not _EMAIL_RE.match(email):
+            return _recusar('Informe um e-mail válido, como nome@exemplo.com.')
+        existing = User.query.filter(
+            func.lower(User.email) == email, User.id != user.id
+        ).first()
+        if existing:
+            quem = _cadastro_em_conflito(existing)
+            message = (
+                f'Este e-mail já está no cadastro de {quem}. '
+                'Use esse cadastro ou informe outro e-mail.'
+                if quem else
+                'Este e-mail já está em uso por outro cadastro.'
+            )
+            return _recusar(message, 409)
+
+    phone = (request.form.get('phone') or '').strip()
+    phone_changed = bool(phone) and not same_phone(phone, user.phone)
+    if phone_changed and not is_valid_phone(phone):
+        return _recusar('Informe o telefone com DDD (10 ou 11 dígitos).')
+
+    cpf = (request.form.get('cpf') or '').strip()
+    cpf_changed = bool(cpf) and not same_cpf(cpf, user.cpf)
+    if cpf_changed:
+        if not is_valid_cpf_length(cpf):
+            return _recusar('Informe o CPF com 11 dígitos.')
+        existing = _find_user_by_cpf(cpf, exclude_id=user.id)
+        if existing:
+            quem = _cadastro_em_conflito(existing)
+            message = 'CPF já cadastrado para outro tutor'
+            message += f': {quem}.' if quem else '.'
+            return _recusar(message, 409, 'danger')
+
+    # 📋 Campos básicos
+    for field in ['name', 'rg']:
+        value = (request.form.get(field) or '').strip()
         if value:
             setattr(user, field, value)
+    if email_changed:
+        user.email = email
+        user.email_is_placeholder = is_placeholder_email(email)
+    if phone_changed:
+        user.phone = normalize_phone(phone)
+    if cpf_changed:
+        user.cpf = normalize_cpf(cpf)
 
     # Observações: diferente dos campos acima, aceita ficar vazio — é assim que
     # a clínica apaga uma anotação que não vale mais.
     if 'observacoes' in request.form:
         user.observacoes = (request.form.get('observacoes') or '').strip() or None
-
-    # CPF precisa ser único
-    cpf_val = request.form.get('cpf')
-    if cpf_val:
-        cpf_val = cpf_val.strip()
-        if cpf_val != (user.cpf or ''):
-            existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
-            if existing:
-                message = 'CPF já cadastrado para outro tutor.'
-                if wants_json:
-                    return jsonify(success=False, message=message, category='danger'), 400
-                flash(message, 'danger')
-                return redirect(request.referrer or url_for('index'))
-        user.cpf = cpf_val
 
     # 📅 Data de nascimento
     date_str = request.form.get('date_of_birth')

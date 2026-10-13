@@ -129,11 +129,12 @@
     <div class="col-md-4 col-xl-3">
       <label for="numero" class="form-label fw-semibold">Número</label>
       {% if addr_form %}
-      {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº", pattern="\\d*", inputmode="numeric") }}
+      {# Sem pattern: número de casa tem letra ("1680A", "S/N", "120 fundos"). #}
+      {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº", maxlength="20") }}
       {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
       <input type="text" class="form-control" name="numero" id="numero"
-        value="{{ endereco.numero|default('', true) if endereco else '' }}" placeholder="Nº" pattern="\d*" inputmode="numeric">
+        value="{{ endereco.numero|default('', true) if endereco else '' }}" placeholder="Nº" maxlength="20">
       {% endif %}
     </div>
 

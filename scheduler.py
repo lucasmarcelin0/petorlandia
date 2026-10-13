@@ -208,6 +208,21 @@ def _run_atlas_artefatos() -> None:
             current_app.logger.info("[Scheduler] Artefatos do atlas prontos (versão %s).", versao[:8])
 
 
+def _run_adoption_reminders() -> None:
+    with app.app_context():
+        if not _env_bool("ADOPTION_REMINDERS_ENABLED", True):
+            current_app.logger.info(
+                "[Scheduler] Lembretes de adocao desativados por ADOPTION_REMINDERS_ENABLED."
+            )
+            return
+        from services.adocao_lembretes import enviar_lembretes_adocao
+
+        try:
+            enviar_lembretes_adocao()
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha nos lembretes de adocao.")
+
+
 def main() -> None:
     timezone = os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
     scheduler = BlockingScheduler(timezone=timezone)
@@ -274,6 +289,9 @@ def main() -> None:
         ('lembretes-consultas-exames-vacinas', verificar_datas_proximas, 8, 0),
         ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
         ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
+        # Anúncios de adoção: pedido de foto/telefone e a pergunta mensal
+        # "ainda está disponível?".
+        ('lembretes-adocao', _run_adoption_reminders, 10, 30),
         ('lembretes-fim-trial', enviar_lembretes_fim_trial, 11, 0),
         # Recuperação de receita: quem terminou a avaliação sem assinar e quem
         # montou carrinho e não pagou.

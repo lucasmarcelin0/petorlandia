@@ -53,12 +53,14 @@ Exportações: **CSV por participante** (uma linha por pessoa, etapas lado a
 lado) e **CSV por pergunta** (formato longo, uma linha por pergunta de cada
 etapa, pronto para tabela dinâmica ou R).
 
-## Privacidade
+## Dados e privacidade na simulação
 
-Os formulários pedem para usar dados fictícios, mas os identificadores diretos
-nunca são gravados, mesmo se alguém digitar dados reais: nome, nome da mãe,
-cartão SUS, telefone, endereço (logradouro, número, complemento, CEP, ponto de
-referência, georreferência), nome e assinatura do investigador e o nome de
-quem responde por outra pessoa no T0/T30. Fica só a marca `[preenchido]`, que
-permite medir o preenchimento. O número da ficha digitado não é cruzado com o
-SINAN real.
+Os formulários pedem para usar dados fictícios. Como se trata de simulação com
+casos de teste e as respostas ficam estritamente isoladas nas tabelas
+`sfa_simulacao_*` (sem criar registros em `SfaPaciente`, SINAN oficial ou
+coorte real), todos os dados preenchidos são gravados exatamente como
+informados pelos participantes (incluindo nome, mãe, endereço, investigador e
+respondente). Isso assegura que a equipe possa conferir as fichas preenchidas,
+verificar a exatidão em relação aos casos simulados e exportar os dados
+completos para análise. O número da ficha digitado não é cruzado com o SINAN
+real.

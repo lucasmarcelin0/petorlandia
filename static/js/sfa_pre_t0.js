@@ -374,6 +374,35 @@
   form.dataset.ready = "true";
   showStep(0);
 
+  // Completar a ficha depois: os itens de "O que ainda falta" (e o link vindo da tela da ficha) abrem a
+  // etapa do campo e focam nele. Preencheu o campo, a marca "Falta" dele some.
+  function irParaCampo(nome) {
+    const controle = form.querySelector(`[name="${window.CSS && CSS.escape ? CSS.escape(nome) : nome}"]`);
+    const painel = controle && controle.closest("[data-step-panel]");
+    if (!controle || !painel) return false;
+    const indice = Number(painel.dataset.stepPanel || 0);
+    visited.add(indice);
+    showStep(indice);
+    const cartao = controle.closest("[data-field-card]");
+    window.setTimeout(() => {
+      controle.focus({ preventScroll: true });
+      (cartao || controle).scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return true;
+  }
+  document.querySelectorAll("[data-ir-para]").forEach((atalho) => atalho.addEventListener("click", (evento) => {
+    if (irParaCampo(atalho.dataset.irPara)) evento.preventDefault();
+  }));
+  form.querySelectorAll(".field-card.is-pending").forEach((cartao) => {
+    const preenchido = () => {
+      cartao.classList.remove("is-pending");
+      cartao.querySelector(".pending-mark")?.remove();
+    };
+    cartao.addEventListener("input", preenchido, { once: true });
+    cartao.addEventListener("change", preenchido, { once: true });
+  });
+  if (form.dataset.focusField && !form.dataset.errorField) irParaCampo(form.dataset.focusField);
+
   // Erro devolvido pelo servidor: abre a etapa do campo, destaca o cartão, mostra a mensagem ali e foca no campo.
   const campoComErro = form.dataset.errorField;
   if (campoComErro) {

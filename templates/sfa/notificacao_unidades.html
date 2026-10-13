@@ -1,0 +1,79 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Unidades e responsáveis · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Unidades e responsáveis{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+{% endblock %}
+
+{% macro campos_unidade(prefixo, u=none) %}
+<div><label for="{{ prefixo }}-nome">Nome da unidade</label><input class="form-control form-control-sm" id="{{ prefixo }}-nome" name="nome" maxlength="180" required value="{{ u.nome if u else '' }}"></div>
+<div style="flex:0 1 130px"><label for="{{ prefixo }}-cnes">CNES</label><input class="form-control form-control-sm" id="{{ prefixo }}-cnes" name="cnes" inputmode="numeric" maxlength="7" value="{{ (u.cnes or '') if u else '' }}"></div>
+<div style="flex:0 1 170px"><label for="{{ prefixo }}-telefone">Telefone</label><input class="form-control form-control-sm" id="{{ prefixo }}-telefone" name="telefone" maxlength="25" value="{{ (u.telefone or '') if u else '' }}"></div>
+<div style="flex:1 1 100%"><label for="{{ prefixo }}-apelidos">Outros nomes na planilha (um por linha)</label><textarea class="form-control form-control-sm" id="{{ prefixo }}-apelidos" name="apelidos" rows="2" maxlength="2000" placeholder="Ex.: UBS 1">{{ (u.apelidos or '') if u else '' }}</textarea></div>
+{% endmacro %}
+
+{% block content %}
+<div class="notif-cabecalho">
+  <div>
+    <h1>Unidades e responsáveis</h1>
+    <p>Quem responde por uma unidade registra fichas em nome dela, vê as fichas dessa unidade e o panorama. Não acessa pacientes nem as demais telas do SFA; os outros acessos da conta continuam iguais.</p>
+  </div>
+  <a class="btn btn-primary" href="#nova-unidade"><i class="fas fa-plus me-1" aria-hidden="true"></i>Nova unidade</a>
+</div>
+
+{% for u in unidades %}
+<section class="notif-painel notif-unidade{% if not u.ativa %} inativa{% endif %}" id="unidade-{{ u.id }}" aria-labelledby="unidade-titulo-{{ u.id }}">
+  <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
+    <h2 id="unidade-titulo-{{ u.id }}" class="mb-0">{{ u.nome }}{% if not u.ativa %} <span class="badge bg-secondary">desativada</span>{% endif %}</h2>
+    <span class="notif-nota">{% if u.cnes %}CNES {{ u.cnes }}{% else %}sem CNES{% endif %}{% if u.telefone %} · {{ u.telefone }}{% endif %}</span>
+  </div>
+
+  <div class="table-responsive mt-2">
+    <table class="table table-sm mb-2 notif-tabela">
+      <thead><tr><th>Responsável</th><th>E-mail</th><th>Desde</th><th>Indicado por</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for v in u.responsaveis_ativos %}
+        <tr>
+          <td>{{ v.user.name or '—' }}</td><td>{{ v.user.email }}</td><td>{{ v.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ v.concedido_por }}</td>
+          <td class="text-end"><form method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_revogar', vinculo_id=v.id) }}" onsubmit="return confirm('Revogar o acesso desta conta à unidade?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger">Revogar</button></form></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">Ninguém responde por esta unidade ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form class="notif-form-linha" method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_conceder', unidade_id=u.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="responsavel-email-{{ u.id }}">E-mail da conta que vai responder pela unidade</label><input class="form-control form-control-sm" type="email" id="responsavel-email-{{ u.id }}" name="email" maxlength="254" required placeholder="pessoa@exemplo.com"></div>
+    <div style="flex:0 0 auto"><button class="btn btn-sm btn-primary">Indicar responsável</button></div>
+  </form>
+
+  <details class="mt-3">
+    <summary>Editar unidade</summary>
+    <form class="notif-form-linha mt-2" method="post" action="{{ url_for('sfa_routes.notificacao_unidade_editar', unidade_id=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ campos_unidade('unidade-' ~ u.id, u) }}
+      <div class="form-check" style="flex:1 1 100%"><input class="form-check-input" type="checkbox" id="unidade-{{ u.id }}-ativa" name="ativa" value="1" {% if u.ativa %}checked{% endif %}><label class="form-check-label mb-0" for="unidade-{{ u.id }}-ativa" style="font-size:.85rem;font-weight:500;color:inherit">Unidade ativa (desmarcar suspende o acesso dos responsáveis; as fichas já registradas continuam guardadas)</label></div>
+      <div style="flex:0 0 auto"><button class="btn btn-sm btn-outline-primary">Salvar</button></div>
+    </form>
+  </details>
+</section>
+{% else %}
+<p class="notif-painel notif-vazio">Nenhuma unidade cadastrada ainda.</p>
+{% endfor %}
+
+<section class="notif-painel" id="nova-unidade" aria-labelledby="nova-unidade-titulo">
+  <h2 id="nova-unidade-titulo">Nova unidade</h2>
+  <form class="notif-form-linha" method="post" action="{{ url_for('sfa_routes.notificacao_unidade_criar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campos_unidade('nova') }}
+    <div style="flex:0 0 auto"><button class="btn btn-sm btn-primary">Cadastrar unidade</button></div>
+  </form>
+  <p class="notif-nota mt-2 mb-0">A pessoa indicada precisa ter uma conta no site com o e-mail informado. Em “Outros nomes na planilha”, escreva como a unidade aparece na planilha de notificações, para o panorama contar os casos dela.</p>
+</section>
+{% endblock %}

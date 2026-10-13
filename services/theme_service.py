@@ -287,6 +287,22 @@ WORKSPACE_THEMES: dict[str, dict[str, Any]] = {
         "endpoints": set(),
         "prefixes": (),
     },
+    "sinan": {
+        "label": "Notificação SINAN",
+        "emoji": "📋",
+        "icon": "fa-file-medical",
+        "area": "#7a4a12",
+        "tone2": "#a8691f",
+        "tone3": "#e3b877",
+        "tone4": "#f6e3c4",
+        "ink": "#47300f",
+        "tint": "#fdf8f0",
+        "edge": "#eedcbd",
+        # Só colore o cartão da página inicial; as telas usam o layout do SFA.
+        "blueprints": set(),
+        "endpoints": set(),
+        "prefixes": (),
+    },
     "personal-shortcuts": {
         "label": "Minha vida pet",
         "emoji": "🐾",

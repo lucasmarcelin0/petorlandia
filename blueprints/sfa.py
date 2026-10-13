@@ -40,9 +40,14 @@ from flask import (
     current_app,
 )
 from flask_login import current_user
+from template_filters import data_br
 
 bp = Blueprint("sfa_routes", __name__, url_prefix="/sfa",
                template_folder="../templates/sfa")
+
+# Os testes do SFA montam um Flask cru só com este blueprint, sem a factory:
+# filtro usado em template do SFA precisa estar registrado aqui também.
+bp.add_app_template_filter(data_br, "data_br")
 
 
 def get_blueprint():
@@ -147,10 +152,35 @@ def require_entomologia_access(view):
     return wrapper
 
 
+def require_cadastro_admin(view):
+    """Cadastro pessoal: somente uma sessão autenticada com papel admin."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _usuario_admin_autenticado():
+            response = jsonify({'error': 'Consulta restrita ao administrador.'})
+            response.status_code = 403 if current_user.is_authenticated else 401
+        else:
+            response = current_app.make_response(view(*args, **kwargs))
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.vary.add('Cookie')
+        return response
+
+    return wrapper
+
+
+def _acesso_territorio_liberado() -> bool:
+    from services.entomologia_acesso import membro_equipe
+    return _acesso_interno_sfa_liberado() or membro_equipe(current_user)
+
+
 @bp.context_processor
 def _inject_sfa_acesso_completo():
-    # A equipe de combate à dengue vê só a área de território na barra lateral.
-    return {"sfa_acesso_completo": _acesso_interno_sfa_liberado}
+    # A barra lateral mostra só as áreas da conta: a equipe de combate à dengue vê o território;
+    # quem responde por uma unidade de saúde vê a notificação SINAN (blueprints.sfa_notificacao_routes).
+    return {"sfa_acesso_completo": _acesso_interno_sfa_liberado,
+            "sfa_acesso_territorio": _acesso_territorio_liberado}
 
 
 # ---------------------------------------------------------------------------
@@ -231,14 +261,40 @@ def entomologia():
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
                                'fim': publicacao.fim.isoformat()} if publicacao else None)
+    cadastral_admin_enabled = _usuario_admin_autenticado()
+    if cadastral_admin_enabled:
+        dataset['cadastre_search_url'] = url_for('sfa_routes.entomologia_cadastro_imoveis')
+        dataset['cadastre_detail_base_url'] = url_for('sfa_routes.entomologia_cadastro_imovel', property_code='CODE')
 
     response = current_app.make_response(render_template(
         "sfa/entomologia.html", dataset=dataset, token=_token_admin_informado() or None,
         acesso_completo=acesso_completo, pode_alterar=usuario_pode_alterar(),
+        cadastral_admin_enabled=cadastral_admin_enabled,
     ))
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response
+
+
+@bp.get('/entomologia/cadastro/imoveis')
+@require_cadastro_admin
+def entomologia_cadastro_imoveis():
+    from services.entomologia_cadastro import search_cadastro
+
+    return jsonify(search_cadastro(request.args.get('q', ''), request.args.get('limit', 20)))
+
+
+@bp.get('/entomologia/cadastro/imoveis/<property_code>')
+@require_cadastro_admin
+def entomologia_cadastro_imovel(property_code):
+    from services.entomologia_cadastro import get_cadastro_property
+
+    if len(property_code) > 100:
+        return jsonify({'error': 'Imóvel não encontrado.'}), 404
+    result = get_cadastro_property(property_code)
+    if result is None:
+        return jsonify({'error': 'Imóvel não encontrado.'}), 404
+    return jsonify(result)
 
 
 @bp.route('/entomologia/atlas/camadas')
@@ -2056,8 +2112,11 @@ def pre_t0_ficha():
             return page_response("sfa/pre_t0_submitted.html")
         try:
             answers = coletar_respostas_pre_t0(request.form, schema)
-            salvar_ficha_pre_t0(answers)
-            return page_response("sfa/pre_t0_submitted.html")
+            saved = salvar_ficha_pre_t0(answers)
+            return page_response(
+                "sfa/pre_t0_submitted.html",
+                print_url=url_for("sfa_routes.paciente_pre_t0_imprimir", id_estudo=saved["id_estudo"]),
+            )
         except ValueError as exc:
             error = str(exc)
             error_field = getattr(exc, "campo", "")
@@ -2406,6 +2465,32 @@ def paciente_pre_t0_ficha(id_estudo: str):
         "sfa/pre_t0_detail.html",
         p=paciente,
         ficha=ficha,
+    ))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@bp.route("/paciente/<id_estudo>/ficha-pre-t0/imprimir")
+@require_sfa_internal_access
+def paciente_pre_t0_imprimir(id_estudo: str):
+    """Ficha digital na disposição da folha oficial do SINAN, pronta para imprimir."""
+    from models.sfa import SfaPaciente
+    from services.sfa_pre_t0 import montar_folha_pre_t0, obter_ficha_pre_t0
+
+    SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    ficha = obter_ficha_pre_t0(id_estudo)
+    if ficha is None:
+        abort(404)
+    response = current_app.make_response(render_template(
+        "sfa/pre_t0_print.html",
+        folha=montar_folha_pre_t0(ficha["respostas"]),
+        recebida_em=ficha["submitted_at"],
+        voltar_url=url_for("sfa_routes.paciente_pre_t0_ficha", id_estudo=id_estudo),
+        voltar_rotulo="Voltar à ficha",
+        simulacao=None,
+        oculto="",
     ))
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -2900,6 +2985,9 @@ _register_workflow_routes(bp, require_sfa_internal_access)
 
 from blueprints.entomologia_routes import register as _register_entomologia_routes
 _register_entomologia_routes(bp, require_entomologia_access)
+
+from blueprints.sfa_notificacao_routes import register as _register_notificacao_routes
+_register_notificacao_routes(bp)
 
 
 @bp.route('/p/<token>/t10', methods=['GET', 'POST'])

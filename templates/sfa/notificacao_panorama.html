@@ -1,0 +1,73 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Panorama das unidades · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Panorama das unidades{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+{% endblock %}
+
+{% block content %}
+<div class="notif-cabecalho">
+  <div>
+    <h1>Panorama das unidades</h1>
+    <p>Notificações{% if agravo %} de {{ agravo }}{% else %} de dengue e chikungunya{% endif %} em Orlândia, por unidade notificante.</p>
+  </div>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Agravo">
+    <a class="btn {{ 'btn-primary' if not agravo else 'btn-outline-primary' }}" href="{{ url_for('sfa_routes.notificacao_panorama') }}" {% if not agravo %}aria-current="true"{% endif %}>Todos</a>
+    <a class="btn {{ 'btn-primary' if agravo == 'Dengue' else 'btn-outline-primary' }}" href="{{ url_for('sfa_routes.notificacao_panorama', agravo='Dengue') }}" {% if agravo == 'Dengue' %}aria-current="true"{% endif %}>Dengue</a>
+    <a class="btn {{ 'btn-primary' if agravo == 'Chikungunya' else 'btn-outline-primary' }}" href="{{ url_for('sfa_routes.notificacao_panorama', agravo='Chikungunya') }}" {% if agravo == 'Chikungunya' %}aria-current="true"{% endif %}>Chikungunya</a>
+  </div>
+</div>
+
+<div class="notif-painel p-0">
+  <div class="table-responsive">
+    <table class="table mb-0 notif-tabela notif-panorama">
+      <thead>
+        <tr>
+          <th>Unidade</th>
+          <th class="num">Semana {{ p.semana }}<br><span class="fw-normal text-lowercase">desde {{ p.inicio_semana.strftime('%d/%m') }}</span></th>
+          <th class="num">Últimas 4 semanas<br><span class="fw-normal text-lowercase">desde {{ p.inicio_quatro.strftime('%d/%m') }}</span></th>
+          <th class="num">{{ p.ano }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in p.linhas %}
+        <tr class="{{ 'minha' if linha.minha }}">
+          <td>{{ linha.nome }}{% if linha.minha %}<span class="notif-selo">sua unidade</span>{% endif %}</td>
+          <td class="num">{{ linha.semana }}</td>
+          <td class="num">{{ linha.quatro }}<span class="notif-barra" aria-hidden="true"><span style="width: {{ (100 * linha.quatro / p.maior)|round|int }}%"></span></span></td>
+          <td class="num">{{ linha.ano }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="notif-vazio">Nenhuma unidade cadastrada.</td></tr>
+        {% endfor %}
+        {% if p.sem_unidade %}
+        <tr>
+          <td class="text-muted">Unidade não identificada</td>
+          <td class="num">{{ p.sem_unidade.semana }}</td>
+          <td class="num">{{ p.sem_unidade.quatro }}</td>
+          <td class="num">{{ p.sem_unidade.ano }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr><td>Município</td><td class="num">{{ p.total.semana }}</td><td class="num">{{ p.total.quatro }}</td><td class="num">{{ p.total.ano }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+<p class="notif-nota mt-2">Conta as notificações da planilha municipal e as fichas registradas aqui, pela data de notificação até {{ p.hoje.strftime('%d/%m/%Y') }}. Cada ficha conta uma vez. A semana epidemiológica vai de domingo a sábado. Esta tela mostra somente contagens.</p>
+
+{% if p.nomes_sem_unidade or p.sem_data %}
+<section class="notif-painel mt-3" aria-labelledby="sem-unidade-titulo">
+  <h2 id="sem-unidade-titulo">Para o administrador</h2>
+  {% if p.nomes_sem_unidade %}
+  <p class="small mb-2">Estes nomes aparecem na origem em {{ p.ano }} e não correspondem a nenhuma unidade cadastrada. Para contá-los na unidade certa, acrescente o nome em “Outros nomes na planilha” em <a href="{{ url_for('sfa_routes.notificacao_unidades') }}">Unidades e responsáveis</a>.</p>
+  <ul class="small mb-2">{% for nome, total in p.nomes_sem_unidade %}<li>{{ nome }} · {{ total }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if p.sem_data %}<p class="small mb-0">{{ p.sem_data }} {{ 'registro ficou' if p.sem_data == 1 else 'registros ficaram' }} fora da contagem por não ter data de notificação válida.</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

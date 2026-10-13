@@ -1,0 +1,84 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Ficha {{ log.ficha_sinan }} · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Ficha {{ log.ficha_sinan }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.notificacao_fichas') }}"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Fichas da unidade</a>
+  {% if pode_completar %}<a class="btn btn-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id) }}"><i class="fas fa-pen me-1" aria-hidden="true"></i>{{ 'Completar ficha' if grupos else 'Corrigir ficha' }}</a>{% endif %}
+  <a class="btn btn-outline-primary" href="{{ url_for('sfa_routes.notificacao_imprimir', ficha_id=log.id) }}"><i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir no formato SINAN</a>
+</div>
+
+<section class="notif-painel mb-3">
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+    <div>
+      <h1 class="h4 mb-1">{{ ficha.respostas.nome or 'Paciente' }}</h1>
+      <p class="mb-0 text-muted">Ficha {{ log.ficha_sinan or 'sem número' }}{% if agravo %} · {{ agravo }}{% endif %} · {{ log.unidade.nome }}</p>
+    </div>
+    <div class="small text-sm-end text-muted">
+      Registrada em <strong>{{ ficha.submitted_at or 'data não disponível' }}</strong>{% if autor %}<br>por {{ autor }}{% endif %}
+    </div>
+  </div>
+</section>
+
+{% if grupos %}
+<section class="notif-falta mb-3" aria-labelledby="falta-titulo">
+  <h2 id="falta-titulo">O que ainda falta nesta ficha</h2>
+  {% if pode_completar %}<p class="mb-0 small">Toque em um item para abrir a ficha direto no campo.</p>
+  {% else %}<p class="mb-0 small">Quem registrou a ficha{% if autor %} ({{ autor }}){% endif %} pode completá-la.</p>{% endif %}
+  {% for grupo in grupos %}
+  <h3>{{ grupo.titulo }}</h3>
+  <ul>
+    {% for item in grupo.itens %}
+    <li>{% if pode_completar %}<a href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id, campo=item.campo) }}">{% else %}<span>{% endif %}<span class="notif-numero">{{ item.numero }}</span>{{ item.rotulo }}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}{% if pode_completar %}</a>{% else %}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="accordion shadow-sm" id="ficha-secoes">
+  {% for section in ficha.sections %}
+  <section class="accordion-item">
+    <h2 class="accordion-header" id="ficha-titulo-{{ loop.index }}">
+      <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#ficha-secao-{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="ficha-secao-{{ loop.index }}">
+        <span>{{ section.title }}</span>
+        {% set faltam_aqui = section.fields|selectattr('key', 'in', faltando)|list|length %}
+        {% if faltam_aqui %}<span class="notif-chip ms-2 mb-0">falta {{ faltam_aqui }}</span>{% endif %}
+      </button>
+    </h2>
+    <div id="ficha-secao-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="ficha-titulo-{{ loop.index }}" data-bs-parent="#ficha-secoes">
+      <div class="accordion-body">
+        <div class="row g-2">
+          {% for field in section.fields %}
+          <div class="col-lg-6">
+            <div class="notif-resposta{% if field.key in faltando %} falta{% endif %}">
+              <div class="notif-resposta-rotulo">{% if field.number %}<span class="notif-numero me-1">{{ field.number }}</span>{% endif %}{{ field.label }}</div>
+              <div class="notif-resposta-valor">{{ field.value }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+{% if revisoes %}
+<section class="notif-painel mt-3" aria-labelledby="revisoes-titulo">
+  <h2 id="revisoes-titulo">Alterações depois do envio</h2>
+  <ul class="mb-0 small">
+    {% for r in revisoes %}
+    <li>{{ r.em }} · {{ r.autor }} · campos {{ r.campos|join(', ') }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

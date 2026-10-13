@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ form_name or schema.title }}</title>
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
   <script>document.documentElement.classList.add("sfa-js");</script>
   <style>
     :root {

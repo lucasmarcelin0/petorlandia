@@ -59,6 +59,8 @@ from .sfa import (
     SfaRespostaT7,
     SfaRespostaT30,
     SfaSinanLog,
+    SfaUnidadeResponsavel,
+    SfaUnidadeSaude,
 )
 from .entomologia import EntomologiaAtlasArtefato, EntomologiaEquipe, EntomologiaImportacao, EntomologiaPublicacao
 from .petsitter import (

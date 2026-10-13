@@ -2715,6 +2715,10 @@ def importar_fichas_sinan_estruturadas(registros: object, dry_run: bool = False)
             )
             log_sinan.revisao_status = review_status
             log_sinan.grupo = log_sinan.grupo or grupo
+            log_sinan.agravo = log_sinan.agravo or str(structured.get("agravo") or "")[:40] or None
+            log_sinan.unidade_notificante = (
+                log_sinan.unidade_notificante or str(structured.get("unidade_notificante") or "")[:180] or None
+            )
             log_sinan.id_estudo_vinculado = paciente.id_estudo
 
             summary["itens"].append(
@@ -3989,6 +3993,11 @@ def sincronizar_sinan() -> dict:
             ajustes_linha,
         )
         data_nasc_raw = row[COLS_SINAN["DATA_NASCIMENTO"]]
+        # Agravo e unidade notificante alimentam o panorama por unidade (services.sfa_notificacao).
+        agravo = _sanitize_limited_text(row[COLS_SINAN["AGRAVO"]], 40, "agravo", ajustes_linha)
+        unidade_notificante = _sanitize_limited_text(
+            row[COLS_SINAN["UNIDADE_NOTIFICANTE"]], 180, "unidade_notificante", ajustes_linha
+        )
 
         # Parseia data de nascimento
         data_nasc = ""
@@ -4006,6 +4015,11 @@ def sincronizar_sinan() -> dict:
                     mudou = reconciliar(log_existente, dict(nome=nome, telefone=telefone, bairro=bairro,
                         data_notificacao=data_not, data_inicio_sintomas=data_ini,
                         tipo_exame=tipo_exame, resultado=resultado, grupo=grupo))
+                    # Registros importados antes destas colunas são completados; o que já existe fica.
+                    if agravo and not log_existente.agravo:
+                        log_existente.agravo, mudou = agravo, True
+                    if unidade_notificante and not log_existente.unidade_notificante:
+                        log_existente.unidade_notificante, mudou = unidade_notificante, True
                 atualizados += int(mudou)
             continue
 
@@ -4041,6 +4055,8 @@ def sincronizar_sinan() -> dict:
                 resultado=resultado,
                 grupo=grupo,
                 id_estudo_vinculado=id_estudo,
+                agravo=agravo or None,
+                unidade_notificante=unidade_notificante or None,
             )
             db.session.add(log_entry)
             db.session.flush()

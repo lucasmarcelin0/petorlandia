@@ -355,6 +355,60 @@ class SfaSinanLog(db.Model):
         index=True,
     )
     timestamp_importacao = db.Column(db.DateTime(timezone=True), default=utcnow)
+    # Agravo e unidade notificante como vieram da origem (planilha ou ficha). Quando a
+    # ficha é preenchida na área das unidades, ficam também a unidade cadastrada e a conta autora.
+    agravo = db.Column(db.String(40))
+    unidade_notificante = db.Column(db.String(180))
+    unidade_id = db.Column(db.Integer, db.ForeignKey("sfa_unidade_saude.id"), index=True)
+    preenchido_por_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+
+    unidade = db.relationship("SfaUnidadeSaude", foreign_keys=[unidade_id])
+    preenchido_por = db.relationship("User", foreign_keys=[preenchido_por_id])
+
+
+# ---------------------------------------------------------------------------
+# Notificação SINAN pelas unidades de saúde
+# ---------------------------------------------------------------------------
+
+class SfaUnidadeSaude(db.Model):
+    """Unidade de saúde notificadora, cadastrada pelo administrador."""
+    __tablename__ = "sfa_unidade_saude"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(180), nullable=False)
+    cnes = db.Column(db.String(12), index=True)
+    telefone = db.Column(db.String(25))
+    # Outros nomes pelos quais a unidade aparece na planilha de origem, um por linha.
+    apelidos = db.Column(db.Text)
+    ativa = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por = db.Column(db.String(160), nullable=False)
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    responsaveis = db.relationship("SfaUnidadeResponsavel", back_populates="unidade",
+                                   order_by="SfaUnidadeResponsavel.concedido_em")
+
+    @property
+    def responsaveis_ativos(self) -> list:
+        return [vinculo for vinculo in self.responsaveis if vinculo.revogado_em is None]
+
+
+class SfaUnidadeResponsavel(db.Model):
+    """Conta responsável por uma unidade: papel adicional, não altera ``User.role``.
+
+    Uma conta pode responder por mais de uma unidade. Acesso ativo = ``revogado_em`` vazio.
+    """
+    __tablename__ = "sfa_unidade_responsavel"
+
+    id = db.Column(db.Integer, primary_key=True)
+    unidade_id = db.Column(db.Integer, db.ForeignKey("sfa_unidade_saude.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    concedido_por = db.Column(db.String(160), nullable=False)
+    concedido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    revogado_em = db.Column(db.DateTime(timezone=True))
+    revogado_por = db.Column(db.String(160))
+
+    unidade = db.relationship("SfaUnidadeSaude", back_populates="responsaveis")
+    user = db.relationship("User", foreign_keys=[user_id])
 
 
 # ---------------------------------------------------------------------------

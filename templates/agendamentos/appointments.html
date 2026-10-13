@@ -208,8 +208,10 @@
 
           <div class="row g-3 mt-2">
             <div class="col-md-6">
-              {# A data é exibida em pt-BR; o value técnico do input date
-                 permanece ISO (aaaa-mm-dd) para a API, sem ambiguidade. #}
+              {# static/js/date_br.js troca este campo por um espelho em
+                 dd/mm/aaaa (o <input type="date"> nativo segue o idioma do
+                 NAVEGADOR, não o lang da página). O value técnico continua
+                 ISO (aaaa-mm-dd) para a API, sem ambiguidade. #}
               {{ form.date.label('Data (dd/mm/aaaa)', class="form-label fw-semibold") }}
               {{ form.date(class="form-control", type="date", lang="pt-BR") }}
               <div class="form-text">Escolha o dia desejado para atualizar os horários disponíveis.</div>
@@ -755,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let newAppointmentCollapseInstance = null;
   let cachedScheduleDays = [];
   let selectedScheduleSlotKey = '';
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = window.PetDateBR.todayIso();
   let currentScheduleStart = (dateField && dateField.value) ? dateField.value : todayIso;
   let currentVetId = '';
   if (vetField && vetField.value) {
@@ -1159,14 +1161,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (Number.isNaN(date.getTime())) {
         return '';
       }
-      return date.toISOString().split('T')[0];
+      return window.PetDateBR.dateToIso('date', date);
     }
 
     function shiftIsoDate(base, amount) {
       const normalized = normalizeIsoDate(base) || todayIso;
       const reference = new Date(`${normalized}T00:00:00`);
       reference.setDate(reference.getDate() + amount);
-      return reference.toISOString().split('T')[0];
+      return window.PetDateBR.dateToIso('date', reference);
     }
 
     function formatDateLabel(dateString, { variant = 'short', includeWeekday = true } = {}) {

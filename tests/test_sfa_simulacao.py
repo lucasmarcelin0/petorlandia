@@ -178,8 +178,13 @@ def test_percurso_completo_usa_formularios_reais_sem_tocar_na_coorte(app, client
     sinan = service.carregar_respostas(respostas["sinan"])
     guardado = json.dumps(sinan, ensure_ascii=False)
     for identificador in ("Pessoa Real", "Mãe Real", "16999990000", "123456789012345", "Rua Verdadeira", "Investigador Real"):
-        assert identificador not in guardado
-    assert sinan["nome"] == service.MARCADOR_OCULTO
+        assert identificador in guardado
+    assert sinan["nome"] == "Pessoa Real Digitada"
+    assert sinan["nome_mae"] == "Mãe Real"
+    assert sinan["telefone"] == "16999990000"
+    assert sinan["cartao_sus"] == "123456789012345"
+    assert sinan["logradouro"]["valor"] == "Rua Verdadeira"
+    assert sinan["investigador"]["nome"] == "Investigador Real"
     assert sinan["investigador"]["funcao"] == "Enfermeira"
     assert json.loads(respostas["sinan"].erros_json) == [["Preencha os campos obrigatórios indicados antes de enviar."]]
     assert json.loads(respostas["t0"].erros_json) == [["dias_incap"]]
@@ -272,7 +277,7 @@ def test_analise_por_grupo_consolidada_e_exportacoes(app, client, hoje):
     assert sexo["diferenca"] == pytest.approx(0.5)
     assert any(d["id"] == "sexo" for d in analise["destaques"]["diferencas"])
     nome = next(p for p in analise["perguntas"]["sinan"] if p["id"] == "nome")
-    assert nome["tipo"] == "oculto" and nome["colunas"]["todos"]["n_preenchida"] == 7
+    assert nome["tipo"] == "texto" and nome["colunas"]["todos"]["n_preenchida"] == 7
     assert analise["comentarios"][0]["texto"] == "Explicar o campo 7."
 
     pagina = client.get(f"/sfa/simulacoes/analise?g={instituto.id}&g={trabalho.id}&etapa=sinan")
@@ -280,18 +285,23 @@ def test_analise_por_grupo_consolidada_e_exportacoes(app, client, hoje):
     assert pagina.status_code == 200
     assert "Consolidado" in texto and "Instituto" in texto and "Vigilância" in texto
     assert "Explicar o campo 7." in texto
-    assert "Pessoa Real" not in texto
+    assert "Pessoa Real Digitada" in texto
     assert client.get(f"/sfa/simulacoes/analise?g={instituto.id}&etapa=t0").status_code == 200
     assert client.get("/sfa/simulacoes/analise?visao=consolidado&etapa=t30").status_code == 200
 
     largo = list(csv.DictReader(io.StringIO(client.get("/sfa/simulacoes/exportar.csv?formato=largo").get_data(as_text=True).lstrip("﻿"))))
     assert len(largo) == 7
     assert {linha["grupo"] for linha in largo} == {"Instituto", "Vigilância"}
-    assert largo[0]["sinan__nome"] == service.MARCADOR_OCULTO
+    assert largo[0]["sinan__nome"] == "Pessoa Real Digitada"
     assert largo[0]["t0__dias_incap"] == "2"
     longo = client.get(f"/sfa/simulacoes/exportar.csv?g={instituto.id}").get_data(as_text=True)
-    assert "Pessoa Real" not in longo and "Vigilância" not in longo
+    assert "Pessoa Real Digitada" in longo and "Vigilância" not in longo
     assert "sinais_clinicos__febre" in longo
+
+    # Página do participante exibe os dados preenchidos
+    detalhe_p = client.get(f"/sfa/simulacoes/participante/{participante_incompleto.id}").get_data(as_text=True)
+    assert "Pessoa Real Digitada" in detalhe_p
+    assert "Preenchido (conteúdo não guardado)" not in detalhe_p
 
     for url in ("/sfa/simulacoes", f"/sfa/simulacoes/{instituto.id}",
                 f"/sfa/simulacoes/participante/{participante_incompleto.id}"):
@@ -308,6 +318,53 @@ def test_equipe_remove_participante_de_teste_e_nao_exclui_grupo_com_respostas(ap
     assert SfaSimulacaoParticipante.query.count() == 0 and SfaSimulacaoResposta.query.count() == 0
     client.post(f"/sfa/simulacoes/{grupo.id}/excluir")
     assert db.session.get(SfaSimulacaoGrupo, grupo.id) is None
+
+
+def test_dados_preenchidos_salvos_e_retrocompatibilidade_legado(app, client, hoje):
+    """Garante que dados preenchidos são salvos e exibidos na íntegra, e legados são tolerados."""
+    grupo = _criar_grupo(client, "Turma Teste")
+    p = _entrar(client, grupo)
+    base = f"/sfa/simulacao/p/{p.token}"
+
+    client.post(f"{base}/sinan", data=_sinan(
+        nome="Carlos Silva", nome_mae="Ana Silva", telefone="16988887777",
+        cartao_sus="987654321098765", logradouro="Avenida Brasil",
+        investigador__nome="Dra. Paula",
+    ))
+    resp_t0 = client.post(f"{base}/t0", data=_t0(
+        respondent_role="Outra pessoa autorizada", respondent_name="Mariana Silva",
+    ))
+    assert resp_t0.status_code == 302
+
+    # Verifica o JSON salvo no banco
+    respostas = service.respostas_por_etapa(db.session.get(SfaSimulacaoParticipante, p.id))
+    sinan_dados = service.carregar_respostas(respostas["sinan"])
+    t0_dados = service.carregar_respostas(respostas["t0"])
+
+    assert sinan_dados["nome"] == "Carlos Silva"
+    assert sinan_dados["nome_mae"] == "Ana Silva"
+    assert sinan_dados["telefone"] == "16988887777"
+    assert sinan_dados["cartao_sus"] == "987654321098765"
+    assert sinan_dados["logradouro"]["valor"] == "Avenida Brasil"
+    assert sinan_dados["investigador"]["nome"] == "Dra. Paula"
+    assert t0_dados["respondent_name"] == "Mariana Silva"
+
+    # Verifica a renderização da página do participante (/sfa/simulacoes/participante/<id>)
+    pagina = client.get(f"/sfa/simulacoes/participante/{p.id}").get_data(as_text=True)
+    assert "Carlos Silva" in pagina
+    assert "Ana Silva" in pagina
+    assert "16988887777" in pagina
+    assert "987654321098765" in pagina
+    assert "Avenida Brasil" in pagina
+    assert "Dra. Paula" in pagina
+    assert "Mariana Silva" in pagina
+    assert "Preenchido (conteúdo não guardado)" not in pagina
+
+    # Retrocompatibilidade com registro legado que continha [preenchido]
+    respostas["sinan"].respostas_json = json.dumps({"nome": service.MARCADOR_OCULTO, "data_notificacao": "2026-09-22"})
+    db.session.commit()
+    pagina_legado = client.get(f"/sfa/simulacoes/participante/{p.id}").get_data(as_text=True)
+    assert "[preenchido]" in pagina_legado
 
 
 def test_ficha_sinan_real_renderiza(app, client):

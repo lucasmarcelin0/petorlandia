@@ -162,6 +162,24 @@ def register(bp, require_access):
                                        link=url_for("sfa_routes.simulacao_painel", token=participante.token, _external=True),
                                        **contexto_base()))
 
+    @bp.route("/simulacoes/participante/<int:participante_id>/ficha-sinan")
+    @require_access
+    def simulacao_participante_ficha_sinan(participante_id):
+        """Ficha SINAN da simulação na disposição da folha oficial, pronta para imprimir."""
+        from services.sfa_pre_t0 import montar_folha_pre_t0
+
+        participante = db.get_or_404(SfaSimulacaoParticipante, participante_id)
+        resposta = service.respostas_por_etapa(participante).get("sinan")
+        if resposta is None:
+            abort(404)
+        return privado(render_template(
+            "sfa/pre_t0_print.html", folha=montar_folha_pre_t0(service.carregar_respostas(resposta)),
+            recebida_em=service.formatar_data_hora(resposta.enviado_em),
+            voltar_url=url_for("sfa_routes.simulacao_participante", participante_id=participante.id),
+            voltar_rotulo=f"Voltar a {participante.codigo}",
+            simulacao={"grupo": participante.grupo.nome, "participante": participante.codigo},
+            oculto=service.MARCADOR_OCULTO))
+
     @bp.route("/simulacoes/participante/<int:participante_id>/excluir", methods=["POST"])
     @require_access
     def simulacao_participante_excluir(participante_id):

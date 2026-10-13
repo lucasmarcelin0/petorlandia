@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SFA Orlândia{% endblock %}</title>
 
+  {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
+     scripts das telas usam window.PetDateBR já durante o carregamento. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
+
   <!-- Bootstrap 5 -->
   <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
   <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
@@ -205,6 +210,32 @@
     </li>
   </ul>
   {% endif %}
+  {% set sfa_territorio = sfa_completo or sfa_acesso_territorio is not defined or sfa_acesso_territorio() %}
+  {% if sfa_acesso_notificacao is defined and sfa_acesso_notificacao() %}
+  {% set ficha_aberta = request.endpoint in ['sfa_routes.notificacao_fichas', 'sfa_routes.notificacao_ficha', 'sfa_routes.notificacao_completar'] %}
+  <div class="mx-3 mt-3 p-2 rounded" style="border:1px solid rgba(255,255,255,.25)">
+    <div class="px-2 mb-1" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7)">Notificação SINAN</div>
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.notificacao_nova' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.notificacao_nova') }}">
+      <i class="fas fa-file-circle-plus" aria-hidden="true"></i> Nova ficha
+    </a>
+    <a class="nav-link px-2 {% if ficha_aberta %}active{% endif %}"
+       href="{{ url_for('sfa_routes.notificacao_fichas') }}" {% if request.endpoint == 'sfa_routes.notificacao_fichas' %}aria-current="page"{% endif %}>
+      <i class="fas fa-folder-open" aria-hidden="true"></i> Fichas da unidade
+    </a>
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.notificacao_panorama' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.notificacao_panorama') }}" {% if request.endpoint == 'sfa_routes.notificacao_panorama' %}aria-current="page"{% endif %}>
+      <i class="fas fa-chart-column" aria-hidden="true"></i> Panorama das unidades
+    </a>
+    {% if sfa_notificacao_admin is defined and sfa_notificacao_admin() %}
+    <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.notificacao_unidades' %}active{% endif %}"
+       href="{{ url_for('sfa_routes.notificacao_unidades') }}" {% if request.endpoint == 'sfa_routes.notificacao_unidades' %}aria-current="page"{% endif %}>
+      <i class="fas fa-hospital-user" aria-hidden="true"></i> Unidades e responsáveis
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if sfa_territorio %}
   <div class="mx-3 my-3 p-2 rounded" style="border:1px solid rgba(255,255,255,.25)">
     <div class="px-2 mb-1" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7)">Território e vigilância</div>
     <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia' %}active{% endif %}"
@@ -215,10 +246,11 @@
        href="{{ url_for('sfa_routes.entomologia_atualizar') }}" {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}aria-current="page"{% endif %}>
       <i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados
     </a>
-    {% if not sfa_completo %}
-    <a class="nav-link px-2" href="/"><i class="fas fa-house" aria-hidden="true"></i> Página inicial</a>
-    {% endif %}
   </div>
+  {% endif %}
+  {% if not sfa_completo %}
+  <a class="nav-link mx-3 px-2" href="/"><i class="fas fa-house" aria-hidden="true"></i> Página inicial</a>
+  {% endif %}
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>
 

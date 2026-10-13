@@ -1,5 +1,9 @@
 from flask_admin import Admin, BaseView, expose
 from flask_admin.contrib.sqla import ModelView
+from flask_admin.model import typefmt
+from flask_admin.form import fields as admin_form_fields
+from wtforms import fields as wtforms_fields, widgets as wtforms_widgets
+from wtforms.fields.core import UnboundField
 from flask_admin.menu import MenuLink
 from flask import redirect, url_for, flash, current_app, request
 from flask_login import current_user, login_required
@@ -18,7 +22,7 @@ from wtforms.validators import NumberRange, Optional
 from markupsafe import Markup, escape
 import os
 import uuid
-from datetime import timedelta
+from datetime import date, datetime, time as _time, timedelta
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from decimal import Decimal
@@ -219,7 +223,73 @@ except ImportError:
 # --------------------------------------------------------------------------
 # Base para todas as views protegidas
 # --------------------------------------------------------------------------
-class MyModelView(ModelView):
+def _admin_data_br(view, value, name):
+    return value.strftime('%d/%m/%Y')
+
+
+def _admin_data_hora_br(view, value, name):
+    return coerce_to_brazil_tz(value).strftime('%d/%m/%Y %H:%M')
+
+
+def _admin_hora_br(view, value, name):
+    return value.strftime('%H:%M')
+
+
+# O Flask-Admin formata datas como "2026-09-22" e "2026-09-22 10:30:00" por
+# padrão. Todas as views abaixo usam este dicionário para mostrar dd/mm/aaaa
+# nas listagens, nos detalhes e nas exportações do painel.
+TIPOS_DATA_BR = dict(typefmt.BASE_FORMATTERS)
+TIPOS_DATA_BR.update({
+    date: _admin_data_br,
+    datetime: _admin_data_hora_br,
+    _time: _admin_hora_br,
+})
+
+
+def _campo_de_data_nativo(unbound):
+    """Troca os campos de data do Flask-Admin pelos nativos do HTML.
+
+    O padrão da biblioteca é uma caixa de texto com a data em ISO
+    ("2026-09-22") e um seletor que este projeto nem carrega. Com os tipos
+    nativos (date/datetime-local/time), static/js/date_br.js e
+    static/js/time24.js mostram dd/mm/aaaa e 24h como no resto do site, e o
+    valor enviado continua ISO.
+    """
+    classe = unbound.field_class
+    kwargs = dict(unbound.kwargs)
+    kwargs.pop('widget', None)
+    kwargs.pop('format', None)
+    kwargs.pop('formats', None)
+    if issubclass(classe, wtforms_fields.DateField):
+        return wtforms_fields.DateField(*unbound.args, widget=wtforms_widgets.DateInput(), **kwargs)
+    if issubclass(classe, wtforms_fields.DateTimeField):
+        return wtforms_fields.DateTimeLocalField(
+            *unbound.args, format=['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'], **kwargs
+        )
+    if classe is admin_form_fields.TimeField or issubclass(classe, wtforms_fields.TimeField):
+        return wtforms_fields.TimeField(*unbound.args, format=['%H:%M', '%H:%M:%S'], **kwargs)
+    return None
+
+
+class BrazilianDateFormatsMixin:
+    """Datas em dd/mm/aaaa em qualquer view do admin."""
+
+    column_type_formatters = TIPOS_DATA_BR
+    column_type_formatters_detail = TIPOS_DATA_BR
+    column_type_formatters_export = TIPOS_DATA_BR
+
+    def scaffold_form(self):
+        form_class = super().scaffold_form()
+        for nome, atributo in list(vars(form_class).items()):
+            if not isinstance(atributo, UnboundField):
+                continue
+            nativo = _campo_de_data_nativo(atributo)
+            if nativo is not None:
+                setattr(form_class, nome, nativo)
+        return form_class
+
+
+class MyModelView(BrazilianDateFormatsMixin, ModelView):
     # Ordena objetos mais recentes primeiro por padrão
     column_default_sort = ('id', True)
 
@@ -596,14 +666,14 @@ NFSE_FIELD_NAMES = [
 ]
 
 # ─── Subform de Endereco ----------------------------------------------------
-class EnderecoInlineForm(ModelView):
+class EnderecoInlineForm(BrazilianDateFormatsMixin, ModelView):
     form_columns = ("rua", "numero", "bairro", "cidade", "estado", "cep")
     can_delete   = False
     can_view_details = False
     can_export   = False
 
 # ─── View de PickupLocation -------------------------------------------------
-class PickupLocationView(ModelView):
+class PickupLocationView(BrazilianDateFormatsMixin, ModelView):
     column_list   = ("id", "nome", "endereco.full", "ativo")
     column_labels = {"endereco.full": "Endereço"}
 
