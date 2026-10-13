@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Seus animais para adoção — PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block main %}
+<div class="container my-4" style="max-width: 640px;">
+  <div class="card shadow-sm rounded-4 p-4">
+    <h1 class="h4 fw-bold mb-1">Seus animais para adoção</h1>
+
+    {% if review_animals %}
+    <p class="text-muted mb-0">
+      Conte se o anúncio ainda vale e complete o que faltar. Anúncio com foto chama muito mais a atenção de quem quer adotar; anúncio sem resposta à pergunta mensal sai da lista.
+    </p>
+    {% set review_prefix = 'adocao-pagina' %}
+    <form method="POST" action="{{ url_for('revisar_adocao') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include 'partials/_adoption_review_fields.html' %}
+      <div class="d-grid d-sm-flex justify-content-sm-end mt-4">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-muted mb-3">Você não tem nenhum animal anunciado para adoção no momento.</p>
+    <div>
+      <a href="{{ url_for('list_animals', scope='meus') }}" class="btn btn-outline-primary">Ver meus pets</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

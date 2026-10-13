@@ -80,6 +80,7 @@ from app import (  # noqa: E402
     _resolve_record_panel,
     _resolve_shared_access_for_animal,
     _resolve_shared_access_for_user,
+    _sanitize_login_next_url,
     _serialize_share_request,
     _serialize_tutor_share_payload,
     _update_coordinates_from_request,
@@ -93,6 +94,7 @@ from app import (  # noqa: E402
     bake_image_rotation,
     current_user_clinic_id,
     enviar_mensagem_whatsapp,
+    find_users_by_phone,
     formatar_telefone,
     get_animal_or_404,
     get_user_or_404,
@@ -593,6 +595,122 @@ def adotar_animal(animal_id):
     db.session.commit()
     flash(f'Você adotou {animal.name} com sucesso!', 'success')
     return redirect(url_for('list_animals'))
+
+
+#: Mesmas extensões aceitas pelo AnimalForm na edição do animal.
+_FOTO_ANUNCIO_EXTENSOES = {'jpg', 'jpeg', 'png', 'gif'}
+
+
+@bp.route('/adocao/revisar', methods=['GET', 'POST'])
+@login_required
+def revisar_adocao():
+    """Tela em que o responsável confirma, encerra e completa seus anúncios.
+
+    É também o destino do pop-up mensal do layout e dos e-mails de
+    services/adocao_lembretes.py.
+    """
+    from context_processors import _invalidate_cached_context
+    from services import adocao_lembretes
+
+    if request.method == 'POST':
+        destino = _sanitize_login_next_url(
+            request.form.get('next'), fallback=url_for('revisar_adocao')
+        )
+        animais = adocao_lembretes.ensure_own_adoption_listings(
+            current_user, request.form.getlist('animal_id')
+        )
+        confirmados, devolvidos, adotados, fotos, avisos = [], [], [], [], []
+        for animal in animais:
+            resposta = request.form.get(f'resposta_{animal.id}')
+            if resposta == 'adotado':
+                adocao_lembretes.mark_adopted(animal)
+                adotados.append(animal.name)
+                continue
+
+            foto = request.files.get(f'foto_{animal.id}')
+            foto_salva = False
+            if foto and getattr(foto, 'filename', ''):
+                extensao = foto.filename.rsplit('.', 1)[-1].lower() if '.' in foto.filename else ''
+                image_url = None
+                if extensao in _FOTO_ANUNCIO_EXTENSOES:
+                    filename = f"{uuid.uuid4().hex}_{secure_filename(foto.filename)}"
+                    image_url = upload_to_s3(foto, filename, folder="animals")
+                if image_url:
+                    animal.image = image_url
+                    # Enquadramento era da foto antiga; a nova começa do zero.
+                    animal.photo_rotation = 0
+                    animal.photo_zoom = 1
+                    animal.photo_offset_x = 0
+                    animal.photo_offset_y = 0
+                    foto_salva = True
+                    fotos.append(animal.name)
+                else:
+                    avisos.append(
+                        f'Não foi possível salvar a foto de {animal.name}. '
+                        'Envie uma imagem JPG, PNG ou GIF.'
+                    )
+
+            # Quem manda foto nova está dizendo que o animal segue disponível.
+            if resposta == 'disponivel' or foto_salva:
+                # Anúncio que saiu da lista por falta de resposta volta a ela.
+                fora_da_lista = animal.modo != adocao_lembretes.ADOPTION_MODE
+                adocao_lembretes.confirm_still_available(animal)
+                (devolvidos if fora_da_lista else confirmados).append(animal.name)
+
+        telefone = (request.form.get('telefone') or '').strip()
+        telefone_salvo = False
+        if telefone and adocao_lembretes.needs_phone(current_user):
+            if not is_valid_phone(telefone):
+                avisos.append('Telefone inválido. Informe o DDD e o número.')
+            elif find_users_by_phone(telefone, exclude_user_id=current_user.id):
+                avisos.append('Este telefone já está em uso em outra conta.')
+            else:
+                current_user.phone = normalize_phone(telefone)
+                telefone_salvo = True
+
+        db.session.commit()
+        _invalidate_cached_context(current_user.id, 'adoption_review')
+
+        feito = []
+        if adotados:
+            verbo = 'saiu' if len(adotados) == 1 else 'saíram'
+            feito.append(
+                f'Que notícia boa! {adocao_lembretes.join_names(adotados)} '
+                f'{verbo} da lista de adoção.'
+            )
+        if confirmados:
+            verbo = 'continua' if len(confirmados) == 1 else 'continuam'
+            feito.append(
+                f'{adocao_lembretes.join_names(confirmados)} {verbo} na lista de '
+                'adoção; perguntamos de novo daqui a um mês.'
+            )
+        if devolvidos:
+            verbo = 'voltou' if len(devolvidos) == 1 else 'voltaram'
+            feito.append(
+                f'{adocao_lembretes.join_names(devolvidos)} {verbo} para a lista de adoção.'
+            )
+        if fotos:
+            feito.append(f'Foto nova de {adocao_lembretes.join_names(fotos)} salva.')
+        if telefone_salvo:
+            feito.append('Telefone salvo.')
+        if feito:
+            flash(' '.join(feito), 'success')
+        for aviso in avisos:
+            flash(aviso, 'warning')
+        if not (feito or avisos):
+            flash('Nada foi alterado.', 'info')
+        return redirect(destino)
+
+    return render_template(
+        'animais/adocao_revisar.html',
+        review_animals=adocao_lembretes.review_cards(
+            adocao_lembretes.listings_of(current_user)
+            + adocao_lembretes.expired_listings_of(current_user)
+        ),
+        review_needs_phone=adocao_lembretes.needs_phone(current_user),
+        # A própria tela já é o formulário: o pop-up por cima seria redundante.
+        adoption_review_modal_disabled=True,
+    )
 
 
 @bp.route('/animal/<int:animal_id>/editar', methods=['GET', 'POST'])

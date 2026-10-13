@@ -1,0 +1,72 @@
+{#
+  Pop-up mensal: quem tem animal anunciado para adoção há 30 dias ou mais sem
+  confirmar é perguntado, ao voltar ao site, se o anúncio ainda vale. Sem
+  resposta no prazo o anúncio sai da lista, e o pop-up continua perguntando.
+  `adoption_review_pending` vem de context_processors.inject_adoption_review.
+#}
+{% if adoption_review_pending and not adoption_review_modal_disabled %}
+{% set review_animals = adoption_review_pending %}
+{% set review_needs_phone = adoption_review_needs_phone %}
+{% set review_prefix = 'adocao-popup' %}
+<div class="modal fade d-print-none" id="adoptionReviewModal" tabindex="-1" aria-labelledby="adoptionReviewModalLabel" aria-hidden="true" data-adoption-review-user="{{ current_user.id }}">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <form class="modal-content" method="POST" action="{{ url_for('revisar_adocao') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5 mb-0" id="adoptionReviewModalLabel">
+          {% if review_animals|length == 1 %}
+          {{ review_animals[0].name }} ainda está para adoção?
+          {% else %}
+          Seus animais ainda estão para adoção?
+          {% endif %}
+        </h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted small mb-0">
+          Já faz mais de um mês. Conte para a gente se o anúncio ainda vale e, se quiser, aproveite para colocar uma foto nova. Anúncio sem resposta sai da lista de adoção.
+        </p>
+        {% include 'partials/_adoption_review_fields.html' %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-link text-muted" data-bs-dismiss="modal">Agora não</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('adoptionReviewModal');
+    if (!modalEl || !window.bootstrap) return;
+
+    // "Agora não" adia por um dia: o pop-up volta na próxima visita, sem
+    // reaparecer a cada página da mesma navegação.
+    var snoozeKey = 'adocaoRevisaoAdiadaAte:' + modalEl.dataset.adoptionReviewUser;
+    var snoozedUntil = 0;
+    try { snoozedUntil = parseInt(window.localStorage.getItem(snoozeKey) || '0', 10) || 0; } catch (error) {}
+    if (snoozedUntil > Date.now()) return;
+
+    var submitted = false;
+    modalEl.querySelector('form').addEventListener('submit', function () { submitted = true; });
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      if (submitted) return;
+      try { window.localStorage.setItem(snoozeKey, String(Date.now() + 24 * 60 * 60 * 1000)); } catch (error) {}
+    });
+
+    function show() { window.bootstrap.Modal.getOrCreateInstance(modalEl).show(); }
+
+    // O aviso de analytics fica por cima de qualquer modal e cobriria o botão
+    // Salvar: o pop-up espera a pessoa responder a ele primeiro.
+    var consent = document.getElementById('analytics-consent');
+    if (consent && !consent.hidden) {
+      consent.addEventListener('click', function (event) {
+        if (event.target.closest('[data-analytics-accept], [data-analytics-reject]')) show();
+      });
+    } else {
+      show();
+    }
+  });
+</script>
+{% endif %}
