@@ -5,7 +5,7 @@
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_notificacao.css') }}?v=20261013b">
 {% endblock %}
 
 {% macro campos_unidade(prefixo, u=none) %}
@@ -19,7 +19,7 @@
 <div class="notif-cabecalho">
   <div>
     <h1>Unidades e responsáveis</h1>
-    <p>Quem responde por uma unidade registra fichas em nome dela, vê as fichas dessa unidade e o panorama. Não acessa pacientes nem as demais telas do SFA; os outros acessos da conta continuam iguais.</p>
+    <p>Quem responde por uma unidade registra fichas em nome dela, vê as fichas dessa unidade e o panorama. Cada unidade pode ter vários responsáveis, e uma mesma pessoa pode responder por mais de uma unidade. Não acessam pacientes nem as demais telas do SFA; os outros acessos da conta continuam iguais.</p>
   </div>
   <a class="btn btn-primary" href="#nova-unidade"><i class="fas fa-plus me-1" aria-hidden="true"></i>Nova unidade</a>
 </div>
@@ -31,11 +31,13 @@
     <span class="notif-nota">{% if u.cnes %}CNES {{ u.cnes }}{% else %}sem CNES{% endif %}{% if u.telefone %} · {{ u.telefone }}{% endif %}</span>
   </div>
 
-  <div class="table-responsive mt-2">
+  {% set ativos = u.responsaveis_ativos %}
+  <h3 class="notif-subtitulo">{% if not ativos %}Nenhum responsável{% elif ativos|length == 1 %}1 responsável{% else %}{{ ativos|length }} responsáveis{% endif %}</h3>
+  <div class="table-responsive">
     <table class="table table-sm mb-2 notif-tabela">
       <thead><tr><th>Responsável</th><th>E-mail</th><th>Desde</th><th>Indicado por</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
       <tbody>
-        {% for v in u.responsaveis_ativos %}
+        {% for v in ativos %}
         <tr>
           <td>{{ v.user.name or '—' }}</td><td>{{ v.user.email }}</td><td>{{ v.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ v.concedido_por }}</td>
           <td class="text-end"><form method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_revogar', vinculo_id=v.id) }}" onsubmit="return confirm('Revogar o acesso desta conta à unidade?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger">Revogar</button></form></td>
@@ -49,8 +51,8 @@
 
   <form class="notif-form-linha" method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_conceder', unidade_id=u.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div><label for="responsavel-email-{{ u.id }}">E-mail da conta que vai responder pela unidade</label><input class="form-control form-control-sm" type="email" id="responsavel-email-{{ u.id }}" name="email" maxlength="254" required placeholder="pessoa@exemplo.com"></div>
-    <div style="flex:0 0 auto"><button class="btn btn-sm btn-primary">Indicar responsável</button></div>
+    <div><label for="responsavel-email-{{ u.id }}">{{ 'Adicionar mais responsáveis' if ativos else 'Indicar responsáveis' }} (e-mail da conta; para várias pessoas, separe por vírgula ou linha)</label><textarea class="form-control form-control-sm" id="responsavel-email-{{ u.id }}" name="email" rows="2" maxlength="4000" required placeholder="pessoa@exemplo.com, outra@exemplo.com" autocapitalize="off" spellcheck="false"></textarea></div>
+    <div style="flex:0 0 auto"><button class="btn btn-sm btn-primary">{{ 'Adicionar' if ativos else 'Indicar' }}</button></div>
   </form>
 
   <details class="mt-3">
@@ -74,6 +76,6 @@
     {{ campos_unidade('nova') }}
     <div style="flex:0 0 auto"><button class="btn btn-sm btn-primary">Cadastrar unidade</button></div>
   </form>
-  <p class="notif-nota mt-2 mb-0">A pessoa indicada precisa ter uma conta no site com o e-mail informado. Em “Outros nomes na planilha”, escreva como a unidade aparece na planilha de notificações, para o panorama contar os casos dela.</p>
+  <p class="notif-nota mt-2 mb-0">Cada pessoa indicada precisa ter uma conta no site com o e-mail informado. Em “Outros nomes na planilha”, escreva como a unidade aparece na planilha de notificações, para o panorama contar os casos dela.</p>
 </section>
 {% endblock %}
