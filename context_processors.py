@@ -533,6 +533,39 @@ def inject_page_theme():
     )
 
 
+def inject_adoption_review():
+    """Pop-up mensal: anúncios de adoção do usuário à espera de confirmação.
+
+    Roda em toda página, então custa uma única query (com cache) e nunca
+    derruba o layout: sem resposta do banco, simplesmente não há pop-up.
+    """
+    empty = dict(adoption_review_pending=[], adoption_review_needs_phone=False)
+    if not getattr(current_user, "is_authenticated", False):
+        return empty
+
+    user_id = current_user.id
+    cached = _get_cached_context(user_id, 'adoption_review')
+    if cached is not None:
+        return cached
+
+    from services import adocao_lembretes
+
+    try:
+        pending = adocao_lembretes.review_cards(
+            adocao_lembretes.pending_reviews(current_user)
+        )
+        payload = dict(
+            adoption_review_pending=pending,
+            adoption_review_needs_phone=bool(pending)
+            and adocao_lembretes.needs_phone(current_user),
+        )
+    except Exception:
+        db.session.rollback()
+        return empty
+    _set_cached_context(user_id, 'adoption_review', payload)
+    return payload
+
+
 _PROCESSORS = (
     inject_unread_count,
     inject_admin_action_notifications,
@@ -552,6 +585,7 @@ _PROCESSORS = (
     inject_ga_events,
     inject_default_pickup_address,
     inject_activation_progress,
+    inject_adoption_review,
     inject_user_experience,
     inject_page_theme,
 )
