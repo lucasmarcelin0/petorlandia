@@ -91,6 +91,7 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         # Papel adicional "Combate à dengue" (services.entomologia_acesso): não depende de role.
         area('dengue', 'Combate à dengue', 'fa-mosquito',
              action('Painel do território', 'sfa_routes.entomologia', 'fa-map-location-dot'),
+             action('Casa a casa', 'sfa_routes.casa_a_casa', 'fa-house-circle-check'),
              action('Atualizar dados', 'sfa_routes.entomologia_atualizar', 'fa-upload'),
              action('Página pública', 'vigilancia_publica.painel_aedes_publico', 'fa-bullhorn'))
     if sinan or admin:
