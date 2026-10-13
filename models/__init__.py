@@ -62,7 +62,14 @@ from .sfa import (
     SfaUnidadeResponsavel,
     SfaUnidadeSaude,
 )
-from .entomologia import EntomologiaAtlasArtefato, EntomologiaEquipe, EntomologiaImportacao, EntomologiaPublicacao
+from .entomologia import (
+    EntomologiaAtlasArtefato,
+    EntomologiaEquipe,
+    EntomologiaImportacao,
+    EntomologiaPublicacao,
+    EntomologiaQuarteiraoTrabalho,
+    EntomologiaVisitaDomiciliar,
+)
 from .petsitter import (
     CareerApplication,
     PetsitterProfile,
@@ -161,6 +168,8 @@ __all__ = [
     "EntomologiaAtlasArtefato",
     "EntomologiaImportacao",
     "EntomologiaPublicacao",
+    "EntomologiaQuarteiraoTrabalho",
+    "EntomologiaVisitaDomiciliar",
     "CareerApplication",
     "PetsitterProfile",
     "PetsitterRequest",

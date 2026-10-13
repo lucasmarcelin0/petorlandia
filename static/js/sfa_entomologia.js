@@ -317,6 +317,7 @@
     if(view==='planning'){updatePlanning();renderActions();}
     if(view==='census')updateCensus();
     if(view==='reference')window.SfaFieldMap?.open();
+    if(view==='fieldwork')window.SfaFieldwork?.open(dataset);
     if(view==='visits')updateVisits();
     requestAnimationFrame(()=>{const map=state[{visits:'visitMap',census:'censusMap',reference:'referenceMap'}[view]];if(map)map.invalidateSize();});
   }
