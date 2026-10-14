@@ -4,6 +4,8 @@
 ``_run_whatsapp_batch_selenium`` e ``_is_admin`` são late-bound via módulo app
 (testes fazem monkeypatch desses nomes — contrato do antigo lazy_view).
 """
+from security.redact import redact_sensitive_text
+
 import json
 import logging
 import re
@@ -2273,7 +2275,7 @@ def checkout():
         if marketplace_fee > 0:
             preference_data["marketplace_fee"] = marketplace_fee
     current_app.logger.debug("MP Preference Payload:\n%s",
-                             json.dumps(preference_data, indent=2, ensure_ascii=False))
+                             redact_sensitive_text(json.dumps(preference_data, indent=2, ensure_ascii=False)))
 
     # 5️⃣ cria Preference no Mercado Pago
     try:
