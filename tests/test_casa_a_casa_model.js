@@ -76,6 +76,21 @@ const mapa = (...visitas) => M.juntarVisitas(visitas, []);
   assert.deepEqual([fechado.recipientes_existentes, fechado.larvas, fechado.tubitos, fechado.tratamento_focal, fechado.observacao], [0, false, 0, false, 'cão bravo']);
   const registro = M.comoRegistro(v, { id: 7, nome: 'Ana' });
   assert.deepEqual([registro.m, registro.s, registro.l, registro.ai, registro.pendente, registro.d], ['a', 'TRABALHADO', 1, 7, true, HOJE]);
+  assert.deepEqual(registro.rt, []);
+}
+
+// --- recipientes por tipo (ficha do SISAWEB)
+{
+  const lista = [{ t: 30, e: 1 }, { t: 12, e: 1, a: 2, l: 1 }, { t: 12, e: 1 }, { t: 41, e: 5 }, { t: 5, e: 0 }];
+  assert.deepEqual(M.recipientesPorTipo(lista), [{ t: 12, e: 3, a: 2, l: 1 }, { t: 30, e: 1, a: 0, l: 0 }]);
+  assert.deepEqual(M.somaDosTipos(lista), { e: 4, a: 2, l: 1 });
+  // Anotados por tipo, os totais da visita são a soma; os contadores gerais são ignorados.
+  const v = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'PARCIAL', recipientes_existentes: 9, recipientes: lista });
+  assert.deepEqual([v.recipientes_existentes, v.recipientes_agua, v.recipientes_larva, v.larvas], [4, 2, 1, true]);
+  assert.deepEqual(v.recipientes.map(r => r.t), [12, 30]);
+  assert.deepEqual(M.comoRegistro(v, null).rt, v.recipientes);
+  // Sem inspeção não há recipiente.
+  assert.deepEqual(M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'RECUSA', recipientes: lista }).recipientes, []);
 }
 
 // --- pontos, níveis e medalhas

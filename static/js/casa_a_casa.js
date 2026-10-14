@@ -64,6 +64,13 @@
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
   const eu = () => cfg.usuario;
+  // Tipos de recipiente da ficha do SISAWEB (1 a 40), vindos do servidor com a página.
+  const GRUPOS_RECIPIENTE = cfg.recipientes || [];
+  const TIPO_RECIPIENTE = new Map(GRUPOS_RECIPIENTE.flatMap(grupo => grupo.tipos.map(([numero, nome]) => [numero, { g: grupo.g, grupo: grupo.nome, nome }])));
+  const codigoDoTipo = t => (TIPO_RECIPIENTE.has(t) ? TIPO_RECIPIENTE.get(t).g : '') + t;
+  // Cada agente com uma cor, na ordem da equipe, para o plano no mapa.
+  const CORES_AGENTE = ['#1c7ed6', '#d6336c', '#f08c00', '#2f9e44', '#7048e8', '#0c8599', '#e8590c', '#5c940d'];
+  const corDoAgente = id => { const posicao = (cfg.equipe || []).findIndex(p => p.id === id); return posicao < 0 ? '#495057' : CORES_AGENTE[posicao % CORES_AGENTE.length]; };
   const casasDe = bloco => bloco.extras && bloco.extras.length ? bloco.casas.concat(bloco.extras) : bloco.casas;
   const nomeDoBloco = bloco => 'Quarteirão ' + bloco.n;
   const concluidosLocais = () => new Set(S.acoes.filter(a => a.acao === 'concluir').flatMap(a => a.blocos));
@@ -355,13 +362,18 @@
       if (rotulos > 450) continue;
       const prog = bloco.estado.prog;
       const comConta = (tipo === 'andamento' || tipo === 'planejado' || tipo === 'concluido') && prog.total && zoom >= 14;
+      const plano = zoom >= 14 ? planoDoRotulo(bloco) : null;
       const icone = L.divIcon({
         className: 'cac-rotulo cac-rotulo-' + tipo + (S.blocoAtivo === bloco ? ' ativo' : ''),
-        html: '<div><b></b>' + (comConta ? '<i></i>' : '') + '</div>', iconSize: [0, 0],
+        html: '<div><b></b>' + (comConta ? '<i></i>' : '') + (plano ? '<u></u>' : '') + '</div>', iconSize: [0, 0],
       });
       const marcador = L.marker([bloco.c[1], bloco.c[0]], { icon: icone, interactive: false, keyboard: false }).addTo(S.camadaRotulos);
       const no = marcador.getElement();
-      if (no) { no.querySelector('b').textContent = bloco.n; if (comConta) no.querySelector('i').textContent = prog.feitas + '/' + prog.total; }
+      if (no) {
+        no.querySelector('b').textContent = bloco.n;
+        if (comConta) no.querySelector('i').textContent = prog.feitas + '/' + prog.total;
+        if (plano) { const quem = no.querySelector('u'); quem.textContent = primeiroNome(plano.r); quem.style.background = corDoAgente(plano.ri); }
+      }
       rotulos += 1;
     }
     $('cac-dica').textContent = zoom >= ZOOM_NUMEROS ? 'Toque no número da casa para registrar'
@@ -397,6 +409,17 @@
       }
     }
     S.novas.clear();
+  }
+
+  // Quem trabalha o quarteirão: no escritório, o plano do dia escolhido; na rua, o plano em aberto.
+  function planoDoRotulo(bloco) {
+    if (S.prefs.modo === 'escritorio') {
+      const dia = S.diaPlano || S.hoje;
+      const plano = (bloco.planos || []).find(p => p.d === dia && !p.c);
+      return plano && plano.r ? plano : null;
+    }
+    const e = bloco.estado;
+    return (e.tipo === 'planejado' || e.tipo === 'andamento') && e.plano && e.plano.r ? e.plano : null;
   }
 
   function desenharMapa() {
@@ -461,9 +484,13 @@
 
   function planejarOuTirar(bloco) {
     const dia = S.diaPlano || S.hoje;
-    const noPlano = bloco.planos.some(p => p.d === dia && !p.c);
+    const plano = bloco.planos.find(p => p.d === dia && !p.c);
     const quem = cfg.equipe.find(p => p.id === S.responsavelPlano);
-    if (noPlano) {
+    if (plano && (plano.ri || null) !== (S.responsavelPlano || null)) {
+      // Já no plano de outra pessoa: o clique passa o quarteirão para quem está escolhido.
+      mudarPlano({ acao: 'planejar', blocos: [bloco.id], data: dia, responsavel_id: S.responsavelPlano },
+        () => `${nomeDoBloco(bloco)} passou para ${quem ? primeiroNome(quem.nome) : 'sem responsável'}`);
+    } else if (plano) {
       mudarPlano({ acao: 'remover', blocos: [bloco.id], data: dia },
         dados => dados.feitos ? nomeDoBloco(bloco) + ' saiu do plano' : nomeDoBloco(bloco) + ' já tem visita registrada e fica no plano');
     } else {
@@ -534,6 +561,7 @@
       recipientes_larva: deHoje ? deHoje.rl : 0, larvas: deHoje ? Boolean(deHoje.l) : false, tubitos: deHoje ? deHoje.t : 0,
       controle_mecanico: deHoje ? Boolean(deHoje.cm) : false, controle_alternativo: deHoje ? Boolean(deHoje.ca) : false,
       tratamento_focal: deHoje ? Boolean(deHoje.tf) : false, observacao: deHoje ? deHoje.o : '',
+      recipientes: deHoje && deHoje.rt ? deHoje.rt.map(r => Object.assign({}, r)) : [],
     };
     $('cac-ficha-titulo').textContent = nova ? 'Imóvel que não está na lista' : `${casa.rua}, ${casa.n}`;
     $('cac-ficha-sub').textContent = `${nomeDoBloco(casa.bloco)} · SC ${casa.bloco.s}` + (casa.cp ? ' · ' + casa.cp : '');
@@ -571,12 +599,49 @@
           marca.addEventListener('change', () => { d[chave] = marca.checked; });
           return h('label', { class: 'cac-chip' }, marca, h('span', {}, rotulo));
         };
+        const marcarLarva = v => { if (v > 0 && !larvas.checked) { larvas.checked = true; d.larvas = true; } };
+        // Totais do boletim: digitados, ou a soma dos tipos quando há tipo anotado.
+        const totais = h('div', { class: 'cac-contadores' });
+        const notaTotais = h('p', { class: 'cac-nota' });
+        const desenharTotais = () => {
+          const soma = M.recipientesPorTipo(d.recipientes).length ? M.somaDosTipos(d.recipientes) : null;
+          notaTotais.textContent = soma ? 'Soma dos tipos anotados abaixo' : '';
+          notaTotais.hidden = !soma;
+          totais.replaceChildren(...(soma
+            ? [['Existentes', soma.e], ['Com água', soma.a], ['Com larva', soma.l]].map(([rotulo, valor]) => h('div', { class: 'cac-contador cac-soma' }, h('span', {}, rotulo), h('output', {}, String(valor))))
+            : [contador('Existentes', d.recipientes_existentes, v => { d.recipientes_existentes = v; }),
+              contador('Com água', d.recipientes_agua, v => { d.recipientes_agua = v; }),
+              contador('Com larva', d.recipientes_larva, v => { d.recipientes_larva = v; marcarLarva(v); })]));
+        };
+        const tipos = h('div', { class: 'cac-tipos' });
+        const desenharTipos = () => {
+          tipos.replaceChildren(...d.recipientes.map(linha => {
+            const info = TIPO_RECIPIENTE.get(linha.t) || { nome: 'Tipo ' + linha.t, grupo: '' };
+            const mudar = chave => v => { linha[chave] = v; if (chave === 'l') marcarLarva(v); desenharTotais(); };
+            return h('div', { class: 'cac-tipo' },
+              h('div', { class: 'cac-tipo-topo' }, h('strong', {}, codigoDoTipo(linha.t)), h('span', {}, info.nome, info.grupo ? h('small', {}, ' · ' + info.grupo) : null),
+                h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar ' + info.nome, onclick: () => { d.recipientes = d.recipientes.filter(r => r !== linha); desenharTipos(); desenharTotais(); } }, '×')),
+              h('div', { class: 'cac-contadores' }, contador('Existentes', linha.e || 0, mudar('e')), contador('Com água', linha.a || 0, mudar('a')), contador('Com larva', linha.l || 0, mudar('l'))));
+          }));
+        };
+        const escolherTipo = h('select', { class: 'cac-tipo-escolha', 'aria-label': 'Anotar tipo de recipiente' },
+          h('option', { value: '' }, '＋ Anotar tipo de recipiente…'),
+          GRUPOS_RECIPIENTE.map(grupo => h('optgroup', { label: `${grupo.g} · ${grupo.nome}` }, grupo.tipos.map(([numero, nome]) => h('option', { value: String(numero) }, `${numero} · ${nome}`)))));
+        escolherTipo.addEventListener('change', () => {
+          const t = parseInt(escolherTipo.value, 10);
+          escolherTipo.value = '';
+          if (!t) return;
+          if (!d.recipientes.some(r => r.t === t)) d.recipientes.push({ t, e: 1, a: 0, l: 0 });
+          desenharTipos(); desenharTotais();
+          const linhas = tipos.querySelectorAll('.cac-tipo');
+          const posicao = d.recipientes.findIndex(r => r.t === t);
+          if (linhas[posicao]) linhas[posicao].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
+        desenharTotais(); desenharTipos();
         detalhes.append(
           h('h3', {}, 'Recipientes'),
-          h('div', { class: 'cac-contadores' },
-            contador('Existentes', d.recipientes_existentes, v => { d.recipientes_existentes = v; }),
-            contador('Com água', d.recipientes_agua, v => { d.recipientes_agua = v; }),
-            contador('Com larva', d.recipientes_larva, v => { d.recipientes_larva = v; if (v > 0 && !larvas.checked) { larvas.checked = true; d.larvas = true; } })),
+          totais, notaTotais,
+          ...(GRUPOS_RECIPIENTE.length ? [h('h3', {}, 'Tipos de recipiente'), tipos, escolherTipo] : []),
           h('div', { class: 'cac-larvas' }, h('label', { for: 'cac-larvas' }, larvas, h('span', {}, '🟣 Imóvel com larva')), contador('Tubitos', d.tubitos, v => { d.tubitos = v; })),
           h('h3', {}, 'Controle feito'),
           h('div', { class: 'cac-chips' }, chip('Mecânico', 'controle_mecanico'), chip('Alternativo', 'controle_alternativo'), chip('Focal', 'tratamento_focal')));
@@ -621,6 +686,7 @@
     const linhas = [`${s.icone} ${s.nome} em ${dataBr(v.d)}${horaBr(v.h) ? ' às ' + horaBr(v.h) : ''}${v.a ? ' · ' + v.a : ''}`];
     if (M.INSPECIONADO.has(v.s)) {
       linhas.push(`Recipientes: ${v.re} existentes, ${v.ra} com água, ${v.rl} com larva`);
+      if (v.rt && v.rt.length) linhas.push('Tipos: ' + v.rt.map(r => `${codigoDoTipo(r.t)} ${(TIPO_RECIPIENTE.get(r.t) || { nome: '' }).nome} ×${r.e}${r.l ? ' (' + r.l + ' com larva)' : ''}`).join('; '));
       if (v.l) linhas.push(`🟣 Imóvel com larva${v.t ? ' · ' + plural(v.t, 'tubito', 'tubitos') : ''}`);
       const controles = [v.cm && 'mecânico', v.ca && 'alternativo', v.tf && 'focal'].filter(Boolean);
       if (controles.length) linhas.push('Controle: ' + controles.join(', '));
@@ -765,27 +831,30 @@
     for (const bloco of doDia) {
       const plano = bloco.planos.find(p => p.d === dia && !p.c);
       const nome = plano.r || 'Sem responsável';
-      if (!porPessoa.has(nome)) porPessoa.set(nome, []);
-      porPessoa.get(nome).push(bloco);
+      if (!porPessoa.has(nome)) porPessoa.set(nome, { cor: plano.ri ? corDoAgente(plano.ri) : '#868e96', blocos: [] });
+      porPessoa.get(nome).blocos.push(bloco);
     }
-    const escolha = (rotulo, valor) => h('button', { type: 'button', 'aria-pressed': String(dia === valor), onclick: () => { S.diaPlano = valor; desenharPainel(); } }, rotulo);
+    const escolha = (rotulo, valor) => h('button', { type: 'button', 'aria-pressed': String(dia === valor), onclick: () => { S.diaPlano = valor; desenhar(); } }, rotulo);
     const campoData = h('input', { type: 'date', min: S.hoje, max: somarDias(S.hoje, 60), value: dia, 'aria-label': 'Outro dia' });
-    campoData.addEventListener('change', () => { if (campoData.value >= S.hoje) { S.diaPlano = campoData.value; desenharPainel(); } });
-    const quem = h('select', { 'aria-label': 'Responsável pelos quarteirões' }, h('option', { value: '' }, 'Sem responsável'), cfg.equipe.map(p => h('option', { value: String(p.id) }, p.nome)));
-    quem.value = S.responsavelPlano ? String(S.responsavelPlano) : '';
-    quem.addEventListener('change', () => { S.responsavelPlano = quem.value ? Number(quem.value) : null; });
+    campoData.addEventListener('change', () => { if (campoData.value >= S.hoje) { S.diaPlano = campoData.value; desenhar(); } });
+    // Um botão por agente: escolhe e clica nos quarteirões dele; o número é quantos já tem no dia.
+    const doAgente = id => doDia.filter(b => (b.planos.find(p => p.d === dia && !p.c).ri || null) === id);
+    const pessoas = cfg.equipe.concat([{ id: null, nome: 'Sem responsável' }]);
+    const quem = h('div', { class: 'cac-agentes', role: 'radiogroup', 'aria-label': 'Para quem são os quarteirões' },
+      pessoas.map(p => { const blocos = doAgente(p.id); return h('button', { type: 'button', role: 'radio', 'aria-checked': String((S.responsavelPlano || null) === p.id), style: `--agente:${p.id === null ? '#868e96' : corDoAgente(p.id)}`, title: p.nome, onclick: () => { S.responsavelPlano = p.id; desenharPainel(); } },
+        h('i', { 'aria-hidden': 'true' }), p.id === null ? p.nome : primeiroNome(p.nome), blocos.length ? h('small', {}, `${blocos.length} q · ${blocos.reduce((soma, b) => soma + b.estado.prog.total, 0)} im.`) : null); }));
     const totalCasas = doDia.reduce((soma, b) => soma + b.estado.prog.total, 0);
     return [
       h('section', { class: 'cac-cartao' }, h('h2', {}, 'Plano do dia'),
         h('div', { class: 'cac-escolhas' }, escolha('Hoje', S.hoje), escolha('Amanhã', somarDias(S.hoje, 1)), campoData),
-        cfg.registra ? [h('label', { class: 'cac-campo' }, 'Para quem', quem),
+        cfg.registra ? [h('div', { class: 'cac-campo' }, h('span', {}, 'Para quem'), quem),
           h('label', { class: 'cac-interruptor' }, (() => { const marca = h('input', { type: 'checkbox' }); marca.checked = S.planejando; marca.addEventListener('change', () => { S.planejando = marca.checked; desenharPainel(); }); return marca; })(),
-            h('span', {}, S.planejando ? 'Clique nos quarteirões para pôr ou tirar do plano' : 'Planejar desligado: o clique só abre o quarteirão'))]
+            h('span', {}, S.planejando ? 'Clique nos quarteirões para pôr no plano de quem está escolhido; clique de novo para tirar' : 'Planejar desligado: o clique só abre o quarteirão'))]
           : h('p', { class: 'cac-vazio' }, 'Somente leitura: entre com uma conta da equipe para planejar.')),
       h('section', { class: 'cac-cartao' },
         h('h3', {}, `${dia === S.hoje ? 'Hoje' : dataBr(dia)}: ${plural(doDia.length, 'quarteirão', 'quarteirões')} · ${plural(totalCasas, 'imóvel', 'imóveis')}`),
-        doDia.length ? Array.from(porPessoa.entries()).map(([nome, blocos]) => h('div', { class: 'cac-grupo' },
-          h('h4', {}, `${nome} · ${plural(blocos.length, 'quarteirão', 'quarteirões')}, ${plural(blocos.reduce((soma, b) => soma + b.estado.prog.total, 0), 'imóvel', 'imóveis')}`),
+        doDia.length ? Array.from(porPessoa.entries()).map(([nome, { cor, blocos }]) => h('div', { class: 'cac-grupo' },
+          h('h4', {}, h('i', { class: 'cac-agente-cor', style: `background:${cor}` }), `${nome} · ${plural(blocos.length, 'quarteirão', 'quarteirões')}, ${plural(blocos.reduce((soma, b) => soma + b.estado.prog.total, 0), 'imóvel', 'imóveis')}`),
           blocos.map(b => linhaDeBloco(b))))
           : h('p', { class: 'cac-vazio' }, 'Nada no plano deste dia. Clique nos quarteirões no mapa.'),
         h('div', { class: 'cac-bloco-acoes' }, h('button', { type: 'button', class: 'cac-botao', onclick: imprimir }, '🖨️ Imprimir mapa e plano'))),
@@ -907,6 +976,7 @@
       item('📄 Boletim de hoje (CSV)', baixar(cfg.urls.boletim_csv, S.hoje)),
       item('📄 Boletim dos últimos 30 dias (CSV)', baixar(cfg.urls.boletim_csv, somarDias(S.hoje, -30))),
       item('📄 Visitas dos últimos 30 dias (CSV)', baixar(cfg.urls.visitas_csv, somarDias(S.hoje, -30))),
+      cfg.urls.recipientes_csv ? item('📄 Recipientes por tipo, últimos 30 dias (CSV)', baixar(cfg.urls.recipientes_csv, somarDias(S.hoje, -30))) : null,
       item('↩ Painel do território', () => { location.href = cfg.urls.painel; }),
       cfg.registra ? item('🧹 Limpar o que está guardado neste aparelho', limparAparelho, pendentes > 0) : null);
     menu.hidden = false;

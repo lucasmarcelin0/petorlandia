@@ -126,20 +126,45 @@
     return null;
   }
 
+  const contagem = valor => Math.max(0, Math.min(999, parseInt(valor, 10) || 0));
+
+  /* Recipientes anotados por tipo (1 a 40 da ficha do SISAWEB): um por tipo, em ordem, com
+     existentes >= com água >= com larva. Tipo sem recipiente existente sai da lista. */
+  function recipientesPorTipo(lista) {
+    const porTipo = new Map();
+    for (const linha of lista || []) {
+      const tipo = parseInt(linha && linha.t, 10);
+      if (!(tipo >= 1 && tipo <= 40)) continue;
+      const l = contagem(linha.l), a = Math.max(contagem(linha.a), l), e = Math.max(contagem(linha.e), a);
+      const soma = porTipo.get(tipo) || { t: tipo, e: 0, a: 0, l: 0 };
+      porTipo.set(tipo, { t: tipo, e: Math.min(999, soma.e + e), a: Math.min(999, soma.a + a), l: Math.min(999, soma.l + l) });
+    }
+    return Array.from(porTipo.values()).filter(linha => linha.e > 0).sort((x, y) => x.t - y.t);
+  }
+
+  function somaDosTipos(lista) {
+    const r = { e: 0, a: 0, l: 0 };
+    for (const linha of recipientesPorTipo(lista)) { r.e += linha.e; r.a += linha.a; r.l += linha.l; }
+    return { e: Math.min(999, r.e), a: Math.min(999, r.a), l: Math.min(999, r.l) };
+  }
+
   // Monta a visita no formato que o servidor recebe. Sem inspeção, os campos de recipiente ficam zerados.
+  // Com recipientes anotados por tipo, os totais do boletim são a soma dos tipos.
   function novaVisita(d) {
     const inspecionado = INSPECIONADO.has(d.situacao);
-    const n = valor => Math.max(0, Math.min(999, parseInt(valor, 10) || 0));
-    const comLarva = inspecionado ? n(d.recipientes_larva) : 0;
-    const comAgua = inspecionado ? Math.max(n(d.recipientes_agua), comLarva) : 0;
+    const n = contagem;
+    const tipos = inspecionado ? recipientesPorTipo(d.recipientes) : [];
+    const soma = tipos.length ? somaDosTipos(tipos) : null;
+    const comLarva = !inspecionado ? 0 : (soma ? soma.l : n(d.recipientes_larva));
+    const comAgua = !inspecionado ? 0 : (soma ? soma.a : Math.max(n(d.recipientes_agua), comLarva));
     const agora = d.agora || new Date();
     return {
       uuid: d.uuid || uuid(), bloco: d.bloco, imovel: d.imovel, situacao: d.situacao,
       data: d.data, horario: agora.toISOString(),
       logradouro: d.logradouro || '', numero: d.numero || '', complemento: d.complemento || '',
       lat: d.lat ?? null, lng: d.lng ?? null,
-      recipientes_existentes: inspecionado ? Math.max(n(d.recipientes_existentes), comAgua) : 0,
-      recipientes_agua: comAgua, recipientes_larva: comLarva,
+      recipientes_existentes: !inspecionado ? 0 : (soma ? soma.e : Math.max(n(d.recipientes_existentes), comAgua)),
+      recipientes_agua: comAgua, recipientes_larva: comLarva, recipientes: tipos,
       larvas: inspecionado && (Boolean(d.larvas) || comLarva > 0),
       tubitos: inspecionado ? n(d.tubitos) : 0,
       controle_mecanico: inspecionado && Boolean(d.controle_mecanico),
@@ -157,7 +182,7 @@
       re: envio.recipientes_existentes, ra: envio.recipientes_agua, rl: envio.recipientes_larva, t: envio.tubitos,
       cm: envio.controle_mecanico ? 1 : 0, ca: envio.controle_alternativo ? 1 : 0, tf: envio.tratamento_focal ? 1 : 0,
       rc: 0, o: envio.observacao, lg: envio.logradouro, n: envio.numero, cp: envio.complemento,
-      la: envio.lat, lo: envio.lng, pendente: true,
+      la: envio.lat, lo: envio.lng, rt: envio.recipientes || [], pendente: true,
     };
   }
 
@@ -213,7 +238,7 @@
   const api = {
     SITUACOES, POR_ID, INSPECIONADO, PENDENCIA, LARVA, BLOCOS, XP, NIVEIS, RECENTE_DIAS,
     dia, diasEntre, uuid, maisRecente, juntarVisitas, planoAberto, progresso, estadoDoBloco, corDaCasa,
-    proximaCasa, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
+    proximaCasa, recipientesPorTipo, somaDosTipos, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
   };
   root.CasaACasaModel = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -74,6 +74,7 @@ def register(bp, require_access):
                 'visitas': url_for('sfa_routes.casa_a_casa_visitas'),
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
+                'recipientes_csv': url_for('sfa_routes.casa_a_casa_recipientes_csv', token=_token()),
                 'painel': url_for('sfa_routes.entomologia', token=_token()),
                 'entrar': url_for('login_view', next=url_for('sfa_routes.casa_a_casa'))
                 if 'login_view' in current_app.view_functions else '',
@@ -85,6 +86,7 @@ def register(bp, require_access):
                         if registra else None),
             'registra': registra,
             'situacoes': servico.SITUACOES,
+            'recipientes': servico.grupos_recipiente(),
             'equipe': servico.equipe(current_user if registra else None),
             'csrf': generate_csrf(),
         }
@@ -191,3 +193,10 @@ def register(bp, require_access):
         from services.entomologia_casa_a_casa import boletim_csv
         inicio, fim = _periodo()
         return _planilha(boletim_csv(inicio, fim), f'casa_a_casa_boletim_{inicio}_{fim}.csv')
+
+    @bp.route('/entomologia/casa-a-casa/recipientes.csv')
+    @require_access
+    def casa_a_casa_recipientes_csv():
+        from services.entomologia_casa_a_casa import recipientes_csv
+        inicio, fim = _periodo()
+        return _planilha(recipientes_csv(inicio, fim), f'casa_a_casa_recipientes_{inicio}_{fim}.csv')

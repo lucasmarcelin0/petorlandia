@@ -153,6 +153,8 @@ class EntomologiaVisitaDomiciliar(db.Model):
     recipientes_existentes = db.Column(db.Integer, nullable=False, default=0)
     recipientes_agua = db.Column(db.Integer, nullable=False, default=0)
     recipientes_larva = db.Column(db.Integer, nullable=False, default=0)
+    # Recipientes por tipo da ficha do SISAWEB (1 a 40): [{"t": 12, "e": 3, "a": 2, "l": 1}]. Vazio = só os totais.
+    recipientes_json = db.Column(db.Text)
     larvas_encontradas = db.Column(db.Boolean, nullable=False, default=False)
     tubitos = db.Column(db.Integer, nullable=False, default=0)
     controle_mecanico = db.Column(db.Boolean, nullable=False, default=False)

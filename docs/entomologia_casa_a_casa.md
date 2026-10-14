@@ -14,8 +14,11 @@ barra lateral do SFA. Tela própria, leve, pensada primeiro para o celular.
   mesmo formato da lista de casas: "Rua 26"). Vai junto na base guardada no
   aparelho, então aparece também sem internet.
   Não depende de imagem de fundo; "ruas ao fundo" é opcional e precisa de internet.
-- **Escritório**: escolhe o dia e o agente e clica nos quarteirões para pôr ou
-  tirar do plano. O painel "Ao vivo" mostra totais do dia, quarteirões em aberto,
+- **Escritório**: escolhe o dia e o agente (um botão por pessoa da equipe, com
+  quantos quarteirões e imóveis ela já tem no dia) e clica nos quarteirões para
+  pôr no plano dela. Clicar num quarteirão que está com outra pessoa passa para
+  a escolhida; clicar de novo tira do plano. No mapa, cada quarteirão do plano
+  leva o primeiro nome do agente, na cor dele. O painel "Ao vivo" mostra totais do dia, quarteirões em aberto,
   placar da equipe e os últimos registros.
 - **Rua**: toca no número da casa e marca o resultado. A lista do quarteirão
   segue a ordem da volta (ângulo em torno do centro) e "Salvar e próxima" abre a
@@ -37,6 +40,15 @@ Os mesmos do arquivo oficial "Visita a Imóvel" que o painel já importa
 | Recipientes existentes, com água, com larva | REC. EXIST., REC. AGUA, REC. LARVA |
 | Imóvel com larva, tubitos coletados | IM. LARVA |
 | Controle mecânico, alternativo, focal | IM MECANICO, IM ALTERNATIVO, IM FOCAL |
+| Recipientes por tipo (1 a 40, grupos A a G) | ficha de campo do SISAWEB |
+
+**Tipos de recipiente**: na ficha do imóvel, "Anotar tipo de recipiente" abre a
+lista da ficha do SISAWEB (A depósito elevado, B não elevado, C móveis, D fixos,
+E pneus, F passíveis de remoção, G naturais). Cada tipo anotado tem existentes,
+com água e com larva; com ao menos um tipo anotado, os totais do boletim passam
+a ser a soma dos tipos. Sem tipo anotado, valem os totais digitados, como antes.
+`…/recipientes.csv` soma por dia, quarteirão e tipo; `…/visitas.csv` traz os
+tipos de cada visita na última coluna.
 
 Recipientes e controles só valem para imóvel trabalhado ou parcial; o servidor
 zera o resto e mantém existentes ≥ com água ≥ com larva. Espécie (aegypti,
@@ -82,11 +94,15 @@ sem plano cria a linha do plano sozinha; uma linha por quarteirão e dia.
 ## Acesso e dados
 
 - Ler: administrador, equipe "Combate à dengue" ou token interno do SFA.
+  Os primeiros agentes (lukemarki3 e cvorlandia, no Gmail) entram na equipe pela
+  migration `e3b8f5a1c7d9`, se a conta existir; os demais são concedidos no
+  painel da equipe, que também revoga.
   Planejar e registrar: só conta logada (administrador ou equipe), para cada
   marcação ter autor. O agente é sempre a conta que enviou.
 - Tabelas `entomologia_quarteirao_trabalho` (plano por quarteirão e dia) e
   `entomologia_visita_domiciliar` (visitas, imutáveis; corrigir é registrar
-  outra). Migration `d9a4c1e7b352`. Nenhum dado de morador é guardado: só
+  outra). Migrations `d9a4c1e7b352` e `e3b8f5a1c7d9`
+  (recipientes por tipo em `recipientes_json`). Nenhum dado de morador é guardado: só
   endereço, resultado e agente.
 - Código: `services/entomologia_casa_a_casa.py`,
   `blueprints/entomologia_fieldwork_routes.py`, `static/js/casa_a_casa.js`

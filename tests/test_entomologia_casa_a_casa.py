@@ -255,6 +255,52 @@ def test_sem_inspecao_zera_recipientes_e_contagens_ficam_coerentes(client, base)
     assert (parcial.recipientes_existentes, parcial.recipientes_agua, parcial.recipientes_larva, parcial.larvas_encontradas) == (3, 3, 3, True)
 
 
+def test_recipientes_por_tipo_da_ficha_do_sisaweb(client, base):
+    entrar(client, agente())
+    tipos = [{'t': 30, 'e': 1}, {'t': 12, 'e': 2, 'a': 1, 'l': 1}, {'t': 12, 'e': 1}, {'t': 5, 'e': 0}]
+    resposta = enviar(client,
+                      visita(base['a'], '1001', 'TRABALHADO', 'visita-t1', recipientes_existentes=9, recipientes=tipos),
+                      visita(base['a'], '1002', 'FECHADO', 'visita-t2', recipientes=tipos),
+                      visita(base['a'], '1003-abc', 'TRABALHADO', 'visita-t3', recipientes=[{'t': 41, 'e': 1}]))
+    assert resposta.json['aceitas'] == ['visita-t1', 'visita-t2']
+    assert resposta.json['recusadas'] == [{'uuid': 'visita-t3', 'motivo': 'Tipo de recipiente inválido.'}]
+    trabalhado, fechado = Visita.query.order_by(Visita.id).all()
+    # Com tipo anotado, os totais do boletim são a soma dos tipos; um registro por tipo.
+    assert (trabalhado.recipientes_existentes, trabalhado.recipientes_agua, trabalhado.recipientes_larva,
+            trabalhado.larvas_encontradas) == (4, 1, 1, True)
+    assert servico.recipientes_da_visita(trabalhado) == [{'t': 12, 'e': 3, 'a': 1, 'l': 1}, {'t': 30, 'e': 1, 'a': 0, 'l': 0}]
+    assert fechado.recipientes_json is None and fechado.recipientes_existentes == 0
+
+    estado = client.get(RAIZ + '/estado', **HTTPS).json
+    assert next(v for v in estado['visitas'] if v['m'] == '1001')['rt'][0] == {'t': 12, 'e': 3, 'a': 1, 'l': 1}
+    linhas = client.get(RAIZ + '/visitas.csv', **HTTPS).get_data(as_text=True).splitlines()
+    assert linhas[0].endswith(';TIPOS DE RECIPIENTE')
+    assert any(linha.endswith('C12 (3 exist., 1 água, 1 larva) | F30 (1 exist.)') for linha in linhas)
+    planilha = client.get(RAIZ + '/recipientes.csv', **HTTPS)
+    assert planilha.status_code == 200 and 'attachment' in planilha.headers['Content-Disposition']
+    cabecalho, *corpo = planilha.get_data(as_text=True).lstrip('\ufeff').splitlines()
+    assert cabecalho == 'DATA;SETOR;QUARTEIRAO;GRUPO;TIPO;RECIPIENTE;IMOVEIS;REC. EXIST.;REC. AGUA;REC. LARVA'
+    assert [linha.split(';')[3:] for linha in corpo] == [['C', '12', 'Lata, frasco, plástico utilizáveis', '1', '3', '1', '1'],
+                                                         ['F', '30', 'Lata, frasco, plástico', '1', '1', '0', '0']]
+
+
+def test_tela_traz_os_40_tipos_de_recipiente_e_a_equipe(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    import json
+    import re
+    html = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    config = json.loads(re.search(r'id="cac-config">(.*?)</script>', html, re.S).group(1))
+    assert {pessoa['nome'] for pessoa in config['equipe']} == {'Ana Agente', 'Bia Agente'}
+    assert config['recipientes'][0] == {'g': 'A', 'nome': 'Depósito elevado', 'tipos': [[1, 'Ligado à rede'], [2, 'Não ligado à rede']]}
+    assert config['recipientes'][-1]['tipos'][1] == [39, 'Bromélias'] and config['urls']['recipientes_csv']
+    assert sorted(servico.TIPOS_RECIPIENTE) == list(range(1, 41))
+    assert [grupo['g'] for grupo in servico.grupos_recipiente()] == list('ABCDEFG')
+    # O plano do dia aceita qualquer pessoa da equipe e troca o responsável com outro clique.
+    assert planejar(client, 'planejar', [base['a']], responsavel_id=bia.id).json['feitos'] == 1
+    assert planejar(client, 'planejar', [base['a']], responsavel_id=ana.id).json['planos'][0]['ri'] == ana.id
+
+
 def test_lote_aceita_as_boas_e_explica_as_recusadas(client, base):
     entrar(client, agente())
     antiga = (hoje_local() - timedelta(days=servico.JANELA_DIAS + 5)).isoformat()

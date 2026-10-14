@@ -44,6 +44,33 @@ PENDENCIA = {"FECHADO", "RECUSA", "TEMPORADA"}
 COLUNA_SITUACAO = {"TRABALHADO": "IM TRAB", "FECHADO": "IM FECH", "DESOCUPADO": "IM DESOC",
                    "TEMPORADA": "IM TEMP", "PARCIAL": "IM PARC", "RECUSA": "IM RECUSA"}
 
+# Tipo de recipiente, com os grupos e a numeração da ficha de campo do SISAWEB (1 a 40).
+GRUPOS_RECIPIENTE = (
+    ("A", "Depósito elevado", ((1, "Ligado à rede"), (2, "Não ligado à rede"))),
+    ("B", "Depósito não elevado", ((3, "Ligado à rede"), (4, "Não ligado à rede"))),
+    ("C", "Móveis", ((5, "Vaso de planta na água"), (6, "Vasos de planta (diversos)"), (7, "Prato / pingadeira"),
+                     (8, "Consumo animal"), (9, "Depósito p/ construção"), (10, "Depósito p/ horticultura"),
+                     (11, "Piscina desmontável"), (12, "Lata, frasco, plástico utilizáveis"),
+                     (13, "Garrafas retornáveis"), (14, "Balde / regador"), (15, "Bandeja geladeira / ar cond."),
+                     (16, "Material de construção"), (17, "Outros"))),
+    ("D", "Fixos", ((18, "Ralo interno"), (19, "Ralo externo"), (20, "Laje"), (21, "Calha"),
+                    (22, "Vaso sanitário / cx. descarga"), (23, "Piscina"), (24, "Depósito p/ construção"),
+                    (25, "Depósito p/ horticultura"), (26, "Consumo animal"), (27, "Outros"))),
+    ("E", "Pneus", ((28, "Pneu"), (29, "Outros correlatos"))),
+    ("F", "Passíveis remoção / alteração", ((30, "Lata, frasco, plástico"), (31, "Garrafa descartável"),
+                                            (32, "Lona, encerado, plástico"), (33, "Entulho de construção"),
+                                            (34, "Peças / sucatas"), (35, "Masseira"), (36, "Barco"),
+                                            (37, "Outros"))),
+    ("G", "Naturais", ((38, "Oco de árvore e bambu"), (39, "Bromélias"), (40, "Outros"))),
+)
+TIPOS_RECIPIENTE = {numero: (grupo, nome) for grupo, _titulo, tipos in GRUPOS_RECIPIENTE for numero, nome in tipos}
+
+
+def grupos_recipiente() -> list[dict]:
+    """Os tipos de recipiente no formato da tela (vai na página, então vale sem internet)."""
+    return [{"g": grupo, "nome": titulo, "tipos": [[numero, nome] for numero, nome in tipos]}
+            for grupo, titulo, tipos in GRUPOS_RECIPIENTE]
+
 _UUID = re.compile(r"[A-Za-z0-9-]{8,64}")
 _IMOVEL = re.compile(r"[A-Za-z0-9_.:-]{1,80}")
 _CELULA = 0.003          # ~300 m: grade para achar o quarteirão de um ponto sem testar os 946
@@ -314,7 +341,16 @@ def visita_dict(visita) -> dict:
         "tf": int(bool(visita.tratamento_focal)), "rc": int(bool(visita.recuperacao)),
         "o": visita.observacao or "", "lg": visita.logradouro or "", "n": visita.numero or "",
         "cp": visita.complemento or "", "la": visita.latitude, "lo": visita.longitude,
+        "rt": recipientes_da_visita(visita),
     }
+
+
+def recipientes_da_visita(visita) -> list[dict]:
+    try:
+        lista = json.loads(getattr(visita, "recipientes_json", None) or "[]")
+    except ValueError:
+        return []
+    return lista if isinstance(lista, list) else []
 
 
 def estado(hoje: date, desde: int = 0) -> dict:
@@ -503,6 +539,31 @@ def _coordenada(valor, minimo: float, maximo: float):
     return numero if math.isfinite(numero) and minimo <= numero <= maximo else None
 
 
+def _recipientes_por_tipo(valor) -> list[dict]:
+    """Recipientes anotados por tipo: ``[{"t": 12, "e": 3, "a": 2, "l": 1}, ...]``, um por tipo, em ordem."""
+    if valor in (None, ""):
+        return []
+    if not isinstance(valor, list) or len(valor) > len(TIPOS_RECIPIENTE):
+        raise ValueError("Lista de tipos de recipiente inválida.")
+    por_tipo: dict = {}
+    for linha in valor:
+        if not isinstance(linha, dict):
+            raise ValueError("Lista de tipos de recipiente inválida.")
+        try:
+            tipo = int(linha.get("t"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Tipo de recipiente inválido.") from exc
+        if tipo not in TIPOS_RECIPIENTE:
+            raise ValueError("Tipo de recipiente inválido.")
+        larva = _inteiro(linha.get("l"), "recipientes com larva")
+        agua = max(_inteiro(linha.get("a"), "recipientes com água"), larva)
+        existentes = max(_inteiro(linha.get("e"), "recipientes existentes"), agua)
+        soma = por_tipo.setdefault(tipo, {"t": tipo, "e": 0, "a": 0, "l": 0})
+        soma["e"], soma["a"], soma["l"] = (min(999, soma["e"] + existentes), min(999, soma["a"] + agua),
+                                           min(999, soma["l"] + larva))
+    return [por_tipo[tipo] for tipo in sorted(por_tipo) if por_tipo[tipo]["e"]]
+
+
 def validar_visita(item, blocos: dict, hoje: date) -> dict:
     """Campos de uma visita prontos para gravar; ``ValueError`` diz o que recusar."""
     if not isinstance(item, dict):
@@ -531,9 +592,15 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
         horario = None
 
     inspecionado = situacao in INSPECIONADO
+    por_tipo = _recipientes_por_tipo(item.get("recipientes")) if inspecionado else []
     existentes = _inteiro(item.get("recipientes_existentes"), "recipientes existentes") if inspecionado else 0
     com_agua = _inteiro(item.get("recipientes_agua"), "recipientes com água") if inspecionado else 0
     com_larva = _inteiro(item.get("recipientes_larva"), "recipientes com larva") if inspecionado else 0
+    if por_tipo:
+        # Anotados por tipo, os totais do boletim são a soma dos tipos.
+        existentes = min(999, sum(linha["e"] for linha in por_tipo))
+        com_agua = min(999, sum(linha["a"] for linha in por_tipo))
+        com_larva = min(999, sum(linha["l"] for linha in por_tipo))
     # No boletim, existentes >= com água >= com larva.
     com_agua = max(com_agua, com_larva)
     existentes = max(existentes, com_agua)
@@ -545,6 +612,7 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
         "complemento": str(item.get("complemento") or "").strip()[:80] or None,
         "latitude": _coordenada(item.get("lat"), -90, 90), "longitude": _coordenada(item.get("lng"), -180, 180),
         "recipientes_existentes": existentes, "recipientes_agua": com_agua, "recipientes_larva": com_larva,
+        "recipientes_json": json.dumps(por_tipo, separators=(",", ":")) if por_tipo else None,
         "larvas_encontradas": inspecionado and (bool(item.get("larvas")) or com_larva > 0),
         "tubitos": _inteiro(item.get("tubitos"), "tubitos") if inspecionado else 0,
         "controle_mecanico": inspecionado and bool(item.get("controle_mecanico")),
@@ -618,20 +686,57 @@ def _texto_de_planilha(valor) -> str:
     return "'" + texto if texto[:1] in ("=", "+", "-", "@") else texto
 
 
+def _tipos_em_texto(visita) -> str:
+    """"12 (3 exist., 2 água, 1 larva) | 30 (1 exist.)": os tipos anotados, legíveis na planilha."""
+    partes = []
+    for linha in recipientes_da_visita(visita):
+        conta = [f'{linha.get("e", 0)} exist.']
+        if linha.get("a"):
+            conta.append(f'{linha["a"]} água')
+        if linha.get("l"):
+            conta.append(f'{linha["l"]} larva')
+        partes.append(f'{TIPOS_RECIPIENTE.get(linha.get("t"), ("?",))[0]}{linha.get("t")} ({", ".join(conta)})')
+    return " | ".join(partes)
+
+
 def visitas_csv(inicio: date, fim: date) -> str:
     """Uma linha por visita, com todos os campos registrados na rua."""
     sim = lambda valor: "SIM" if valor else "NAO"
     return _csv(
         ["DATA", "HORA", "SETOR", "QUARTEIRAO", "LOGRADOURO", "NUMERO", "COMPLEMENTO", "SITUACAO",
          "REC. EXIST.", "REC. AGUA", "REC. LARVA", "IM. LARVA", "TUBITOS", "IM MECANICO", "IM ALTERNATIVO",
-         "IM FOCAL", "RECUPERACAO", "AGENTE", "OBSERVACAO"],
+         "IM FOCAL", "RECUPERACAO", "AGENTE", "OBSERVACAO", "TIPOS DE RECIPIENTE"],
         ([v.data_visita.isoformat(), (_iso(v.horario_visita) or "")[11:16], v.setor, v.quarteirao,
           _texto_de_planilha(v.logradouro), v.numero or "", _texto_de_planilha(v.complemento),
           SITUACOES.get(v.situacao, v.situacao),
           v.recipientes_existentes, v.recipientes_agua, v.recipientes_larva, sim(v.larvas_encontradas), v.tubitos,
           sim(v.controle_mecanico), sim(v.controle_alternativo), sim(v.tratamento_focal), sim(v.recuperacao),
-          _texto_de_planilha(v.agente), _texto_de_planilha(v.observacao)]
+          _texto_de_planilha(v.agente), _texto_de_planilha(v.observacao), _tipos_em_texto(v)]
          for v in _visitas_do_periodo(inicio, fim)))
+
+
+def recipientes_csv(inicio: date, fim: date) -> str:
+    """Recipientes por tipo, somados por dia e quarteirão (vale a última visita do imóvel no dia)."""
+    ultimas = {}
+    for visita in _visitas_do_periodo(inicio, fim):
+        ultimas[(visita.data_visita, visita.bloco, visita.imovel)] = visita
+    somas: dict = {}
+    for (dia, bloco, _imovel), v in ultimas.items():
+        for linha in recipientes_da_visita(v):
+            tipo = linha.get("t")
+            if tipo not in TIPOS_RECIPIENTE:
+                continue
+            conta = somas.setdefault((dia, v.setor, v.quarteirao, bloco, tipo), [0, 0, 0, 0])
+            conta[0] += 1
+            conta[1] += linha.get("e", 0)
+            conta[2] += linha.get("a", 0)
+            conta[3] += linha.get("l", 0)
+    return _csv(
+        ["DATA", "SETOR", "QUARTEIRAO", "GRUPO", "TIPO", "RECIPIENTE", "IMOVEIS", "REC. EXIST.", "REC. AGUA",
+         "REC. LARVA"],
+        ([dia.isoformat(), setor, quarteirao, TIPOS_RECIPIENTE[tipo][0], tipo, TIPOS_RECIPIENTE[tipo][1], *conta]
+         for (dia, setor, quarteirao, _bloco, tipo), conta in sorted(somas.items(), key=lambda item: (
+             item[0][0], item[0][1], item[0][2], item[0][3], item[0][4]))))
 
 
 COLUNAS_BOLETIM = ["IM TRAB", "IM FECH", "IM DESOC", "IM TEMP", "IM PARC", "IM RECUSA", "IM. LARVA",

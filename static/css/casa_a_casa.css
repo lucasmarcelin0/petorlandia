@@ -65,6 +65,7 @@ h2, h3, h4, p { margin: 0; }
 .cac-rotulo b { font-size: .8rem; font-weight: 800; }
 .cac-rotulo i { font-size: .62rem; font-style: normal; font-weight: 700; opacity: .8; }
 .cac-rotulo-livre b, .cac-rotulo-anterior b { color: #6c7a7d; font-weight: 700; }
+.cac-rotulo u { margin-top: .08rem; padding: 0 .3rem; border-radius: .35rem; color: #fff; font-size: .6rem; font-weight: 700; text-decoration: none; }
 .cac-rotulo.ativo > div { color: #fff; background: var(--cac-verde); }
 /* Nome da rua: gira com o eixo, tem contorno branco para ser lido por cima das cores e não recebe toque. */
 .cac-via > span { position: absolute; color: #3d4b4f; font-weight: 700; letter-spacing: .02em; line-height: 1; white-space: nowrap; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff, 0 0 4px #fff; pointer-events: none; }
@@ -158,6 +159,15 @@ h2, h3, h4, p { margin: 0; }
 .cac-escolhas button, .cac-escolhas input { padding: .35rem .7rem; border: 1px solid var(--cac-linha); border-radius: .6rem; background: #fff; font-weight: 600; }
 .cac-escolhas button[aria-pressed="true"] { border-color: var(--cac-verde); color: #fff; background: var(--cac-verde); }
 .cac-campo { display: block; margin-top: .4rem; color: var(--cac-suave); font-size: .78rem; font-weight: 700; }
+.cac-campo > span { display: block; }
+.cac-agentes { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .25rem; }
+.cac-agentes button { display: inline-flex; align-items: center; gap: .35rem; padding: .4rem .7rem; border: 1.5px solid var(--cac-linha); border-radius: 999px; color: var(--cac-tinta); background: #fff; font-size: .86rem; font-weight: 700; }
+.cac-agentes button i, .cac-agente-cor { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; background: var(--agente); vertical-align: baseline; }
+.cac-agentes button small { color: var(--cac-suave); font-size: .72rem; font-weight: 600; }
+.cac-agentes button[aria-checked="true"] { border-color: var(--agente); color: #fff; background: var(--agente); }
+.cac-agentes button[aria-checked="true"] i { background: #fff; }
+.cac-agentes button[aria-checked="true"] small { color: rgba(255, 255, 255, .85); }
+.cac-agente-cor { margin-right: .35rem; }
 .cac-campo select { display: block; width: 100%; margin-top: .2rem; padding: .45rem .5rem; border: 1px solid var(--cac-linha); border-radius: .6rem; color: var(--cac-tinta); background: #fff; font-weight: 500; }
 .cac-interruptor { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; padding: .5rem .6rem; border-radius: .6rem; background: var(--cac-verde-claro); font-size: .82rem; font-weight: 600; }
 .cac-interruptor input { width: 1.1rem; height: 1.1rem; accent-color: var(--cac-verde); }
@@ -199,6 +209,20 @@ h2, h3, h4, p { margin: 0; }
 .cac-chip span { display: block; padding: .45rem .8rem; border: 1.5px solid var(--cac-linha); border-radius: 999px; background: #fff; font-weight: 600; }
 .cac-chip input:checked + span { border-color: var(--cac-verde); color: #fff; background: var(--cac-verde); }
 .cac-chip input:focus-visible + span { outline: 3px solid #96d5cc; }
+/* Totais como soma dos tipos e recipientes por tipo (ficha do SISAWEB) */
+.cac-soma output { display: block; padding: .4rem 0; border: 1.5px dashed var(--cac-linha); border-radius: .7rem; background: #f8faf9; font-size: 1.05rem; font-weight: 700; text-align: center; }
+.cac-nota { margin-top: .25rem; color: var(--cac-suave); font-size: .74rem; text-align: center; }
+.cac-tipos { display: grid; gap: .45rem; }
+.cac-tipo { padding: .45rem .5rem .5rem; border: 1.5px solid var(--cac-linha); border-radius: .8rem; background: #fbfdfc; }
+.cac-tipo-topo { display: flex; align-items: center; gap: .45rem; margin-bottom: .3rem; }
+.cac-tipo-topo strong { flex: 0 0 auto; min-width: 2.3rem; padding: .1rem .35rem; border-radius: .45rem; color: #fff; background: var(--cac-verde); font-size: .8rem; text-align: center; }
+.cac-tipo-topo > span { flex: 1 1 auto; min-width: 0; font-size: .86rem; font-weight: 700; line-height: 1.2; }
+.cac-tipo-topo small { color: var(--cac-suave); font-weight: 500; }
+.cac-tipo-tirar { flex: 0 0 auto; width: 1.9rem; height: 1.9rem; border: 0; border-radius: 50%; color: var(--cac-suave); background: #f1f3f5; font-size: 1.1rem; }
+.cac-tipo .cac-contador button { flex-basis: 1.9rem; }
+.cac-tipo .cac-contador input { padding: .3rem 0; font-size: .98rem; }
+.cac-tipo-escolha { display: block; width: 100%; margin-top: .45rem; padding: .55rem .6rem; border: 1.5px dashed var(--cac-verde); border-radius: .7rem; color: var(--cac-verde); background: var(--cac-verde-claro); font-weight: 700; }
+
 .cac-detalhes textarea, .cac-nova input { display: block; width: 100%; margin-top: .6rem; padding: .5rem .6rem; border: 1.5px solid var(--cac-linha); border-radius: .7rem; background: #fff; }
 .cac-nova { display: grid; grid-template-columns: 1fr 6rem; gap: .4rem; margin-bottom: .5rem; }
 .cac-nova label { color: var(--cac-suave); font-size: .76rem; font-weight: 700; }
