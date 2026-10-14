@@ -34,4 +34,6 @@ assert(M.automationSummary({...automation,manual:{markers:154,compared:0}}).incl
 assert(!M.automationSummary({...automation,manual:null,read_at:''}).includes('Casos Dengue'));
 assert.equal(M.automationSummary({rows:1,located:1,unlocated:0,methods:{equipe:1}}),'1 notificação · 1 no mapa · 0 sem posição. Posição: 1 pela equipe.');
 assert.equal(M.automationSummary(null),'');
+assert(M.automationSummary({rows:171,located:166,unlocated:5,methods:{exato:143,interpolado:12,numeracao:2,condominio:8,localidade:1,memoria:1}})
+  .includes('143 pelo número exato, 12 entre vizinhos, 2 pela numeração da rua, 8 em condomínio, 1 por localidade rural, 1 por endereço já marcado pela equipe.'));
 console.log('Automatic dengue layer summary passed.');

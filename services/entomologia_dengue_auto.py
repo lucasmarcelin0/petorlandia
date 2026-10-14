@@ -28,7 +28,7 @@ from services.entomologia_atlas import normalize
 KEY = 'auto-dengue'
 TITLE = 'Dengue Automatizados'
 COLOR = '#ff5d8f'
-VERSION = 1
+VERSION = 2
 MANUAL_TITLE = 'Casos Dengue'
 
 WINDOW = 60          # diferença de numeração até onde um imóvel da mesma rua serve de referência
@@ -50,15 +50,19 @@ NUMBER_MARKS = ('n', 'no', 'num', 'numero')
 CONDOMINIUMS = {'quebec': 'Quebec', 'quebeck': 'Quebec', 'torino': 'Torino'}
 # Portarias confirmadas pela coordenação em 05/10/2026: o número da rua é a entrada do condomínio, não o
 # imóvel. A letra não entra na chave. O Quebec fica de fora: "Rua 20, 955" também cabe na numeração do Centro.
-GATES = {('rua 20', 1107): ('Torino', 'Rua 20, 1107-A'), ('rua 26', 1109): ('Paris', 'Rua 26, 1109-A')}
+GATES = {('rua 20', 1107): ('Torino', 'Rua 20, 1107-A', 'a'), ('rua 26', 1109): ('Paris', 'Rua 26, 1109-A', 'a')}
+# Endereços que não são "rua e número": o nome do lugar é o endereço.
+PLACE_KINDS = ('assentamento', 'chacara', 'sitio', 'fazenda', 'estrada', 'rodovia', 'vicinal', 'colonia', 'rancho',
+               'estancia', 'acampamento')
 NEIGHBORHOOD_NOISE = {'jardim', 'jd', 'conj', 'conjunto', 'hab', 'habitacional', 'dr', 'vila', 'vl', 'parque',
                       'residencial', 'res', 'condominio', 'cond', 'de', 'da', 'do', 'das', 'dos', 'e'}
 RESULT_LABELS = {'positive': 'Positivo', 'negative': 'Negativo', 'pending': 'Pendente / suspeito',
                  'unknown': 'Sem resultado reconhecido'}
 METHOD_LABELS = {'exato': 'Endereço exato', 'exato_sufixo': 'Número exato, letra diferente',
                  'interpolado': 'Interpolado entre vizinhos', 'vizinho': 'Vizinho mais próximo',
+                 'numeracao': 'Numeração métrica da rua', 'localidade': 'Lugar ou localidade rural',
                  'condominio': 'Condomínio (casa ou portaria)', 'equipe': 'Posição ajustada pela equipe',
-                 'sem_posicao': 'Sem posição'}
+                 'memoria': 'Endereço já posicionado pela equipe', 'sem_posicao': 'Sem posição'}
 SHEET_HEADERS = {1: 'agravo/doenca', 2: 'n ficha epidemiologica', 3: 'sinan', 5: 'data notificacao',
                  6: 'data inicio sintomas', 9: 'endereco', 10: 'bairro', 15: 'tipo de exame',
                  16: 'resultado', 17: 'resultado final', 18: 'classificacao do caso'}
@@ -115,7 +119,8 @@ def parse_address(text):
     house = re.search(r'\bcasa (\d{1,4})\b', joined)
     apartment = re.search(r'\b(?:apto|apartamento|ap|apt) (\d{1,5}[a-z]?)\b', joined)
     parsed = {'street': None, 'street_label': '', 'number': None, 'suffix': '', 'condominium': condo,
-              'other_condominium': other[1].title() if other else '', 'house': int(house[1]) if house else None}
+              'other_condominium': other[1].title() if other else '', 'house': int(house[1]) if house else None,
+              'place': place_key(text)}
     if tokens[0] in STREET_KINDS:
         kind, rest, index, name = STREET_KINDS[tokens[0]], tokens[1:], 0, []
         marked = lambda i: rest[i] in NUMBER_MARKS and i + 1 < len(rest) and rest[i + 1][:1].isdigit()
@@ -143,9 +148,27 @@ def parse_address(text):
     parsed['complement'] = ' · '.join(p for p in (
         'Condomínio ' + named if named else '', 'Casa ' + house[1] if house else '',
         'Apto ' + apartment[1].upper() if apartment else '') if p)
-    if not parsed['street'] and not parsed['complement']:
+    if not parsed['street'] and not parsed['complement'] and not parsed['place']:
         return None
     return parsed
+
+
+def place_key(text):
+    """Chave de um lugar sem rua e número ("Chácara Recanto Feliz", "Assentamento X"); vazio se não for um."""
+    tokens = [t for t in _tokens(text) if t.isalnum()]
+    return ' '.join(tokens[:6]) if len(tokens) > 1 and tokens[0] in PLACE_KINDS else ''
+
+
+def address_key(parsed):
+    """Identidade de um endereço para a memória do mapa: casa de condomínio, rua e número ou lugar."""
+    if not parsed:
+        return None
+    condo = parsed['condominium'] or parsed['other_condominium']
+    if condo and parsed['house']:
+        return ('house', normalize(condo), parsed['house'])
+    if parsed['street'] and parsed['number']:
+        return ('street', parsed['street'], parsed['number'], parsed['suffix'])
+    return ('place', parsed['place']) if parsed['place'] else None
 
 
 def address_label(parsed):
@@ -153,7 +176,8 @@ def address_label(parsed):
         return ''
     number = (str(parsed['number']) + ('-' + parsed['suffix'].upper() if parsed['suffix'] else '')) if parsed['number'] else ''
     street = (parsed['street_label'] + (', ' + number if number else ', sem número')) if parsed['street'] else ''
-    return ' · '.join(p for p in (street, parsed['complement']) if p)
+    place = parsed['place'].title() if parsed['place'] and not street else ''
+    return ' · '.join(p for p in (street or place, parsed['complement']) if p)
 
 
 def neighborhood_tokens(value):
@@ -181,7 +205,10 @@ class AddressIndex:
     def __init__(self, layers):
         self.streets = defaultdict(list)
         self.houses = defaultdict(list)
+        self.places = defaultdict(list)
         self.gates = {}
+        self.memory = {}        # endereço -> posição que a equipe já marcou na própria camada (ver ``_memory``)
+        self._grid = None
         for layer in layers.values():
             kind = layer.get('origin', {}).get('type')
             if layer.get('deleted') or kind not in ('cnefe', 'condominium', 'local') or (kind == 'local' and layer.get('clinical')):
@@ -192,13 +219,11 @@ class AddressIndex:
                     continue
                 point = tuple(geometry['coordinates'][:2])
                 if kind == 'local':
-                    known = next((a for a in map(parse_address, (p.get('address'), p.get('name')))
-                                  if a and a['street'] and a['number']), None)
-                    if known:
-                        self.streets[known['street']].append({
-                            'id': str(feature['id']), 'number': known['number'], 'suffix': known['suffix'],
-                            'point': point, 'neighborhood': '', 'team': layer.get('title', '')})
+                    self._teach(feature, point, 'camada ' + layer.get('title', ''))
                     continue
+                # Lugares rurais do Censo: o "logradouro" é o nome do sítio ou da fazenda; a localidade, o do assentamento.
+                for name in {place_key(p.get('street')), place_key(p.get('neighborhood'))} - {''}:
+                    self.places[name].append({'id': str(feature['id']), 'point': point, 'neighborhood': p.get('neighborhood', '')})
                 number = _house_number(p.get('house_number', ''))
                 if not number:
                     continue
@@ -214,6 +239,32 @@ class AddressIndex:
                     self.streets[key].append(entry)
                 elif hood.startswith('condominio ') and normalize(p.get('street')).startswith('acesso'):
                     self.gates[hood[len('condominio '):]] = entry      # acesso do condomínio registrado pelo CNEFE
+
+    def _teach(self, feature, point, source):
+        """Ponto que a equipe cadastrou vira referência: por rua e número, por casa de condomínio ou por lugar."""
+        p = feature.get('properties', {})
+        for text in (p.get('address'), p.get('name')):
+            key = address_key(parse_address(text))
+            if key:
+                self._add(key, {'id': str(feature['id']), 'point': point, 'neighborhood': '', 'team': source})
+                return
+
+    def _add(self, key, entry):
+        if key[0] == 'house':
+            self.houses[key[1:]].append({**entry, 'block': '', 'sector': ''})
+        elif key[0] == 'street':
+            self.streets[key[1]].append({**entry, 'number': key[2], 'suffix': key[3]})
+        else:
+            self.places[key[1]].append(entry)
+
+
+    @property
+    def grid(self):
+        """Numeração métrica aprendida dos endereços conhecidos (calculada uma vez por atualização)."""
+        if self._grid is None:
+            from services.entomologia_numeracao import Grid
+            self._grid = Grid(self.streets)
+        return self._grid
 
     @property
     def size(self):
@@ -251,23 +302,85 @@ def _located(point, method, confidence, precision, references, issues=()):
             'reference_neighborhood': hoods.most_common(1)[0][0] if hoods else '', 'issues': list(issues)}
 
 
+def _road_segments(key):
+    """Traçado da rua na malha de ruas do atlas, em trechos ``(a, b)`` de longitude/latitude."""
+    from services.entomologia_georeference import reference_index
+    index = reference_index()
+    return [(index['roads'][i][0], index['roads'][i][1]) for i in index['by_name'].get(key, [])]
+
+
+def _by_numbering(index, key, street, number, suffix, neighborhood):
+    """Posição pela numeração métrica da rua: ``(candidato, motivo)``; um dos dois é ``None``."""
+    candidates = index.grid.predict(key, number, suffix, _road_segments(key))
+    if not candidates:
+        return None, None
+    rate = lambda c: c['score'] + 2 * any(same_neighborhood(neighborhood, hood) for hood in c['neighborhoods'])
+    ranked = sorted(candidates, key=rate, reverse=True)
+    # Só a ausência de letra não decide o lado: a letra some com frequência, na planilha e na base.
+    if len(ranked) > 1 and rate(ranked[0]) - rate(ranked[1]) < 2:
+        places = ' e '.join(sorted({c['neighborhood'] or 'bairro não informado' for c in ranked[:2]}))
+        return None, (f'{street}, {number} cabe em dois trechos de numeração da rua ({places}); '
+                      'letra e bairro da planilha não permitem decidir.')
+    return ranked[0], None
+
+
 def _gate(index, condo):
-    """Portaria do condomínio: ponto no endereço dela (da equipe, de preferência) ou o acesso que o CNEFE registra."""
-    for (street, number), (name, _) in GATES.items():
-        found = [e for e in index.streets.get(street, []) if e['number'] == number] if name == condo else []
+    """Portaria do condomínio: ``(posição, como)``.
+
+    Vale, nesta ordem, um ponto no endereço dela (da equipe, de preferência), o acesso que o CNEFE registra para
+    o condomínio e a posição do número da portaria pela numeração métrica da rua.
+    """
+    for (street, number), (name, label, suffix) in GATES.items():
+        if name != condo:
+            continue
+        found = [e for e in index.streets.get(street, []) if e['number'] == number]
         if found:
-            return _medoid([e for e in found if e.get('team')] or found)
-    return index.gates.get(normalize(condo))
+            return _medoid([e for e in found if e.get('team')] or found), ''
+        access = index.gates.get(normalize(condo))
+        if access:
+            return access, ''
+        candidate, _ = _by_numbering(index, street, label, number, suffix, '')
+        if candidate:
+            return ({'id': 'numeracao', 'point': candidate['point'], 'neighborhood': candidate['neighborhood']},
+                    f', pela numeração da rua (a {candidate["near_m"]} m do nº {candidate["near_number"]})')
+    access = index.gates.get(normalize(condo))
+    return (access, '') if access else (None, '')
 
 
 def _locate_gate(index, condo, why):
-    gate, label = _gate(index, condo), next((label for name, label in GATES.values() if name == condo), '')
+    (gate, how), label = _gate(index, condo), next((label for name, label, _ in GATES.values() if name == condo), '')
     where = f' ({label})' if label else ''
     if not gate:
         return _unlocated(f'Condomínio {condo}: {why} e a portaria{where} não tem posição na base do atlas. '
                           'Cadastre a portaria como ponto de referência.')
     return _located(gate['point'], 'condominio', 'baixa',
-                    f'Automático · portaria do Condomínio {condo}{where}: {why}.', [gate])
+                    f'Automático · portaria do Condomínio {condo}{where}{how}: {why}.', [gate])
+
+
+def _locate_place(parsed, index):
+    """Lugar sem rua e número: ponto de referência da equipe ou os endereços do Censo com esse nome."""
+    from difflib import SequenceMatcher
+    key = parsed['place']
+    # O Censo grafa o mesmo lugar de mais de um jeito ("Aparecida"/"Aparexida"): vale nome quase igual.
+    names = [name for name in index.places
+             if name == key or (name.split()[0] == key.split()[0] and SequenceMatcher(None, name, key).ratio() >= 0.9)]
+    found = [entry for name in names for entry in index.places[name]]
+    label = key.title()
+    if not found:
+        return _unlocated(f'{label} não está na base de endereços do atlas. Marque o local uma vez no mapa: '
+                          'os próximos registros com esse nome usarão a mesma posição.')
+    team = [e for e in found if e.get('team')]
+    if team:
+        chosen = _medoid(team)
+        return _located(chosen['point'], 'exato', 'alta', f'Automático · {label}: {chosen["team"]}.', [chosen])
+    chosen = _medoid(found)
+    spread = max(distance_m(chosen['point'], e['point']) for e in found)
+    if spread > 3000:                                        # nome de estrada ou região: um ponto só não diz onde é
+        return _unlocated(f'{label}: o Censo tem {len(found)} endereços com esse nome, espalhados por '
+                          f'{round(spread / 1000)} km. Marque o local uma vez no mapa.')
+    return _located(chosen['point'], 'localidade', 'baixa',
+                    f'Automático · {label}: um dos {len(found)} endereços do Censo com esse nome '
+                    f'(espalhados por até {round(spread)} m). Sem endereço exato.', [chosen])
 
 
 def _locate_house(parsed, index):
@@ -278,6 +391,7 @@ def _locate_house(parsed, index):
     if house is None:
         return _locate_gate(index, condo, 'a casa não foi informada')
     found = index.houses.get((normalize(condo), house), [])
+    found = [e for e in found if e.get('team')][:1] or found       # a casa que a equipe marcou vale mais que o croqui
     if len(found) != 1:
         return _unlocated(f'Casa {house} do Condomínio {condo} não está no croqui do atlas.')
     issues = [f'Número {house} lido como casa do condomínio: confira.'] if guessed else []
@@ -293,27 +407,52 @@ def locate(parsed, neighborhood, index):
         return _unlocated(NO_STREET)
     if parsed['condominium']:
         return _locate_house(parsed, index)
-    if any(name == parsed['other_condominium'] for name, _ in GATES.values()):
-        return _locate_gate(index, parsed['other_condominium'], 'o condomínio não tem croqui no atlas')
+    other = parsed['other_condominium']
+    if other:
+        marked = [e for e in index.houses.get((normalize(other), parsed['house']), []) if e.get('team')]
+        if marked:                                           # casa de condomínio sem croqui que a equipe já marcou
+            return _located(marked[0]['point'], 'condominio', 'media',
+                            f'Automático · casa {parsed["house"]} do Condomínio {other}: {marked[0]["team"]}.', marked[:1])
+        if any(name == other for name, _, _ in GATES.values()):
+            return _locate_gate(index, other, 'o condomínio não tem croqui no atlas')
     if not parsed['street']:
-        return _unlocated(f'Condomínio {parsed["other_condominium"]} ainda não tem croqui no atlas.'
-                          if parsed['other_condominium'] else NO_STREET)
+        if parsed['place']:
+            return _locate_place(parsed, index)
+        return _unlocated(f'Condomínio {other} ainda não tem croqui no atlas.' if other else NO_STREET)
     street, number, suffix = parsed['street_label'], parsed['number'], parsed['suffix']
     entries = index.streets.get(parsed['street'])
     if not entries:
-        return _unlocated(f'{street} não está na base de endereços do atlas.')
+        return _unlocated(f'{street} não está na base de endereços do atlas (confira se o nome foi digitado certo).')
     if not number:
         return _unlocated('Endereço sem número.')
+
+    def by_numbering(issues=()):
+        """Sem o número e sem vizinhos dos dois lados: a numeração métrica da rua diz onde ele fica."""
+        candidate, doubt = _by_numbering(index, parsed['street'], street, number, suffix, neighborhood)
+        if not candidate:
+            return None, doubt
+        how = ('pelo traçado da rua' if candidate['by_road'] else
+               f'a {candidate["near_m"]} m do nº {candidate["near_number"]}, o mais próximo na base')
+        located = _located(candidate['point'], 'numeracao',
+                           'media' if candidate['near_m'] <= 150 and not candidate['by_road'] and not issues else 'baixa',
+                           f'Automático · numeração métrica da {street} (um número por metro): o nº {number} fica {how}.',
+                           [], issues)
+        return {**located, 'reference_neighborhood': candidate['neighborhood']}, None
+
     window = [e for e in entries if abs(e['number'] - number) <= WINDOW]
     if not window:
+        located, doubt = by_numbering()
+        if located:
+            return located
         nearest = min(entries, key=lambda e: abs(e['number'] - number))
-        return _unlocated(f'Número fora da faixa conhecida da {street} (mais próximo na base: {_number_text(nearest)}).')
+        return _unlocated(doubt or f'{street}, {number}: pela numeração, cairia onde a rua não tem imóveis nem traçado '
+                          f'no mapa (número mais próximo na base: {_number_text(nearest)}). Confira o endereço.')
 
     def weigh(zone):
         exact = [e for e in zone if e['number'] == number]
         hood = any(same_neighborhood(neighborhood, e['neighborhood']) for e in zone)
         # Número e letra iguais pesam mais; depois o número; o bairro desempata; a letra sozinha é o indício mais fraco.
-        value = (8 * any(e.get('team') for e in exact) + 4 * any(e['suffix'] == suffix for e in exact)
+        value = (8 * any(e.get('team') and e['suffix'] == suffix for e in exact) + 4 * any(e['suffix'] == suffix for e in exact)
                  + 2 * bool(exact) + 2 * hood + (sum(e['suffix'] == suffix for e in zone) * 2 > len(zone)))
         return {'zone': zone, 'exact': exact, 'hood': hood, 'value': value,
                 'delta': min(abs(e['number'] - number) for e in zone)}
@@ -333,11 +472,12 @@ def locate(parsed, neighborhood, index):
     if rival and not best['hood']:
         issues.append(f'O mesmo número existe em {rival["zone"][0]["neighborhood"]}, bairro informado na planilha: confira.')
     zone, exact = best['zone'], best['exact']
-    if any(e.get('team') for e in exact):
-        chosen = _medoid([e for e in exact if e.get('team')])
+    team = [e for e in exact if e.get('team') and e['suffix'] == suffix]
+    if team:
+        chosen = _medoid(team)
         return _located(chosen['point'], 'exato', 'alta',
-                        f'Automático · ponto de referência da equipe ({street}, {_number_text(chosen)} · camada '
-                        f'{chosen["team"]}).', [chosen])
+                        f'Automático · ponto de referência da equipe ({street}, {_number_text(chosen)}): '
+                        f'{chosen["team"]}.', [chosen])
     if exact:
         same = [e for e in exact if e['suffix'] == suffix]
         chosen = _medoid(same or exact)
@@ -376,12 +516,16 @@ def locate(parsed, neighborhood, index):
             return _located(point, 'interpolado', 'baixa' if issues or gap > 40 or span > 80 else 'media',
                             f'Automático · interpolado entre os nº {_number_text(low)} e {_number_text(high)} '
                             f'da {street} (base do atlas; {round(span)} m entre eles).', [low, high], issues)
+    located, doubt = by_numbering(issues)
+    if located:
+        return located
     nearest = min(zone, key=lambda e: (abs(e['number'] - number), e['id']))
     if abs(nearest['number'] - number) <= NEIGHBOR:
         return _located(nearest['point'], 'vizinho', 'baixa',
                         f'Automático · posição do nº {_number_text(nearest)} da {street}, o mais próximo na base do atlas '
                         f'(o {number} não está cadastrado).', [nearest], issues)
-    return _unlocated(f'{street}, {number}: sem imóveis próximos na base de endereços (mais próximo: {_number_text(nearest)}).')
+    return _unlocated(doubt or f'{street}, {number}: sem imóveis próximos na base de endereços '
+                      f'(mais próximo: {_number_text(nearest)}).')
 
 
 # --------------------------------------------------------------------------
@@ -465,8 +609,20 @@ def _team_position(old):
         return None
     geometry = old.get('geometry')
     current = geometry['coordinates'] if geometry and geometry.get('type') == 'Point' else None
-    edited = properties.get('position_status') in ('verified', 'to_review') or current != properties['auto_coordinates']
+    edited = (properties.get('team_position') or properties.get('position_status') in ('verified', 'to_review')
+              or current != properties['auto_coordinates'])
     return old if edited else None
+
+
+def _memory(previous):
+    """Endereços que a equipe posicionou, guardados na camada: valem mesmo que a linha saia da planilha."""
+    learned = {tuple(item['key']): item for item in (previous or {}).get('automation', {}).get('memory', [])}
+    for feature in (previous or {}).get('features', []):
+        geometry = feature.get('geometry')
+        key = address_key(parse_address(feature.get('properties', {}).get('name')))
+        if key and geometry and geometry.get('type') == 'Point' and _team_position(feature):
+            learned[key] = {'key': list(key), 'point': geometry['coordinates'][:2]}
+    return [learned[key] for key in sorted(learned, key=str)]
 
 
 def _date_issue(row):
@@ -482,6 +638,8 @@ def build(values, layers, previous=None, read_at=''):
     """Camada completa (pastas por mês + registros) e o resumo da geocodificação."""
     rows, others = sheet_rows(values)
     index = AddressIndex(layers)
+    memory = _memory(previous)
+    index.memory = {tuple(item['key']): item for item in memory}
     manual = layers.get('earth-' + atlas.layer_id(MANUAL_TITLE))
     if manual and manual.get('deleted'):
         manual = None
@@ -492,6 +650,12 @@ def build(values, layers, previous=None, read_at=''):
     for row in rows:
         parsed = parse_address(row['raw_address'])
         found = locate(parsed, row['neighborhood'], index)
+        kept = _team_position(before.get(row['id']))
+        remembered = None if kept else index.memory.get(address_key(parsed))
+        if remembered:
+            # O mesmo endereço já foi posicionado pela equipe em outro registro: vale aquela posição.
+            found = _located(remembered['point'], 'memoria', 'alta',
+                             'Posição que a equipe já marcou para este endereço em outro registro.', [])
         label = address_label(parsed)
         when = row['symptoms_date'] or row['notification_date']
         months.add(when[:7])
@@ -502,17 +666,17 @@ def build(values, layers, previous=None, read_at=''):
         notes += [_date_issue(row)] + found['issues']
         geometry, status = found['geometry'], 'estimated' if found['geometry'] else 'unlocated'
         automatic = geometry['coordinates'] if geometry else None
-        if geometry and found['method'] not in ('condominio',):
+        if geometry and parsed['street'] and found['method'] not in ('condominio', 'localidade', 'memoria'):
             far = _far_from_street(parsed, geometry)
             if far:
                 notes.append(f'Posição a {round(far)} m da {parsed["street_label"]} na malha de ruas do atlas: confira.')
                 found = {**found, 'confidence': 'baixa'}
-        kept = _team_position(before.get(row['id']))
         if kept:
             geometry = kept.get('geometry')
             status = kept['properties'].get('position_status', 'to_review') if geometry else 'unlocated'
-            if geometry and geometry['type'] == 'Point' and automatic:
-                notes.append(f'A equipe ajustou a posição; a automática fica a {round(distance_m(geometry["coordinates"], automatic))} m.')
+            moved = round(distance_m(geometry['coordinates'], automatic)) if geometry and geometry['type'] == 'Point' and automatic else 0
+            if moved:
+                notes.append(f'A equipe ajustou a posição; a automática fica a {moved} m.')
             found = {**found, 'method': 'equipe', 'confidence': 'alta' if geometry else '',
                      'precision': kept['properties'].get('precision') or 'Posição ajustada pela equipe no atlas.'}
         properties = {
@@ -523,6 +687,7 @@ def build(values, layers, previous=None, read_at=''):
             'date_origin': 'Início dos sintomas' if row['symptoms_date'] else 'Notificação' if when else '',
             'month': when[5:7], 'period_year': when[:4], 'folder_id': KEY + '-' + (when[:7] or 'sem-data'),
             'source_row': row['source_row'], 'ficha': row['ficha'], 'sheet_neighborhood': row['neighborhood'],
+            **({'team_position': True} if kept else {}),
             **{k: row[k] for k in ('sinan', 'disease', 'notification_date', 'symptoms_date', 'exam', 'exam_result',
                                    'final_result', 'classification')}}
         if geometry and geometry['type'] == 'Point':
@@ -563,7 +728,7 @@ def build(values, layers, previous=None, read_at=''):
         'version': VERSION, 'read_at': read_at, 'rows': len(rows), 'other_diseases': others,
         'located': sum(f['geometry'] is not None for f in features),
         'unlocated': sum(f['geometry'] is None for f in features),
-        'with_block': sum('block' in f['properties'] for f in features),
+        'with_block': sum('block' in f['properties'] for f in features), 'memory': memory,
         'methods': dict(methods), 'confidence': dict(confidence), 'references': index.size,
         'manual': None if manual is None else {
             'markers': len(manual_points), 'compared': len(distances),

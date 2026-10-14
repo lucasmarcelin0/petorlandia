@@ -86,3 +86,49 @@ def test_bulk_addresses_honor_revisions_and_require_access(client,app,monkeypatc
     client.get('/logout');app.config['TESTING']=False
     monkeypatch.setenv('SFA_ALLOW_OPEN_ACCESS','0');monkeypatch.delenv('SFA_ADMIN_TOKEN',raising=False)
     assert client.get('/sfa/entomologia/atlas/enderecos').status_code in (302,401,403)
+
+
+def _stored(*features):
+    """Fonte como fica gravada: registros retidos guardam a coordenada original e o motivo."""
+    base = c.build(archive([row()]), BOUNDARY)
+    template = base['layers'][0]['features'][0]
+    items = []
+    for i, (street, number, point, held) in enumerate(features):
+        f = deepcopy(template)
+        f['id'] = f'cnefe-teste-{i}'
+        f['properties'].update(street=street, house_number=number, name=f'{street}, {number}', source_coordinates=point,
+                               quality_issues=[c.FAR] if held else [], position_status='unlocated' if held else 'imported',
+                               kind='cnefe_address' if held else 'cnefe_house', cnefe_id=str(i),
+                               notes='Endereço público do Censo 2022. Pendências: ' + c.FAR + '.' if held else 'Endereço público do Censo 2022.')
+        f['geometry'] = None if held else {'type': 'Point', 'coordinates': point[:]}
+        items.append(f)
+    base['layers'][0]['features'] = items
+    base['source'].pop('requalified', None)
+    base['source'].update(records=len(items), located_records=sum(not h for *_, h in features), issues={c.FAR: sum(h for *_, h in features)})
+    return base
+
+
+def test_withheld_coordinates_are_released_only_for_the_known_false_alarms():
+    step = 0.0001                                           # cerca de 10 m
+    data = _stored(
+        ('Alameda Sete A', '153', [-47.871, -20.708], True),              # alameda interna comparada com a Alameda 7 da cidade
+        ('Rodovia Altino Arantes', '', [-47.905, -20.753], True),         # endereço rural: a via é só o acesso
+        ('Rua 24', '1963', [-47.9, -20.7], True),                         # vizinhos de numeração a poucos metros
+        ('Rua 24', '1953', [-47.9 - step, -20.7], False), ('Rua 24', '1973', [-47.9 + step, -20.7], False),
+        ('Rua 24', '500', [-47.95, -20.75], True),                        # isolado e longe da rua: continua pendente
+        ('Rua 24', '500', [-47.95, -20.75], True))                        # o próprio registro repetido não é vizinho
+    again = c.requalify(data)
+    assert again is data and data['source']['requalified'] == {'homonimo': 1, 'rural': 1, 'vizinhos': 1}
+    released = {f['properties']['requalified']: f for f in data['layers'][0]['features'] if f['properties'].get('requalified')}
+    for reason, f in released.items():
+        assert f['geometry']['coordinates'] == f['properties']['source_coordinates'] and not f['properties']['quality_issues']
+        assert f['properties']['position_status'] == 'imported' and 'liberada após conferência' in f['properties']['notes']
+        assert 'Pendências' not in f['properties']['notes']
+    assert released['homonimo']['properties']['kind'] == 'cnefe_house'
+    held = [f for f in data['layers'][0]['features'] if not f['geometry']]
+    assert len(held) == 2 and all(f['properties']['quality_issues'] == [c.FAR] for f in held)
+    assert data['source']['located_records'] == 5 and data['source']['issues'] == {c.FAR: 2}
+    c.validate(data)
+    # Segunda passagem não muda nada: a liberação acontece uma vez por fonte carregada.
+    snapshot = deepcopy(data)
+    assert c.requalify(data) == snapshot

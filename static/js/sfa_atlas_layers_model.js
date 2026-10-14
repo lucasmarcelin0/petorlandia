@@ -37,7 +37,7 @@
     // Resumo da camada Dengue Automatizados: quantos entraram no mapa, como, e a distância para a marcação manual.
     if(!a)return '';
     const m=a.methods||{}, exact=(m.exato||0)+(m.exato_sufixo||0), plural=(n,one,many)=>`${n} ${n===1?one:many}`;
-    const how=[[exact,'pelo número exato'],[m.interpolado||0,'entre vizinhos'],[m.vizinho||0,'pelo vizinho mais próximo'],[m.condominio||0,'em condomínio'],[m.equipe||0,'pela equipe']]
+    const how=[[exact,'pelo número exato'],[m.interpolado||0,'entre vizinhos'],[m.numeracao||0,'pela numeração da rua'],[m.vizinho||0,'pelo vizinho mais próximo'],[m.condominio||0,'em condomínio'],[m.localidade||0,'por localidade rural'],[m.memoria||0,'por endereço já marcado pela equipe'],[m.equipe||0,'pela equipe']]
       .filter(p=>p[0]).map(p=>p[0]+' '+p[1]).join(', ');
     const parts=[`${plural(a.rows,'notificação','notificações')} · ${a.located} no mapa · ${a.unlocated} sem posição.`];
     if(how)parts.push('Posição: '+how+'.');

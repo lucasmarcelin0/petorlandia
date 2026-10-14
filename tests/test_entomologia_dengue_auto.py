@@ -56,6 +56,12 @@ def find(address, hood, layers):
 
 
 @pytest.fixture(autouse=True)
+def no_real_street_network(monkeypatch):
+    """Os endereços fictícios não ficam sobre o traçado real das ruas de Orlândia."""
+    monkeypatch.setattr(dengue, '_road_segments', lambda key: [])
+
+
+@pytest.fixture(autouse=True)
 def fresh_scheduler_state():
     dengue._auto.update(checked=None, seen='')
     yield
@@ -88,7 +94,10 @@ def test_complement_keeps_only_structured_parts_never_free_text():
     assert (condo['condominium'], condo['house']) == ('Quebec', 177)
     assert dengue.parse_address('CONDOMINIO QUEBECK CASA 144')['house'] == 144
     assert dengue.address_label(dengue.parse_address('CONDOMINIO PARIS CASA 45')) == 'Condomínio Paris · Casa 45'
-    assert dengue.parse_address('ASSENTAMENTO BOA SORTE') is None and dengue.parse_address('') is None
+    # Lugar sem rua: o nome é o endereço. Texto solto continua sem virar endereço.
+    place = dengue.parse_address('ASSENTAMENTO BOA SORTE')
+    assert place['place'] == 'assentamento boa sorte' and dengue.address_label(place) == 'Assentamento Boa Sorte'
+    assert dengue.parse_address('PERTO DA PRACA') is None and dengue.parse_address('') is None
 
 
 def test_exact_address_uses_an_original_reference_coordinate():
@@ -135,8 +144,9 @@ def test_one_sided_neighbour_and_unknown_addresses_are_explained():
     near = find('RUA 9 122', 'Centro', layers)
     assert (near['method'], near['confidence']) == ('vizinho', 'baixa')
     assert near['geometry']['coordinates'] == [round(v, 6) for v in east(10)]
-    for address, reason in (('RUA 9 900', 'fora da faixa'), ('RUA 77 10', 'não está na base'), ('RUA 9', 'sem número'),
-                            ('CHACARA RECANTO', 'sem logradouro'), ('CONDOMINIO PARIS CASA 45', 'não tem croqui')):
+    for address, reason in (('RUA 9 900', 'cairia onde a rua não tem'), ('RUA 77 10', 'não está na base'), ('RUA 9', 'sem número'),
+                            ('CHACARA RECANTO FELIZ', 'Marque o local uma vez'), ('PERTO DA PRACA', 'sem logradouro'),
+                            ('CONDOMINIO PARIS CASA 45', 'não tem croqui')):
         found = find(address, 'Centro', layers)
         assert found['geometry'] is None and reason in found['precision'], address
 
@@ -509,3 +519,107 @@ def test_scheduler_job_updates_the_layer_before_the_search_index(monkeypatch):
     monkeypatch.setenv('ATLAS_DENGUE_AUTO_ENABLED', '0')
     monkeypatch.setattr(dengue, 'sync_if_changed', lambda *a: pytest.fail('Desligado pela configuração'))
     scheduler._run_atlas_artefatos()
+
+
+def metric_street(name, numbers, north=0, origin=0, sign=1, suffix='', hood='Bairro Leste'):
+    """Rua de numeração métrica: o número é a distância em metros até a origem, no sentido ``sign``."""
+    return [(name, f'{n}{suffix}', east(origin + sign * n, north + (4 if n % 2 else -4)), hood) for n in numbers]
+
+
+def metric_town(*extra):
+    """Três ruas paralelas com o lado leste (letra A) e o lado oeste (sem letra), como em Orlândia."""
+    houses = []
+    for i, name in enumerate(('Rua 11', 'Rua 13', 'Rua 15')):
+        houses += metric_street(name, range(100, 400, 10), north=120 * i, suffix='A')
+        houses += metric_street(name, range(105, 400, 10), north=120 * i, origin=-200, sign=-1, hood='Bairro Oeste')
+    return reference(*houses, *extra)
+
+
+def test_metric_numbering_places_a_number_the_base_does_not_have():
+    layers = metric_town()
+    # 30 números além do último imóvel conhecido (390A): um número por metro ao longo da rua.
+    beyond = find('RUA 13 420-A', 'Bairro Leste', layers)
+    assert (beyond['method'], beyond['confidence']) == ('numeracao', 'media')
+    assert dengue.distance_m(beyond['geometry']['coordinates'], east(420, 120)) < 8
+    assert 'nº 420 fica a 30 m do nº 390' in beyond['precision']
+    # Sem a letra, o bairro decide o lado; sem letra e sem bairro que decida, o registro fica sem posição.
+    west = find('RUA 13 430', 'Bairro Oeste', layers)
+    assert dengue.distance_m(west['geometry']['coordinates'], east(-200 - 430, 120)) < 8
+    undecided = find('RUA 13 430', '', layers)
+    assert undecided['geometry'] is None and 'cabe em dois trechos de numeração' in undecided['precision']
+    # Número a centenas de metros do último imóvel e sem traçado da rua: não se inventa posição.
+    far = find('RUA 13 1500-A', 'Bairro Leste', layers)
+    assert far['geometry'] is None and 'cairia onde a rua não tem' in far['precision']
+
+
+def test_metric_numbering_follows_the_street_trace_only_where_the_street_exists(monkeypatch):
+    layers = metric_town()
+    # O traçado de uma rua interrompida: existe até a altura do nº 800A e recomeça em 1200A.
+    trace = {'rua 13': [(east(0, 120), east(800, 120)), (east(1200, 120), east(1600, 120))]}
+    monkeypatch.setattr(dengue, '_road_segments', lambda key: trace.get(key, []))
+    on_trace = find('RUA 13 760-A', 'Bairro Leste', layers)
+    assert (on_trace['method'], on_trace['confidence']) == ('numeracao', 'baixa') and 'pelo traçado da rua' in on_trace['precision']
+    assert dengue.distance_m(on_trace['geometry']['coordinates'], east(760, 120)) < 8
+    in_the_gap = find('RUA 13 1000-A', 'Bairro Leste', layers)
+    assert in_the_gap['geometry'] is None and 'cairia onde a rua não tem' in in_the_gap['precision']
+
+
+def test_gate_without_any_reference_is_found_by_the_street_numbering(monkeypatch):
+    # Rua 26 só tem imóveis de 1200A a 1300A; a portaria do Paris (1109-A) fica 91 m antes do primeiro.
+    layers = reference(*metric_street('Rua 26', range(1200, 1300, 10), suffix='A'),
+                       *metric_street('Rua 24', range(1000, 1300, 10), north=120, suffix='A'),
+                       *metric_street('Rua 28', range(1000, 1300, 10), north=-120, suffix='A'),
+                       *metric_street('Rua 30', range(1000, 1300, 10), north=-240, suffix='A'))
+    for address in ('RUA 26 1109-A', 'CONDOMINIO PARIS CASA 45', 'RUA 26 1109-A CONDOMINIO PARIS CASA 70'):
+        found = find(address, 'Morada do Sol', layers)
+        assert (found['method'], found['confidence']) == ('condominio', 'baixa'), address
+        assert dengue.distance_m(found['geometry']['coordinates'], east(1109, 0)) < 8
+        assert 'pela numeração da rua' in found['precision'] and 'não tem croqui' in found['precision']
+
+
+def test_rural_place_comes_from_the_census_or_from_a_point_the_team_added():
+    layers = reference()
+    layers['cnefe-teste']['features'] += [
+        {'type': 'Feature', 'id': f'rural-{i}', 'geometry': {'type': 'Point', 'coordinates': east(5000 + 300 * i)},
+         'properties': {'street': 'Acesso A Rodovia', 'house_number': '', 'neighborhood': name}}
+        for i, name in enumerate(('Assentamento Boa Sorte', 'Assentamento Boa Xorte', 'Assentamento Boa Sorte'))]
+    layers['cnefe-teste']['features'].append(
+        {'type': 'Feature', 'id': 'sitio', 'geometry': {'type': 'Point', 'coordinates': east(9000)},
+         'properties': {'street': 'Sitio Varginha', 'house_number': '', 'neighborhood': 'Zona Rural'}})
+    found = find('ASSENTAMENTO BOA SORTE', 'Zona Rural', layers)
+    assert (found['method'], found['confidence']) == ('localidade', 'baixa') and '3 endereços do Censo' in found['precision']
+    assert find('SITIO VARGINHA', '', layers)['geometry']['coordinates'] == [round(v, 6) for v in east(9000)]
+    unknown = find('CHACARA RECANTO FELIZ', '', layers)
+    assert unknown['geometry'] is None and 'Marque o local uma vez' in unknown['precision']
+    layers['local-teste'] = team_layer(('Chácara Recanto Feliz', '', east(7000)))
+    taught = find('CHACARA RECANTO FELIZ', '', layers)
+    assert (taught['method'], taught['confidence']) == ('exato', 'alta')
+    assert taught['geometry']['coordinates'] == [round(v, 6) for v in east(7000)]
+
+
+def test_address_the_team_positioned_once_is_remembered_for_the_next_records(no_street_check):
+    layers = reference(('Rua 11', '2130', east(0), 'Centro'))
+    first, _ = dengue.build(sheet(case('001', '9000001', 'CHACARA RECANTO FELIZ'), case('002', '9000002', 'CONDOMINIO PARIS CASA 45')), layers)
+    assert all(f['geometry'] is None for f in first['features'])
+    # A equipe marca os dois locais no editor (o registro ganha posição e deixa de ser "sem posição").
+    marked = json.loads(json.dumps(first))
+    for feature, point in zip(marked['features'], (east(7000), east(3000, 50))):
+        feature['geometry'] = {'type': 'Point', 'coordinates': point}
+        feature['properties']['position_status'] = 'to_review'
+    again = sheet(case('001', '9000001', 'CHACARA RECANTO FELIZ'), case('002', '9000002', 'CONDOMINIO PARIS CASA 45'),
+                  case('003', '9000003', 'Chácara Recanto Feliz', symptoms='02/03/2026'),
+                  case('004', '9000004', 'COND. PARIS CASA 45', symptoms='03/03/2026'),
+                  case('005', '9000005', 'CONDOMINIO PARIS CASA 46', symptoms='04/03/2026'))
+    second, summary = dengue.build(again, layers, previous=marked)
+    one, two, three, four, five = second['features']
+    assert one['properties']['geocode_method'] == two['properties']['geocode_method'] == 'equipe'
+    assert three['geometry']['coordinates'] == [round(v, 6) for v in east(7000)]
+    assert four['geometry']['coordinates'] == [round(v, 6) for v in east(3000, 50)]
+    assert three['properties']['geocode_method'] == four['properties']['geocode_method'] == 'memoria'
+    assert five['geometry'] is None                              # outra casa do condomínio não herda a posição
+    assert len(summary['memory']) == 2
+    # A memória fica na camada: continua valendo quando a linha original sai da planilha.
+    later, _ = dengue.build(sheet(case('003', '9000003', 'CHACARA RECANTO FELIZ', symptoms='02/03/2026')), layers,
+                            previous=json.loads(json.dumps(second)))
+    assert later['features'][0]['geometry']['coordinates'] == [round(v, 6) for v in east(7000)]
+    assert later['features'][0]['properties']['geocode_method'] == 'memoria'

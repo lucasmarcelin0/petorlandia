@@ -33,7 +33,7 @@ from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent / 'data' / 'entomologia'
 # Muda quando o conjunto de saídas gravadas muda (sem mudar o índice): força uma montagem completa nova.
-ARTEFATOS_FORMATO = 'mapa-1'
+ARTEFATOS_FORMATO = 'mapa-2'
 TIPO_INDICE = 'indice'
 TIPO_CATALOGO = 'catalogo'
 TIPO_ENDERECOS = 'enderecos'
