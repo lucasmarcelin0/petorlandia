@@ -48,7 +48,11 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
       {% elif ext in ['doc', 'docx', 'odt', 'txt'] %}{% set doc_icon, doc_tone = 'fa-file-word', 'doc' %}
       {% elif ext in ['xls', 'xlsx', 'csv'] %}{% set doc_icon, doc_tone = 'fa-file-excel', 'xls' %}
       {% else %}{% set doc_icon, doc_tone = 'fa-file-lines', 'other' %}{% endif %}
-      <article class="doc-card">
+      {# So PDF e imagens que o navegador exibe abrem na camada; o resto segue em nova aba. #}
+      {% set viewer_kind = 'pdf' if ext == 'pdf' else ('image' if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else '') %}
+      {% set viewer_src = url_for('view_document_file', animal_id=animal.id, doc_id=d.id) if viewer_kind == 'pdf' else d.file_url %}
+      {% set viewer_meta = [(d.uploaded_at.strftime('%d/%m/%Y') if d.uploaded_at else ''), (d.veterinario.name if d.veterinario and d.veterinario.name else '')]|select|join(' · ') %}
+      <article class="doc-card" style="--i: {{ loop.index0 if loop.index0 < 8 else 8 }}">
         <div class="doc-card__main">
           <span class="doc-card__icon doc-card__icon--{{ doc_tone }}" aria-hidden="true"><i class="fa-solid {{ doc_icon }}"></i></span>
           <div class="doc-card__info">
@@ -62,9 +66,10 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
           </div>
         </div>
         <div class="doc-card__actions">
-          <a href="{{ d.file_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" aria-label="Abrir {{ d.filename }}"><i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>Abrir</a>
+          <a href="{{ d.file_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" aria-label="Abrir {{ d.filename }}"
+             {% if viewer_kind %}data-doc-viewer data-doc-kind="{{ viewer_kind }}" data-doc-src="{{ viewer_src }}" data-doc-open="{{ d.file_url }}" data-doc-name="{{ nome_exibido }}" data-doc-meta="{{ viewer_meta }}"{% endif %}><i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>Abrir</a>
           {% if tutor.phone %}
-            <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" aria-label="Enviar {{ d.filename }} por WhatsApp"><i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>WhatsApp</a>
+            <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success js-doc-whatsapp" aria-label="Enviar {{ d.filename }} por WhatsApp"><i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>WhatsApp</a>
           {% endif %}
           {% if current_user.role == 'admin' or (is_active_veterinarian and current_user.id == d.veterinario_id) %}
           <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline ms-sm-auto">
@@ -99,3 +104,10 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
   <button class="btn btn-success"><i class="fa-solid fa-paper-plane me-1" aria-hidden="true"></i>Enviar</button>
 </form>
 {% endif %}
+
+{# Visualizador em camada (foto e documentos). `defer` + guarda no proprio script evitam init duplo. #}
+<div id="pet-viewer-config" hidden
+     data-pdfjs="{{ url_for('static', filename='vendor/pdfjs/pdf.min.js', v='3.11.174') }}"
+     data-pdfjs-worker="{{ url_for('static', filename='vendor/pdfjs/pdf.worker.min.js', v='3.11.174') }}"
+     data-photo-caption="{{ animal.name }}"></div>
+<script src="{{ url_for('static', filename='js/pet_viewer.js', v='20261002viewer1') }}" defer></script>
