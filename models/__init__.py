@@ -65,6 +65,7 @@ from .sfa import (
 from .entomologia import (
     EntomologiaAtlasArtefato,
     EntomologiaEquipe,
+    EntomologiaImovelCampo,
     EntomologiaImportacao,
     EntomologiaPublicacao,
     EntomologiaQuarteiraoTrabalho,
@@ -166,6 +167,7 @@ __all__ = [
     "SfaSinanLog",
     "EntomologiaEquipe",
     "EntomologiaAtlasArtefato",
+    "EntomologiaImovelCampo",
     "EntomologiaImportacao",
     "EntomologiaPublicacao",
     "EntomologiaQuarteiraoTrabalho",
