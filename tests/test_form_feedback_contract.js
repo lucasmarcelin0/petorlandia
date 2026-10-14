@@ -31,6 +31,7 @@ class FakeElement {
     this.classList = new FakeClassList(this);
     this.parentNode = null;
     this.textContent = '';
+    this.closest = function(selector) { return null; };
   }
 
   set className(value) {
