@@ -1105,6 +1105,161 @@ def test_submit_vacina_pmo_request_creates_sheet_only_when_missing(app, monkeypa
     assert fake_service.append_range.startswith("'Solicitacoes de vacina'!")
 
 
+def _col_letter(index):
+    letters = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        letters = chr(65 + rest) + letters
+    return letters
+
+
+def _col_index(letters):
+    index = 0
+    for char in letters:
+        index = index * 26 + ord(char) - 64
+    return index - 1
+
+
+class _TableDetectingSheets:
+    """Planilha falsa que escolhe o destino do append como o Google escolhe.
+
+    O ``values().append`` procura a *última tabela* (bloco contíguo de células
+    preenchidas) dentro da faixa pedida e escreve na linha seguinte a ela, a
+    partir da primeira coluna do bloco. Uma célula vazia, fora de qualquer
+    bloco, é escrita exatamente onde está.
+    """
+
+    def __init__(self, title, rows):
+        self.title = title
+        self.rows = [list(row) for row in rows]
+        self.updates = []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    class _Execute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    def _filled(self, row, col):
+        return row < len(self.rows) and col < len(self.rows[row]) and str(self.rows[row][col]).strip() != ""
+
+    def _block(self, row, col):
+        seen, stack = set(), [(row, col)]
+        while stack:
+            r, c = stack.pop()
+            if (r, c) in seen or r < 0 or c < 0 or not self._filled(r, c):
+                continue
+            seen.add((r, c))
+            stack.extend([(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)])
+        return seen
+
+    def _write(self, row, col, values):
+        while len(self.rows) <= row:
+            self.rows.append([])
+        line = self.rows[row]
+        while len(line) < col + len(values):
+            line.append("")
+        line[col:col + len(values)] = values
+
+    def get(self, **kwargs):
+        if kwargs.get("fields") == "sheets.properties":
+            return self._Execute({"sheets": [{"properties": {"title": self.title, "sheetId": 279}}]})
+        rows = [list(row[:18]) for row in self.rows]
+        if kwargs["range"].endswith("A1:R1"):
+            rows = rows[:1]
+        while rows and not any(str(cell).strip() for cell in rows[-1]):
+            rows.pop()
+        return self._Execute({"values": rows})
+
+    def update(self, **kwargs):
+        self.updates.append(kwargs["range"])
+        start = kwargs["range"].split("!")[1].split(":")[0]
+        letters = "".join(ch for ch in start if ch.isalpha())
+        number = int("".join(ch for ch in start if ch.isdigit()))
+        for offset, values in enumerate(kwargs["body"]["values"]):
+            self._write(number - 1 + offset, _col_index(letters), list(values))
+        return self._Execute({"updatedRange": kwargs["range"]})
+
+    def batchUpdate(self, **kwargs):
+        return self._Execute({})
+
+    def append(self, **kwargs):
+        faixa = kwargs["range"].split("!")[1]
+        if ":" in faixa:
+            # Faixa de colunas (ex.: A:R): vale o último bloco que ela alcança.
+            first, last = (_col_index(part) for part in faixa.split(":"))
+            blocks = [
+                self._block(r, c)
+                for r in range(len(self.rows))
+                for c in range(first, last + 1)
+                if self._filled(r, c)
+            ]
+            block = max(blocks, key=lambda b: (max(r for r, _ in b), min(c for _, c in b)))
+            row = max(r for r, _ in block) + 1
+            col = min(c for _, c in block)
+        else:
+            letters = "".join(ch for ch in faixa if ch.isalpha())
+            row = int("".join(ch for ch in faixa if ch.isdigit())) - 1
+            col = _col_index(letters)
+            if self._filled(row, col):
+                block = self._block(row, col)
+                row = max(r for r, _ in block) + 1
+                col = min(c for _, c in block)
+        values = kwargs["body"]["values"]
+        self.rows[row:row] = [[] for _ in values]  # INSERT_ROWS
+        for offset, line in enumerate(values):
+            self._write(row + offset, col, list(line))
+        end = _col_letter(col + len(values[0]) - 1)
+        return self._Execute({
+            "updates": {
+                "updatedRange": f"'{self.title}'!{_col_letter(col)}{row + 1}:{end}{row + len(values)}"
+            }
+        })
+
+
+def test_submit_vacina_pmo_request_writes_from_column_a_despite_gaps(app, monkeypatch):
+    """Inscrição nova sempre começa na coluna A, logo abaixo da última linha.
+
+    Com uma linha vazia no meio da aba e as colunas de execução (L..O) vazias,
+    o append sobre A:R escolhia o bloco P:R como "última tabela": a inscrição
+    de uma tutora caiu em P5:AG5, o app não leu o número da linha e o registro
+    local nem foi criado.
+    """
+    def pedido(nome):
+        return [nome, "Rua 9", "990", "", "Centro", "16999990000", "", "1", "0", "Bela",
+                "Turno preferencial: Manha", "", "", "", "", "03/09/2026 23:51:42",
+                "PetOrlandia", "2"]
+
+    fake_service = _TableDetectingSheets(
+        "Solicitacoes de vacina",
+        [PMO_REQUEST_HEADERS, pedido("Primeira Tutora"), [], pedido("Segunda Tutora")],
+    )
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.delenv("PMO_VACCINE_REQUEST_SHEET_TITLE", raising=False)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        user_id = _pmo_request_user("bruno-lacuna@example.com").id
+        _submit_minimal_pmo_request(user_id)
+        visit = PmoVaccinationVisit.query.filter_by(tutor_user_id=user_id).one()
+        source_row = visit.source_row
+
+    linha = fake_service.rows[4]
+    assert linha[0] == "Bruno Henrique"
+    assert linha[16:18] == ["PetOrlandia", str(user_id)]
+    assert len(linha) == 18  # nada escrito além da coluna R
+    assert source_row == 5
+    assert "'Solicitacoes de vacina'!P5" in fake_service.updates
+
+
 class _FakeReconcileSheetsService:
     """Planilha falsa com abas e valores em memória, para a reconciliação."""
 
