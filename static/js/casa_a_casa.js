@@ -30,7 +30,12 @@
   }
   const lerLocal = (chave, padrao) => { try { return JSON.parse(localStorage.getItem(chave)) ?? padrao; } catch (e) { return padrao; } };
   const salvarLocal = (chave, valor) => { try { localStorage.setItem(chave, JSON.stringify(valor)); return true; } catch (e) { return false; } };
-  const hojeNoAparelho = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  // Dia de hoje em Orlândia (aaaa-mm-dd), qualquer que seja o fuso ou o idioma do aparelho.
+  const hojeNoAparelho = () => {
+    const partes = Object.fromEntries(new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date()).map(parte => [parte.type, parte.value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
+  };
   const dataBr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
   const horaBr = iso => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(t) : ''; };
   const somarDias = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
