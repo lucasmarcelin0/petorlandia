@@ -137,9 +137,12 @@
   }
 
   async function pedir(url, corpo, repetir = true) {
-    const opcoes = { credentials: 'same-origin', headers: { Accept: 'application/json' } };
+    const opcoes = { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } };
     if (corpo) {
       opcoes.method = 'POST';
+      // A página oculta o Referer por privacidade. Em HTTPS, CSRFProtect exige
+      // a origem do formulário; envie-a só para este mesmo site, nunca a terceiros.
+      opcoes.referrerPolicy = 'same-origin';
       opcoes.headers['Content-Type'] = 'application/json';
       opcoes.headers['X-CSRFToken'] = S.csrf;
       opcoes.body = JSON.stringify(corpo);
@@ -147,15 +150,18 @@
     const resposta = await fetch(url, opcoes);
     const json = (resposta.headers.get('Content-Type') || '').includes('json');
     if (resposta.redirected || [401, 403, 404].includes(resposta.status)) { const erro = new Error('Entre de novo para continuar.'); erro.sessao = true; throw erro; }
-    if (corpo && resposta.status === 400 && !json && repetir) {
+    const dados = json ? await resposta.json() : null;
+    const csrfRecusado = resposta.status === 400 && (!json || (dados &&
+      (dados.error === 'CSRF token missing or invalid' || (dados.errors && dados.errors.csrf_token))));
+    if (corpo && csrfRecusado && repetir) {
       // Token de formulário vencido (a tela ficou aberta ou veio do aparelho): pega um novo e repete uma vez.
       const estado = await pedir(cfg.urls.estado + (cfg.urls.estado.includes('?') ? '&' : '?') + 'desde=' + S.cursor);
       S.csrf = estado.csrf || S.csrf;
       return pedir(url, corpo, false);
     }
-    const dados = json ? await resposta.json() : null;
     if (!resposta.ok || !dados) {
-      const erro = new Error((dados && dados.erro) || 'O servidor não respondeu como esperado.');
+      const erro = new Error(csrfRecusado ? 'Não foi possível renovar a sessão. Sua seleção e as visitas foram preservadas. Tente salvar novamente.'
+        : (dados && (dados.erro || dados.message)) || 'O servidor não respondeu como esperado.');
       erro.conflito = resposta.status === 409;
       throw erro;
     }

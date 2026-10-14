@@ -222,6 +222,32 @@ def test_reagendamento_valida_equipe_e_datas(client, base):
         assert planejar(client, 'reagendar', [base['a']], origem=hoje, **dados).status_code == 400
     assert Plano.query.count() == 1 and Plano.query.one().data.isoformat() == hoje
 
+
+def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
+    app.config['WTF_CSRF_ENABLED'] = True
+    ana = agente()
+    entrar(client, ana)
+    dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
+             'esperado': [{'b': base['a']}]}
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert 'casa_a_casa.js?v=20261014-csrf' in pagina
+    rejeitada = client.post(RAIZ + '/plano', json=dados,
+                           headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
+    assert rejeitada.status_code == 400 and rejeitada.is_json
+    assert rejeitada.json['errors']['csrf_token']
+    assert Plano.query.count() == 0
+    token = client.get(RAIZ + '/estado', headers={'Accept': 'application/json'}, **HTTPS).json['csrf']
+    # A tela usa no-referrer. HTTPS exige também a origem do envio; o fetch
+    # a fornece com referrerPolicy=same-origin sem abrir essa informação a terceiros.
+    sem_origem = client.post(RAIZ + '/plano', json=dados,
+                            headers={'Accept': 'application/json', 'X-CSRFToken': token}, **HTTPS)
+    assert sem_origem.status_code == 400 and Plano.query.count() == 0
+    salva = client.post(RAIZ + '/plano', json=dados,
+                        headers={'Accept': 'application/json', 'X-CSRFToken': token,
+                                 'Referer': 'https://localhost' + RAIZ}, **HTTPS)
+    assert salva.status_code == 200 and salva.json['feitos'] == 1
+    assert Plano.query.count() == 1
+
 def test_escritorio_planeja_troca_responsavel_e_tira_do_plano(client, base):
     coordenadora, ana = agente('coord@example.test', 'Carla Coordenadora'), agente('ana@example.test', 'Ana Agente')
     entrar(client, coordenadora)
