@@ -327,7 +327,8 @@ def _iso(momento) -> str | None:
 
 def plano_dict(plano) -> dict:
     return {"id": plano.id, "b": plano.bloco, "d": plano.data.isoformat(), "ri": plano.responsavel_id,
-            "r": plano.responsavel or "", "c": _iso(plano.concluido_em), "cp": plano.concluido_por or ""}
+            "r": plano.responsavel or "", "c": _iso(plano.concluido_em), "cp": plano.concluido_por or "",
+            "v": _iso(plano.atualizado_em)}
 
 
 def visita_dict(visita) -> dict:
@@ -436,6 +437,47 @@ def _blocos_validos(blocos) -> list[dict]:
     if not validos:
         raise ValueError("Quarteirão desconhecido.")
     return validos
+
+
+class ConflitoPlano(ValueError):
+    pass
+
+
+def conferir_plano(blocos, dia, esperado):
+    """Valida a fotografia apresentada na tela antes de alterar o lote inteiro."""
+    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
+    ids = {b['id'] for b in _blocos_validos(blocos)}
+    if not isinstance(esperado, list) or any(not isinstance(p, dict) or not isinstance(p.get('b'), str) for p in esperado):
+        raise ValueError('Conferência do plano inválida.')
+    if len(esperado) != len(ids) or {p.get('b') for p in esperado} != ids:
+        raise ValueError('Conferência incompleta do plano.')
+    atuais = {p.bloco: p for p in Q.query.filter(Q.bloco.in_(ids), Q.data == dia).with_for_update().all()}
+    for previa in esperado:
+        linha = atuais.get(previa['b'])
+        atual = plano_dict(linha) if linha else {}
+        if any(previa.get(k) != atual.get(k) for k in ('id', 'ri', 'c', 'v')):
+            raise ConflitoPlano('O plano mudou em outro aparelho. Confira a agenda atualizada e aplique novamente.')
+
+
+def reagendar(blocos, origem, destino, hoje, responsavel):
+    """Move o lote sem apagar serviço realizado nem sobrescrever o destino."""
+    from extensions import db
+    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q, EntomologiaVisitaDomiciliar as V
+    if destino < hoje or destino > hoje + timedelta(days=60) or origem == destino:
+        raise ValueError('Escolha uma nova data entre hoje e 60 dias à frente.')
+    linhas = []
+    for bloco in _blocos_validos(blocos):
+        linha = Q.query.filter_by(bloco=bloco['id'], data=origem).with_for_update().first()
+        if not linha or linha.concluido_em or V.query.filter(V.bloco == bloco['id'], V.data_visita >= origem).first():
+            raise ValueError('Só é possível reagendar quarteirões que ainda não começaram.')
+        if Q.query.filter_by(bloco=bloco['id'], data=destino).first():
+            raise ConflitoPlano('Já existe um plano para esse quarteirão na data de destino. Confira a agenda.')
+        linhas.append(linha)
+    for linha in linhas:
+        linha.data = destino
+        linha.responsavel_id = getattr(responsavel, 'id', None)
+        linha.responsavel = nome_da_conta(responsavel) or None
+    return len(linhas)
 
 
 def planejar(blocos, dia: date, hoje: date, responsavel, por: str) -> int:

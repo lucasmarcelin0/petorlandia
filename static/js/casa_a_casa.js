@@ -64,6 +64,7 @@
     fila: lerLocal(FILA, []), acoes: lerLocal(ACOES, []), recusadas: lerLocal(RECUSADAS, []),
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
+    selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
     aoVivo: false, enviando: false, precisaEntrar: false, pronto: false, novas: new Set(),
     mapa: null, tela: null, poligonos: new Map(), camadaRotulos: null, camadaCasas: null, camadaRuas: null, camadaVias: null, eu: null,
   };
@@ -153,7 +154,11 @@
       return pedir(url, corpo, false);
     }
     const dados = json ? await resposta.json() : null;
-    if (!resposta.ok || !dados) throw new Error((dados && dados.erro) || 'O servidor não respondeu como esperado.');
+    if (!resposta.ok || !dados) {
+      const erro = new Error((dados && dados.erro) || 'O servidor não respondeu como esperado.');
+      erro.conflito = resposta.status === 409;
+      throw erro;
+    }
     return dados;
   }
 
@@ -301,10 +306,13 @@
 
   function estiloDoBloco(bloco) {
     const cores = M.BLOCOS[bloco.estado ? bloco.estado.tipo : 'livre'];
-    const ativo = S.blocoAtivo === bloco;
+    const selecionado = S.prefs.modo === 'escritorio' && S.selecionados.has(bloco.id);
+    const ativo = S.blocoAtivo === bloco || selecionado;
+    const plano = S.prefs.modo === 'escritorio' && (bloco.planos || []).find(p => p.d === (S.diaPlano || S.hoje));
+    const escritorio = S.prefs.modo === 'escritorio';
     return {
-      renderer: S.tela, color: ativo ? '#0b6568' : cores.borda, weight: ativo ? 4 : (bloco.estado && bloco.estado.tipo !== 'livre' ? 2 : 1),
-      fillColor: cores.fundo, fillOpacity: S.prefs.ruas ? 0.55 : 1, dashArray: bloco.estado && bloco.estado.tipo === 'agendado' ? '7 5' : null,
+      renderer: S.tela, color: ativo ? '#0b6568' : (plano ? corDoAgente(plano.ri) : cores.borda), weight: ativo ? 4 : (plano ? 2 : 1),
+      fillColor: selecionado ? '#b2f2e5' : (plano ? corDoAgente(plano.ri) : escritorio ? '#fff' : cores.fundo), fillOpacity: plano && !selecionado ? 0.22 : (S.prefs.ruas ? 0.55 : 1), dashArray: selecionado ? '5 3' : null,
     };
   }
 
@@ -366,7 +374,7 @@
       if (zoom < ZOOM_ROTULOS && (tipo === 'livre' || tipo === 'anterior') && S.blocoAtivo !== bloco) continue;
       if (rotulos > 450) continue;
       const prog = bloco.estado.prog;
-      const comConta = (tipo === 'andamento' || tipo === 'planejado' || tipo === 'concluido') && prog.total && zoom >= 14;
+      const comConta = (S.prefs.modo === 'rua' || (S.diaPlano || S.hoje) === S.hoje) && (tipo === 'andamento' || tipo === 'planejado' || tipo === 'concluido') && prog.total && zoom >= 14;
       const plano = zoom >= 14 ? planoDoRotulo(bloco) : null;
       const icone = L.divIcon({
         className: 'cac-rotulo cac-rotulo-' + tipo + (S.blocoAtivo === bloco ? ' ativo' : ''),
@@ -381,7 +389,8 @@
       }
       rotulos += 1;
     }
-    $('cac-dica').textContent = zoom >= ZOOM_NUMEROS ? 'Toque no número da casa para registrar'
+    $('cac-dica').textContent = S.prefs.modo === 'escritorio' && S.aba === 'plano' ? 'Selecione quarteirões no mapa ou pela busca'
+      : zoom >= ZOOM_NUMEROS ? 'Toque no número da casa para registrar'
       : (zoom >= ZOOM_CASAS ? 'Aproxime mais um pouco para ver os números' : (S.prefs.modo === 'rua' ? 'Toque em um quarteirão para trabalhar nele' : ''));
     if (zoom < ZOOM_CASAS) return;
     // Casas: ponto colorido; bem perto, o número.
@@ -464,7 +473,7 @@
 
   // ---------------------------------------------------------------- ações
   function tocarBloco(bloco) {
-    if (S.prefs.modo === 'escritorio' && S.planejando && cfg.registra && S.aba === 'plano') { planejarOuTirar(bloco); return; }
+    if (S.prefs.modo === 'escritorio' && S.planejando && cfg.registra && S.aba === 'plano') { selecionarBloco(bloco); return; }
     S.blocoAtivo = bloco;
     S.aba = 'quarteirao';
     abrirPainel(true);
@@ -473,7 +482,10 @@
   }
 
   async function mudarPlano(corpo, sucesso) {
+    if (S.salvandoPlano) return false;
     if (!navigator.onLine) { avisar('O plano é feito com internet. Tente de novo quando o sinal voltar.'); return false; }
+    S.salvandoPlano = true;
+    desenharPainel();
     try {
       const dados = await pedir(cfg.urls.plano, corpo);
       aplicarEstado(Object.assign({ parcial: false }, dados));
@@ -481,34 +493,62 @@
       if (sucesso) avisar(sucesso(dados), 'bom');
       return true;
     } catch (erro) {
+      if (erro.conflito) await atualizar().catch(() => {});
       if (erro.sessao) { S.precisaEntrar = true; desenharConexao(); }
       avisar(erro.message || 'Não deu para salvar o plano.', 'ruim');
       return false;
+    } finally {
+      S.salvandoPlano = false;
+      desenharPainel();
     }
   }
 
-  function planejarOuTirar(bloco) {
+  function selecionarBloco(bloco) {
+    if (S.salvandoPlano) return;
+    if (S.origemPlano) { avisar('Finalize ou cancele o reagendamento antes de selecionar outros quarteirões.'); return; }
+    if (S.selecionados.has(bloco.id)) S.selecionados.delete(bloco.id);
+    else if (S.selecionados.size < 400) S.selecionados.add(bloco.id);
+    else { avisar('Selecione até 400 quarteirões por vez.'); return; }
+    desenhar();
+  }
+
+  function fotografiaPlano(blocos, dia) {
+    return blocos.map(b => {
+      const p = b.planos.find(p => p.d === dia);
+      return p ? { b: b.id, id: p.id, ri: p.ri, c: p.c, v: p.v } : { b: b.id };
+    });
+  }
+
+  async function aplicarSelecao() {
+    const blocos = S.blocos.filter(b => S.selecionados.has(b.id));
+    if (!blocos.length || S.salvandoPlano) return;
     const dia = S.diaPlano || S.hoje;
-    const plano = bloco.planos.find(p => p.d === dia && !p.c);
-    const quem = cfg.equipe.find(p => p.id === S.responsavelPlano);
-    if (plano && (plano.ri || null) !== (S.responsavelPlano || null)) {
-      // Já no plano de outra pessoa: o clique passa o quarteirão para quem está escolhido.
-      mudarPlano({ acao: 'planejar', blocos: [bloco.id], data: dia, responsavel_id: S.responsavelPlano },
-        () => `${nomeDoBloco(bloco)} passou para ${quem ? primeiroNome(quem.nome) : 'sem responsável'}`);
-    } else if (plano) {
-      mudarPlano({ acao: 'remover', blocos: [bloco.id], data: dia },
-        dados => dados.feitos ? nomeDoBloco(bloco) + ' saiu do plano' : nomeDoBloco(bloco) + ' já tem visita registrada e fica no plano');
-    } else {
-      mudarPlano({ acao: 'planejar', blocos: [bloco.id], data: dia, responsavel_id: S.responsavelPlano },
-        () => `${nomeDoBloco(bloco)} no plano de ${dia === S.hoje ? 'hoje' : dataBr(dia)}${quem ? ' para ' + primeiroNome(quem.nome) : ''} · ${plural(casasDe(bloco).length, 'imóvel', 'imóveis')}`);
-    }
+    const ok = await mudarPlano({ acao: S.origemPlano ? 'reagendar' : 'planejar', blocos: blocos.map(b => b.id), data: dia,
+      origem: S.origemPlano, responsavel_id: S.responsavelPlano, esperado: fotografiaPlano(blocos, S.origemPlano || dia) },
+      dados => `${dados.feitos} de ${blocos.length} quarteirões salvos para ${dataBr(dia)}.${dados.feitos < blocos.length ? ' Quarteirões concluídos foram preservados.' : ''}`);
+    if (ok) { S.selecionados.clear(); S.origemPlano = null; desenhar(); }
+  }
+
+  function reagendarBloco(bloco, dia) {
+    S.selecionados = new Set([bloco.id]); S.origemPlano = dia;
+    S.responsavelPlano = bloco.planos.find(p => p.d === dia).ri || null;
+    const seguinte = M.diasDeTrabalho(somarDias(dia < S.hoje ? S.hoje : dia, 1), 1)[0];
+    S.diaPlano = seguinte <= somarDias(S.hoje, 60) ? seguinte : S.hoje;
+    desenhar(); $('cac-conteudo').scrollTop = 0;
+  }
+
+  function removerDoPlano(bloco, dia) {
+    if (!window.confirm(`Retirar ${nomeDoBloco(bloco)} (SC ${bloco.s}) do plano de ${dataBr(dia)}? Visitas registradas serão preservadas.`)) return;
+    mudarPlano({ acao: 'remover', blocos: [bloco.id], data: dia, esperado: fotografiaPlano([bloco], dia) },
+      dados => dados.feitos ? 'Quarteirão retirado do plano.' : 'Este quarteirão já começou e foi mantido no plano.');
   }
 
   function concluirBloco(bloco) {
     const faltam = bloco.estado.prog.total - bloco.estado.prog.feitas;
     if (faltam > 0 && !window.confirm(`Ainda ${faltam === 1 ? 'falta 1 imóvel' : 'faltam ' + faltam + ' imóveis'} sem registro em ${nomeDoBloco(bloco)}. Concluir mesmo assim?`)) return;
-    S.acoes.push({ acao: 'concluir', blocos: [bloco.id] });
-    salvarLocal(ACOES, S.acoes);
+    const acoes = S.acoes.concat({ acao: 'concluir', blocos: [bloco.id] });
+    if (!salvarLocal(ACOES, acoes)) { avisar('Não foi possível guardar a conclusão. Libere espaço no aparelho e tente de novo.', 'ruim'); return; }
+    S.acoes = acoes;
     recalcular(); desenhar();
     festa();
     avisar(`${nomeDoBloco(bloco)} concluído! +${M.XP.quarteirao} pontos 🏁`, 'bom');
@@ -528,8 +568,9 @@
     const visita = M.novaVisita(Object.assign({}, dados, {
       bloco: bloco.id, imovel: casa.id, data: S.hoje, logradouro: casa.rua, numero: casa.n, complemento: casa.cp, lat: casa.y, lng: casa.x,
     }));
-    S.fila.push(visita);
-    if (!salvarLocal(FILA, S.fila)) avisar('O aparelho está sem espaço para guardar. Envie as visitas assim que tiver internet.', 'ruim');
+    const fila = S.fila.concat(visita);
+    if (!salvarLocal(FILA, fila)) { avisar('Não foi possível guardar a visita: o aparelho está sem espaço. Mantenha a ficha aberta e libere espaço para tentar de novo.', 'ruim'); return; }
+    S.fila = fila;
     recalcular();
     const recuperou = anterior && M.PENDENCIA.has(anterior.s) && M.INSPECIONADO.has(visita.situacao);
     const ganho = M.XP.visita + (recuperou ? M.XP.recuperada : 0);
@@ -537,7 +578,7 @@
     avisar(`${casa.rua}, ${casa.n}: ${M.POR_ID[visita.situacao].nome} · +${ganho} pontos${recuperou ? ' (pendência recuperada 🔑)' : ''}`, 'bom');
     const prog = bloco.estado.prog;
     const fechou = prog.total > 0 && prog.feitas === prog.total && feitasAntes < prog.total;
-    fecharFicha();
+    fecharFicha(true);
     desenhar();
     if (fechou) { festa(); avisar(`Todas as casas de ${nomeDoBloco(bloco)} registradas! Toque em “Concluir quarteirão”.`, 'bom'); S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenharPainel(); }
     else if (seguir) { const proxima = M.proximaCasa(casasDe(bloco), S.ultimas, bloco.estado.inicio, casa.id); if (proxima) { S.mapa.panTo([proxima.y, proxima.x]); abrirCasa(proxima); } }
@@ -545,7 +586,13 @@
   }
 
   // ---------------------------------------------------------------- ficha do imóvel
-  function fecharFicha() { $('cac-ficha').hidden = true; S.fichaCasa = null; }
+  function fecharFicha(forcar = false) {
+    if (forcar !== true && S.fichaSuja && !window.confirm('Sair sem salvar as alterações desta visita?')) return;
+    $('cac-ficha').hidden = true; S.fichaCasa = null; S.fichaSuja = false;
+    document.querySelector('.cac-corpo').inert = false;
+    document.querySelector('.cac-topo').inert = false;
+    if (S.focoAnterior && S.focoAnterior.isConnected) S.focoAnterior.focus();
+  }
 
   function contador(rotulo, valor, aoMudar) {
     const campo = h('input', { type: 'number', inputmode: 'numeric', min: '0', max: '999', value: String(valor), 'aria-label': rotulo });
@@ -558,9 +605,12 @@
   function abrirCasa(casa, nova) {
     if (!cfg.registra) { mostrarVisita(casa); return; }
     S.fichaCasa = casa;
+    S.fichaSuja = false;
+    S.focoAnterior = document.activeElement;
     S.blocoAtivo = casa.bloco;
     const anterior = S.ultimas.get(casa.id);
     const deHoje = anterior && anterior.d === S.hoje ? anterior : null;
+    const versaoAoAbrir = anterior ? anterior.u : null;
     const d = {
       situacao: deHoje ? deHoje.s : '', recipientes_existentes: deHoje ? deHoje.re : 0, recipientes_agua: deHoje ? deHoje.ra : 0,
       recipientes_larva: deHoje ? deHoje.rl : 0, larvas: deHoje ? Boolean(deHoje.l) : false, tubitos: deHoje ? deHoje.t : 0,
@@ -569,8 +619,10 @@
       recipientes: deHoje && deHoje.rt ? deHoje.rt.map(r => Object.assign({}, r)) : [],
     };
     $('cac-ficha-titulo').textContent = nova ? 'Imóvel que não está na lista' : `${casa.rua}, ${casa.n}`;
-    $('cac-ficha-sub').textContent = `${nomeDoBloco(casa.bloco)} · SC ${casa.bloco.s}` + (casa.cp ? ' · ' + casa.cp : '');
+    const posicaoCasa = casasDe(casa.bloco).findIndex(c => c.id === casa.id) + 1;
+    $('cac-ficha-sub').textContent = `${nomeDoBloco(casa.bloco)} · SC ${casa.bloco.s}` + (casa.cp ? ' · ' + casa.cp : '') + (posicaoCasa ? ` · Imóvel ${posicaoCasa} de ${casasDe(casa.bloco).length}` : '');
     const corpo = $('cac-ficha-corpo');
+    $('cac-ficha').querySelector('.cac-ficha-acoes')?.remove();
     corpo.replaceChildren();
 
     if (nova) {
@@ -661,6 +713,9 @@
         h('span', { 'aria-hidden': 'true' }, s.icone), s.nome));
     }
     const salvar = seguir => {
+      if (!d.situacao || S.fichaCasa !== casa) return;
+      const atual = S.ultimas.get(casa.id);
+      if ((atual ? atual.u : null) !== versaoAoAbrir) { avisar('Este imóvel recebeu outra visita enquanto a ficha estava aberta. Reabra a ficha para conferir.', 'ruim'); return; }
       let alvo = casa;
       if (nova) {
         const numero = $('cac-nova-numero').value.trim(), rua = $('cac-nova-rua').value.trim();
@@ -670,14 +725,20 @@
       }
       registrar(alvo, d, seguir && !nova);
     };
-    acoes.append(h('button', { type: 'button', class: 'cac-botao', onclick: () => salvar(false) }, 'Salvar'),
+    acoes.append(h('p', { class: 'cac-nota-salvar' }, 'Confira o endereço e a situação. A visita fica guardada no aparelho até o envio.'), h('button', { type: 'button', class: 'cac-botao', onclick: () => salvar(false) }, 'Salvar'),
       !nova && h('button', { type: 'button', class: 'cac-botao forte', onclick: () => salvar(true) }, 'Salvar e próxima ▶'));
-    corpo.append(h('h3', {}, 'Situação do imóvel'), botoes, detalhes, acoes);
+    corpo.append(h('h3', {}, 'Situação do imóvel'), botoes, detalhes);
+    $('cac-ficha').querySelector('.cac-folha').append(acoes);
     desenharDetalhesDaFicha();
     $('cac-ficha').hidden = false;
+    document.querySelector('.cac-corpo').inert = true;
+    document.querySelector('.cac-topo').inert = true;
+    corpo.querySelector('button')?.focus();
   }
 
   function mostrarVisita(casa) {
+    S.fichaSuja = false;
+    $('cac-ficha').querySelector('.cac-ficha-acoes')?.remove();
     const v = S.ultimas.get(casa.id);
     $('cac-ficha-titulo').textContent = `${casa.rua}, ${casa.n}`;
     $('cac-ficha-sub').textContent = `${nomeDoBloco(casa.bloco)} · SC ${casa.bloco.s}`;
@@ -747,7 +808,7 @@
     const meusFeitos = concluidos.filter(b => b.estado.plano && (b.estado.plano.ri === meu || b.estado.plano.local));
     const missao = meus.concat(meusFeitos);
     const total = missao.reduce((soma, b) => soma + b.estado.prog.total, 0);
-    const feitas = missao.reduce((soma, b) => soma + (b.estado.tipo === 'concluido' ? b.estado.prog.total : b.estado.prog.feitas), 0);
+    const feitas = missao.reduce((soma, b) => soma + b.estado.prog.feitas, 0);
     const pct = total ? Math.round(100 * feitas / total) : 0;
     const resumo = meuResumo(), nivel = M.nivel(M.pontos(resumo));
     const visitasDeHoje = Array.from(S.ultimas.values()).filter(v => v.d === S.hoje && (v.pendente || v.ai === meu));
@@ -778,6 +839,9 @@
     const lista = h('div', { class: 'cac-casas' });
     let ruaAtual = null;
     for (const casa of casas) {
+      const atual = S.ultimas.get(casa.id);
+      if (S.filtroCasas === 'faltam' && atual && atual.d >= bloco.estado.inicio) continue;
+      if (S.filtroCasas === 'retorno' && (!atual || !M.PENDENCIA.has(atual.s))) continue;
       if (casa.rua !== ruaAtual) { ruaAtual = casa.rua; lista.append(h('h4', {}, casa.rua)); }
       const visita = S.ultimas.get(casa.id), cor = M.corDaCasa(visita, bloco.estado.inicio);
       const s = visita ? M.POR_ID[visita.s] : null;
@@ -802,7 +866,14 @@
               ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => concluirBloco(bloco) }, 'Concluir quarteirão 🏁') : null),
           rua ? h('button', { type: 'button', class: 'cac-botao', onclick: () => abrirCasa({ id: '', rua: '', n: '', cp: '', bloco }, true) }, '＋ Imóvel que não está na lista') : null) : null,
         plano && plano.r ? h('p', { class: 'cac-conta' }, 'Responsável: ' + plano.r) : null),
-      h('section', { class: 'cac-cartao' }, h('h3', {}, casas.length ? 'Casas, na ordem da volta' : 'Sem casas cadastradas neste quarteirão'), lista),
+      h('section', { class: 'cac-cartao' },
+        h('div', { class: 'cac-bloco-acoes' },
+          rua && cfg.registra && M.proximaCasa(casas, S.ultimas, bloco.estado.inicio) ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => abrirCasa(M.proximaCasa(casas, S.ultimas, bloco.estado.inicio)) }, 'Começar pela próxima casa ▶') : null,
+          h('button', { type: 'button', class: 'cac-botao', onclick: () => imprimir({ bloco }) }, 'Roteiro A4')),
+        h('h3', { class: 'cac-etapa' }, casas.length ? 'Casas, na ordem da volta' : 'Sem casas cadastradas neste quarteirão'),
+        h('div', { class: 'cac-filtros-casas', role: 'group', 'aria-label': 'Mostrar imóveis' }, [['todas', 'Todos'], ['faltam', 'Faltam registrar'], ['retorno', 'Retornos']].map(([id, nome]) =>
+          h('button', { type: 'button', 'aria-pressed': String(S.filtroCasas === id), onclick: () => { S.filtroCasas = id; desenharPainel(); } }, nome))),
+        lista.children.length ? lista : h('p', { class: 'cac-vazio' }, casas.length ? 'Nenhum imóvel neste filtro.' : 'Acrescente os imóveis encontrados em campo.')),
     ];
   }
 
@@ -829,42 +900,7 @@
         : h('p', { class: 'cac-vazio' }, 'Ninguém registrou imóvel hoje ainda. A primeira casa abre o placar!'))];
   }
 
-  function painelPlano() {
-    const dia = S.diaPlano || S.hoje;
-    const doDia = S.blocos.filter(b => b.planos.some(p => p.d === dia && !p.c));
-    const porPessoa = new Map();
-    for (const bloco of doDia) {
-      const plano = bloco.planos.find(p => p.d === dia && !p.c);
-      const nome = plano.r || 'Sem responsável';
-      if (!porPessoa.has(nome)) porPessoa.set(nome, { cor: plano.ri ? corDoAgente(plano.ri) : '#868e96', blocos: [] });
-      porPessoa.get(nome).blocos.push(bloco);
-    }
-    const escolha = (rotulo, valor) => h('button', { type: 'button', 'aria-pressed': String(dia === valor), onclick: () => { S.diaPlano = valor; desenhar(); } }, rotulo);
-    const campoData = h('input', { type: 'date', min: S.hoje, max: somarDias(S.hoje, 60), value: dia, 'aria-label': 'Outro dia' });
-    campoData.addEventListener('change', () => { if (campoData.value >= S.hoje) { S.diaPlano = campoData.value; desenhar(); } });
-    // Um botão por agente: escolhe e clica nos quarteirões dele; o número é quantos já tem no dia.
-    const doAgente = id => doDia.filter(b => (b.planos.find(p => p.d === dia && !p.c).ri || null) === id);
-    const pessoas = cfg.equipe.concat([{ id: null, nome: 'Sem responsável' }]);
-    const quem = h('div', { class: 'cac-agentes', role: 'radiogroup', 'aria-label': 'Para quem são os quarteirões' },
-      pessoas.map(p => { const blocos = doAgente(p.id); return h('button', { type: 'button', role: 'radio', 'aria-checked': String((S.responsavelPlano || null) === p.id), style: `--agente:${p.id === null ? '#868e96' : corDoAgente(p.id)}`, title: p.nome, onclick: () => { S.responsavelPlano = p.id; desenharPainel(); } },
-        h('i', { 'aria-hidden': 'true' }), p.id === null ? p.nome : primeiroNome(p.nome), blocos.length ? h('small', {}, `${blocos.length} q · ${blocos.reduce((soma, b) => soma + b.estado.prog.total, 0)} im.`) : null); }));
-    const totalCasas = doDia.reduce((soma, b) => soma + b.estado.prog.total, 0);
-    return [
-      h('section', { class: 'cac-cartao' }, h('h2', {}, 'Plano do dia'),
-        h('div', { class: 'cac-escolhas' }, escolha('Hoje', S.hoje), escolha('Amanhã', somarDias(S.hoje, 1)), campoData),
-        cfg.registra ? [h('div', { class: 'cac-campo' }, h('span', {}, 'Para quem'), quem),
-          h('label', { class: 'cac-interruptor' }, (() => { const marca = h('input', { type: 'checkbox' }); marca.checked = S.planejando; marca.addEventListener('change', () => { S.planejando = marca.checked; desenharPainel(); }); return marca; })(),
-            h('span', {}, S.planejando ? 'Clique nos quarteirões para pôr no plano de quem está escolhido; clique de novo para tirar' : 'Planejar desligado: o clique só abre o quarteirão'))]
-          : h('p', { class: 'cac-vazio' }, 'Somente leitura: entre com uma conta da equipe para planejar.')),
-      h('section', { class: 'cac-cartao' },
-        h('h3', {}, `${dia === S.hoje ? 'Hoje' : dataBr(dia)}: ${plural(doDia.length, 'quarteirão', 'quarteirões')} · ${plural(totalCasas, 'imóvel', 'imóveis')}`),
-        doDia.length ? Array.from(porPessoa.entries()).map(([nome, { cor, blocos }]) => h('div', { class: 'cac-grupo' },
-          h('h4', {}, h('i', { class: 'cac-agente-cor', style: `background:${cor}` }), `${nome} · ${plural(blocos.length, 'quarteirão', 'quarteirões')}, ${plural(blocos.reduce((soma, b) => soma + b.estado.prog.total, 0), 'imóvel', 'imóveis')}`),
-          blocos.map(b => linhaDeBloco(b))))
-          : h('p', { class: 'cac-vazio' }, 'Nada no plano deste dia. Clique nos quarteirões no mapa.'),
-        h('div', { class: 'cac-bloco-acoes' }, h('button', { type: 'button', class: 'cac-botao', onclick: imprimir }, '🖨️ Imprimir mapa e plano'))),
-    ];
-  }
+  function painelPlano() { return planejamento.painel(); }
 
   function painelAoVivo() {
     const visitas = Array.from(S.doDia.values()).concat(S.fila.filter(v => v.data === S.hoje).map(v => M.comoRegistro(v, eu())));
@@ -888,6 +924,10 @@
   }
 
   function desenharPainel() {
+    const foco = document.activeElement;
+    const rotuloFoco = $('cac-conteudo').contains(foco) && ['INPUT', 'SELECT'].includes(foco.tagName) ? foco.getAttribute('aria-label') : null;
+    const cursor = rotuloFoco && foco.type === 'search' ? foco.selectionStart : null;
+    const rolagemCatalogo = $('cac-conteudo').querySelector('.cac-catalogo')?.scrollTop || 0;
     const abas = ABAS[S.prefs.modo];
     if (!abas.some(([id]) => id === S.aba)) S.aba = abas[0][0];
     $('cac-abas').replaceChildren(...abas.map(([id, rotulo]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(id === S.aba), onclick: () => { S.aba = id; abrirPainel(true); desenharPainel(); } }, rotulo)));
@@ -896,6 +936,12 @@
     $('cac-conteudo').replaceChildren(...[conteudo].flat(3).filter(Boolean));
     $('cac-conteudo').scrollTop = S.abaDesenhada === S.aba + (S.blocoAtivo ? S.blocoAtivo.id : '') ? rolagem : 0;
     S.abaDesenhada = S.aba + (S.blocoAtivo ? S.blocoAtivo.id : '');
+    const catalogo = $('cac-conteudo').querySelector('.cac-catalogo');
+    if (catalogo) catalogo.scrollTop = rolagemCatalogo;
+    if (rotuloFoco) {
+      const campo = Array.from($('cac-conteudo').querySelectorAll('input,select')).find(el => el.getAttribute('aria-label') === rotuloFoco);
+      if (campo) { campo.focus({ preventScroll: true }); if (cursor !== null) campo.setSelectionRange(cursor, cursor); }
+    }
   }
 
   function desenharConexao() {
@@ -917,6 +963,14 @@
   }
 
   function desenharLegenda() {
+    if (S.prefs.modo === 'escritorio') {
+      $('cac-legenda-itens').replaceChildren(h('h4', {}, 'Plano de ' + dataBr(S.diaPlano || S.hoje)),
+        ...(cfg.equipe || []).map(p => h('span', {}, h('i', { style: `background:${corDoAgente(p.id)};border-color:${corDoAgente(p.id)}` }), p.nome)),
+        h('span', {}, h('i', { style: 'background:#495057;border-color:#495057' }), 'Sem responsável'),
+        h('span', {}, h('i', { style: 'background:#fff;border-color:#adb5bd' }), 'Livre nesta data'),
+        h('span', {}, h('i', { style: 'background:#b2f2e5;border-color:#0b6568;border-style:dashed' }), 'Selecionado · ainda não salvo'));
+      return;
+    }
     const itens = Object.entries(M.BLOCOS).map(([, c]) => h('span', {}, h('i', { style: `background:${c.fundo};border-color:${c.borda}` }), c.nome));
     const casas = M.SITUACOES.map(s => h('span', {}, h('i', { class: 'redondo', style: `background:${s.cor};border-color:${s.cor}` }), s.nome));
     casas.push(h('span', {}, h('i', { class: 'redondo', style: `background:${M.LARVA.cor};border-color:${M.LARVA.cor}` }), 'Com larva'));
@@ -924,11 +978,15 @@
   }
 
   function desenhar() {
+    if (!document.getElementById('cac-print-preview').open) $('cac-impressao').replaceChildren();
     document.body.dataset.modo = S.prefs.modo;
     document.querySelectorAll('.cac-modos button').forEach(botao => botao.setAttribute('aria-pressed', String(botao.dataset.modo === S.prefs.modo)));
     desenharMapa();
     desenharPainel();
     desenharConexao();
+    desenharLegenda();
+    $('cac-conferir').hidden = S.prefs.modo !== 'escritorio' || !S.selecionados.size;
+    $('cac-conferir').textContent = `${S.selecionados.size} selecionado${S.selecionados.size === 1 ? '' : 's'} · Conferir e salvar`;
   }
 
   // ---------------------------------------------------------------- menu, impressão, sem internet
@@ -996,17 +1054,7 @@
     location.reload();
   }
 
-  function imprimir() {
-    const dia = S.diaPlano || S.hoje;
-    const doDia = S.blocos.filter(b => b.planos.some(p => p.d === dia && !p.c));
-    const linhas = doDia.map(bloco => { const plano = bloco.planos.find(p => p.d === dia && !p.c); return h('tr', {}, h('td', {}, bloco.n), h('td', {}, 'SC ' + bloco.s), h('td', {}, plano.r || ''), h('td', {}, String(bloco.estado.prog.total)), h('td', {}, ''), h('td', {}, '')); });
-    $('cac-impressao').replaceChildren(
-      h('h1', {}, 'Casa a casa · plano de ' + dataBr(dia) + '/' + dia.slice(0, 4)),
-      h('p', {}, `${plural(doDia.length, 'quarteirão', 'quarteirões')} · ${plural(doDia.reduce((soma, b) => soma + b.estado.prog.total, 0), 'imóvel', 'imóveis')}`),
-      doDia.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Quarteirão', 'Setor', 'Responsável', 'Imóveis', 'Trabalhados', 'Pendências'].map(t => h('th', {}, t)))), h('tbody', {}, linhas)) : h('p', {}, 'Nenhum quarteirão no plano deste dia.'));
-    $('cac-legenda').open = true;
-    setTimeout(() => window.print(), 60);
-  }
+  function imprimir(opcoes = {}) { impressao.abrir(opcoes); }
 
   // ---------------------------------------------------------------- início
   function ligarTela() {
@@ -1022,15 +1070,29 @@
     $('cac-menu-abrir').addEventListener('click', evento => { evento.stopPropagation(); if ($('cac-menu').hidden) abrirMenu(); else fecharMenu(); });
     document.addEventListener('click', evento => { if (!$('cac-menu').hidden && !$('cac-menu').contains(evento.target)) fecharMenu(); });
     $('cac-ficha-fechar').addEventListener('click', fecharFicha);
+    $('cac-ficha-corpo').addEventListener('input', () => { S.fichaSuja = true; });
+    $('cac-ficha-corpo').addEventListener('change', () => { S.fichaSuja = true; });
+    $('cac-ficha-corpo').addEventListener('click', evento => { if (evento.target.closest('.cac-situacoes button, .cac-contador button, .cac-tipo-tirar')) S.fichaSuja = true; });
     $('cac-ficha').addEventListener('click', evento => { if (evento.target === $('cac-ficha')) fecharFicha(); });
-    document.addEventListener('keydown', evento => { if (evento.key === 'Escape') { fecharFicha(); fecharMenu(); } });
+    document.addEventListener('keydown', evento => {
+      if (evento.key === 'Escape' && !$('cac-ficha').hidden) { evento.preventDefault(); fecharFicha(); }
+      if (evento.key === 'Escape') fecharMenu();
+      if (evento.key === 'Tab' && !$('cac-ficha').hidden) {
+        const alvos = Array.from($('cac-ficha').querySelectorAll('button, input, select, textarea')).filter(el => !el.disabled && el.offsetParent !== null);
+        const primeiro = alvos[0], ultimo = alvos.at(-1);
+        if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); ultimo?.focus(); }
+        else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); primeiro?.focus(); }
+      }
+    });
     $('cac-onde').addEventListener('click', ondeEstou);
     $('cac-ruas').addEventListener('click', alternarRuas);
     $('cac-cidade').addEventListener('click', verCidade);
+    $('cac-conferir').addEventListener('click', () => { S.aba = 'plano'; abrirPainel(true); desenharPainel(); $('cac-conteudo').querySelector('.cac-revisao')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
     window.addEventListener('online', ciclo);
     window.addEventListener('offline', () => { S.aoVivo = false; desenharConexao(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ciclo(); });
     window.addEventListener('resize', () => S.mapa && S.mapa.invalidateSize());
+    window.addEventListener('beforeprint', () => impressao.preparar());
   }
 
   async function iniciar() {
@@ -1062,6 +1124,9 @@
     S.pronto = await prontoParaOffline();
   }
 
+  const planejamento = window.CasaACasaPlanejamento({ S, cfg, h, casasDe, dataBr, somarDias, corDoAgente,
+    desenhar, desenharPainel, selecionarBloco, aplicarSelecao, reagendarBloco, removerDoPlano, irParaBloco, imprimir });
+  const impressao = window.CasaACasaImpressao({ S, h, casasDe, dataBr });
   window.CasaACasa = { estado: S };
   iniciar();
 })();

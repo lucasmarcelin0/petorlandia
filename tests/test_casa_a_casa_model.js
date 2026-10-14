@@ -117,3 +117,23 @@ const mapa = (...visitas) => M.juntarVisitas(visitas, []);
 }
 
 console.log('casa_a_casa_model: ok');
+
+// A agenda salta o fim de semana nos atalhos, sem excluir datas manuais.
+assert.deepEqual(M.diasDeTrabalho('2026-10-16'), ['2026-10-16', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22']);
+assert.equal(M.diasDeTrabalho('2026-10-17')[0], '2026-10-19');
+const agenda = M.agendaDoDia([
+  { casas: [{ id: 'a' }], extras: [{ id: 'extra' }], planos: [{ d: HOJE, ri: 1, r: 'Ana' }] },
+  { casas: [{ id: 'b' }], planos: [{ d: HOJE, ri: 2, r: 'Ana', c: HOJE }] },
+  { casas: [{ id: 'c' }], planos: [{ d: '2026-10-20', ri: 1, r: 'Ana' }] },
+], HOJE);
+assert.deepEqual(agenda.map(g => [g.id, g.imoveis]), [[1, 2], [2, 1]]);
+const roteiro = Array.from({ length: 31 }, (_, i) => ({ id: String(i), n: '10', cp: 'Unidade ' + i }));
+const folhas = M.paginasDoRoteiro(roteiro);
+assert.deepEqual(folhas.map(p => p.length), [14, 14, 3]);
+assert.deepEqual(folhas.flat(), roteiro); // Nenhum imóvel repetido ou perdido entre folhas.
+assert.deepEqual(M.paginasDoRoteiro([]), [[]]);
+const longos = roteiro.map(c => ({ ...c, rua: 'Rua ' + 'nome muito longo '.repeat(10), cp: 'Unidade com acesso pelos fundos' }));
+assert(M.paginasDoRoteiro(longos)[0].length < 14);
+assert.deepEqual(M.paginasDoRoteiro(longos).flat(), longos);
+const concluidoReal = M.estadoDoBloco([{ d: '2026-10-10', c: HOJE + 'T15:00:00Z' }], casas, mapa(visita('a', 'TRABALHADO', '2026-10-11')), HOJE, 60);
+assert.deepEqual([concluidoReal.inicio, concluidoReal.prog.feitas], ['2026-10-10', 1]);

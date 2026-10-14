@@ -14,15 +14,27 @@ barra lateral do SFA. Tela própria, leve, pensada primeiro para o celular.
   mesmo formato da lista de casas: "Rua 26"). Vai junto na base guardada no
   aparelho, então aparece também sem internet.
   Não depende de imagem de fundo; "ruas ao fundo" é opcional e precisa de internet.
-- **Escritório**: escolhe o dia e o agente (um botão por pessoa da equipe, com
-  quantos quarteirões e imóveis ela já tem no dia) e clica nos quarteirões para
-  pôr no plano dela. Clicar num quarteirão que está com outra pessoa passa para
-  a escolhida; clicar de novo tira do plano. No mapa, cada quarteirão do plano
-  leva o primeiro nome do agente, na cor dele. O painel "Ao vivo" mostra totais do dia, quarteirões em aberto,
-  placar da equipe e os últimos registros.
+- **Escritório**: escolhe dia e trabalhador, seleciona vários quarteirões no
+  mapa ou pela busca (número, rua, bairro e setor), confere a carga e salva o
+  lote. Clicar apenas seleciona; não altera o plano. Os atalhos mostram os próximos
+  cinco dias de segunda a sexta; o calendário permite outras datas até 60 dias à frente.
+  A tabela de carga compara trabalhadores por dia. O mapa colore o plano da data escolhida
+  por responsável. A revisão avisa quando o lote troca responsáveis ou acrescenta datas
+  a quarteirões já previstos. Reagendar move a data de um quarteirão que ainda não começou;
+  se há visitas ou destino ocupado, o servidor preserva o lote. Cada alteração leva a
+  versão mostrada na tela; estado divergente responde 409 e pede nova conferência.
+- **Impressão A4**: prévia por dia, trabalhador ou quarteirão. Cada quarteirão
+  tem cabeçalho, mapa vetorial, todos os endereços numerados da base, complementos,
+  campos do boletim, linhas para imóveis adicionais, legenda e assinatura. Folhas
+  seguintes repetem a identificação; endereços longos reduzem as linhas por folha.
+  A ficha independe do zoom do mapa e funciona em preto e branco. O cadastro é a
+  fonte dos imóveis previstos; imóveis ainda ausentes precisam ser acrescentados em campo.
 - **Rua**: toca no número da casa e marca o resultado. A lista do quarteirão
   segue a ordem da volta (ângulo em torno do centro) e "Salvar e próxima" abre a
-  casa seguinte ainda sem registro. Dá para acrescentar imóvel que não está na lista.
+  casa seguinte ainda sem registro. Mostra a posição na rota, oferece filtros de imóveis
+  sem registro e retornos, e exige escolher uma situação antes de mostrar os botões de salvar.
+  Impede fechar alterações sem aviso, avisa sobre outra visita recebida com a ficha aberta,
+  e mantém a ficha aberta se não consegue guardar a visita no aparelho. Dá para acrescentar imóvel que não está na lista.
 - **Ao vivo**: cada aparelho pergunta ao servidor a cada 8 s o que chegou depois
   do último registro que já tem; mapa, painel e placar se atualizam sozinhos.
 - **Jogo**: missão do dia, pontos (10 por imóvel, 15 por pendência recuperada,

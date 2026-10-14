@@ -10,7 +10,7 @@
   {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
      dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261014a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261014-agenda') }}">
 </head>
 <body class="cac" data-modo="rua">
   <header class="cac-topo">
@@ -39,6 +39,7 @@
         <div id="cac-legenda-itens"></div>
       </details>
       <div class="cac-dica" id="cac-dica" aria-live="polite"></div>
+      <button type="button" class="cac-conferir" id="cac-conferir" hidden></button>
     </section>
 
     <aside class="cac-painel" id="cac-painel" aria-label="Painel">
@@ -49,7 +50,7 @@
   </main>
 
   <div class="cac-folha-fundo" id="cac-ficha" hidden>
-    <div class="cac-folha" role="dialog" aria-modal="true" aria-labelledby="cac-ficha-titulo">
+    <div class="cac-folha" role="dialog" aria-modal="true" aria-labelledby="cac-ficha-titulo" tabindex="-1">
       <header class="cac-folha-topo">
         <div>
           <h2 id="cac-ficha-titulo">Imóvel</h2>
@@ -68,7 +69,9 @@
 
   <script type="application/json" id="cac-config">{{ config | tojson }}</script>
   <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261014a') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261014a') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261014-agenda') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261014-agenda') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261014-agenda') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261014-agenda') }}"></script>
 </body>
 </html>

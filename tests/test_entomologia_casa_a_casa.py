@@ -177,6 +177,51 @@ def test_token_interno_le_mas_nao_grava(client, restrito, base, monkeypatch):
 # Plano do dia
 # ---------------------------------------------------------------------------
 
+def test_plano_desatualizado_nao_sobrescreve_o_lote(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia')
+    entrar(client, ana)
+    resposta = planejar(client, 'planejar', [base['a']], responsavel_id=ana.id)
+    antigo = resposta.json['planos'][0]
+    esperado = [{k: antigo[k] for k in ('b', 'id', 'ri', 'c', 'v')}, {'b': base['b']}]
+    planejar(client, 'planejar', [base['a']], responsavel_id=bia.id)
+    conflito = planejar(client, 'planejar', [base['a'], base['b']], responsavel_id=ana.id, esperado=esperado)
+    assert conflito.status_code == 409
+    assert Plano.query.count() == 1
+    assert Plano.query.one().responsavel_id == bia.id
+
+
+def test_reagendamento_move_sem_duplicar_e_preserva_visitas(client, base):
+    ana = agente()
+    entrar(client, ana)
+    hoje = hoje_local()
+    origem, destino = (hoje + timedelta(days=1)).isoformat(), (hoje + timedelta(days=4)).isoformat()
+    resposta = planejar(client, 'planejar', [base['a'], base['b']], data=origem, responsavel_id=ana.id)
+    esperado = [{k: p[k] for k in ('b', 'id', 'ri', 'c', 'v')} for p in resposta.json['planos']]
+    movido = planejar(client, 'reagendar', [base['a'], base['b']], origem=origem, data=destino, responsavel_id=ana.id, esperado=esperado)
+    assert movido.status_code == 200 and movido.json['feitos'] == 2
+    assert Plano.query.count() == 2
+    assert all(p.data.isoformat() == destino for p in Plano.query.all())
+    # O lote inteiro é preservado se um dos destinos já estiver ocupado.
+    planejar(client, 'planejar', [base['b']], data=origem)
+    bloqueado = planejar(client, 'reagendar', [base['a'], base['b']], origem=destino, data=origem)
+    assert bloqueado.status_code == 409
+    assert Plano.query.filter_by(bloco=base['a']).one().data.isoformat() == destino
+    planejar(client, 'planejar', [base['a']], data=hoje.isoformat())
+    enviar(client, visita(base['a']))
+    assert planejar(client, 'reagendar', [base['a']], origem=hoje.isoformat(), data=origem).status_code == 400
+    assert Visita.query.count() == 1
+
+
+def test_reagendamento_valida_equipe_e_datas(client, base):
+    ana = agente()
+    entrar(client, ana)
+    hoje = hoje_local().isoformat()
+    planejar(client, 'planejar', [base['a']], data=hoje)
+    for dados in ({'data': hoje}, {'data': '1900-01-01'}, {'data': '2100-01-01'},
+                  {'data': (hoje_local() + timedelta(days=1)).isoformat(), 'responsavel_id': 999999}):
+        assert planejar(client, 'reagendar', [base['a']], origem=hoje, **dados).status_code == 400
+    assert Plano.query.count() == 1 and Plano.query.one().data.isoformat() == hoje
+
 def test_escritorio_planeja_troca_responsavel_e_tira_do_plano(client, base):
     coordenadora, ana = agente('coord@example.test', 'Carla Coordenadora'), agente('ana@example.test', 'Ana Agente')
     entrar(client, coordenadora)

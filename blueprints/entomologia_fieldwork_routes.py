@@ -134,14 +134,20 @@ def register(bp, require_access):
         acao, blocos, hoje = str(pedido.get('acao') or ''), pedido.get('blocos'), hoje_local()
         try:
             dia = servico._data(pedido.get('data'), hoje)
-            if acao == 'planejar':
+            origem = servico._data(pedido.get('origem'), hoje)
+            if 'esperado' in pedido and acao in ('planejar', 'remover', 'reagendar'):
+                servico.conferir_plano(blocos, origem if acao == 'reagendar' else dia, pedido['esperado'])
+            if acao in ('planejar', 'reagendar'):
                 responsavel = None
                 if pedido.get('responsavel_id'):
                     permitidos = {pessoa['id'] for pessoa in servico.equipe(current_user)}
                     if pedido['responsavel_id'] not in permitidos:
                         raise ValueError('Essa pessoa não faz parte da equipe.')
                     responsavel = db.session.get(User, pedido['responsavel_id'])
-                feitos = servico.planejar(blocos, dia, hoje, responsavel, servico.nome_da_conta(current_user))
+                if acao == 'reagendar':
+                    feitos = servico.reagendar(blocos, origem, dia, hoje, responsavel)
+                else:
+                    feitos = servico.planejar(blocos, dia, hoje, responsavel, servico.nome_da_conta(current_user))
             elif acao == 'remover':
                 feitos = servico.desplanejar(blocos, dia)
             elif acao == 'concluir':
@@ -150,13 +156,22 @@ def register(bp, require_access):
                 feitos = servico.reabrir(blocos, hoje)
             else:
                 raise ValueError('Ação desconhecida.')
+        except servico.ConflitoPlano as exc:
+            db.session.rollback()
+            return _erro(str(exc), 409)
         except ValueError as exc:
             db.session.rollback()
             return _erro(str(exc))
         if feitos:
-            _auditar('casa_a_casa_' + acao, f'Casa a casa: {acao} em {feitos} quarteirão(ões)',
-                     {'data': dia, 'blocos': [str(b) for b in (blocos or [])][:60]})
-            db.session.commit()
+            from sqlalchemy.exc import IntegrityError
+            try:
+                _auditar('casa_a_casa_' + acao, f'Casa a casa: {acao} em {feitos} quarteirão(ões)',
+                         {'data': dia, 'origem': origem if acao == 'reagendar' else None,
+                          'blocos': [str(b) for b in (blocos or [])][:60]})
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                return _erro('O plano mudou em outro aparelho. Confira a agenda atualizada e aplique novamente.', 409)
         return _sem_cache(jsonify({'ok': True, 'feitos': feitos, **servico.estado(hoje)}))
 
     @bp.route('/entomologia/casa-a-casa/visitas', methods=['POST'])

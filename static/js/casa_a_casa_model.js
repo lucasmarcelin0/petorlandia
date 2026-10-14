@@ -37,6 +37,40 @@
   const dia = iso => String(iso || '').slice(0, 10);
   const instante = iso => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? t : 0; };
 
+  function diasDeTrabalho(inicio, quantidade = 5) {
+    const dias = [], data = new Date(inicio + 'T12:00:00Z');
+    while (dias.length < quantidade && Number.isFinite(data.getTime())) {
+      if (![0, 6].includes(data.getUTCDay())) dias.push(data.toISOString().slice(0, 10));
+      data.setUTCDate(data.getUTCDate() + 1);
+    }
+    return dias;
+  }
+
+  // Agrupa por identidade, mesmo quando duas pessoas têm o mesmo nome.
+  function agendaDoDia(blocos, dia) {
+    const grupos = new Map();
+    for (const bloco of blocos) {
+      const plano = (bloco.planos || []).find(p => p.d === dia);
+      if (!plano) continue;
+      const chave = plano.ri || null;
+      if (!grupos.has(chave)) grupos.set(chave, { id: chave, nome: plano.r || 'Sem responsável', blocos: [], imoveis: 0 });
+      const grupo = grupos.get(chave);
+      grupo.blocos.push(bloco);
+      grupo.imoveis += bloco.casas.length + (bloco.extras || []).length;
+    }
+    return Array.from(grupos.values());
+  }
+
+  // Não agrega números iguais: frente, fundos e unidades continuam sendo imóveis distintos.
+  function paginasDoRoteiro(casas, tamanho = 14) {
+    // Endereços longos recebem menos linhas por folha, preservando o texto completo.
+    const altura = Math.max(8, ...casas.map(c => Math.ceil([c.rua || '', c.n || '', c.cp || ''].join(' ').length / 37) * 3.4 + 2.8));
+    tamanho = Math.max(1, Math.min(tamanho, Math.floor(128 / altura)));
+    const paginas = [];
+    for (let i = 0; i < casas.length; i += tamanho) paginas.push(casas.slice(i, i + tamanho));
+    return paginas.length ? paginas : [[]];
+  }
+
   function diasEntre(de, ate) {
     const a = Date.parse(dia(de) + 'T00:00:00Z'), b = Date.parse(dia(ate) + 'T00:00:00Z');
     return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86400000) : null;
@@ -88,8 +122,8 @@
      para outro dia e, por fim, há quanto tempo foi trabalhado. */
   function estadoDoBloco(planos, casas, ultimas, hoje, janela) {
     const aberto = planoAberto(planos, hoje);
-    const inicio = aberto ? aberto.d : hoje;
-    const prog = progresso(casas, ultimas, inicio);
+    let inicio = aberto ? aberto.d : hoje;
+    let prog = progresso(casas, ultimas, inicio);
     let ultimaData = '';
     for (const casa of casas) { const v = ultimas.get(casa.id); if (v && v.d > ultimaData) ultimaData = v.d; }
     let concluido = null, futuro = null;
@@ -105,6 +139,7 @@
     else if (futuro) tipo = 'agendado';
     else if (ha !== null && ha <= RECENTE_DIAS) tipo = 'recente';
     else if (ha !== null && ha <= (janela || 60)) tipo = 'anterior';
+    if (tipo === 'concluido') { inicio = concluido.d; prog = progresso(casas, ultimas, inicio); }
     return { tipo, plano: aberto || (tipo === 'concluido' ? concluido : futuro) || null, inicio, prog, ha, ultimaData };
   }
 
@@ -237,7 +272,7 @@
 
   const api = {
     SITUACOES, POR_ID, INSPECIONADO, PENDENCIA, LARVA, BLOCOS, XP, NIVEIS, RECENTE_DIAS,
-    dia, diasEntre, uuid, maisRecente, juntarVisitas, planoAberto, progresso, estadoDoBloco, corDaCasa,
+    dia, diasEntre, diasDeTrabalho, agendaDoDia, paginasDoRoteiro, uuid, maisRecente, juntarVisitas, planoAberto, progresso, estadoDoBloco, corDaCasa,
     proximaCasa, recipientesPorTipo, somaDosTipos, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
   };
   root.CasaACasaModel = api;
