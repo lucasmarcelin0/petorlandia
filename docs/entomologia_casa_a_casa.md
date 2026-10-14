@@ -27,6 +27,10 @@ barra lateral do SFA. Tela própria, leve, pensada primeiro para o celular.
   tem cabeçalho, mapa vetorial, todos os endereços numerados da base, complementos,
   campos do boletim, linhas para imóveis adicionais, legenda e assinatura. Folhas
   seguintes repetem a identificação; endereços longos reduzem as linhas por folha.
+  O mapa repete os nomes das vias de cada lateral, inclusive nas folhas sem casas
+  daquela rua, usando os eixos do atlas. Os números da tabela ficam espaçados ao
+  redor do desenho e ligados à posição do imóvel, sem sobrepor os círculos.
+  Uma lateral sem nome disponível é indicada como não identificada na base.
   A ficha independe do zoom do mapa e funciona em preto e branco. O cadastro é a
   fonte dos imóveis previstos; imóveis ainda ausentes precisam ser acrescentados em campo.
 - **Rua**: toca no número da casa e marca o resultado. A lista do quarteirão

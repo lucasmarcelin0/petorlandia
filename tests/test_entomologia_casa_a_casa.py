@@ -111,6 +111,10 @@ def test_base_leva_o_nome_das_ruas_para_o_mapa_em_branco(base):
     assert len(vias['nomes']) > 200 and len(vias['pontos']) > 1500
     # Mesmo formato da lista de casas: número em algarismo, não por extenso.
     assert 'Rua 12' in vias['nomes'] and 'Rua 26' in vias['nomes'] and 'Rua Doze' not in vias['nomes']
+    assert vias['linhas']
+    for indice, linha in vias['linhas']:
+        assert 0 <= indice < len(vias['nomes']) and len(linha) >= 2
+        assert all(-48.2 < x < -47.6 and -21.0 < y < -20.4 for x, y in linha)
     assert servico.nome_de_rua('Rua  Vinte e Seis') == 'Rua 26' and servico.nome_de_rua('Avenida do Café') == 'Avenida do Café'
     for x, y, giro, indice in vias['pontos']:
         # Dentro do município, texto nunca de cabeça para baixo, nome existente.

@@ -324,7 +324,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .cac-print-meta { display: grid; grid-template-columns: auto 1fr; gap: 1mm 6mm; padding: 3mm 0; }
 .cac-print-meta p:last-child { grid-column: 1 / -1; font-size: 8pt; color: #496469; }
 .cac-print-mapa { border: 1px solid #b3c9c4; border-radius: 2mm; padding: 1mm; margin-bottom: 3mm; }
-.cac-print-mapa svg { display: block; width: 100%; height: 43mm; }
+.cac-print-mapa svg { display: block; width: 100%; height: 60mm; }
 .cac-print-mapa p { text-align: center; font-size: 7pt; color: #496469; }
 .cac-print-tabela { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.5pt; }
 .cac-print-tabela th { background: #e6f4f1; font-size: 7pt; }

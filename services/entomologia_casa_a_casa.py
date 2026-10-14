@@ -194,7 +194,7 @@ def _vias() -> dict:
     from services import entomologia_atlas_editor as editor
     from services.entomologia_atlas_malha import NOT_BUILT
 
-    nomes, pontos = {}, []
+    nomes, pontos, linhas = {}, [], []
     ruas = []
     for feature in editor.references().get("features", []):
         p, g = feature.get("properties") or {}, feature.get("geometry") or {}
@@ -205,6 +205,9 @@ def _vias() -> dict:
         ordem = _ORDEM_DAS_VIAS.index(categoria) if categoria in _ORDEM_DAS_VIAS else len(_ORDEM_DAS_VIAS)
         ruas.append((ordem, nome, g["coordinates"]))
     for ordem, nome, linha in sorted(ruas, key=lambda rua: rua[0]):
+        indice_nome = nomes.setdefault(nome, len(nomes))
+        # Os eixos completos permitem identificar também uma lateral sem casas.
+        linhas.append([indice_nome, [[round(x, 6), round(y, 6)] for x, y in linha]])
         passo = _PASSO_RODOVIA_M if ordem < 3 else _PASSO_NOME_M
         trechos, total = [], 0.0
         for (ax, ay), (bx, by) in zip(linha, linha[1:]):
@@ -224,9 +227,9 @@ def _vias() -> dict:
                 giro = -math.degrees(math.atan2(dy, dx))
                 giro = giro - 180 if giro > 90 else (giro + 180 if giro < -90 else giro)
                 pontos.append([round(ax + (bx - ax) * t, 6), round(ay + (by - ay) * t, 6), round(giro),
-                               nomes.setdefault(nome, len(nomes))])
+                               indice_nome])
                 alvo += passo
-    return {"nomes": list(nomes), "pontos": pontos}
+    return {"nomes": list(nomes), "pontos": pontos, "linhas": linhas}
 
 
 def _montar_base() -> dict:
