@@ -234,7 +234,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261014-csrf' in pagina
+    assert 'casa_a_casa.js?v=20261015-campo' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -354,9 +354,10 @@ def test_recipientes_por_tipo_da_ficha_do_sisaweb(client, base):
     planilha = client.get(RAIZ + '/recipientes.csv', **HTTPS)
     assert planilha.status_code == 200 and 'attachment' in planilha.headers['Content-Disposition']
     cabecalho, *corpo = planilha.get_data(as_text=True).lstrip('\ufeff').splitlines()
-    assert cabecalho == 'DATA;SETOR;QUARTEIRAO;GRUPO;TIPO;RECIPIENTE;IMOVEIS;REC. EXIST.;REC. AGUA;REC. LARVA'
-    assert [linha.split(';')[3:] for linha in corpo] == [['C', '12', 'Lata, frasco, plástico utilizáveis', '1', '3', '1', '1'],
-                                                         ['F', '30', 'Lata, frasco, plástico', '1', '1', '0', '0']]
+    assert cabecalho == ('DATA;SETOR;QUARTEIRAO;GRUPO;TIPO;RECIPIENTE;IMOVEIS;REC. EXIST.;REC. AGUA;REC. LARVA;'
+                         'MECANICO;ALTERNATIVO;FOCAL NATULAR;FOCAL VECTOBAC')
+    assert [linha.split(';')[3:10] for linha in corpo] == [['C', '12', 'Lata, frasco, plástico utilizáveis', '1', '3', '1', '1'],
+                                                           ['F', '30', 'Lata, frasco, plástico', '1', '1', '0', '0']]
 
 
 def test_tela_traz_os_40_tipos_de_recipiente_e_a_equipe(client, base):
@@ -459,3 +460,166 @@ def test_pagina_inicial_e_aba_levam_ao_casa_a_casa(client, base):
     assert '/sfa/entomologia/casa-a-casa' in client.get('/', **HTTPS).get_data(as_text=True)
     painel = client.get('/sfa/entomologia', **HTTPS).get_data(as_text=True)
     assert 'Abrir o Casa a Casa' in painel and 'sfa_fieldwork' not in painel
+
+
+# ---------------------------------------------------------------------------
+# Quarteirão dividido em L, atividade, focal, imóveis de campo, relatório e equipe
+# ---------------------------------------------------------------------------
+
+def test_quarteirao_dividido_em_dois_ls_e_juntado_de_novo(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    hoje = hoje_local().isoformat()
+    planejar(client, 'planejar', [base['a']], responsavel_id=ana.id, atividade='VI_ROTINA')
+    divisao = [{'parte': 'NE', 'responsavel_id': ana.id}, {'parte': 'SO', 'responsavel_id': bia.id}]
+    resposta = planejar(client, 'dividir', [base['a']], data=hoje, divisao=divisao)
+    assert resposta.status_code == 200, resposta.json
+    linhas = {p.parte: p for p in Plano.query.filter_by(bloco=base['a']).all()}
+    assert set(linhas) == {'NE', 'SO'} and linhas['SO'].responsavel == 'Bia Agente'
+    # A atividade escolhida continua nas duas metades.
+    assert {p.atividade for p in linhas.values()} == {'VI_ROTINA'}
+    assert {(p['pt'], p['r']) for p in resposta.json['planos']} == {('NE', 'Ana Agente'), ('SO', 'Bia Agente')}
+    # Ls que não são opostos não valem.
+    ruim = [{'parte': 'NE', 'responsavel_id': ana.id}, {'parte': 'NO', 'responsavel_id': bia.id}]
+    assert planejar(client, 'dividir', [base['a']], data=hoje, divisao=ruim).status_code == 400
+
+    # Quem tem um L conclui só o seu; o quarteirão segue aberto para a outra pessoa.
+    assert planejar(client, 'concluir', [base['a']]).json['feitos'] == 1
+    linhas = {p.parte: p for p in Plano.query.filter_by(bloco=base['a']).all()}
+    assert linhas['NE'].concluido_em is not None and linhas['SO'].concluido_em is None
+    assert planejar(client, 'unir', [base['a']], data=hoje, responsavel_id=ana.id).status_code == 400
+    assert planejar(client, 'reabrir', [base['a']]).json['feitos'] == 0      # ainda há L em aberto
+
+    entrar(client, bia)
+    assert planejar(client, 'concluir', [base['a']]).json['feitos'] == 1
+    assert Plano.query.filter(Plano.bloco == base['a'], Plano.concluido_em.is_(None)).count() == 0
+    assert planejar(client, 'reabrir', [base['a']]).json['feitos'] == 1
+    assert Plano.query.filter(Plano.bloco == base['a'], Plano.concluido_em.is_(None)).count() == 2
+
+    # Juntar volta a um quarteirão inteiro; planejar de novo também.
+    assert planejar(client, 'unir', [base['a']], data=hoje, responsavel_id=bia.id).json['feitos'] == 1
+    (linha,) = Plano.query.filter_by(bloco=base['a']).all()
+    assert (linha.parte, linha.responsavel) == ('', 'Bia Agente')
+
+
+def test_conferencia_do_plano_ve_as_duas_metades(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    amanha = (hoje_local() + timedelta(days=1)).isoformat()
+    planejar(client, 'planejar', [base['a']], data=amanha, responsavel_id=ana.id)
+    divisao = [{'parte': 'NO', 'responsavel_id': ana.id}, {'parte': 'SE', 'responsavel_id': bia.id}]
+    planos = planejar(client, 'dividir', [base['a']], data=amanha, divisao=divisao).json['planos']
+    foto = [{k: p[k] for k in ('b', 'id', 'ri', 'c', 'v', 'pt')} for p in planos if p['b'] == base['a']]
+    assert len(foto) == 2
+    # Fotografia com só uma metade: conflito, nada muda.
+    assert planejar(client, 'planejar', [base['a']], data=amanha, responsavel_id=ana.id, esperado=foto[:1]).status_code == 409
+    # Com as duas, planejar para uma pessoa junta o quarteirão.
+    assert planejar(client, 'planejar', [base['a']], data=amanha, responsavel_id=ana.id, esperado=foto).status_code == 200
+    assert [(p.parte, p.responsavel) for p in Plano.query.filter_by(bloco=base['a']).all()] == [('', 'Ana Agente')]
+
+
+def test_atividade_vai_do_plano_para_a_visita_e_valores_desconhecidos_nao_entram(client, base):
+    ana = agente()
+    entrar(client, ana)
+    planejar(client, 'planejar', [base['a']], responsavel_id=ana.id, atividade='ADL')
+    planejar(client, 'planejar', [base['b']], responsavel_id=ana.id, atividade='INVENTADA')
+    assert Plano.query.filter_by(bloco=base['b']).one().atividade is None
+    enviar(client, visita(base['a']), visita(base['a'], '1002', uuid='visita-0002', atividade='CC_PENDENCIA'))
+    primeira, segunda = Visita.query.order_by(Visita.id).all()
+    assert (primeira.atividade, segunda.atividade) == ('ADL', 'CC_PENDENCIA')
+    assert client.get(RAIZ + '/estado', **HTTPS).json['planos'][0]['at'] in ('ADL', '')
+
+
+def test_focal_com_larvicida_e_controle_em_cada_recipiente(client, base):
+    entrar(client, agente())
+    linhas = [{'t': 28, 'e': 2, 'a': 2, 'l': 1, 'c': 'F', 'p': 'vectobac'},
+              {'t': 30, 'e': 3, 'c': 'M'},
+              {'t': 28, 'e': 1, 'c': 'M'}]
+    resposta = enviar(client,
+                      visita(base['a'], '1001', uuid='visita-f1', recipientes=linhas),
+                      visita(base['a'], '1002', uuid='visita-f2', tratamento_focal=True, focal_produto=['NATULAR']),
+                      visita(base['a'], '1003-abc', uuid='visita-f3', recipientes=[{'t': 5, 'e': 1, 'c': 'F', 'p': 'ABATE'}]),
+                      visita(base['a'], '1003-def', uuid='visita-f4', recipientes=[{'t': 5, 'e': 1, 'c': 'X'}]))
+    assert resposta.json['aceitas'] == ['visita-f1', 'visita-f2']
+    assert {r['motivo'] for r in resposta.json['recusadas']} == {'Produto do tratamento focal inválido.',
+                                                                'Controle do recipiente inválido.'}
+    por_tipo, so_focal = Visita.query.order_by(Visita.id).all()
+    # O controle anotado em cada recipiente vale para o imóvel; o mesmo tipo com controles diferentes fica em linhas separadas.
+    assert (por_tipo.controle_mecanico, por_tipo.controle_alternativo, por_tipo.tratamento_focal) == (True, False, True)
+    assert por_tipo.focal_produto == 'VECTOBAC' and por_tipo.recipientes_existentes == 6
+    assert servico.recipientes_da_visita(por_tipo) == [
+        {'t': 28, 'e': 2, 'a': 2, 'l': 1, 'c': 'F', 'p': 'VECTOBAC'}, {'t': 28, 'e': 1, 'a': 0, 'l': 0, 'c': 'M'},
+        {'t': 30, 'e': 3, 'a': 0, 'l': 0, 'c': 'M'}]
+    assert (so_focal.tratamento_focal, so_focal.focal_produto) == (True, 'NATULAR')
+
+    planilha = client.get(RAIZ + '/recipientes.csv', **HTTPS).get_data(as_text=True).lstrip('\ufeff').splitlines()
+    pneu = next(linha.split(';') for linha in planilha if ';28;' in linha)
+    assert pneu[6:] == ['1', '3', '2', '1', '1', '0', '0', '2']
+    visitas_csv = client.get(RAIZ + '/visitas.csv', **HTTPS).get_data(as_text=True)
+    assert 'E28 (2 exist., 2 água, 1 larva, focal Vectobac)' in visitas_csv and ';Natular;' in visitas_csv
+
+
+def test_imovel_acrescentado_em_campo_entra_na_base_para_todos(client, base, monkeypatch):
+    from models.entomologia import EntomologiaImovelCampo
+    entrar(client, agente())
+    antes = servico.base()
+    nova = visita(base['a'], 'novo-abc123def456', 'FECHADO', 'visita-n1', logradouro='Rua Um', numero='10A',
+                  complemento='fundos', lat=-20.72, lng=-47.88)
+    assert enviar(client, nova).json['novas'] == 1
+    campo = EntomologiaImovelCampo.query.one()
+    assert (campo.imovel, campo.numero, campo.complemento, campo.bloco) == ('novo-abc123def456', '10A', 'fundos', base['a'])
+    depois = servico.base()
+    assert depois['versao'] != antes['versao']
+    casa = next(c for c in depois['imoveis'] if c[0] == 'novo-abc123def456')
+    assert depois['blocos'][casa[6]]['id'] == base['a'] and casa[4] == '10A' and depois['ruas'][casa[3]] == 'Rua Um'
+    assert servico.indice()['casas'][base['a']] == len([c for c in antes['imoveis'] if c[6] == casa[6]]) + 1
+    # Reenviar ou registrar outra visita no mesmo imóvel não duplica.
+    enviar(client, dict(nova, uuid='visita-n2', situacao='TRABALHADO'))
+    assert EntomologiaImovelCampo.query.count() == 1
+
+
+def test_relatorio_do_dia_por_quarteirao(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    hoje = hoje_local()
+    planejar(client, 'planejar', [base['a'], base['b']], responsavel_id=ana.id, atividade='VI_ROTINA')
+    planejar(client, 'dividir', [base['b']], data=hoje.isoformat(),
+             divisao=[{'parte': 'NE', 'responsavel_id': ana.id}, {'parte': 'SO', 'responsavel_id': bia.id}])
+    enviar(client,
+           visita(base['a'], '1001', uuid='visita-r1', recipientes=[{'t': 1, 'e': 2}, {'t': 39, 'e': 1, 'l': 1}], tubitos=1,
+                  tratamento_focal=True, focal_produto='NATULAR'),
+           visita(base['a'], '1002', 'RECUSA', 'visita-r2'))
+    planejar(client, 'concluir', [base['a']])
+    resposta = client.get(f"{RAIZ}/relatorio.json?inicio={hoje}&fim={hoje}", **HTTPS)
+    assert resposta.status_code == 200 and resposta.headers['Cache-Control'] == 'private, no-store'
+    (dia,) = resposta.json['dias']
+    assert dia['data'] == hoje.isoformat()
+    t = dia['totais']
+    assert (t['quarteiroes'], t['concluidos'], t['imoveis'], t['trabalhados'], t['recusas'], t['com_larva']) == (2, 1, 2, 1, 1, 1)
+    assert (t['natular'], t['tubitos'], t['agentes']) == (1, 1, ['Ana Agente'])
+    a = next(q for q in dia['quarteiroes'] if q['bloco'] == base['a'])
+    assert a['grupos']['A'] == 2 and a['grupos']['G'] == 1 and a['atividades'] == ['VI_ROTINA'] and a['concluido']
+    assert a['previstos'] == servico.indice()['casas'][base['a']]
+    b = next(q for q in dia['quarteiroes'] if q['bloco'] == base['b'])
+    assert {(p['responsavel'], p['parte']) for p in b['planos']} == {('Ana Agente', 'NE'), ('Bia Agente', 'SO')}
+    assert b['imoveis'] == 0 and not b['concluido']
+
+    planilha = client.get(f"{RAIZ}/relatorio.csv?inicio={hoje}&fim={hoje}", **HTTPS).get_data(as_text=True).splitlines()
+    assert planilha[0].lstrip('\ufeff').startswith('DATA;SETOR;QUARTEIRAO;ATIVIDADE;RESPONSAVEIS') and len(planilha) == 3
+    assert any('Ana Agente (L Nordeste) + Bia Agente (L Sudoeste)' in linha for linha in planilha)
+    longe = (hoje - timedelta(days=90)).isoformat()
+    assert client.get(f"{RAIZ}/relatorio.json?inicio={longe}&fim={hoje}", **HTTPS).status_code == 400
+
+
+def test_administrador_inclui_trabalhador_pelo_email(client, base):
+    admin = conta('chefe@example.test', role='admin', name='Chefe')
+    novo = conta('novo@example.test', name='Nova Agente')
+    entrar(client, admin)
+    resposta = client.post(RAIZ + '/equipe', json={'email': 'NOVO@example.test'}, **HTTPS)
+    assert resposta.status_code == 200 and resposta.json['criado'] is True
+    assert {p['nome'] for p in resposta.json['equipe']} >= {'Nova Agente', 'Chefe'}
+    assert client.post(RAIZ + '/equipe', json={'email': 'novo@example.test'}, **HTTPS).json['criado'] is False
+    assert client.post(RAIZ + '/equipe', json={'email': 'ninguem@example.test'}, **HTTPS).status_code == 400
+    # Quem é da equipe mas não é administrador não inclui ninguém.
+    entrar(client, novo)
+    assert client.post(RAIZ + '/equipe', json={'email': 'chefe@example.test'}, **HTTPS).status_code in (403, 404)

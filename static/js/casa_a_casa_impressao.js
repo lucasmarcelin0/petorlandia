@@ -106,7 +106,7 @@
   }
   root.CasaACasaDesenhoImpressao = desenhoDoBloco;
   if (typeof module !== 'undefined' && module.exports) module.exports = { desenhoDoBloco };
-  root.CasaACasaImpressao = function ({ S, h, casasDe, dataBr }) {
+  root.CasaACasaImpressao = function ({ S, h, casasDe, dataBr, nomeDaParte = p => p, nomeDaAtividade = () => '' }) {
     const M = root.CasaACasaModel;
     const dialogo = h('dialog', { id: 'cac-print-preview', class: 'cac-print-preview', 'aria-labelledby': 'cac-print-titulo' });
     document.body.append(dialogo);
@@ -142,11 +142,19 @@
       });
       return svg;
     }
-    function folhas(blocos, dia) {
+    // Uma entrada por roteiro: o quarteirão inteiro ou, quando dividido em L, cada metade com o seu responsável.
+    function roteiros(blocos, dia, responsavel) {
       return blocos.flatMap(bloco => {
-        const casas = casasDe(bloco), paginas = M.paginasDoRoteiro(casas);
-        const plano = bloco.planos.find(p => p.d === dia);
+        const planos = M.planosDoDia(bloco, dia);
+        if (!planos.length) return [{ bloco, plano: null }];
+        return planos.filter(p => responsavel === undefined || String(p.ri || null) === String(responsavel)).map(plano => ({ bloco, plano }));
+      });
+    }
+    function folhas(entradas, dia) {
+      return entradas.flatMap(({ bloco, plano }) => {
+        const casas = plano && plano.pt ? M.casasDoL(bloco, casasDe(bloco), plano.pt) : casasDe(bloco), paginas = M.paginasDoRoteiro(casas);
         const responsavel = plano && plano.r ? plano.r : '________________________________';
+        const parte = plano && plano.pt ? nomeDaParte(plano.pt) : '';
         let offset = 0;
         return paginas.map((lista, pagina) => {
           const inicio = offset;
@@ -155,17 +163,19 @@
             h('td', { class: 'cac-print-endereco' }, c ? [h('strong', {}, `${c.rua}, ${c.n}`), c.cp ? h('small', {}, c.cp) : null] : 'Imóvel acrescentado: __________________'),
             h('td', {}, ''), h('td', {}, ''), h('td', {}, '___ / ___ / ___'), h('td', {}, ''), h('td', {}, ''), h('td', {}, ''));
           return h('article', { class: 'cac-print-folha' },
-            h('header', { class: 'cac-print-cabecalho' }, h('div', {}, h('small', {}, 'ORLÂNDIA · CONTROLE DE VETORES'), h('h1', {}, 'Roteiro casa a casa')), h('strong', {}, `Q ${bloco.n}`, h('small', {}, `SC ${bloco.s}`))),
+            h('header', { class: 'cac-print-cabecalho' }, h('div', {}, h('small', {}, 'ORLÂNDIA · CONTROLE DE VETORES'), h('h1', {}, 'Roteiro casa a casa')), h('strong', {}, `Q ${bloco.n}`, h('small', {}, `SC ${bloco.s}${parte ? ' · ' + parte : ''}`))),
             h('div', { class: 'cac-print-meta' }, h('p', {}, h('strong', {}, 'Data: '), `${dataBr(dia)}/${dia.slice(0, 4)}`), h('p', {}, h('strong', {}, 'Trabalhador: '), responsavel),
+              plano && plano.at ? h('p', {}, h('strong', {}, 'Atividade: '), nomeDaAtividade(plano.at)) : null,
+              parte ? h('p', {}, h('strong', {}, 'Parte: '), `${parte} (os dois lados em torno do canto; o outro L é de outra pessoa)`) : null,
               h('p', {}, `${casas.length} imóveis previstos · Folha ${pagina + 1} de ${paginas.length}${bloco.d ? ' · ' + bloco.d : ''}`)),
             h('div', { class: 'cac-print-mapa' }, mapaDoBloco(bloco, lista, inicio), h('p', {}, 'Círculos = ordem na tabela desta folha. As linhas ligam cada número à posição do imóvel. Norte para cima.')),
             !casas.length ? h('p', { class: 'cac-print-atencao' }, 'Sem imóveis numerados na base deste quarteirão. Levante e anote os endereços em campo.') : null,
             h('table', { class: 'cac-print-tabela' }, h('thead', {}, h('tr', {}, ['#', 'Rua, número e complemento', 'Hora', 'Sit.', 'Recipientes E / A / L', 'Tub.', 'Controle', 'Observações'].map(t => h('th', { scope: 'col' }, t)))),
               h('tbody', {}, lista.map(linha), Array.from({ length: casas.length ? 2 : 8 }, (_, i) => linha(null, i)))),
-            h('div', { class: 'cac-print-chaves' }, h('p', {}, 'Situação: T Trabalhado · F Fechado · D Desocupado · V Temporada · P Parcial · R Recusa.'),
-              h('p', {}, 'Recipientes: E existentes · A com água · L com larva. Controle: M mecânico · A alternativo · F focal.'),
-              h('p', {}, 'Anote o tipo (1–40) e a quantidade de recipientes nas observações ou na ficha complementar.')),
-            h('footer', { class: 'cac-print-rodape' }, h('p', {}, 'Conferência: T ____ F ____ D ____ V ____ P ____ R ____ · Assinatura: __________________'),
+            h('div', { class: 'cac-print-chaves' }, h('p', {}, 'Situação: T Trabalhado · F Fechado · D Desocupado · R Recusa.'),
+              h('p', {}, 'Recipientes: E existentes · A com água · L com larva. Controle: M mecânico · A alternativo · F focal (N Natular · V Vectobac).'),
+              h('p', {}, 'Anote o tipo (1–40), a quantidade e o controle de cada recipiente nas observações ou na ficha complementar.')),
+            h('footer', { class: 'cac-print-rodape' }, h('p', {}, 'Conferência: T ____ F ____ D ____ R ____ · Assinatura: __________________'),
               h('small', {}, `Planejamento não comprova visita. Base de endereços: ${S.base.versao}. Imóveis fora da base devem ser anotados nas linhas extras.`)));
         });
       });
@@ -183,14 +193,16 @@
       const imprimir = h('button', { type: 'button', class: 'cac-botao forte', onclick: () => { dialogo.close(); window.print(); } }, 'Imprimir / salvar PDF');
       const fechar = () => { dialogo.close(); };
       function atualizar() {
-        const blocos = iniciais.filter(b => escolher.value === 'todos' || String(b.planos.find(p => p.d === dia)?.ri || null) === escolher.value)
+        const blocos = iniciais.slice()
           .sort((a, b) => String(a.s).localeCompare(String(b.s), 'pt-BR', { numeric: true }) || String(a.n).localeCompare(String(b.n), 'pt-BR', { numeric: true }));
-        const conteudo = folhas(blocos, dia);
+        const entradas = roteiros(blocos, dia, escolher.value === 'todos' ? undefined : escolher.value);
+        const conteudo = folhas(entradas, dia);
         paginas.replaceChildren(...conteudo);
         $('cac-impressao').replaceChildren(...conteudo.map(p => p.cloneNode(true)));
         $('cac-impressao').setAttribute('aria-hidden', 'false');
-        imprimir.disabled = !blocos.length;
-        resumo.textContent = `${dataBr(dia)}/${dia.slice(0, 4)} · ${blocos.length} ${blocos.length === 1 ? 'quarteirão' : 'quarteirões'} · ${blocos.reduce((n, b) => n + casasDe(b).length, 0)} imóveis · ${conteudo.length} folhas A4`;
+        imprimir.disabled = !entradas.length;
+        const imoveis = entradas.reduce((n, e) => n + (e.plano && e.plano.pt ? M.casasDoL(e.bloco, casasDe(e.bloco), e.plano.pt) : casasDe(e.bloco)).length, 0);
+        resumo.textContent = `${dataBr(dia)}/${dia.slice(0, 4)} · ${entradas.length} ${entradas.length === 1 ? 'roteiro' : 'roteiros'} · ${imoveis} imóveis · ${conteudo.length} folhas A4`;
         if (!conteudo.length) paginas.append(h('p', { class: 'cac-vazio' }, 'Não há quarteirões planejados neste dia.'));
       }
       const $ = id => document.getElementById(id);
@@ -207,7 +219,7 @@
     function preparar() {
       if (!document.getElementById('cac-impressao').children.length) {
         const dia = S.diaPlano || S.hoje;
-        document.getElementById('cac-impressao').replaceChildren(...folhas(S.blocos.filter(b => b.planos.some(p => p.d === dia)), dia));
+        document.getElementById('cac-impressao').replaceChildren(...folhas(roteiros(S.blocos.filter(b => b.planos.some(p => p.d === dia)), dia), dia));
       }
     }
     return { abrir, preparar };

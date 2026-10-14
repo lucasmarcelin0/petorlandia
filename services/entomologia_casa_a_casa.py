@@ -44,6 +44,22 @@ PENDENCIA = {"FECHADO", "RECUSA", "TEMPORADA"}
 COLUNA_SITUACAO = {"TRABALHADO": "IM TRAB", "FECHADO": "IM FECH", "DESOCUPADO": "IM DESOC",
                    "TEMPORADA": "IM TEMP", "PARCIAL": "IM PARC", "RECUSA": "IM RECUSA"}
 
+# Quarteirão dividido entre duas pessoas: cada uma faz um L, os dois lados em torno de um canto.
+# Os Ls de uma divisão são sempre opostos (NE + SO ou NO + SE).
+PARTES = {"NE": "SO", "SO": "NE", "NO": "SE", "SE": "NO"}
+NOME_PARTE = {"NE": "L Nordeste", "NO": "L Noroeste", "SE": "L Sudeste", "SO": "L Sudoeste"}
+# O que a equipe faz no quarteirão, escolhido no escritório ao planejar.
+ATIVIDADES = {
+    "ADL": "Avaliação de densidade larvária",
+    "VI_ROTINA": "Visita a imóveis · rotina",
+    "VI_PENDENCIA": "Visita a imóveis · pendência",
+    "CC_ROTINA": "Controle de criadouro · rotina",
+    "CC_PENDENCIA": "Controle de criadouro · pendência",
+}
+# Controle feito em cada recipiente e larvicida do tratamento focal.
+CONTROLES = {"M": "Mecânico", "A": "Alternativo", "F": "Focal"}
+PRODUTOS_FOCAL = {"NATULAR": "Natular", "VECTOBAC": "Vectobac"}
+
 # Tipo de recipiente, com os grupos e a numeração da ficha de campo do SISAWEB (1 a 40).
 GRUPOS_RECIPIENTE = (
     ("A", "Depósito elevado", ((1, "Ligado à rede"), (2, "Não ligado à rede"))),
@@ -110,6 +126,32 @@ def _assinatura():
         return None
 
 
+def _assinatura_campo():
+    """Muda quando um imóvel é acrescentado (ou retirado) em campo: a base é refeita."""
+    from services.entomologia_service import consultar_sem_interromper
+
+    def consulta():
+        from sqlalchemy import func
+        from extensions import db
+        from models.entomologia import EntomologiaImovelCampo as C
+        total, maior, retirados = db.session.query(func.count(C.id), func.max(C.id),
+                                                   func.count(C.removido_em)).one()
+        return f"{total}-{maior or 0}-{retirados}"
+
+    return consultar_sem_interromper(consulta, "")
+
+
+def _imoveis_campo() -> list:
+    from services.entomologia_service import consultar_sem_interromper
+
+    def consulta():
+        from models.entomologia import EntomologiaImovelCampo as C
+        return [(c.imovel, c.bloco, c.logradouro, c.numero, c.complemento or "", c.longitude, c.latitude)
+                for c in C.query.filter(C.removido_em.is_(None)).order_by(C.id).all()]
+
+    return consultar_sem_interromper(consulta, []) or []
+
+
 def esquecer_base() -> None:
     with _lock:
         _memo.clear()
@@ -122,10 +164,11 @@ def base() -> dict:
         pronto = _memo.get("base")
         if pronto and agora - pronto["conferido"] < _CONFERIR_S:
             return pronto["dados"]
-    chave = _assinatura()
+    atlas = _assinatura()
+    chave = (atlas, _assinatura_campo())
     with _lock:
         pronto = _memo.get("base")
-        if pronto and pronto["chave"] == chave and (chave is not None or agora - pronto["em"] < _VALIDADE_S):
+        if pronto and pronto["chave"] == chave and (atlas is not None or agora - pronto["em"] < _VALIDADE_S):
             pronto["conferido"] = agora
             return pronto["dados"]
     dados = _montar_base()
@@ -297,6 +340,16 @@ def _montar_base() -> dict:
         por_bloco[posicao].append([identificador, round(x, 6), round(y, 6),
                                    ruas.setdefault(rua, len(ruas)), numero[:20], complemento, posicao])
 
+    # Imóveis que faltavam na base oficial e a equipe acrescentou em campo: fazem parte do mapa daí em diante.
+    posicao_do_bloco = {bloco["id"]: posicao for posicao, bloco in enumerate(blocos)}
+    for identificador, bloco_id, rua, numero, complemento, x, y in _imoveis_campo():
+        posicao = posicao_do_bloco.get(bloco_id)
+        if posicao is None or identificador in usados:
+            continue
+        usados.add(identificador)
+        por_bloco[posicao].append([identificador, round(x, 6), round(y, 6), ruas.setdefault(rua, len(ruas)),
+                                   str(numero)[:20], complemento[:60], posicao])
+
     # Na ordem da volta no quarteirão: o ângulo em torno do centro dá a sequência de quem caminha.
     imoveis = []
     for posicao in sorted(por_bloco):
@@ -331,7 +384,7 @@ def _iso(momento) -> str | None:
 def plano_dict(plano) -> dict:
     return {"id": plano.id, "b": plano.bloco, "d": plano.data.isoformat(), "ri": plano.responsavel_id,
             "r": plano.responsavel or "", "c": _iso(plano.concluido_em), "cp": plano.concluido_por or "",
-            "v": _iso(plano.atualizado_em)}
+            "v": _iso(plano.atualizado_em), "pt": plano.parte or "", "at": plano.atividade or ""}
 
 
 def visita_dict(visita) -> dict:
@@ -345,7 +398,7 @@ def visita_dict(visita) -> dict:
         "tf": int(bool(visita.tratamento_focal)), "rc": int(bool(visita.recuperacao)),
         "o": visita.observacao or "", "lg": visita.logradouro or "", "n": visita.numero or "",
         "cp": visita.complemento or "", "la": visita.latitude, "lo": visita.longitude,
-        "rt": recipientes_da_visita(visita),
+        "rt": recipientes_da_visita(visita), "fp": visita.focal_produto or "", "at": visita.atividade or "",
     }
 
 
@@ -446,103 +499,207 @@ class ConflitoPlano(ValueError):
     pass
 
 
+def _linhas_do_dia(bloco_id: str, dia: date, travar: bool = False) -> list:
+    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
+    consulta = Q.query.filter_by(bloco=bloco_id, data=dia).order_by(Q.id)
+    return (consulta.with_for_update() if travar else consulta).all()
+
+
+def _atividade(valor):
+    """Atividade escolhida no escritório; vazio ou desconhecido vira ``None``."""
+    valor = str(valor or "").strip().upper()
+    return valor if valor in ATIVIDADES else None
+
+
 def conferir_plano(blocos, dia, esperado):
-    """Valida a fotografia apresentada na tela antes de alterar o lote inteiro."""
+    """Valida a fotografia apresentada na tela antes de alterar o lote inteiro.
+
+    A fotografia traz uma entrada por linha do plano (duas quando o quarteirão está
+    dividido em L) e uma entrada só com ``b`` para quarteirão livre no dia.
+    """
     from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
     ids = {b['id'] for b in _blocos_validos(blocos)}
     if not isinstance(esperado, list) or any(not isinstance(p, dict) or not isinstance(p.get('b'), str) for p in esperado):
         raise ValueError('Conferência do plano inválida.')
-    if len(esperado) != len(ids) or {p.get('b') for p in esperado} != ids:
+    if {p.get('b') for p in esperado} != ids:
         raise ValueError('Conferência incompleta do plano.')
-    atuais = {p.bloco: p for p in Q.query.filter(Q.bloco.in_(ids), Q.data == dia).with_for_update().all()}
+    atuais = defaultdict(set)
+    for linha in Q.query.filter(Q.bloco.in_(ids), Q.data == dia).with_for_update().all():
+        p = plano_dict(linha)
+        atuais[linha.bloco].add((p['pt'], p['id'], p['ri'], p['c'], p['v']))
+    vistos = defaultdict(set)
     for previa in esperado:
-        linha = atuais.get(previa['b'])
-        atual = plano_dict(linha) if linha else {}
-        if any(previa.get(k) != atual.get(k) for k in ('id', 'ri', 'c', 'v')):
-            raise ConflitoPlano('O plano mudou em outro aparelho. Confira a agenda atualizada e aplique novamente.')
+        if previa.get('id') is not None:
+            vistos[previa['b']].add((previa.get('pt') or '', previa.get('id'), previa.get('ri'), previa.get('c'),
+                                     previa.get('v')))
+    if any(vistos.get(b, set()) != atuais.get(b, set()) for b in ids):
+        raise ConflitoPlano('O plano mudou em outro aparelho. Confira a agenda atualizada e aplique novamente.')
 
 
 def reagendar(blocos, origem, destino, hoje, responsavel):
-    """Move o lote sem apagar serviço realizado nem sobrescrever o destino."""
-    from extensions import db
-    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q, EntomologiaVisitaDomiciliar as V
+    """Move o lote sem apagar serviço realizado nem sobrescrever o destino.
+
+    Quarteirão dividido em L muda de dia com as duas metades e os mesmos responsáveis.
+    """
+    from models.entomologia import EntomologiaVisitaDomiciliar as V
     if destino < hoje or destino > hoje + timedelta(days=60) or origem == destino:
         raise ValueError('Escolha uma nova data entre hoje e 60 dias à frente.')
-    linhas = []
+    grupos = []
     for bloco in _blocos_validos(blocos):
-        linha = Q.query.filter_by(bloco=bloco['id'], data=origem).with_for_update().first()
-        if not linha or linha.concluido_em or V.query.filter(V.bloco == bloco['id'], V.data_visita >= origem).first():
+        linhas = _linhas_do_dia(bloco['id'], origem, travar=True)
+        if (not linhas or any(linha.concluido_em for linha in linhas)
+                or V.query.filter(V.bloco == bloco['id'], V.data_visita >= origem).first()):
             raise ValueError('Só é possível reagendar quarteirões que ainda não começaram.')
-        if Q.query.filter_by(bloco=bloco['id'], data=destino).first():
+        if _linhas_do_dia(bloco['id'], destino):
             raise ConflitoPlano('Já existe um plano para esse quarteirão na data de destino. Confira a agenda.')
-        linhas.append(linha)
-    for linha in linhas:
-        linha.data = destino
-        linha.responsavel_id = getattr(responsavel, 'id', None)
-        linha.responsavel = nome_da_conta(responsavel) or None
-    return len(linhas)
+        grupos.append(linhas)
+    for linhas in grupos:
+        for linha in linhas:
+            linha.data = destino
+            if len(linhas) == 1:
+                linha.responsavel_id = getattr(responsavel, 'id', None)
+                linha.responsavel = nome_da_conta(responsavel) or None
+    return len(grupos)
 
 
-def planejar(blocos, dia: date, hoje: date, responsavel, por: str) -> int:
-    """Põe os quarteirões no plano do dia (ou troca o responsável dos que já estão)."""
+def planejar(blocos, dia: date, hoje: date, responsavel, por: str, atividade=None) -> int:
+    """Põe os quarteirões no plano do dia (ou troca o responsável dos que já estão).
+
+    Quarteirão dividido em L volta a ser inteiro, do responsável escolhido.
+    """
     from extensions import db
     from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
 
     if dia < hoje or dia > hoje + timedelta(days=60):
         raise ValueError("O plano vale de hoje até 60 dias à frente.")
+    atividade = _atividade(atividade)
     feitos = 0
     for bloco in _blocos_validos(blocos):
-        linha = Q.query.filter_by(bloco=bloco["id"], data=dia).first()
-        if linha is None:
-            linha = Q(bloco=bloco["id"], setor=bloco["s"], quarteirao=bloco["n"], data=dia, criado_por=por)
-            db.session.add(linha)
-        elif linha.concluido_em is not None:
+        linhas = _linhas_do_dia(bloco["id"], dia)
+        if any(linha.concluido_em is not None for linha in linhas):
             continue
+        if not linhas:
+            linha = Q(bloco=bloco["id"], setor=bloco["s"], quarteirao=bloco["n"], data=dia, criado_por=por, parte="")
+            db.session.add(linha)
+        else:
+            linha = linhas[0]
+            for sobra in linhas[1:]:
+                db.session.delete(sobra)
+            linha.parte = ""
         linha.responsavel_id = getattr(responsavel, "id", None)
         linha.responsavel = nome_da_conta(responsavel) or None
+        if atividade:
+            linha.atividade = atividade
         feitos += 1
     return feitos
+
+
+def dividir(bloco_id, dia: date, hoje: date, divisao, por: str) -> int:
+    """Divide o quarteirão do dia em dois Ls opostos, um para cada pessoa.
+
+    ``divisao``: ``[(parte, responsavel), (parte_oposta, responsavel)]``. Reaproveita
+    as linhas que já existem (a atividade escolhida continua) e não mexe em parte concluída.
+    """
+    from extensions import db
+    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
+
+    if dia < hoje or dia > hoje + timedelta(days=60):
+        raise ValueError("O plano vale de hoje até 60 dias à frente.")
+    if (not isinstance(divisao, list) or len(divisao) != 2
+            or divisao[0][0] not in PARTES or PARTES[divisao[0][0]] != divisao[1][0]):
+        raise ValueError("Divida o quarteirão em dois Ls opostos (NE e SO, ou NO e SE).")
+    (bloco,) = _blocos_validos([bloco_id])
+    linhas = _linhas_do_dia(bloco["id"], dia)
+    if any(linha.concluido_em is not None for linha in linhas):
+        raise ValueError("Parte deste quarteirão já foi concluída. Reabra antes de dividir de novo.")
+    atividade = next((linha.atividade for linha in linhas if linha.atividade), None)
+    por_parte = {linha.parte: linha for linha in linhas}
+    livres = [linha for linha in linhas if linha.parte not in {parte for parte, _r in divisao}]
+    for parte, responsavel in divisao:
+        linha = por_parte.get(parte) or (livres.pop(0) if livres else None)
+        if linha is None:
+            linha = Q(bloco=bloco["id"], setor=bloco["s"], quarteirao=bloco["n"], data=dia, criado_por=por,
+                      atividade=atividade)
+            db.session.add(linha)
+        linha.parte = parte
+        linha.responsavel_id = getattr(responsavel, "id", None)
+        linha.responsavel = nome_da_conta(responsavel) or None
+    for sobra in livres:
+        db.session.delete(sobra)
+    return 1
+
+
+def unir(bloco_id, dia: date, responsavel) -> int:
+    """Desfaz a divisão em L: o quarteirão volta a ser inteiro, do responsável escolhido."""
+    from extensions import db
+
+    (bloco,) = _blocos_validos([bloco_id])
+    linhas = _linhas_do_dia(bloco["id"], dia)
+    if len(linhas) < 2 and not any(linha.parte for linha in linhas):
+        return 0
+    if any(linha.concluido_em is not None for linha in linhas):
+        raise ValueError("Parte deste quarteirão já foi concluída. Reabra antes de juntar as partes.")
+    escolhida = next((linha for linha in linhas if linha.responsavel_id == getattr(responsavel, "id", None)), linhas[0])
+    for sobra in linhas:
+        if sobra is not escolhida:
+            db.session.delete(sobra)
+    escolhida.parte = ""
+    escolhida.responsavel_id = getattr(responsavel, "id", None)
+    escolhida.responsavel = nome_da_conta(responsavel) or None
+    return 1
 
 
 def desplanejar(blocos, dia: date) -> int:
     """Tira do plano o que ainda não começou; quarteirão com visita registrada fica."""
     from extensions import db
-    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q, EntomologiaVisitaDomiciliar as V
+    from models.entomologia import EntomologiaVisitaDomiciliar as V
 
     feitos = 0
     for bloco in _blocos_validos(blocos):
-        linha = Q.query.filter_by(bloco=bloco["id"], data=dia).first()
-        if linha is None or linha.concluido_em is not None:
+        linhas = _linhas_do_dia(bloco["id"], dia)
+        if not linhas or any(linha.concluido_em is not None for linha in linhas):
             continue
         if V.query.filter(V.bloco == bloco["id"], V.data_visita >= dia).first() is not None:
             continue
-        db.session.delete(linha)
+        for linha in linhas:
+            db.session.delete(linha)
         feitos += 1
     return feitos
 
 
-def _plano_aberto(bloco_id: str, ate: date):
+def _abertos(bloco_id: str, ate: date) -> list:
+    """Linhas em aberto do plano mais recente do quarteirão (duas quando dividido em L)."""
     from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
-    return (Q.query.filter(Q.bloco == bloco_id, Q.concluido_em.is_(None), Q.data <= ate)
-            .order_by(Q.data.desc(), Q.id.desc()).first())
+    linhas = (Q.query.filter(Q.bloco == bloco_id, Q.concluido_em.is_(None), Q.data <= ate)
+              .order_by(Q.data.desc(), Q.id).all())
+    return [linha for linha in linhas if linha.data == linhas[0].data] if linhas else []
+
+
+def _plano_aberto(bloco_id: str, ate: date, usuario_id=None):
+    abertos = _abertos(bloco_id, ate)
+    return next((linha for linha in abertos if usuario_id and linha.responsavel_id == usuario_id),
+                abertos[0] if abertos else None)
 
 
 def concluir(blocos, hoje: date, usuario) -> int:
+    """Conclui o quarteirão; dividido em L, quem tem um L conclui só o seu."""
     from extensions import db
     from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
     from time_utils import utcnow
 
     feitos, nome = 0, nome_da_conta(usuario)
     for bloco in _blocos_validos(blocos):
-        linha = _plano_aberto(bloco["id"], hoje)
-        if linha is None:
-            linha = Q.query.filter_by(bloco=bloco["id"], data=hoje).first()
-            if linha is not None:
+        abertos = _abertos(bloco["id"], hoje)
+        if not abertos:
+            if _linhas_do_dia(bloco["id"], hoje):
                 continue            # já concluído hoje
             linha = Q(bloco=bloco["id"], setor=bloco["s"], quarteirao=bloco["n"], data=hoje, criado_por=nome,
-                      responsavel_id=usuario.id, responsavel=nome)
+                      responsavel_id=usuario.id, responsavel=nome, parte="")
             db.session.add(linha)
-        linha.concluido_em, linha.concluido_por, linha.concluido_por_id = utcnow(), nome, usuario.id
+            abertos = [linha]
+        meus = [linha for linha in abertos if linha.responsavel_id == usuario.id]
+        for linha in (meus if meus and len(abertos) > 1 else abertos):
+            linha.concluido_em, linha.concluido_por, linha.concluido_por_id = utcnow(), nome, usuario.id
         feitos += 1
     return feitos
 
@@ -552,12 +709,13 @@ def reabrir(blocos, hoje: date) -> int:
 
     feitos = 0
     for bloco in _blocos_validos(blocos):
-        linha = (Q.query.filter(Q.bloco == bloco["id"], Q.concluido_em.isnot(None),
-                                Q.data >= hoje - timedelta(days=RECENTE_DIAS))
-                 .order_by(Q.data.desc(), Q.id.desc()).first())
-        if linha is None or _plano_aberto(bloco["id"], hoje) is not None:
+        ultima = (Q.query.filter(Q.bloco == bloco["id"], Q.concluido_em.isnot(None),
+                                 Q.data >= hoje - timedelta(days=RECENTE_DIAS))
+                  .order_by(Q.data.desc(), Q.id.desc()).first())
+        if ultima is None or _abertos(bloco["id"], hoje):
             continue
-        linha.concluido_em = linha.concluido_por = linha.concluido_por_id = None
+        for linha in _linhas_do_dia(bloco["id"], ultima.data):
+            linha.concluido_em = linha.concluido_por = linha.concluido_por_id = None
         feitos += 1
     return feitos
 
@@ -584,13 +742,31 @@ def _coordenada(valor, minimo: float, maximo: float):
     return numero if math.isfinite(numero) and minimo <= numero <= maximo else None
 
 
+def _produtos(valor) -> list[str]:
+    """Larvicidas do focal informados (lista ou texto separado por vírgula), sem repetição."""
+    itens = valor if isinstance(valor, list) else str(valor or "").split(",")
+    produtos = set()
+    for item in itens:
+        produto = str(item or "").strip().upper()
+        if not produto:
+            continue
+        if produto not in PRODUTOS_FOCAL:
+            raise ValueError("Produto do tratamento focal inválido.")
+        produtos.add(produto)
+    return sorted(produtos)
+
+
 def _recipientes_por_tipo(valor) -> list[dict]:
-    """Recipientes anotados por tipo: ``[{"t": 12, "e": 3, "a": 2, "l": 1}, ...]``, um por tipo, em ordem."""
+    """Recipientes anotados linha a linha: ``[{"t": 12, "e": 3, "a": 2, "l": 1, "c": "F", "p": "NATULAR"}]``.
+
+    Cada linha tem um tipo (1 a 40) e, opcionalmente, o controle feito nela (``c``:
+    M, A ou F) e, no focal, o larvicida (``p``). Linhas iguais em tipo e controle somam.
+    """
     if valor in (None, ""):
         return []
-    if not isinstance(valor, list) or len(valor) > len(TIPOS_RECIPIENTE):
+    if not isinstance(valor, list) or len(valor) > 3 * len(TIPOS_RECIPIENTE):
         raise ValueError("Lista de tipos de recipiente inválida.")
-    por_tipo: dict = {}
+    por_linha: dict = {}
     for linha in valor:
         if not isinstance(linha, dict):
             raise ValueError("Lista de tipos de recipiente inválida.")
@@ -600,13 +776,23 @@ def _recipientes_por_tipo(valor) -> list[dict]:
             raise ValueError("Tipo de recipiente inválido.") from exc
         if tipo not in TIPOS_RECIPIENTE:
             raise ValueError("Tipo de recipiente inválido.")
+        controle = str(linha.get("c") or "").strip().upper()
+        if controle and controle not in CONTROLES:
+            raise ValueError("Controle do recipiente inválido.")
+        produto = str(linha.get("p") or "").strip().upper() if controle == "F" else ""
+        if produto and produto not in PRODUTOS_FOCAL:
+            raise ValueError("Produto do tratamento focal inválido.")
         larva = _inteiro(linha.get("l"), "recipientes com larva")
         agua = max(_inteiro(linha.get("a"), "recipientes com água"), larva)
         existentes = max(_inteiro(linha.get("e"), "recipientes existentes"), agua)
-        soma = por_tipo.setdefault(tipo, {"t": tipo, "e": 0, "a": 0, "l": 0})
+        soma = por_linha.setdefault((tipo, controle, produto), {"t": tipo, "e": 0, "a": 0, "l": 0})
+        if controle:
+            soma["c"] = controle
+        if produto:
+            soma["p"] = produto
         soma["e"], soma["a"], soma["l"] = (min(999, soma["e"] + existentes), min(999, soma["a"] + agua),
                                            min(999, soma["l"] + larva))
-    return [por_tipo[tipo] for tipo in sorted(por_tipo) if por_tipo[tipo]["e"]]
+    return [por_linha[chave] for chave in sorted(por_linha) if por_linha[chave]["e"]]
 
 
 def validar_visita(item, blocos: dict, hoje: date) -> dict:
@@ -638,6 +824,13 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
 
     inspecionado = situacao in INSPECIONADO
     por_tipo = _recipientes_por_tipo(item.get("recipientes")) if inspecionado else []
+    # O controle anotado em cada recipiente vale também para o imóvel.
+    controles = {linha.get("c") for linha in por_tipo}
+    mecanico = inspecionado and (bool(item.get("controle_mecanico")) or "M" in controles)
+    alternativo = inspecionado and (bool(item.get("controle_alternativo")) or "A" in controles)
+    focal = inspecionado and (bool(item.get("tratamento_focal")) or "F" in controles)
+    produtos = sorted(set(_produtos(item.get("focal_produto")) if focal else [])
+                      | {linha["p"] for linha in por_tipo if linha.get("p")})
     existentes = _inteiro(item.get("recipientes_existentes"), "recipientes existentes") if inspecionado else 0
     com_agua = _inteiro(item.get("recipientes_agua"), "recipientes com água") if inspecionado else 0
     com_larva = _inteiro(item.get("recipientes_larva"), "recipientes com larva") if inspecionado else 0
@@ -660,9 +853,9 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
         "recipientes_json": json.dumps(por_tipo, separators=(",", ":")) if por_tipo else None,
         "larvas_encontradas": inspecionado and (bool(item.get("larvas")) or com_larva > 0),
         "tubitos": _inteiro(item.get("tubitos"), "tubitos") if inspecionado else 0,
-        "controle_mecanico": inspecionado and bool(item.get("controle_mecanico")),
-        "controle_alternativo": inspecionado and bool(item.get("controle_alternativo")),
-        "tratamento_focal": inspecionado and bool(item.get("tratamento_focal")),
+        "controle_mecanico": mecanico, "controle_alternativo": alternativo, "tratamento_focal": focal,
+        "focal_produto": ",".join(produtos) if focal and produtos else None,
+        "atividade": _atividade(item.get("atividade")),
         "observacao": str(item.get("observacao") or "").strip()[:1000] or None,
     }
 
@@ -670,7 +863,8 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
 def registrar_visitas(itens, usuario, hoje: date) -> dict:
     """Grava o lote vindo do aparelho. Reenviar a mesma visita não duplica."""
     from extensions import db
-    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q, EntomologiaVisitaDomiciliar as V
+    from models.entomologia import (EntomologiaImovelCampo as C, EntomologiaQuarteiraoTrabalho as Q,
+                                    EntomologiaVisitaDomiciliar as V)
 
     if not isinstance(itens, list) or not itens:
         raise ValueError("Nenhuma visita informada.")
@@ -680,7 +874,7 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
     nome = nome_da_conta(usuario)
     enviados = [str(item.get("uuid") or "") for item in itens if isinstance(item, dict)]
     existentes = {uuid for (uuid,) in V.query.with_entities(V.uuid_local).filter(V.uuid_local.in_(enviados)).all()}
-    aceitas, recusadas, novas = [], [], 0
+    aceitas, recusadas, novas, imoveis_novos = [], [], 0, 0
     for item in itens:
         try:
             dados = validar_visita(item, blocos, hoje)
@@ -696,8 +890,22 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
                                    V.data_visita >= hoje - timedelta(days=JANELA_DIAS))
                     .order_by(V.id.desc()).first())
         recuperacao = bool(anterior and anterior.situacao in PENDENCIA and dados["situacao"] in INSPECIONADO)
+        if not dados["atividade"]:
+            plano = _plano_aberto(dados["bloco"], dados["data_visita"], usuario.id)
+            dados["atividade"] = plano.atividade if plano else None
         db.session.add(V(**dados, recuperacao=recuperacao, agente_id=usuario.id, agente=nome))
         novas += 1
+        # Imóvel que faltava na base: entra no mapa da equipe a partir de agora.
+        if (dados["imovel"].startswith("novo-") and dados["logradouro"] and dados["numero"]
+                and C.query.filter_by(imovel=dados["imovel"]).first() is None):
+            bloco = blocos[dados["bloco"]]
+            db.session.add(C(imovel=dados["imovel"], bloco=dados["bloco"], setor=dados["setor"],
+                             quarteirao=dados["quarteirao"], logradouro=dados["logradouro"],
+                             numero=dados["numero"], complemento=dados["complemento"],
+                             latitude=dados["latitude"] if dados["latitude"] is not None else bloco["c"][1],
+                             longitude=dados["longitude"] if dados["longitude"] is not None else bloco["c"][0],
+                             criado_por_id=usuario.id, criado_por=nome))
+            imoveis_novos += 1
         # Todo quarteirão trabalhado tem a sua linha no plano, mesmo quando não foi planejado.
         if (_plano_aberto(dados["bloco"], dados["data_visita"]) is None
                 and Q.query.filter_by(bloco=dados["bloco"], data=dados["data_visita"]).first() is None):
@@ -705,7 +913,7 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
                              data=dados["data_visita"], responsavel_id=usuario.id, responsavel=nome,
                              criado_por=nome))
             db.session.flush()
-    return {"aceitas": aceitas, "recusadas": recusadas, "novas": novas}
+    return {"aceitas": aceitas, "recusadas": recusadas, "novas": novas, "imoveis_novos": imoveis_novos}
 
 
 # ---------------------------------------------------------------------------
@@ -740,8 +948,15 @@ def _tipos_em_texto(visita) -> str:
             conta.append(f'{linha["a"]} água')
         if linha.get("l"):
             conta.append(f'{linha["l"]} larva')
+        if linha.get("c"):
+            controle = CONTROLES.get(linha["c"], linha["c"]).lower()
+            conta.append(controle + (" " + PRODUTOS_FOCAL.get(linha.get("p"), "") if linha.get("p") else ""))
         partes.append(f'{TIPOS_RECIPIENTE.get(linha.get("t"), ("?",))[0]}{linha.get("t")} ({", ".join(conta)})')
     return " | ".join(partes)
+
+
+def _nomes_produtos(valor) -> str:
+    return " + ".join(PRODUTOS_FOCAL.get(p, p) for p in str(valor or "").split(",") if p)
 
 
 def visitas_csv(inicio: date, fim: date) -> str:
@@ -750,13 +965,14 @@ def visitas_csv(inicio: date, fim: date) -> str:
     return _csv(
         ["DATA", "HORA", "SETOR", "QUARTEIRAO", "LOGRADOURO", "NUMERO", "COMPLEMENTO", "SITUACAO",
          "REC. EXIST.", "REC. AGUA", "REC. LARVA", "IM. LARVA", "TUBITOS", "IM MECANICO", "IM ALTERNATIVO",
-         "IM FOCAL", "RECUPERACAO", "AGENTE", "OBSERVACAO", "TIPOS DE RECIPIENTE"],
+         "IM FOCAL", "RECUPERACAO", "AGENTE", "OBSERVACAO", "PRODUTO FOCAL", "ATIVIDADE", "TIPOS DE RECIPIENTE"],
         ([v.data_visita.isoformat(), (_iso(v.horario_visita) or "")[11:16], v.setor, v.quarteirao,
           _texto_de_planilha(v.logradouro), v.numero or "", _texto_de_planilha(v.complemento),
           SITUACOES.get(v.situacao, v.situacao),
           v.recipientes_existentes, v.recipientes_agua, v.recipientes_larva, sim(v.larvas_encontradas), v.tubitos,
           sim(v.controle_mecanico), sim(v.controle_alternativo), sim(v.tratamento_focal), sim(v.recuperacao),
-          _texto_de_planilha(v.agente), _texto_de_planilha(v.observacao), _tipos_em_texto(v)]
+          _texto_de_planilha(v.agente), _texto_de_planilha(v.observacao), _nomes_produtos(v.focal_produto),
+          ATIVIDADES.get(v.atividade or "", ""), _tipos_em_texto(v)]
          for v in _visitas_do_periodo(inicio, fim)))
 
 
@@ -771,15 +987,21 @@ def recipientes_csv(inicio: date, fim: date) -> str:
             tipo = linha.get("t")
             if tipo not in TIPOS_RECIPIENTE:
                 continue
-            conta = somas.setdefault((dia, v.setor, v.quarteirao, bloco, tipo), [0, 0, 0, 0])
-            conta[0] += 1
-            conta[1] += linha.get("e", 0)
-            conta[2] += linha.get("a", 0)
-            conta[3] += linha.get("l", 0)
+            conta = somas.setdefault((dia, v.setor, v.quarteirao, bloco, tipo),
+                                     {"imoveis": set(), "e": 0, "a": 0, "l": 0, "M": 0, "A": 0, "NATULAR": 0, "VECTOBAC": 0})
+            conta["imoveis"].add(v.imovel)
+            for chave in ("e", "a", "l"):
+                conta[chave] += linha.get(chave, 0)
+            # Recipientes (existentes) por controle feito na linha; focal pelo larvicida usado.
+            controle = linha.get("p") if linha.get("c") == "F" else linha.get("c")
+            if controle in conta:
+                conta[controle] += linha.get("e", 0)
+    colunas = ("e", "a", "l", "M", "A", "NATULAR", "VECTOBAC")
     return _csv(
         ["DATA", "SETOR", "QUARTEIRAO", "GRUPO", "TIPO", "RECIPIENTE", "IMOVEIS", "REC. EXIST.", "REC. AGUA",
-         "REC. LARVA"],
-        ([dia.isoformat(), setor, quarteirao, TIPOS_RECIPIENTE[tipo][0], tipo, TIPOS_RECIPIENTE[tipo][1], *conta]
+         "REC. LARVA", "MECANICO", "ALTERNATIVO", "FOCAL NATULAR", "FOCAL VECTOBAC"],
+        ([dia.isoformat(), setor, quarteirao, TIPOS_RECIPIENTE[tipo][0], tipo, TIPOS_RECIPIENTE[tipo][1],
+          len(conta["imoveis"]), *(conta[c] for c in colunas)]
          for (dia, setor, quarteirao, _bloco, tipo), conta in sorted(somas.items(), key=lambda item: (
              item[0][0], item[0][1], item[0][2], item[0][3], item[0][4]))))
 
@@ -812,3 +1034,110 @@ def boletim(inicio: date, fim: date) -> list[dict]:
 def boletim_csv(inicio: date, fim: date) -> str:
     cabecalho = ["DATA", "SETOR", "QUARTEIRAO", *COLUNAS_BOLETIM]
     return _csv(cabecalho, ([linha[coluna] for coluna in cabecalho] for linha in boletim(inicio, fim)))
+
+
+# ---------------------------------------------------------------------------
+# Relatório do escritório: tudo por dia e por quarteirão
+# ---------------------------------------------------------------------------
+
+_CONTAS_RELATORIO = ("imoveis", "trabalhados", "fechados", "desocupados", "temporada", "parciais", "recusas",
+                     "com_larva", "tubitos", "rec_existentes", "rec_agua", "rec_larva", "mecanico", "alternativo",
+                     "focal", "natular", "vectobac", "recuperados")
+_CONTA_SITUACAO = {"TRABALHADO": "trabalhados", "FECHADO": "fechados", "DESOCUPADO": "desocupados",
+                   "TEMPORADA": "temporada", "PARCIAL": "parciais", "RECUSA": "recusas"}
+
+
+def relatorio(inicio: date, fim: date) -> dict:
+    """Dias do período, cada um com totais e uma linha por quarteirão trabalhado ou planejado.
+
+    Vale a última visita de cada imóvel no dia, como no boletim. Cada quarteirão traz
+    também o plano (responsáveis, Ls, atividade, se foi concluído), os agentes que
+    registraram e os recipientes por grupo (A a G).
+    """
+    from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
+
+    casas_por_bloco = indice()["casas"]
+    ultimas = {}
+    for visita in _visitas_do_periodo(inicio, fim):
+        ultimas[(visita.data_visita, visita.bloco, visita.imovel)] = visita
+
+    def nova_linha(dia, bloco, setor, quarteirao):
+        return {"data": dia.isoformat(), "bloco": bloco, "setor": setor, "quarteirao": quarteirao,
+                "previstos": casas_por_bloco.get(bloco, 0), "planos": [], "agentes": [], "atividades": [],
+                "concluido": False, "grupos": {grupo: 0 for grupo, _t, _ in GRUPOS_RECIPIENTE},
+                **{conta: 0 for conta in _CONTAS_RELATORIO}}
+
+    linhas: dict = {}
+    for (dia, bloco, _imovel), v in ultimas.items():
+        linha = linhas.setdefault((dia, bloco), nova_linha(dia, bloco, v.setor, v.quarteirao))
+        linha["imoveis"] += 1
+        linha[_CONTA_SITUACAO.get(v.situacao, "trabalhados")] += 1
+        linha["com_larva"] += bool(v.larvas_encontradas)
+        linha["tubitos"] += v.tubitos or 0
+        linha["rec_existentes"] += v.recipientes_existentes or 0
+        linha["rec_agua"] += v.recipientes_agua or 0
+        linha["rec_larva"] += v.recipientes_larva or 0
+        linha["mecanico"] += bool(v.controle_mecanico)
+        linha["alternativo"] += bool(v.controle_alternativo)
+        linha["focal"] += bool(v.tratamento_focal)
+        produtos = str(v.focal_produto or "").split(",")
+        linha["natular"] += "NATULAR" in produtos
+        linha["vectobac"] += "VECTOBAC" in produtos
+        linha["recuperados"] += bool(v.recuperacao)
+        for tipo in recipientes_da_visita(v):
+            grupo = TIPOS_RECIPIENTE.get(tipo.get("t"), (None,))[0]
+            if grupo:
+                linha["grupos"][grupo] += tipo.get("e", 0)
+        if v.agente and v.agente not in linha["agentes"]:
+            linha["agentes"].append(v.agente)
+        if v.atividade and v.atividade not in linha["atividades"]:
+            linha["atividades"].append(v.atividade)
+
+    for plano in Q.query.filter(Q.data >= inicio, Q.data <= fim).order_by(Q.id).all():
+        linha = linhas.setdefault((plano.data, plano.bloco), nova_linha(plano.data, plano.bloco, plano.setor,
+                                                                        plano.quarteirao))
+        linha["planos"].append({"responsavel": plano.responsavel or "", "parte": plano.parte or "",
+                                "concluido": plano.concluido_em is not None})
+        if plano.atividade and plano.atividade not in linha["atividades"]:
+            linha["atividades"].append(plano.atividade)
+    for linha in linhas.values():
+        linha["concluido"] = bool(linha["planos"]) and all(p["concluido"] for p in linha["planos"])
+
+    dias = []
+    for dia in sorted({chave[0] for chave in linhas}, reverse=True):
+        do_dia = sorted((linha for (d, _b), linha in linhas.items() if d == dia),
+                        key=lambda linha: (_ordem_natural(linha["setor"]), _ordem_natural(linha["quarteirao"])))
+        totais = {conta: sum(linha[conta] for linha in do_dia) for conta in _CONTAS_RELATORIO}
+        totais.update(quarteiroes=len(do_dia), concluidos=sum(linha["concluido"] for linha in do_dia),
+                      agentes=sorted({agente for linha in do_dia for agente in linha["agentes"]}))
+        dias.append({"data": dia.isoformat(), "totais": totais, "quarteiroes": do_dia})
+    return {"inicio": inicio.isoformat(), "fim": fim.isoformat(), "dias": dias, "atividades": ATIVIDADES,
+            "grupos": {grupo: titulo for grupo, titulo, _ in GRUPOS_RECIPIENTE}}
+
+
+def _ordem_natural(texto) -> tuple:
+    return tuple(int(parte) if parte.isdigit() else parte for parte in re.split(r"(\d+)", str(texto or "")))
+
+
+def relatorio_csv(inicio: date, fim: date) -> str:
+    """O relatório do escritório numa planilha: uma linha por dia e quarteirão."""
+    grupos = [grupo for grupo, _t, _ in GRUPOS_RECIPIENTE]
+    cabecalho = ["DATA", "SETOR", "QUARTEIRAO", "ATIVIDADE", "RESPONSAVEIS", "AGENTES", "CONCLUIDO",
+                 "IMOVEIS PREVISTOS", "IMOVEIS VISITADOS", "TRABALHADOS", "FECHADOS", "DESOCUPADOS", "RECUSAS",
+                 "TEMPORADA", "PARCIAIS", "RECUPERADOS", "COM LARVA", "TUBITOS", "REC. EXIST.", "REC. AGUA",
+                 "REC. LARVA", "MECANICO", "ALTERNATIVO", "FOCAL", "NATULAR", "VECTOBAC",
+                 *[f"RECIPIENTES {grupo}" for grupo in grupos]]
+    linhas = []
+    for dia in reversed(relatorio(inicio, fim)["dias"]):
+        for q in dia["quarteiroes"]:
+            responsaveis = " + ".join(p["responsavel"] + (f" ({NOME_PARTE[p['parte']]})" if p["parte"] else "")
+                                      for p in q["planos"] if p["responsavel"])
+            linhas.append([q["data"], q["setor"], q["quarteirao"],
+                           " / ".join(ATIVIDADES.get(a, a) for a in q["atividades"]),
+                           _texto_de_planilha(responsaveis), _texto_de_planilha(" + ".join(q["agentes"])),
+                           "SIM" if q["concluido"] else "NAO", q["previstos"], q["imoveis"], q["trabalhados"],
+                           q["fechados"], q["desocupados"], q["recusas"], q["temporada"], q["parciais"],
+                           q["recuperados"], q["com_larva"], q["tubitos"], q["rec_existentes"], q["rec_agua"],
+                           q["rec_larva"], q["mecanico"], q["alternativo"], q["focal"], q["natular"], q["vectobac"],
+                           *[q["grupos"][grupo] for grupo in grupos]])
+    return _csv(cabecalho, linhas)

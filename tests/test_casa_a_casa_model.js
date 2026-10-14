@@ -116,6 +116,50 @@ const mapa = (...visitas) => M.juntarVisitas(visitas, []);
   assert.equal(M.diasEntre('2026-10-01', HOJE), 12);
 }
 
+// --- quarteirão dividido em L
+{
+  // Quarteirão retangular alinhado ao norte, 100 m x 60 m, com uma casa no meio de cada lado.
+  const k = Math.cos(-20.72 * Math.PI / 180), mx = 0.0005 / k, my = 0.00027;
+  const bloco = { c: [-47.88, -20.72], g: [[[[-47.88 - mx, -20.72 - my], [-47.88 + mx, -20.72 - my], [-47.88 + mx, -20.72 + my], [-47.88 - mx, -20.72 + my], [-47.88 - mx, -20.72 - my]]]] };
+  const casa = (id, dx, dy) => ({ id, x: -47.88 + dx * mx, y: -20.72 + dy * my });
+  const lados = [casa('norte', 0.1, 0.9), casa('leste', 0.9, 0.05), casa('sul', -0.1, -0.9), casa('oeste', -0.9, -0.05)];
+  const ids = parte => M.casasDoL(bloco, lados, parte).map(c => c.id).sort();
+  assert.deepEqual(ids('NE'), ['leste', 'norte']);
+  assert.deepEqual(ids('SO'), ['oeste', 'sul']);
+  assert.deepEqual(ids('NO'), ['norte', 'oeste']);
+  assert.deepEqual(ids('SE'), ['leste', 'sul']);
+  assert.deepEqual(ids(''), ['leste', 'norte', 'oeste', 'sul']);
+  // Os dois Ls de uma divisão nunca deixam casa de fora nem repetem casa, mesmo com casas espalhadas.
+  const muitas = Array.from({ length: 60 }, (_, i) => casa('c' + i, Math.cos(i) * 0.95, Math.sin(i * 1.7) * 0.95));
+  for (const [a, b] of [['NE', 'SO'], ['NO', 'SE']]) {
+    const x = M.casasDoL(bloco, muitas, a), y = M.casasDoL(bloco, muitas, b);
+    assert.equal(x.length + y.length, muitas.length);
+    assert.ok(x.every(c => !y.includes(c)));
+  }
+  // A linha da divisão NE/SO liga os cantos NO e SE.
+  const [no, se] = M.linhaDaDivisao(bloco, 'NE');
+  assert.ok(no[0] < -47.88 && no[1] > -20.72 && se[0] > -47.88 && se[1] < -20.72);
+  // Agenda: cada pessoa conta só os imóveis do seu L.
+  const dividido = Object.assign({}, bloco, { id: 'q9', casas: lados, extras: [], planos: [{ d: HOJE, ri: 1, r: 'Ana', pt: 'NE' }, { d: HOJE, ri: 2, r: 'Bia', pt: 'SO' }] });
+  const agenda = M.agendaDoDia([dividido], HOJE);
+  assert.deepEqual(agenda.map(g => [g.nome, g.imoveis, g.partes.get('q9')]), [['Ana', 2, 'NE'], ['Bia', 2, 'SO']]);
+}
+
+// --- opções, controle por recipiente e focal
+{
+  assert.deepEqual(M.OPCOES.map(s => s.id), ['TRABALHADO', 'FECHADO', 'DESOCUPADO', 'RECUSA']);
+  assert.ok(M.POR_ID.TEMPORADA && M.POR_ID.PARCIAL);   // registros antigos continuam legíveis
+  const linhas = [{ t: 28, e: 2, l: 1, c: 'F', p: 'VECTOBAC' }, { t: 28, e: 1, c: 'M' }, { t: 28, e: 1, c: 'M' }, { t: 5, e: 1, c: 'X' }];
+  assert.deepEqual(M.recipientesPorTipo(linhas), [{ t: 5, e: 1, a: 0, l: 0 }, { t: 28, e: 2, a: 1, l: 1, c: 'F', p: 'VECTOBAC' }, { t: 28, e: 2, a: 0, l: 0, c: 'M' }]);
+  const v = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'TRABALHADO', recipientes: linhas, atividade: 'ADL' });
+  assert.deepEqual([v.controle_mecanico, v.controle_alternativo, v.tratamento_focal, v.focal_produto, v.atividade], [true, false, true, ['VECTOBAC'], 'ADL']);
+  const so = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'TRABALHADO', tratamento_focal: true, focal_produto: ['NATULAR', 'ABATE'] });
+  assert.deepEqual(so.focal_produto, ['NATULAR']);
+  const fechado = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'FECHADO', tratamento_focal: true, focal_produto: ['NATULAR'] });
+  assert.deepEqual([fechado.tratamento_focal, fechado.focal_produto], [false, []]);
+  assert.equal(M.comoRegistro(v, null).fp, 'VECTOBAC');
+}
+
 console.log('casa_a_casa_model: ok');
 
 // A agenda salta o fim de semana nos atalhos, sem excluir datas manuais.

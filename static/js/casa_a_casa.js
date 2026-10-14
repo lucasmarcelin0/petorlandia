@@ -65,6 +65,7 @@
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
+    atividadePlano: 'VI_ROTINA', relatorio: null, relatorioInicio: null, relatorioFim: null,
     aoVivo: false, enviando: false, precisaEntrar: false, pronto: false, novas: new Set(),
     mapa: null, tela: null, poligonos: new Map(), camadaRotulos: null, camadaCasas: null, camadaRuas: null, camadaVias: null, eu: null,
   };
@@ -77,8 +78,28 @@
   // Cada agente com uma cor, na ordem da equipe, para o plano no mapa.
   const CORES_AGENTE = ['#1c7ed6', '#d6336c', '#f08c00', '#2f9e44', '#7048e8', '#0c8599', '#e8590c', '#5c940d'];
   const corDoAgente = id => { const posicao = (cfg.equipe || []).findIndex(p => p.id === id); return posicao < 0 ? '#495057' : CORES_AGENTE[posicao % CORES_AGENTE.length]; };
+  const nomeDoProduto = id => (M.PRODUTOS.find(p => p.id === id) || { nome: id }).nome;
+  const nomeDoControle = r => (M.CONTROLES.find(c => c.id === r.c) || { nome: r.c }).nome.toLowerCase() + (r.p ? ' ' + nomeDoProduto(r.p) : '');
+  const nomeDaParte = parte => (cfg.partes && cfg.partes[parte]) || M.NOME_PARTE[parte] || '';
+  const nomeDaAtividade = at => (cfg.atividades && cfg.atividades[at]) || '';
   const casasDe = bloco => bloco.extras && bloco.extras.length ? bloco.casas.concat(bloco.extras) : bloco.casas;
   const nomeDoBloco = bloco => 'Quarteirão ' + bloco.n;
+  // Planos em aberto do passe atual (dois quando o quarteirão está dividido em L).
+  function planosAbertos(bloco) {
+    const abertos = (bloco.planos || []).filter(p => !p.c && p.d <= S.hoje);
+    const ultimo = abertos.reduce((maior, p) => (p.d > maior ? p.d : maior), '');
+    return abertos.filter(p => p.d === ultimo);
+  }
+  // O plano de quem está usando o aparelho; sem um seu, o primeiro em aberto.
+  function meuPlano(bloco) {
+    const abertos = planosAbertos(bloco);
+    return abertos.find(p => eu() && p.ri === eu().id) || abertos[0] || null;
+  }
+  // Imóveis que cabem a quem está na rua: o seu L quando o quarteirão está dividido.
+  function casasDoMeuL(bloco) {
+    const plano = meuPlano(bloco);
+    return plano && plano.pt && eu() && plano.ri === eu().id ? M.casasDoL(bloco, casasDe(bloco), plano.pt) : casasDe(bloco);
+  }
   const concluidosLocais = () => new Set(S.acoes.filter(a => a.acao === 'concluir').flatMap(a => a.blocos));
 
   function avisar(texto, tipo) {
@@ -214,7 +235,11 @@
     for (const plano of S.planos) { if (!planos.has(plano.b)) planos.set(plano.b, []); planos.get(plano.b).push(plano); }
     const agora = new Date().toISOString();
     for (const id of concluidosLocais()) {
-      const lista = (planos.get(id) || []).map(p => (!p.c && p.d <= S.hoje ? Object.assign({}, p, { c: agora, local: true }) : p));
+      const original = planos.get(id) || [];
+      const abertos = original.filter(p => !p.c && p.d <= S.hoje), meus = abertos.filter(p => eu() && p.ri === eu().id);
+      // Dividido em L, a conclusão guardada no aparelho fecha só o L de quem concluiu (como o servidor faz).
+      const fecha = meus.length && abertos.length > 1 ? new Set(meus) : new Set(abertos);
+      const lista = original.map(p => (fecha.has(p) ? Object.assign({}, p, { c: agora, local: true }) : p));
       if (!lista.some(p => p.c && M.dia(p.c) === M.dia(agora))) lista.push({ b: id, d: S.hoje, c: agora, ri: eu() && eu().id, r: eu() ? eu().nome : '', local: true });
       planos.set(id, lista);
     }
@@ -294,6 +319,7 @@
     S.tela = L.canvas({ padding: 0.4 });
     S.camadaQuarteiroes = L.layerGroup().addTo(S.mapa);
     S.camadaVias = L.layerGroup().addTo(S.mapa);
+    S.camadaDivisoes = L.layerGroup().addTo(S.mapa);
     S.camadaCasas = L.layerGroup().addTo(S.mapa);
     S.camadaRotulos = L.layerGroup().addTo(S.mapa);
     S.mapa.on('moveend', () => {
@@ -372,6 +398,7 @@
     S.camadaRotulos.clearLayers();
     S.camadaCasas.clearLayers();
     desenharNomesDeRua(zoom, limites);
+    desenharDivisoes();
     const visiveis = S.blocos.filter(bloco => naVista(bloco.caixa, limites));
     // Número do quarteirão: sempre que couber; afastado, só os que têm trabalho.
     let rotulos = 0;
@@ -391,7 +418,11 @@
       if (no) {
         no.querySelector('b').textContent = bloco.n;
         if (comConta) no.querySelector('i').textContent = prog.feitas + '/' + prog.total;
-        if (plano) { const quem = no.querySelector('u'); quem.textContent = primeiroNome(plano.r); quem.style.background = corDoAgente(plano.ri); }
+        if (plano) {
+          const quem = no.querySelector('u'), todos = planosDoRotulo(bloco);
+          quem.textContent = todos.map(p => primeiroNome(p.r)).join(' / ');
+          quem.style.background = todos.length > 1 ? '#12343b' : corDoAgente(plano.ri);
+        }
       }
       rotulos += 1;
     }
@@ -432,14 +463,34 @@
   }
 
   // Quem trabalha o quarteirão: no escritório, o plano do dia escolhido; na rua, o plano em aberto.
-  function planoDoRotulo(bloco) {
-    if (S.prefs.modo === 'escritorio') {
-      const dia = S.diaPlano || S.hoje;
-      const plano = (bloco.planos || []).find(p => p.d === dia && !p.c);
-      return plano && plano.r ? plano : null;
-    }
+  function planosDoRotulo(bloco) {
+    if (S.prefs.modo === 'escritorio') return M.planosDoDia(bloco, S.diaPlano || S.hoje).filter(p => !p.c && p.r);
     const e = bloco.estado;
-    return (e.tipo === 'planejado' || e.tipo === 'andamento') && e.plano && e.plano.r ? e.plano : null;
+    return e.tipo === 'planejado' || e.tipo === 'andamento' ? planosAbertos(bloco).filter(p => p.r) : [];
+  }
+  function planoDoRotulo(bloco) { return planosDoRotulo(bloco)[0] || null; }
+
+  // Quarteirão dividido em L: linha tracejada entre as metades e o nome de cada pessoa no seu canto.
+  function desenharDivisoes() {
+    S.camadaDivisoes.clearLayers();
+    if (!S.mapa || S.mapa.getZoom() < 15.5) return;
+    const limites = S.mapa.getBounds().pad(0.1);
+    for (const bloco of S.blocos) {
+      if (!naVista(bloco.caixa, limites)) continue;
+      const planos = S.prefs.modo === 'escritorio' ? M.planosDoDia(bloco, S.diaPlano || S.hoje) : planosAbertos(bloco);
+      const partes = planos.filter(p => p.pt);
+      if (!partes.length) continue;
+      const [a, b] = M.linhaDaDivisao(bloco, partes[0].pt);
+      L.polyline([[a[1], a[0]], [b[1], b[0]]], { renderer: S.tela, color: '#12343b', weight: 2, dashArray: '6 5', interactive: false }).addTo(S.camadaDivisoes);
+      for (const p of partes) {
+        const canto = M.geometriaDoBloco(bloco).cantos[p.pt].ponto;
+        const ponto = [bloco.c[1] + (canto[1] - bloco.c[1]) * 0.55, bloco.c[0] + (canto[0] - bloco.c[0]) * 0.55];
+        const icone = L.divIcon({ className: 'cac-l-nome', html: '<span></span>', iconSize: [0, 0] });
+        const marcador = L.marker(ponto, { icon: icone, interactive: false, keyboard: false }).addTo(S.camadaDivisoes);
+        const texto = marcador.getElement() && marcador.getElement().querySelector('span');
+        if (texto) { texto.textContent = `${p.pt} · ${primeiroNome(p.r || 'Sem resp.')}`; texto.style.background = corDoAgente(p.ri); }
+      }
+    }
   }
 
   function desenharMapa() {
@@ -518,10 +569,11 @@
     desenhar();
   }
 
+  // O que a tela mostra do plano de cada quarteirão no dia (as duas metades quando dividido em L).
   function fotografiaPlano(blocos, dia) {
-    return blocos.map(b => {
-      const p = b.planos.find(p => p.d === dia);
-      return p ? { b: b.id, id: p.id, ri: p.ri, c: p.c, v: p.v } : { b: b.id };
+    return blocos.flatMap(b => {
+      const planos = M.planosDoDia(b, dia).filter(p => !p.local);
+      return planos.length ? planos.map(p => ({ b: b.id, id: p.id, ri: p.ri, c: p.c, v: p.v, pt: p.pt || '' })) : [{ b: b.id }];
     });
   }
 
@@ -530,7 +582,7 @@
     if (!blocos.length || S.salvandoPlano) return;
     const dia = S.diaPlano || S.hoje;
     const ok = await mudarPlano({ acao: S.origemPlano ? 'reagendar' : 'planejar', blocos: blocos.map(b => b.id), data: dia,
-      origem: S.origemPlano, responsavel_id: S.responsavelPlano, esperado: fotografiaPlano(blocos, S.origemPlano || dia) },
+      origem: S.origemPlano, responsavel_id: S.responsavelPlano, atividade: S.atividadePlano, esperado: fotografiaPlano(blocos, S.origemPlano || dia) },
       dados => `${dados.feitos} de ${blocos.length} quarteirões salvos para ${dataBr(dia)}.${dados.feitos < blocos.length ? ' Quarteirões concluídos foram preservados.' : ''}`);
     if (ok) { S.selecionados.clear(); S.origemPlano = null; desenhar(); }
   }
@@ -543,6 +595,35 @@
     desenhar(); $('cac-conteudo').scrollTop = 0;
   }
 
+  // Divide o quarteirão do dia em dois Ls opostos, um para cada pessoa.
+  function dividirBloco(bloco, dia, divisao) {
+    const nomes = divisao.map(d => `${nomeDaParte(d.parte)} para ${primeiroNome((cfg.equipe.find(p => p.id === d.responsavel_id) || { nome: 'sem responsável' }).nome)}`);
+    return mudarPlano({ acao: 'dividir', blocos: [bloco.id], data: dia, divisao, esperado: fotografiaPlano([bloco], dia) },
+      () => `${nomeDoBloco(bloco)} dividido: ${nomes.join(' e ')}.`);
+  }
+
+  function juntarBloco(bloco, dia, responsavelId) {
+    return mudarPlano({ acao: 'unir', blocos: [bloco.id], data: dia, responsavel_id: responsavelId, esperado: fotografiaPlano([bloco], dia) },
+      () => `${nomeDoBloco(bloco)} voltou a ser um quarteirão inteiro.`);
+  }
+
+  // Administrador inclui um trabalhador pelo e-mail da conta; ele passa a aparecer na escolha do responsável.
+  async function incluirTrabalhador() {
+    const email = window.prompt('E-mail da conta do novo trabalhador (a pessoa precisa ter conta no site):');
+    if (!email || !email.trim()) return;
+    if (!navigator.onLine) { avisar('Incluir trabalhador precisa de internet.'); return; }
+    try {
+      const dados = await pedir(cfg.urls.equipe, { email: email.trim() });
+      cfg.equipe = dados.equipe || cfg.equipe;
+      S.responsavelPlano = dados.id;
+      avisar(dados.criado ? 'Trabalhador incluído na equipe ✔' : 'Essa pessoa já fazia parte da equipe.', 'bom');
+      desenhar();
+    } catch (erro) {
+      if (erro.sessao) { S.precisaEntrar = true; desenharConexao(); }
+      avisar(erro.message || 'Não deu para incluir o trabalhador.', 'ruim');
+    }
+  }
+
   function removerDoPlano(bloco, dia) {
     if (!window.confirm(`Retirar ${nomeDoBloco(bloco)} (SC ${bloco.s}) do plano de ${dataBr(dia)}? Visitas registradas serão preservadas.`)) return;
     mudarPlano({ acao: 'remover', blocos: [bloco.id], data: dia, esperado: fotografiaPlano([bloco], dia) },
@@ -550,8 +631,10 @@
   }
 
   function concluirBloco(bloco) {
-    const faltam = bloco.estado.prog.total - bloco.estado.prog.feitas;
-    if (faltam > 0 && !window.confirm(`Ainda ${faltam === 1 ? 'falta 1 imóvel' : 'faltam ' + faltam + ' imóveis'} sem registro em ${nomeDoBloco(bloco)}. Concluir mesmo assim?`)) return;
+    // Dividido em L, cada pessoa conclui o seu L (o servidor só fecha a parte de quem envia).
+    const prog = M.progresso(casasDoMeuL(bloco), S.ultimas, bloco.estado.inicio), faltam = prog.total - prog.feitas;
+    const onde = casasDoMeuL(bloco).length !== casasDe(bloco).length ? 'no seu L de ' + nomeDoBloco(bloco) : 'em ' + nomeDoBloco(bloco);
+    if (faltam > 0 && !window.confirm(`Ainda ${faltam === 1 ? 'falta 1 imóvel' : 'faltam ' + faltam + ' imóveis'} sem registro ${onde}. Concluir mesmo assim?`)) return;
     const acoes = S.acoes.concat({ acao: 'concluir', blocos: [bloco.id] });
     if (!salvarLocal(ACOES, acoes)) { avisar('Não foi possível guardar a conclusão. Libere espaço no aparelho e tente de novo.', 'ruim'); return; }
     S.acoes = acoes;
@@ -570,9 +653,11 @@
   function registrar(casa, dados, seguir) {
     const bloco = casa.bloco;
     const anterior = S.ultimas.get(casa.id);
-    const feitasAntes = bloco.estado.prog.feitas;
+    const minhas = () => M.progresso(casasDoMeuL(bloco), S.ultimas, bloco.estado.inicio);
+    const feitasAntes = minhas().feitas;
+    const plano = meuPlano(bloco);
     const visita = M.novaVisita(Object.assign({}, dados, {
-      bloco: bloco.id, imovel: casa.id, data: S.hoje, logradouro: casa.rua, numero: casa.n, complemento: casa.cp, lat: casa.y, lng: casa.x,
+      atividade: plano && plano.at ? plano.at : '', bloco: bloco.id, imovel: casa.id, data: S.hoje, logradouro: casa.rua, numero: casa.n, complemento: casa.cp, lat: casa.y, lng: casa.x,
     }));
     const fila = S.fila.concat(visita);
     if (!salvarLocal(FILA, fila)) { avisar('Não foi possível guardar a visita: o aparelho está sem espaço. Mantenha a ficha aberta e libere espaço para tentar de novo.', 'ruim'); return; }
@@ -582,12 +667,13 @@
     const ganho = M.XP.visita + (recuperou ? M.XP.recuperada : 0);
     if (navigator.vibrate) navigator.vibrate(25);
     avisar(`${casa.rua}, ${casa.n}: ${M.POR_ID[visita.situacao].nome} · +${ganho} pontos${recuperou ? ' (pendência recuperada 🔑)' : ''}`, 'bom');
-    const prog = bloco.estado.prog;
+    const prog = minhas();
     const fechou = prog.total > 0 && prog.feitas === prog.total && feitasAntes < prog.total;
     fecharFicha(true);
     desenhar();
-    if (fechou) { festa(); avisar(`Todas as casas de ${nomeDoBloco(bloco)} registradas! Toque em “Concluir quarteirão”.`, 'bom'); S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenharPainel(); }
-    else if (seguir) { const proxima = M.proximaCasa(casasDe(bloco), S.ultimas, bloco.estado.inicio, casa.id); if (proxima) { S.mapa.panTo([proxima.y, proxima.x]); abrirCasa(proxima); } }
+    const meuL = meuPlano(bloco) && meuPlano(bloco).pt && casasDoMeuL(bloco).length !== casasDe(bloco).length;
+    if (fechou) { festa(); avisar(`Todas as casas ${meuL ? 'do seu L' : 'de ' + nomeDoBloco(bloco)} registradas! Toque em “Concluir”.`, 'bom'); S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenharPainel(); }
+    else if (seguir) { const proxima = M.proximaCasa(casasDoMeuL(bloco), S.ultimas, bloco.estado.inicio, casa.id); if (proxima) { S.mapa.panTo([proxima.y, proxima.x]); abrirCasa(proxima); } }
     ciclo();
   }
 
@@ -623,6 +709,7 @@
       controle_mecanico: deHoje ? Boolean(deHoje.cm) : false, controle_alternativo: deHoje ? Boolean(deHoje.ca) : false,
       tratamento_focal: deHoje ? Boolean(deHoje.tf) : false, observacao: deHoje ? deHoje.o : '',
       recipientes: deHoje && deHoje.rt ? deHoje.rt.map(r => Object.assign({}, r)) : [],
+      focal_produto: deHoje && deHoje.fp ? deHoje.fp.split(',').filter(Boolean) : [],
     };
     $('cac-ficha-titulo').textContent = nova ? 'Imóvel que não está na lista' : `${casa.rua}, ${casa.n}`;
     const posicaoCasa = casasDe(casa.bloco).findIndex(c => c.id === casa.id) + 1;
@@ -637,7 +724,8 @@
       corpo.append(h('div', { class: 'cac-nova' },
         h('label', {}, 'Rua', h('input', { type: 'text', id: 'cac-nova-rua', list: 'cac-ruas-do-bloco', maxlength: '200', value: ruas[0] || '', autocomplete: 'off' })), lista,
         h('label', {}, 'Número', h('input', { type: 'text', id: 'cac-nova-numero', maxlength: '20', inputmode: 'numeric', autocomplete: 'off' })),
-        h('label', {}, 'Complemento', h('input', { type: 'text', id: 'cac-nova-complemento', maxlength: '60', placeholder: 'fundos, casa 2…', autocomplete: 'off' }))));
+        h('label', {}, 'Complemento', h('input', { type: 'text', id: 'cac-nova-complemento', maxlength: '60', placeholder: 'fundos, casa 2…', autocomplete: 'off' })),
+        h('p', { class: 'cac-nota' }, 'Ao salvar, este endereço passa a fazer parte do mapa da equipe, na sua posição atual (toque em 📍 antes, se puder).')));
     }
     if (anterior) {
       const s = M.POR_ID[anterior.s];
@@ -656,11 +744,34 @@
         const larvas = h('input', { type: 'checkbox', id: 'cac-larvas' });
         larvas.checked = d.larvas;
         larvas.addEventListener('change', () => { d.larvas = larvas.checked; });
+        // Controle do imóvel; o focal pede o larvicida (Natular ou Vectobac).
+        const produtosDoImovel = h('div', { class: 'cac-chips cac-produtos', role: 'group', 'aria-label': 'Larvicida do tratamento focal' });
+        const desenharProdutos = () => {
+          produtosDoImovel.hidden = !d.tratamento_focal;
+          produtosDoImovel.replaceChildren(h('span', { class: 'cac-nota' }, 'Larvicida:'), ...M.PRODUTOS.map(produto => {
+            const marca = h('input', { type: 'checkbox' });
+            marca.checked = d.focal_produto.includes(produto.id);
+            marca.addEventListener('change', () => {
+              d.focal_produto = marca.checked ? d.focal_produto.concat(produto.id) : d.focal_produto.filter(p => p !== produto.id);
+            });
+            return h('label', { class: 'cac-chip' }, marca, h('span', {}, produto.nome));
+          }));
+        };
+        const chipsDoImovel = {};
         const chip = (rotulo, chave) => {
           const marca = h('input', { type: 'checkbox' });
           marca.checked = d[chave];
-          marca.addEventListener('change', () => { d[chave] = marca.checked; });
+          marca.addEventListener('change', () => { d[chave] = marca.checked; if (chave === 'tratamento_focal') desenharProdutos(); });
+          chipsDoImovel[chave] = marca;
           return h('label', { class: 'cac-chip' }, marca, h('span', {}, rotulo));
+        };
+        // O controle anotado num recipiente marca o mesmo controle no imóvel.
+        const marcarControle = c => {
+          const chave = { M: 'controle_mecanico', A: 'controle_alternativo', F: 'tratamento_focal' }[c];
+          if (!chave || d[chave]) return;
+          d[chave] = true;
+          if (chipsDoImovel[chave]) chipsDoImovel[chave].checked = true;
+          if (chave === 'tratamento_focal') desenharProdutos();
         };
         const marcarLarva = v => { if (v > 0 && !larvas.checked) { larvas.checked = true; d.larvas = true; } };
         // Totais do boletim: digitados, ou a soma dos tipos quando há tipo anotado.
@@ -681,10 +792,19 @@
           tipos.replaceChildren(...d.recipientes.map(linha => {
             const info = TIPO_RECIPIENTE.get(linha.t) || { nome: 'Tipo ' + linha.t, grupo: '' };
             const mudar = chave => v => { linha[chave] = v; if (chave === 'l') marcarLarva(v); desenharTotais(); };
-            return h('div', { class: 'cac-tipo' },
+            // Um controle por linha: tocar de novo tira; o focal pede o larvicida.
+            const controles = h('div', { class: 'cac-tipo-controle', role: 'radiogroup', 'aria-label': 'Controle feito em ' + info.nome },
+              h('span', {}, 'Controle:'),
+              M.CONTROLES.map(c => h('button', { type: 'button', role: 'radio', 'aria-checked': String(linha.c === c.id),
+                onclick: () => { linha.c = linha.c === c.id ? '' : c.id; if (linha.c !== 'F') delete linha.p; marcarControle(linha.c); S.fichaSuja = true; desenharTipos(); } }, c.nome)),
+              linha.c === 'F' ? h('span', { class: 'cac-tipo-produto', role: 'radiogroup', 'aria-label': 'Larvicida em ' + info.nome },
+                M.PRODUTOS.map(p => h('button', { type: 'button', role: 'radio', 'aria-checked': String(linha.p === p.id),
+                  onclick: () => { linha.p = p.id; S.fichaSuja = true; desenharTipos(); } }, p.nome))) : null);
+            return h('div', { class: 'cac-tipo' + (linha.c === 'F' && !linha.p ? ' falta' : '') },
               h('div', { class: 'cac-tipo-topo' }, h('strong', {}, codigoDoTipo(linha.t)), h('span', {}, info.nome, info.grupo ? h('small', {}, ' · ' + info.grupo) : null),
                 h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar ' + info.nome, onclick: () => { d.recipientes = d.recipientes.filter(r => r !== linha); desenharTipos(); desenharTotais(); } }, '×')),
-              h('div', { class: 'cac-contadores' }, contador('Existentes', linha.e || 0, mudar('e')), contador('Com água', linha.a || 0, mudar('a')), contador('Com larva', linha.l || 0, mudar('l'))));
+              h('div', { class: 'cac-contadores' }, contador('Existentes', linha.e || 0, mudar('e')), contador('Com água', linha.a || 0, mudar('a')), contador('Com larva', linha.l || 0, mudar('l'))),
+              controles);
           }));
         };
         const escolherTipo = h('select', { class: 'cac-tipo-escolha', 'aria-label': 'Anotar tipo de recipiente' },
@@ -694,10 +814,11 @@
           const t = parseInt(escolherTipo.value, 10);
           escolherTipo.value = '';
           if (!t) return;
-          if (!d.recipientes.some(r => r.t === t)) d.recipientes.push({ t, e: 1, a: 0, l: 0 });
+          // O mesmo tipo pode ter mais de uma linha, cada uma com o seu controle.
+          d.recipientes.push({ t, e: 1, a: 0, l: 0 });
           desenharTipos(); desenharTotais();
           const linhas = tipos.querySelectorAll('.cac-tipo');
-          const posicao = d.recipientes.findIndex(r => r.t === t);
+          const posicao = d.recipientes.length - 1;
           if (linhas[posicao]) linhas[posicao].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         });
         desenharTotais(); desenharTipos();
@@ -706,20 +827,26 @@
           totais, notaTotais,
           ...(GRUPOS_RECIPIENTE.length ? [h('h3', {}, 'Tipos de recipiente'), tipos, escolherTipo] : []),
           h('div', { class: 'cac-larvas' }, h('label', { for: 'cac-larvas' }, larvas, h('span', {}, '🟣 Imóvel com larva')), contador('Tubitos', d.tubitos, v => { d.tubitos = v; })),
-          h('h3', {}, 'Controle feito'),
-          h('div', { class: 'cac-chips' }, chip('Mecânico', 'controle_mecanico'), chip('Alternativo', 'controle_alternativo'), chip('Focal', 'tratamento_focal')));
+          h('h3', {}, 'Controle feito no imóvel'),
+          h('div', { class: 'cac-chips' }, chip('Mecânico', 'controle_mecanico'), chip('Alternativo', 'controle_alternativo'), chip('Focal', 'tratamento_focal')),
+          produtosDoImovel);
+        desenharProdutos();
       }
       const obs = h('textarea', { rows: '2', maxlength: '1000', placeholder: 'Observação (opcional)', 'aria-label': 'Observação' });
       obs.value = d.observacao;
       obs.addEventListener('input', () => { d.observacao = obs.value; });
       detalhes.append(obs);
     }
-    for (const s of M.SITUACOES) {
+    for (const s of M.SITUACOES.filter(s => !M.OCULTAS.has(s.id) || s.id === d.situacao)) {
       botoes.append(h('button', { type: 'button', role: 'radio', dataset: { id: s.id }, style: `--cor:${s.cor};--clara:${s.clara}`, onclick: () => { d.situacao = s.id; desenharDetalhesDaFicha(); } },
         h('span', { 'aria-hidden': 'true' }, s.icone), s.nome));
     }
     const salvar = seguir => {
       if (!d.situacao || S.fichaCasa !== casa) return;
+      if (M.INSPECIONADO.has(d.situacao)) {
+        if (d.recipientes.some(r => r.c === 'F' && !r.p)) { avisar('Escolha o larvicida (Natular ou Vectobac) do recipiente com focal.', 'ruim'); return; }
+        if (d.tratamento_focal && !d.focal_produto.length && !d.recipientes.some(r => r.c === 'F')) { avisar('Escolha o larvicida do tratamento focal: Natular ou Vectobac.', 'ruim'); return; }
+      }
       const atual = S.ultimas.get(casa.id);
       if ((atual ? atual.u : null) !== versaoAoAbrir) { avisar('Este imóvel recebeu outra visita enquanto a ficha estava aberta. Reabra a ficha para conferir.', 'ruim'); return; }
       let alvo = casa;
@@ -758,11 +885,12 @@
     const linhas = [`${s.icone} ${s.nome} em ${dataBr(v.d)}${horaBr(v.h) ? ' às ' + horaBr(v.h) : ''}${v.a ? ' · ' + v.a : ''}`];
     if (M.INSPECIONADO.has(v.s)) {
       linhas.push(`Recipientes: ${v.re} existentes, ${v.ra} com água, ${v.rl} com larva`);
-      if (v.rt && v.rt.length) linhas.push('Tipos: ' + v.rt.map(r => `${codigoDoTipo(r.t)} ${(TIPO_RECIPIENTE.get(r.t) || { nome: '' }).nome} ×${r.e}${r.l ? ' (' + r.l + ' com larva)' : ''}`).join('; '));
+      if (v.rt && v.rt.length) linhas.push('Tipos: ' + v.rt.map(r => `${codigoDoTipo(r.t)} ${(TIPO_RECIPIENTE.get(r.t) || { nome: '' }).nome} ×${r.e}${r.l ? ' (' + r.l + ' com larva)' : ''}${r.c ? ' · ' + nomeDoControle(r) : ''}`).join('; '));
       if (v.l) linhas.push(`🟣 Imóvel com larva${v.t ? ' · ' + plural(v.t, 'tubito', 'tubitos') : ''}`);
-      const controles = [v.cm && 'mecânico', v.ca && 'alternativo', v.tf && 'focal'].filter(Boolean);
+      const controles = [v.cm && 'mecânico', v.ca && 'alternativo', v.tf && ('focal' + (v.fp ? ' (' + v.fp.split(',').map(nomeDoProduto).join(' + ') + ')' : ''))].filter(Boolean);
       if (controles.length) linhas.push('Controle: ' + controles.join(', '));
     }
+    if (v.at && cfg.atividades && cfg.atividades[v.at]) linhas.push('Atividade: ' + cfg.atividades[v.at]);
     if (v.o) linhas.push('Obs.: ' + v.o);
     return h('div', { class: 'cac-ultima' }, linhas.map(linha => h('p', {}, linha)));
   }
@@ -770,7 +898,7 @@
   // ---------------------------------------------------------------- painel
   const ABAS = {
     rua: [['missao', '🎯 Missão'], ['quarteirao', '🏘️ Quarteirão'], ['equipe', '🏆 Equipe']],
-    escritorio: [['plano', '🗓️ Plano'], ['aovivo', '📡 Ao vivo'], ['quarteirao', '🏘️ Quarteirão']],
+    escritorio: [['plano', '🗓️ Plano'], ['aovivo', '📡 Ao vivo'], ['relatorio', '📊 Relatório'], ['quarteirao', '🏘️ Quarteirão']],
   };
 
   function abrirPainel(aberto) {
@@ -791,8 +919,8 @@
     return h('div', { class: 'cac-selos' }, chips);
   }
 
-  function linhaDeBloco(bloco, extra) {
-    const prog = bloco.estado.prog, cores = M.BLOCOS[bloco.estado.tipo];
+  function linhaDeBloco(bloco, extra, progresso) {
+    const prog = progresso || bloco.estado.prog, cores = M.BLOCOS[bloco.estado.tipo];
     return h('button', { type: 'button', class: 'cac-linha-bloco', onclick: () => { S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenhar(); irParaBloco(bloco); } },
       h('span', { class: 'cac-numero', style: `background:${cores.fundo};border-color:${cores.borda}` }, bloco.n),
       h('span', { class: 'cac-linha-meio' }, h('strong', {}, `SC ${bloco.s}` + (extra ? ' · ' + extra : '')), barra(prog.pct, bloco.estado.tipo === 'concluido' ? '#2f9e44' : null)),
@@ -809,12 +937,13 @@
     const meu = eu() ? eu().id : null;
     const abertos = S.blocos.filter(b => b.estado.tipo === 'planejado' || b.estado.tipo === 'andamento');
     const concluidos = S.blocos.filter(b => b.estado.tipo === 'concluido');
-    const meus = abertos.filter(b => b.estado.plano && b.estado.plano.ri === meu);
+    const meus = abertos.filter(b => planosAbertos(b).some(p => p.ri === meu));
     const semDono = abertos.filter(b => b.estado.plano && !b.estado.plano.ri);
     const meusFeitos = concluidos.filter(b => b.estado.plano && (b.estado.plano.ri === meu || b.estado.plano.local));
     const missao = meus.concat(meusFeitos);
-    const total = missao.reduce((soma, b) => soma + b.estado.prog.total, 0);
-    const feitas = missao.reduce((soma, b) => soma + b.estado.prog.feitas, 0);
+    const progDe = b => (meus.includes(b) ? M.progresso(casasDoMeuL(b), S.ultimas, b.estado.inicio) : b.estado.prog);
+    const total = missao.reduce((soma, b) => soma + progDe(b).total, 0);
+    const feitas = missao.reduce((soma, b) => soma + progDe(b).feitas, 0);
     const pct = total ? Math.round(100 * feitas / total) : 0;
     const resumo = meuResumo(), nivel = M.nivel(M.pontos(resumo));
     const visitasDeHoje = Array.from(S.ultimas.values()).filter(v => v.d === S.hoje && (v.pendente || v.ai === meu));
@@ -831,7 +960,10 @@
         h('small', {}, nivel.teto ? `Faltam ${nivel.teto - nivel.xp} pontos para o próximo nível` : 'Nível máximo. Lenda!'),
         h('div', { class: 'cac-medalhas' }, M.medalhas(resumo).map(m => h('span', { class: m.ganha ? 'ganha' : '', title: `${m.nome}: ${m.como}` }, m.icone)))),
       doDia.total ? h('section', { class: 'cac-cartao' }, h('h3', {}, 'Seu dia'), chipsDeSituacao(doDia.porSituacao, doDia.larvas)) : null,
-      meus.length ? h('section', { class: 'cac-cartao' }, h('h3', {}, 'Seus quarteirões'), meus.map(b => linhaDeBloco(b))) : null,
+      meus.length ? h('section', { class: 'cac-cartao' }, h('h3', {}, 'Seus quarteirões'), meus.map(b => {
+        const plano = meuPlano(b);
+        return linhaDeBloco(b, [plano && plano.pt ? nomeDaParte(plano.pt) : '', plano && plano.at ? nomeDaAtividade(plano.at) : ''].filter(Boolean).join(' · '), progDe(b));
+      })) : null,
       meusFeitos.length ? h('section', { class: 'cac-cartao' }, h('h3', {}, 'Concluídos hoje'), meusFeitos.map(b => linhaDeBloco(b))) : null,
       semDono.length ? h('section', { class: 'cac-cartao' }, h('h3', {}, 'No plano, sem responsável'), semDono.map(b => linhaDeBloco(b))) : null,
     ];
@@ -841,6 +973,12 @@
     const bloco = S.blocoAtivo;
     if (!bloco) return [h('section', { class: 'cac-cartao cac-vazio' }, h('p', {}, 'Toque em um quarteirão no mapa para ver as casas dele.'))];
     const prog = bloco.estado.prog, cores = M.BLOCOS[bloco.estado.tipo], plano = bloco.estado.plano;
+    const abertos = planosAbertos(bloco), meu = meuPlano(bloco);
+    const temMeuL = Boolean(meu && meu.pt && eu() && meu.ri === eu().id);
+    if (S.filtroCasas === 'meu' && !temMeuL) S.filtroCasas = 'todas';
+    if (temMeuL && S.filtroBloco !== bloco.id) S.filtroCasas = 'meu';
+    S.filtroBloco = bloco.id;
+    const doMeuL = new Set(temMeuL ? casasDoMeuL(bloco).map(c => c.id) : []);
     const casas = casasDe(bloco);
     const lista = h('div', { class: 'cac-casas' });
     let ruaAtual = null;
@@ -848,6 +986,7 @@
       const atual = S.ultimas.get(casa.id);
       if (S.filtroCasas === 'faltam' && atual && atual.d >= bloco.estado.inicio) continue;
       if (S.filtroCasas === 'retorno' && (!atual || !M.PENDENCIA.has(atual.s))) continue;
+      if (S.filtroCasas === 'meu' && !doMeuL.has(casa.id)) continue;
       if (casa.rua !== ruaAtual) { ruaAtual = casa.rua; lista.append(h('h4', {}, casa.rua)); }
       const visita = S.ultimas.get(casa.id), cor = M.corDaCasa(visita, bloco.estado.inicio);
       const s = visita ? M.POR_ID[visita.s] : null;
@@ -869,15 +1008,20 @@
           bloco.estado.tipo === 'concluido'
             ? h('button', { type: 'button', class: 'cac-botao', onclick: () => reabrirBloco(bloco) }, 'Reabrir quarteirão')
             : (bloco.estado.tipo === 'planejado' || bloco.estado.tipo === 'andamento' || prog.feitas
-              ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => concluirBloco(bloco) }, 'Concluir quarteirão 🏁') : null),
+              ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => concluirBloco(bloco) }, temMeuL ? `Concluir meu ${nomeDaParte(meu.pt)} 🏁` : 'Concluir quarteirão 🏁') : null),
           rua ? h('button', { type: 'button', class: 'cac-botao', onclick: () => abrirCasa({ id: '', rua: '', n: '', cp: '', bloco }, true) }, '＋ Imóvel que não está na lista') : null) : null,
-        plano && plano.r ? h('p', { class: 'cac-conta' }, 'Responsável: ' + plano.r) : null),
+        abertos.length > 1 || (abertos[0] && abertos[0].pt)
+          ? h('div', { class: 'cac-divisao' }, h('strong', {}, 'Quarteirão dividido em L'),
+            abertos.map(p => h('p', {}, h('i', { class: 'cac-agente-cor', style: `background:${corDoAgente(p.ri)}` }),
+              `${p.r || 'Sem responsável'} · ${nomeDaParte(p.pt)} · ${plural(M.casasDoL(bloco, casas, p.pt).length, 'imóvel', 'imóveis')}`)))
+          : (plano && plano.r ? h('p', { class: 'cac-conta' }, 'Responsável: ' + plano.r) : null),
+        meu && meu.at ? h('p', { class: 'cac-conta' }, 'Atividade: ' + nomeDaAtividade(meu.at)) : null),
       h('section', { class: 'cac-cartao' },
         h('div', { class: 'cac-bloco-acoes' },
-          rua && cfg.registra && M.proximaCasa(casas, S.ultimas, bloco.estado.inicio) ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => abrirCasa(M.proximaCasa(casas, S.ultimas, bloco.estado.inicio)) }, 'Começar pela próxima casa ▶') : null,
+          rua && cfg.registra && M.proximaCasa(casasDoMeuL(bloco), S.ultimas, bloco.estado.inicio) ? h('button', { type: 'button', class: 'cac-botao forte', onclick: () => abrirCasa(M.proximaCasa(casasDoMeuL(bloco), S.ultimas, bloco.estado.inicio)) }, 'Começar pela próxima casa ▶') : null,
           h('button', { type: 'button', class: 'cac-botao', onclick: () => imprimir({ bloco }) }, 'Roteiro A4')),
         h('h3', { class: 'cac-etapa' }, casas.length ? 'Casas, na ordem da volta' : 'Sem casas cadastradas neste quarteirão'),
-        h('div', { class: 'cac-filtros-casas', role: 'group', 'aria-label': 'Mostrar imóveis' }, [['todas', 'Todos'], ['faltam', 'Faltam registrar'], ['retorno', 'Retornos']].map(([id, nome]) =>
+        h('div', { class: 'cac-filtros-casas', role: 'group', 'aria-label': 'Mostrar imóveis' }, [...(temMeuL ? [['meu', 'Meu ' + nomeDaParte(meu.pt)]] : []), ['todas', 'Todos'], ['faltam', 'Faltam registrar'], ['retorno', 'Retornos']].map(([id, nome]) =>
           h('button', { type: 'button', 'aria-pressed': String(S.filtroCasas === id), onclick: () => { S.filtroCasas = id; desenharPainel(); } }, nome))),
         lista.children.length ? lista : h('p', { class: 'cac-vazio' }, casas.length ? 'Nenhum imóvel neste filtro.' : 'Acrescente os imóveis encontrados em campo.')),
     ];
@@ -937,7 +1081,7 @@
     const abas = ABAS[S.prefs.modo];
     if (!abas.some(([id]) => id === S.aba)) S.aba = abas[0][0];
     $('cac-abas').replaceChildren(...abas.map(([id, rotulo]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(id === S.aba), onclick: () => { S.aba = id; abrirPainel(true); desenharPainel(); } }, rotulo)));
-    const conteudo = { missao: painelMissao, quarteirao: painelQuarteirao, equipe: painelEquipe, plano: painelPlano, aovivo: painelAoVivo }[S.aba]();
+    const conteudo = { missao: painelMissao, quarteirao: painelQuarteirao, equipe: painelEquipe, plano: painelPlano, aovivo: painelAoVivo, relatorio: () => relatorio.painel() }[S.aba]();
     const rolagem = $('cac-conteudo').scrollTop;
     $('cac-conteudo').replaceChildren(...[conteudo].flat(3).filter(Boolean));
     $('cac-conteudo').scrollTop = S.abaDesenhada === S.aba + (S.blocoAtivo ? S.blocoAtivo.id : '') ? rolagem : 0;
@@ -974,11 +1118,12 @@
         ...(cfg.equipe || []).map(p => h('span', {}, h('i', { style: `background:${corDoAgente(p.id)};border-color:${corDoAgente(p.id)}` }), p.nome)),
         h('span', {}, h('i', { style: 'background:#495057;border-color:#495057' }), 'Sem responsável'),
         h('span', {}, h('i', { style: 'background:#fff;border-color:#adb5bd' }), 'Livre nesta data'),
-        h('span', {}, h('i', { style: 'background:#b2f2e5;border-color:#0b6568;border-style:dashed' }), 'Selecionado · ainda não salvo'));
+        h('span', {}, h('i', { style: 'background:#b2f2e5;border-color:#0b6568;border-style:dashed' }), 'Selecionado · ainda não salvo'),
+        h('span', {}, h('i', { style: 'background:#fff;border-color:#12343b;border-style:dashed' }), 'Linha tracejada: dividido em dois Ls'));
       return;
     }
     const itens = Object.entries(M.BLOCOS).map(([, c]) => h('span', {}, h('i', { style: `background:${c.fundo};border-color:${c.borda}` }), c.nome));
-    const casas = M.SITUACOES.map(s => h('span', {}, h('i', { class: 'redondo', style: `background:${s.cor};border-color:${s.cor}` }), s.nome));
+    const casas = M.OPCOES.map(s => h('span', {}, h('i', { class: 'redondo', style: `background:${s.cor};border-color:${s.cor}` }), s.nome));
     casas.push(h('span', {}, h('i', { class: 'redondo', style: `background:${M.LARVA.cor};border-color:${M.LARVA.cor}` }), 'Com larva'));
     $('cac-legenda-itens').replaceChildren(h('h4', {}, 'Quarteirões'), ...itens, h('h4', {}, 'Casas'), ...casas);
   }
@@ -1046,6 +1191,7 @@
       item('📄 Boletim dos últimos 30 dias (CSV)', baixar(cfg.urls.boletim_csv, somarDias(S.hoje, -30))),
       item('📄 Visitas dos últimos 30 dias (CSV)', baixar(cfg.urls.visitas_csv, somarDias(S.hoje, -30))),
       cfg.urls.recipientes_csv ? item('📄 Recipientes por tipo, últimos 30 dias (CSV)', baixar(cfg.urls.recipientes_csv, somarDias(S.hoje, -30))) : null,
+      cfg.urls.relatorio_csv ? item('📄 Relatório por quarteirão, últimos 30 dias (CSV)', baixar(cfg.urls.relatorio_csv, somarDias(S.hoje, -30))) : null,
       item('↩ Painel do território', () => { location.href = cfg.urls.painel; }),
       cfg.registra ? item('🧹 Limpar o que está guardado neste aparelho', limparAparelho, pendentes > 0) : null);
     menu.hidden = false;
@@ -1131,8 +1277,11 @@
   }
 
   const planejamento = window.CasaACasaPlanejamento({ S, cfg, h, casasDe, dataBr, somarDias, corDoAgente,
-    desenhar, desenharPainel, selecionarBloco, aplicarSelecao, reagendarBloco, removerDoPlano, irParaBloco, imprimir });
-  const impressao = window.CasaACasaImpressao({ S, h, casasDe, dataBr });
+    desenhar, desenharPainel, selecionarBloco, aplicarSelecao, reagendarBloco, removerDoPlano, irParaBloco, imprimir,
+    dividirBloco, juntarBloco, incluirTrabalhador, nomeDaParte, nomeDaAtividade });
+  const impressao = window.CasaACasaImpressao({ S, h, casasDe, dataBr, nomeDaParte, nomeDaAtividade });
+  const relatorio = window.CasaACasaRelatorio({ S, cfg, h, dataBr, somarDias, pedir, avisar, desenharPainel, nomeDaParte, nomeDaAtividade,
+    abrirBloco: id => { const bloco = S.porId.get(id); if (bloco) { S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenhar(); irParaBloco(bloco); } } });
   window.CasaACasa = { estado: S };
   iniciar();
 })();

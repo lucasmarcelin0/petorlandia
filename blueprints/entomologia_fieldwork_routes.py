@@ -31,7 +31,8 @@ def _erro(mensagem, codigo=400):
 
 def register(bp, require_access):
     """Registra as rotas de campo no blueprint do SFA."""
-    from blueprints.entomologia_routes import ensure_entomologia_editor, usuario_pode_alterar
+    from blueprints.entomologia_routes import ensure_entomologia_admin, ensure_entomologia_editor, usuario_pode_alterar
+    from services.entomologia_acesso import eh_admin
 
     def _auditar(funcao, mensagem, detalhes):
         from extensions import db
@@ -75,6 +76,9 @@ def register(bp, require_access):
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
                 'recipientes_csv': url_for('sfa_routes.casa_a_casa_recipientes_csv', token=_token()),
+                'relatorio': url_for('sfa_routes.casa_a_casa_relatorio', token=_token()),
+                'relatorio_csv': url_for('sfa_routes.casa_a_casa_relatorio_csv', token=_token()),
+                'equipe': url_for('sfa_routes.casa_a_casa_equipe'),
                 'painel': url_for('sfa_routes.entomologia', token=_token()),
                 'entrar': url_for('login_view', next=url_for('sfa_routes.casa_a_casa'))
                 if 'login_view' in current_app.view_functions else '',
@@ -87,7 +91,11 @@ def register(bp, require_access):
             'registra': registra,
             'situacoes': servico.SITUACOES,
             'recipientes': servico.grupos_recipiente(),
+            'atividades': servico.ATIVIDADES,
+            'partes': servico.NOME_PARTE,
+            'produtos_focal': servico.PRODUTOS_FOCAL,
             'equipe': servico.equipe(current_user if registra else None),
+            'admin': eh_admin(current_user),
             'csrf': generate_csrf(),
         }
         return _sem_cache(render_template('sfa/casa_a_casa.html', config=config))
@@ -123,7 +131,7 @@ def register(bp, require_access):
     @require_access
     @login_required
     def casa_a_casa_plano():
-        """Escritório: planejar, tirar do plano, concluir ou reabrir quarteirões."""
+        """Escritório: planejar, dividir em L, tirar do plano, concluir ou reabrir quarteirões."""
         ensure_entomologia_editor()
         from extensions import db
         from models import User
@@ -135,19 +143,35 @@ def register(bp, require_access):
         try:
             dia = servico._data(pedido.get('data'), hoje)
             origem = servico._data(pedido.get('origem'), hoje)
-            if 'esperado' in pedido and acao in ('planejar', 'remover', 'reagendar'):
+            if 'esperado' in pedido and acao in ('planejar', 'remover', 'reagendar', 'dividir', 'unir'):
                 servico.conferir_plano(blocos, origem if acao == 'reagendar' else dia, pedido['esperado'])
+
+            def pessoa(responsavel_id):
+                if not responsavel_id:
+                    return None
+                if responsavel_id not in {p['id'] for p in servico.equipe(current_user)}:
+                    raise ValueError('Essa pessoa não faz parte da equipe.')
+                return db.session.get(User, responsavel_id)
+
             if acao in ('planejar', 'reagendar'):
-                responsavel = None
-                if pedido.get('responsavel_id'):
-                    permitidos = {pessoa['id'] for pessoa in servico.equipe(current_user)}
-                    if pedido['responsavel_id'] not in permitidos:
-                        raise ValueError('Essa pessoa não faz parte da equipe.')
-                    responsavel = db.session.get(User, pedido['responsavel_id'])
+                responsavel = pessoa(pedido.get('responsavel_id'))
                 if acao == 'reagendar':
                     feitos = servico.reagendar(blocos, origem, dia, hoje, responsavel)
                 else:
-                    feitos = servico.planejar(blocos, dia, hoje, responsavel, servico.nome_da_conta(current_user))
+                    feitos = servico.planejar(blocos, dia, hoje, responsavel, servico.nome_da_conta(current_user),
+                                              pedido.get('atividade'))
+            elif acao in ('dividir', 'unir'):
+                if not isinstance(blocos, list) or len(blocos) != 1:
+                    raise ValueError('Divida um quarteirão por vez.')
+                if acao == 'dividir':
+                    divisao = pedido.get('divisao')
+                    if not isinstance(divisao, list) or any(not isinstance(p, dict) for p in divisao):
+                        raise ValueError('Divisão inválida.')
+                    feitos = servico.dividir(blocos[0], dia, hoje,
+                                             [(str(p.get('parte') or '').upper(), pessoa(p.get('responsavel_id')))
+                                              for p in divisao], servico.nome_da_conta(current_user))
+                else:
+                    feitos = servico.unir(blocos[0], dia, pessoa(pedido.get('responsavel_id')))
             elif acao == 'remover':
                 feitos = servico.desplanejar(blocos, dia)
             elif acao == 'concluir':
@@ -193,6 +217,9 @@ def register(bp, require_access):
             db.session.rollback()
             return _erro(str(exc))
         db.session.commit()
+        if resultado.pop('imoveis_novos', 0):
+            # Imóvel acrescentado em campo entra na base: os aparelhos baixam a nova versão.
+            servico.esquecer_base()
         return _sem_cache(jsonify({'ok': True, **resultado}))
 
     @bp.route('/entomologia/casa-a-casa/visitas.csv')
@@ -215,3 +242,42 @@ def register(bp, require_access):
         from services.entomologia_casa_a_casa import recipientes_csv
         inicio, fim = _periodo()
         return _planilha(recipientes_csv(inicio, fim), f'casa_a_casa_recipientes_{inicio}_{fim}.csv')
+
+    @bp.route('/entomologia/casa-a-casa/relatorio.json')
+    @require_access
+    def casa_a_casa_relatorio():
+        from services.entomologia_casa_a_casa import relatorio
+        inicio, fim = _periodo()
+        if (fim - inicio).days > 62:
+            abort(400)
+        return _sem_cache(jsonify(relatorio(inicio, fim)))
+
+    @bp.route('/entomologia/casa-a-casa/relatorio.csv')
+    @require_access
+    def casa_a_casa_relatorio_csv():
+        from services.entomologia_casa_a_casa import relatorio_csv
+        inicio, fim = _periodo()
+        return _planilha(relatorio_csv(inicio, fim), f'casa_a_casa_relatorio_{inicio}_{fim}.csv')
+
+    @bp.route('/entomologia/casa-a-casa/equipe', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_equipe():
+        """Escritório: o administrador inclui um novo trabalhador pelo e-mail da conta."""
+        ensure_entomologia_admin()
+        from extensions import db
+        from services import entomologia_acesso as acesso
+        from services import entomologia_casa_a_casa as servico
+
+        pedido = request.get_json(silent=True) or {}
+        try:
+            user = acesso.buscar_conta(pedido.get('email'))
+        except ValueError as exc:
+            return _erro(str(exc))
+        _vinculo, criado = acesso.conceder(user, servico.nome_da_conta(current_user) or str(current_user.get_id()))
+        if criado:
+            _auditar('casa_a_casa_trabalhador', 'Casa a casa: trabalhador incluído na equipe',
+                     {'user_id': user.id})
+        db.session.commit()
+        return _sem_cache(jsonify({'ok': True, 'criado': criado, 'id': user.id,
+                                   'equipe': servico.equipe(current_user)}))

@@ -342,6 +342,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .cac-print-rodape small { display: block; margin-top: 2mm; font-size: 7pt; color: #496469; }
 .cac-print-atencao { padding: 2mm; margin-bottom: 2mm; border: 1px solid #8c4600; font-size: 8pt; }
 
+/* Controle por recipiente, larvicida do focal, atividade, divisão em L e relatório */
+.cac-tipo-controle { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .4rem; }
+.cac-tipo-controle > span:first-child { color: var(--cac-suave); font-size: .74rem; font-weight: 700; }
+.cac-tipo-controle button { min-height: 40px; padding: .3rem .65rem; border: 1.5px solid var(--cac-linha); border-radius: 999px; background: #fff; font-size: .82rem; font-weight: 600; }
+.cac-tipo-controle button[aria-checked="true"] { border-color: var(--cac-verde); color: #fff; background: var(--cac-verde); }
+.cac-tipo-produto { display: inline-flex; gap: .3rem; padding-left: .3rem; border-left: 2px solid var(--cac-linha); }
+.cac-tipo-produto button[aria-checked="true"] { border-color: #9c36b5; background: #9c36b5; }
+.cac-tipo.falta { border-color: #e8590c; }
+.cac-produtos { margin-top: .45rem; align-items: center; }
+.cac-produtos[hidden] { display: none; }
+.cac-atividades { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .35rem; margin-top: .25rem; }
+.cac-atividades button { min-height: 44px; padding: .4rem .6rem; border: 1.5px solid var(--cac-linha); border-radius: .7rem; background: #fff; font-size: .82rem; font-weight: 600; text-align: left; }
+.cac-atividades button[aria-checked="true"] { border-color: var(--cac-verde); color: #fff; background: var(--cac-verde); }
+.cac-mais { margin-top: .45rem; width: 100%; border-style: dashed; }
+.cac-dividir { display: grid; gap: .3rem; margin-top: .4rem; padding: .55rem; border: 1.5px dashed var(--cac-verde); border-radius: .7rem; background: var(--cac-verde-claro); }
+.cac-dividir select { display: block; width: 100%; margin-top: .2rem; padding: .45rem .5rem; border: 1px solid var(--cac-linha); border-radius: .6rem; color: var(--cac-tinta); background: #fff; font-weight: 500; }
+.cac-divisao { margin-top: .5rem; padding: .45rem .6rem; border-radius: .6rem; background: #f5f9f8; font-size: .84rem; }
+.cac-divisao p { margin-top: .2rem; }
+.cac-l-nome span { position: absolute; transform: translate(-50%, -50%); padding: 0 .3rem; border-radius: .35rem; color: #fff; font-size: .62rem; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.cac-relatorio { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.cac-relatorio th, .cac-relatorio td { padding: .3rem .35rem; border-bottom: 1px solid var(--cac-linha); text-align: left; vertical-align: top; white-space: nowrap; }
+.cac-relatorio thead th { color: var(--cac-suave); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; }
+.cac-relatorio .cac-link-botao { min-height: 32px; padding: 0; font-size: .82rem; }
+.cac-print-relatorio .cac-kpis { grid-template-columns: repeat(5, 1fr); }
+.cac-print-relatorio .cac-relatorio { font-size: 7.5pt; }
+.cac-print-relatorio .cac-relatorio th, .cac-print-relatorio .cac-relatorio td { white-space: normal; }
+.cac-print-relatorio h2 { margin: 3mm 0 1mm; font-size: 11pt; text-transform: capitalize; }
+
 @media print {
   @page { size: A4 portrait; margin: 10mm; }
   body.cac { display: block; height: auto; overflow: visible; background: #fff; }
