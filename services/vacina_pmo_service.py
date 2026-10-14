@@ -2096,6 +2096,55 @@ def _quote_sheet_title(title: str) -> str:
     return "'" + title.replace("'", "''") + "'"
 
 
+def _first_free_row(rows: list[list[Any]]) -> int:
+    """Linha logo abaixo da última usada (o ``values().get`` omite as vazias do fim)."""
+    return max(len(rows) + 1, 2)
+
+
+def _append_rows_at_column_a(
+    service,
+    spreadsheet_id: str,
+    title: str,
+    rows: list[list[Any]],
+    *,
+    row_number: int,
+) -> str:
+    """Acrescenta ``rows`` a partir de ``A{row_number}`` e devolve o ``updatedRange``.
+
+    ``values().append`` com a faixa ``A:R`` não escolhe a coluna: o Sheets
+    procura a *última tabela* (bloco contíguo de células preenchidas) dentro da
+    faixa e escreve a partir da primeira coluna dela. Com uma linha vazia no
+    meio da aba e as colunas de execução (L..O) ainda vazias, a última tabela
+    virou P:R — e a inscrição caiu 15 colunas à direita, sem o app conseguir
+    ler o número da linha (o registro local nem era criado).
+
+    Ancorado numa célula vazia da coluna A, o append escreve exatamente ali.
+    Se outro envio ocupar essa célula no meio do caminho, ela passa a fazer
+    parte de uma tabela que começa na coluna A, e o append segue na coluna A,
+    na linha seguinte. ``INSERT_ROWS`` continua garantindo que nada abaixo
+    seja sobrescrito.
+    """
+    response = (
+        service.spreadsheets()
+        .values()
+        .append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A{row_number}",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": rows},
+        )
+        .execute()
+    )
+    return response.get("updates", {}).get("updatedRange", "")
+
+
+def _updated_range_start_row(updated_range: str) -> int:
+    """Primeira linha de um ``updatedRange`` que começa na coluna A; 0 se não começar."""
+    match = re.search(r"!\$?A\$?(\d+)", updated_range or "")
+    return int(match.group(1)) if match else 0
+
+
 def _column_index(column: str) -> int:
     index = 0
     for char in column.upper():
@@ -6618,26 +6667,23 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         )
         source_row = target_row
     else:
-        response = (
-            service.spreadsheets()
-            .values()
-            .append(
-                spreadsheetId=spreadsheet_id,
-                range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": [row]},
-            )
-            .execute()
+        updated_range = _append_rows_at_column_a(
+            service,
+            spreadsheet_id,
+            title,
+            [row],
+            row_number=_first_free_row(existing_rows),
         )
 
-        updated_range = response.get("updates", {}).get("updatedRange", "")
-
         # Determina o número da linha inserida para compor o source_row
-        source_row = 0
-        m = re.search(r"!A(\d+)", updated_range)
-        if m:
-            source_row = int(m.group(1))
+        source_row = _updated_range_start_row(updated_range)
+        if not source_row:
+            # Sem a linha não há registro local nem protocolo para o morador:
+            # precisa aparecer no log, não sumir em silêncio.
+            current_app.logger.warning(
+                "Solicitacao PMO gravada fora da coluna A (%s); registro local nao criado.",
+                updated_range,
+            )
 
     # O carimbo vai como texto literal. Com USER_ENTERED o Google interpreta
     # "22/08/2026 18:31:08" pelo locale da planilha e guarda um número de série
@@ -6922,7 +6968,7 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
     known = {
         _request_row_key(row) for row in canonical_rows[1:] if not _request_row_is_empty(row)
     }
-    next_row = len(canonical_rows) + 1
+    next_row = _first_free_row(canonical_rows)
 
     for title in duplicates:
         rows = (
@@ -6952,13 +6998,16 @@ def reconcile_pmo_request_sheets(*, apply: bool = True, service=None) -> dict[st
         if not apply:
             continue
 
-        service.spreadsheets().values().append(
-            spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(canonical)}!{PMO_REQUEST_RANGE_COLS}",
-            valueInputOption="USER_ENTERED",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [row for _source_row, row in pending]},
-        ).execute()
+        updated_range = _append_rows_at_column_a(
+            service,
+            spreadsheet_id,
+            canonical,
+            [row for _source_row, row in pending],
+            row_number=next_row,
+        )
+        # Reaponta para onde o Sheets realmente escreveu, não para onde se
+        # esperava: um envio do site no meio do caminho empurra o bloco.
+        next_row = _updated_range_start_row(updated_range) or next_row
 
         duplicate_gid = _get_sheet_gid(service, spreadsheet_id, title)
         unmatched = 0
