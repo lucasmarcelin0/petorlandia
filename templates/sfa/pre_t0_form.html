@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="referrer" content="no-referrer">
+  {# same-origin: o envio da ficha precisa do Referer do próprio site para passar no CSRF em HTTPS. #}
+  <meta name="referrer" content="same-origin">
   <meta name="theme-color" content="#103f46">
   {# Área das unidades de saúde (blueprints.sfa_notificacao_routes): mesma ficha, com a unidade fixa e a opção de completar depois. #}
   {% set u = unidade_ctx if unidade_ctx is defined else none %}

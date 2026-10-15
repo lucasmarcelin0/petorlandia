@@ -58,7 +58,9 @@ def ensure_notificacao_admin():
 def _sem_cache(response):
     response = current_app.make_response(response)
     response.headers['Cache-Control'] = 'private, no-store'
-    response.headers['Referrer-Policy'] = 'no-referrer'
+    # same-origin, não no-referrer: em HTTPS o CSRF exige o Referer do próprio site, e sem ele todo
+    # envio (ficha, responsáveis, unidades) era recusado. Para fora do site nada é enviado.
+    response.headers['Referrer-Policy'] = 'same-origin'
     response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return response
 

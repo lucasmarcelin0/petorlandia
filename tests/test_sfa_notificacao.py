@@ -366,6 +366,29 @@ def test_painel_de_usuarios_troca_soma_ou_retira_unidade_das_demais_contas(clien
     assert [v.unidade_id for v in notificacao.vinculos_ativos(criada)] == [terceira.id]
 
 
+def test_ficha_enviada_pelo_navegador_passa_no_csrf_em_https(app, client, ubs, autora):
+    """Em produção a ficha voltava em branco: o CSRF em HTTPS exige o Referer e a página mandava não enviá-lo."""
+    app.config['WTF_CSRF_ENABLED'] = True
+    pagina = client.get('/sfa/notificacao/ficha', **HTTPS)
+    assert pagina.headers['Referrer-Policy'] == 'same-origin'
+    tela = BeautifulSoup(pagina.data, 'html.parser')
+    assert tela.select_one('meta[name="referrer"]')['content'] == 'same-origin'
+    token = tela.select_one('input[name="csrf_token"]')['value']
+    for rota in ('/sfa/notificacao', '/sfa/notificacao/panorama'):
+        assert client.get(rota, **HTTPS).headers['Referrer-Policy'] == 'same-origin', rota
+
+    # Sem a origem (o que no-referrer fazia o navegador mandar), o envio é recusado e nada é gravado.
+    navegador = {'Accept': 'text/html'}
+    recusada = client.post('/sfa/notificacao/ficha', data={**ficha_form(), 'csrf_token': token},
+                           headers=navegador, **HTTPS)
+    assert recusada.status_code == 303 and SfaSinanLog.query.count() == 0
+    # Com same-origin o navegador manda o endereço do próprio site, e a ficha é gravada.
+    aceita = client.post('/sfa/notificacao/ficha', data={**ficha_form(), 'csrf_token': token},
+                         headers={**navegador, 'Referer': 'https://localhost/sfa/notificacao/ficha'}, **HTTPS)
+    assert aceita.status_code == 302 and '/sfa/notificacao/fichas/' in aceita.headers['Location']
+    assert SfaSinanLog.query.one().unidade_id == ubs.id
+
+
 # ---------------------------------------------------------------------------
 # Registrar e consultar fichas
 # ---------------------------------------------------------------------------
