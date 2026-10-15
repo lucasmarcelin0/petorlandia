@@ -257,13 +257,6 @@ def entomologia():
         'cadastre':url_for('sfa_routes.atlas_cadastre_drawing',code='CODE',token=_token_admin_informado() or None),
         'documents':url_for('sfa_routes.atlas_documents',token=_token_admin_informado() or None),
     }
-    dataset['fieldwork_urls'] = {
-        'state': url_for('sfa_routes.entomologia_quarteiroes_estado', token=_token_admin_informado() or None),
-        'save_blocks': url_for('sfa_routes.entomologia_quarteiroes_salvar', token=_token_admin_informado() or None),
-        'sync_visits': url_for('sfa_routes.entomologia_visitas_sincronizar', token=_token_admin_informado() or None),
-        'list_visits': url_for('sfa_routes.entomologia_visitas_listar', token=_token_admin_informado() or None),
-        'export_csv': url_for('sfa_routes.entomologia_visitas_exportar_csv', token=_token_admin_informado() or None),
-    }
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
