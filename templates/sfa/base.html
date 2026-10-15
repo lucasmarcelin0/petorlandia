@@ -242,6 +242,9 @@
        href="{{ url_for('sfa_routes.entomologia') }}" {% if request.endpoint == 'sfa_routes.entomologia' %}aria-current="page"{% endif %}>
       <i class="fas fa-map-location-dot" aria-hidden="true"></i> Dados entomológicos<br><span class="ms-4">e censitários</span>
     </a>
+    <a class="nav-link px-2" href="{{ url_for('sfa_routes.casa_a_casa') }}">
+      <i class="fas fa-house-circle-check" aria-hidden="true"></i> Casa a casa
+    </a>
     <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}active{% endif %}"
        href="{{ url_for('sfa_routes.entomologia_atualizar') }}" {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}aria-current="page"{% endif %}>
       <i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados
