@@ -135,6 +135,40 @@ def _redirect_insecure_request():
     return redirect(secure_url, code=308)
 
 
+# O que a conta de uma unidade de saúde ainda usa fora da área SINAN: sair, trocar a
+# própria senha e o que as páginas dela carregam (CEP da ficha, token CSRF, worker).
+_LIVRES_CONTA_UNIDADE = frozenset({
+    "logout", "change_password", "login_view", "api_cep_lookup", "fresh_csrf_token",
+    "service_worker", "favicon_ico", "health_live", "health_ready",
+})
+
+
+def _manter_conta_de_unidade_na_notificacao():
+    """Conta com o perfil "Unidade de saúde (somente Notificação SINAN)" fica dentro da área SINAN.
+
+    As rotas da área já conferem a unidade de cada ficha; aqui só se fecha o
+    resto do site. Demais contas não são afetadas.
+    """
+    endpoint = request.endpoint or ""
+    if not endpoint or endpoint == "static" or endpoint.endswith(".static"):
+        return None
+    from services.sfa_notificacao import conta_so_notificacao, unidades_do_usuario
+
+    if not conta_so_notificacao(current_user):
+        return None
+    nome = endpoint.rsplit(".", 1)[-1]
+    if nome in _LIVRES_CONTA_UNIDADE:
+        return None
+    if not unidades_do_usuario(current_user):
+        return render_template("sfa/notificacao_sem_unidade.html"), 403
+    if nome.startswith("notificacao_"):
+        return None
+    pede_json = request.accept_mimetypes["application/json"] > request.accept_mimetypes["text/html"]
+    if request.method == "GET" and not pede_json:
+        return redirect(url_for("sfa_routes.notificacao_fichas"))
+    raise NotFound()
+
+
 def _health_response(ready: bool):
     if not ready:
         return jsonify(status="ok"), 200
@@ -349,6 +383,7 @@ def handle_unhandled_exception(err):
 def register_request_hooks(app):
     app.before_request(_redirect_insecure_request)
     app.before_request(_attach_request_id)
+    app.before_request(_manter_conta_de_unidade_na_notificacao)
     app.after_request(_set_request_id_header)
     app.add_url_rule("/live", endpoint="health_live", view_func=lambda: _health_response(False), methods=["GET"])
     app.add_url_rule("/ready", endpoint="health_ready", view_func=lambda: _health_response(True), methods=["GET"])

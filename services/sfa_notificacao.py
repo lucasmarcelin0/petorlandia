@@ -17,6 +17,8 @@ from services.entomologia_acesso import eh_admin
 from services.entomologia_service import consultar_sem_interromper
 
 ROTULO_AREA = "Notificação SINAN"
+# Perfil interno (``User.worker``) da conta de uma unidade de saúde que só usa esta área.
+PERFIL_SO_NOTIFICACAO = "unidade_saude"
 LIMITE_FICHAS = 300
 SEM_UNIDADE = "Unidade não identificada"
 
@@ -68,6 +70,13 @@ def unidades_do_usuario(user) -> list:
 
 def pode_acessar(user) -> bool:
     return eh_admin(user) or bool(unidades_do_usuario(user))
+
+
+def conta_so_notificacao(user) -> bool:
+    """Conta de unidade de saúde: o resto do site fica fechado para ela. O administrador nunca é restrito."""
+    return bool(getattr(user, "is_authenticated", False)
+                and (getattr(user, "worker", None) or "").strip().lower() == PERFIL_SO_NOTIFICACAO
+                and not eh_admin(user))
 
 
 def unidades_para_registrar(user) -> list:
@@ -169,6 +178,43 @@ def revogar(vinculo_id: int, por: str):
     vinculo.revogado_em, vinculo.revogado_por = utcnow(), por
     _esquecer_acessos()
     return vinculo
+
+
+def vinculos_ativos(user) -> list:
+    """Vínculos não revogados da conta, inclusive com unidade desativada."""
+    from models.sfa import SfaUnidadeResponsavel
+
+    if not getattr(user, "id", None):
+        return []
+    return (SfaUnidadeResponsavel.query.filter_by(user_id=user.id, revogado_em=None)
+            .order_by(SfaUnidadeResponsavel.id).all())
+
+
+def definir_unidade_da_conta(user, unidade, por: str, *, exclusiva: bool = False) -> tuple[bool, list]:
+    """Faz a conta responder por ``unidade``; com ``exclusiva``, deixa de responder pelas outras.
+
+    A conta de uma unidade (perfil ``PERFIL_SO_NOTIFICACAO``) responde só pela dela, e assim
+    registra fichas sem precisar escolher a unidade. Devolve (concedido, vínculos revogados).
+    """
+    _, concedido = conceder(unidade, user, por)
+    revogados = []
+    if exclusiva:
+        for vinculo in vinculos_ativos(user):
+            if vinculo.unidade_id != unidade.id:
+                revogados.append(revogar(vinculo.id, por))
+    return concedido, revogados
+
+
+def auditar(funcao: str, mensagem: str, detalhes: dict, *, ator=None, id_estudo=None) -> None:
+    import json
+    from extensions import db
+    from models.sfa import SfaAuditoria
+
+    ator_id = ator.get_id() if ator is not None and hasattr(ator, "get_id") else None
+    db.session.add(SfaAuditoria(nivel="INFO", categoria="NOTIFICACAO_SINAN", funcao=funcao, id_estudo=id_estudo,
+                                mensagem=mensagem,
+                                detalhes_json=json.dumps({"ator_autenticado": str(ator_id), **detalhes},
+                                                         ensure_ascii=False, default=str)))
 
 
 # ---------------------------------------------------------------------------

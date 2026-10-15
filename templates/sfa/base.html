@@ -249,7 +249,13 @@
   </div>
   {% endif %}
   {% if not sfa_completo %}
+  {% if sfa_conta_so_notificacao is defined and sfa_conta_so_notificacao() %}
+  {# Conta de unidade de saúde: o resto do site está fechado para ela (request_hooks). #}
+  <a class="nav-link mx-3 px-2" href="{{ url_for('change_password') }}"><i class="fas fa-key" aria-hidden="true"></i> Alterar senha</a>
+  <a class="nav-link mx-3 px-2" href="{{ url_for('logout') }}"><i class="fas fa-right-from-bracket" aria-hidden="true"></i> Sair</a>
+  {% else %}
   <a class="nav-link mx-3 px-2" href="/"><i class="fas fa-house" aria-hidden="true"></i> Página inicial</a>
+  {% endif %}
   {% endif %}
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>

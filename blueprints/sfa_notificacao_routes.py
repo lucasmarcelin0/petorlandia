@@ -4,7 +4,6 @@ Registradas no blueprint do SFA. Ao contrário das telas internas, aqui o token
 do SFA não vale: toda rota exige uma conta, porque cada ficha fica atribuída a
 quem preencheu e à unidade pela qual a pessoa responde.
 """
-import json
 import re
 from functools import wraps
 
@@ -28,6 +27,11 @@ def usuario_pode_acessar():
 def usuario_administra():
     from services.sfa_notificacao import eh_admin
     return eh_admin(_usuario())
+
+
+def usuario_so_notificacao():
+    from services.sfa_notificacao import conta_so_notificacao
+    return conta_so_notificacao(_usuario())
 
 
 def require_notificacao_access(view):
@@ -73,18 +77,15 @@ def _enumerar(itens):
 
 
 def _auditar(funcao, mensagem, detalhes, id_estudo=None):
-    from extensions import db
-    from models.sfa import SfaAuditoria
-    db.session.add(SfaAuditoria(nivel='INFO', categoria='NOTIFICACAO_SINAN', funcao=funcao, id_estudo=id_estudo,
-                                mensagem=mensagem,
-                                detalhes_json=json.dumps({'ator_autenticado': str(current_user.get_id()), **detalhes},
-                                                         ensure_ascii=False, default=str)))
+    from services.sfa_notificacao import auditar
+    auditar(funcao, mensagem, detalhes, ator=current_user, id_estudo=id_estudo)
 
 
 def register(bp):
     @bp.context_processor
     def _inject_notificacao():
-        return {'sfa_acesso_notificacao': usuario_pode_acessar, 'sfa_notificacao_admin': usuario_administra}
+        return {'sfa_acesso_notificacao': usuario_pode_acessar, 'sfa_notificacao_admin': usuario_administra,
+                'sfa_conta_so_notificacao': usuario_so_notificacao}
 
     def ensure_ficha_da_unidade(ficha_id):
         """A ficha, se é de uma unidade ao alcance da conta; senão 404, sem revelar que ela existe."""
@@ -275,8 +276,11 @@ def register(bp):
     def notificacao_unidades():
         ensure_notificacao_admin()
         from models.sfa import SfaUnidadeSaude
+        from services.sfa_notificacao import PERFIL_SO_NOTIFICACAO
         unidades = SfaUnidadeSaude.query.order_by(SfaUnidadeSaude.ativa.desc(), SfaUnidadeSaude.nome).all()
-        return _sem_cache(render_template('sfa/notificacao_unidades.html', unidades=unidades))
+        return _sem_cache(render_template('sfa/notificacao_unidades.html', unidades=unidades,
+                                          perfil_so_notificacao=PERFIL_SO_NOTIFICACAO,
+                                          editar_conta='user.edit_view' in current_app.view_functions))
 
     @bp.route('/notificacao/unidades', methods=['POST'])
     @require_notificacao_access
