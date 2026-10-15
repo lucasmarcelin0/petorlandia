@@ -2465,6 +2465,17 @@
         acao: true,
       };
     }
+    // Foto ilegivel no aparelho (o iPhone descartou o arquivo): reenviar o
+    // mesmo arquivo nao adianta, entao nao se promete que "nao se perdeu".
+    if (animal.photoUploadCode === 'unreadable') {
+      return {
+        tom: 'erro',
+        titulo: 'Esta foto ficou ilegível neste aparelho.',
+        detalhe: 'Toque em "Tirar outra" ou "Da galeria" para enviar de novo.',
+        acao: true,
+        tentar: false,
+      };
+    }
     // 'failed': parou de tentar. Ou o servidor recusou de vez, ou as
     // tentativas automaticas acabaram sem sucesso.
     return {
@@ -2497,7 +2508,7 @@
           }`
         : '';
     }
-    if (photoRetryBtn) photoRetryBtn.hidden = !(aviso && aviso.acao);
+    if (photoRetryBtn) photoRetryBtn.hidden = !(aviso && aviso.acao && aviso.tentar !== false);
     if (photoCopyBtn) {
       photoCopyBtn.hidden = !(aviso && aviso.acao);
       photoCopyBtn.innerHTML = '<i class="fas fa-copy me-1"></i> Copiar o erro';
@@ -5392,6 +5403,7 @@
       attempts,
       nextAttemptAt: Date.now() + queueRetryDelay(attempts),
       lastError: String((error && error.message) || 'Falha temporaria de conexao').slice(0, 240),
+      lastCode: String((error && error.code) || ''),
       lastStatus: Number((error && error.status) || 0) || 0,
       blocked: permanente || esgotou,
       exhausted: esgotou,
@@ -5497,11 +5509,12 @@
 
   function setAnimalQueuedPhoto(record, uploadState = 'pending') {
     const animal = findAnimalById(record.animalId);
-    if (!animal || !record.file) return null;
+    const queuedFile = queuedPhotoFile(record);
+    if (!animal || !queuedFile) return null;
     const id = Number(record.animalId);
     const oldUrl = photoQueue.objectUrls.get(id);
     if (oldUrl) URL.revokeObjectURL(oldUrl);
-    const objectUrl = URL.createObjectURL(record.file);
+    const objectUrl = URL.createObjectURL(queuedFile);
     photoQueue.objectUrls.set(id, objectUrl);
     animal.pendingImageUrl = objectUrl;
     animal.photoUploadState = uploadState;
@@ -5511,6 +5524,9 @@
     // olhando para um selo vermelho mudo.
     animal.photoUploadError = ['failed', 'error'].includes(uploadState)
       ? (record.lastError || '')
+      : '';
+    animal.photoUploadCode = ['failed', 'error'].includes(uploadState)
+      ? (record.lastCode || '')
       : '';
     animal.photoUploadAttempts = Number(record.attempts || 0);
     animal.photoUploadExhausted = Boolean(record.exhausted);
@@ -5528,6 +5544,7 @@
       delete animal.pendingImageUrl;
       delete animal.photoUploadState;
       delete animal.photoUploadError;
+      delete animal.photoUploadCode;
       delete animal.photoUploadAttempts;
       delete animal.photoUploadExhausted;
       delete animal.photoUploadUpdatedAt;
@@ -6211,16 +6228,64 @@
     }
   }
 
+  // O iPhone guarda um File no IndexedDB como *referencia* ao arquivo
+  // temporario da camera/galeria. Quando o iOS limpa esse arquivo, a foto
+  // volta vazia e o envio sai sem arquivo (HTTP 400 "Nenhuma foto enviada"),
+  // sem que o vacinador tenha feito nada de errado. Por isso a fila guarda os
+  // bytes em memoria, lidos na hora da captura, quando o arquivo ainda existe.
+  function readFileBytes(file) {
+    if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Falha ao ler a foto.'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function unreadablePhotoError() {
+    const error = new Error('Não consegui ler esta foto no aparelho. Toque em "Tirar outra" ou "Da galeria".');
+    // Reenviar o mesmo arquivo ilegivel nao adianta: so uma foto nova resolve.
+    error.permanent = true;
+    error.code = 'unreadable';
+    return error;
+  }
+
+  async function bytesOfPhoto(file) {
+    let bytes = null;
+    try {
+      bytes = await readFileBytes(file);
+    } catch (_error) {
+      bytes = null;
+    }
+    if (!bytes || !bytes.byteLength) throw unreadablePhotoError();
+    return bytes;
+  }
+
+  // Registros novos guardam `buffer`; os antigos (ja na fila de algum
+  // aparelho) guardam `file` e continuam funcionando.
+  function queuedPhotoFile(record) {
+    if (record.buffer && record.buffer.byteLength) {
+      return new File([record.buffer], record.filename || 'foto.jpg', {
+        type: record.type || 'image/jpeg',
+        lastModified: Number(record.updatedAt) || Date.now(),
+      });
+    }
+    return record.file || null;
+  }
+
   async function uploadAnimalPhoto(animal, originalFile, button) {
     if (!animal.id) {
       throw new Error('Sincronize a aba antes de adicionar fotos.');
     }
     const file = await prepareAnimalPhoto(originalFile);
+    if (!file.size) throw unreadablePhotoError();
     if (file.size > 8 * 1024 * 1024) {
       throw new Error('Não foi possível reduzir a foto para menos de 8 MB. Tente outra imagem.');
     }
     const formData = new FormData();
-    formData.append('photo', file);
+    // Nome sempre presente: sem ele o servidor nao reconhece o arquivo.
+    formData.append('photo', file, file.name || 'foto.jpg');
     if (button) {
       button.classList.add('is-busy');
       button.disabled = true;
@@ -6252,6 +6317,8 @@
         failure.permanent = payload.retryable === false
           || [400, 401, 403, 413, 415].includes(response.status);
         failure.status = response.status;
+        // Servidor sem arquivo / com arquivo vazio = foto ilegivel no aparelho.
+        failure.code = ['no_file', 'empty_file'].includes(payload.code) ? 'unreadable' : (payload.code || '');
         throw failure;
       }
       // A resposta pode chegar depois de outra acao ter substituido o cartao
@@ -6285,13 +6352,14 @@
   async function uploadQueuedPhoto(record) {
     const animalId = Number(record.animalId);
     if (!animalId || photoQueue.processing.has(animalId)) return;
-    if (!record.file) return;
+    const queuedFile = queuedPhotoFile(record);
+    if (!queuedFile) return;
 
     photoQueue.processing.add(animalId);
     setAnimalQueuedPhoto(record, 'uploading');
     render();
     try {
-      const payload = await uploadAnimalPhoto(findAnimalById(animalId) || { id: animalId }, record.file, null);
+      const payload = await uploadAnimalPhoto(findAnimalById(animalId) || { id: animalId }, queuedFile, null);
       const removed = await deleteQueuedPhoto(animalId, record.updatedAt);
       const currentAnimal = findAnimalById(animalId);
       if (currentAnimal && payload.image_url) currentAnimal.imageUrl = payload.image_url;
@@ -6318,6 +6386,7 @@
         // O motivo fica guardado mesmo quando a tentativa vai se repetir: e
         // o que o modal mostra quando o vacinador toca na foto.
         currentAnimal.photoUploadError = navigator.onLine === false ? '' : motivo;
+        currentAnimal.photoUploadCode = String((error && error.code) || '');
         currentAnimal.photoUploadAttempts = Number(deferred?.attempts || 0);
         currentAnimal.photoUploadExhausted = Boolean(deferred?.exhausted);
       }
@@ -6356,6 +6425,7 @@
               attempts: 0,
               nextAttemptAt: 0,
               lastError: '',
+              lastCode: '',
               lastStatus: 0,
             });
           }
@@ -6496,17 +6566,39 @@
     scheduleLocalQueueProcessing(0);
   }
 
+  function showPhotoPreparing(animal) {
+    document.querySelectorAll(`[data-animal-id="${cssEscape(animal.id)}"] .pmo-animal-photo-btn, [data-animal-id="${cssEscape(animal.id)}"] .pmo-animal-photo-thumb`)
+      .forEach((el) => {
+        el.classList.add('is-busy');
+        if (el.classList.contains('pmo-animal-photo-btn')) {
+          el.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>';
+        }
+      });
+  }
+
   async function queueAnimalPhotoUpload(animal, originalFile) {
     if (!animal.id) {
       throw new Error('Sincronize a aba antes de adicionar fotos.');
     }
-    const file = await prepareAnimalPhoto(originalFile);
-    if (file.size > 8 * 1024 * 1024) {
-      throw new Error('Nao foi possivel reduzir a foto para menos de 8 MB. Tente outra imagem.');
+    // Retorno imediato: preparar a foto (reduzir 12 MP) leva um ou dois
+    // segundos e, sem sinal na tela, parecia que nada tinha acontecido.
+    showPhotoPreparing(animal);
+    let file;
+    let buffer;
+    try {
+      file = await prepareAnimalPhoto(originalFile);
+      if (file.size > 8 * 1024 * 1024) {
+        throw new Error('Nao foi possivel reduzir a foto para menos de 8 MB. Tente outra imagem.');
+      }
+      // Le a foto agora, enquanto o arquivo do aparelho ainda existe.
+      buffer = await bytesOfPhoto(file);
+    } catch (error) {
+      render();
+      throw error;
     }
     const record = {
       animalId: Number(animal.id),
-      file,
+      buffer,
       filename: file.name || `animal-${animal.id}.jpg`,
       type: file.type || 'image/jpeg',
       updatedAt: Date.now(),
@@ -6969,7 +7061,7 @@
     if (imageUrl) {
       return `
         <button type="button" class="pmo-animal-photo-thumb ${isPending ? `is-${stateName}` : ''}" data-action="animal-photo-view" data-animal-index="${index}" title="${escapeHtml(title)}">
-          <img src="${escapeHtml(imageUrl)}" alt="Foto de ${escapeHtml(animal.name)}" loading="lazy">
+          <img src="${escapeHtml(imageUrl)}" alt="Foto de ${escapeHtml(animal.name)}"${String(imageUrl).startsWith('blob:') ? '' : ' loading="lazy"'}>
           ${isPending ? `<span class="pmo-animal-photo-badge" data-state="${escapeHtml(stateName)}">${badgeIcon}</span>` : ''}
         </button>
       `;

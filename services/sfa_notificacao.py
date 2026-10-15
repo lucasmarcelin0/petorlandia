@@ -17,6 +17,8 @@ from services.entomologia_acesso import eh_admin
 from services.entomologia_service import consultar_sem_interromper
 
 ROTULO_AREA = "Notificação SINAN"
+# Perfil interno (``User.worker``) da conta de uma unidade de saúde que só usa esta área.
+PERFIL_SO_NOTIFICACAO = "unidade_saude"
 LIMITE_FICHAS = 300
 SEM_UNIDADE = "Unidade não identificada"
 
@@ -68,6 +70,13 @@ def unidades_do_usuario(user) -> list:
 
 def pode_acessar(user) -> bool:
     return eh_admin(user) or bool(unidades_do_usuario(user))
+
+
+def conta_so_notificacao(user) -> bool:
+    """Conta de unidade de saúde: o resto do site fica fechado para ela. O administrador nunca é restrito."""
+    return bool(getattr(user, "is_authenticated", False)
+                and (getattr(user, "worker", None) or "").strip().lower() == PERFIL_SO_NOTIFICACAO
+                and not eh_admin(user))
 
 
 def unidades_para_registrar(user) -> list:
@@ -169,6 +178,43 @@ def revogar(vinculo_id: int, por: str):
     vinculo.revogado_em, vinculo.revogado_por = utcnow(), por
     _esquecer_acessos()
     return vinculo
+
+
+def vinculos_ativos(user) -> list:
+    """Vínculos não revogados da conta, inclusive com unidade desativada."""
+    from models.sfa import SfaUnidadeResponsavel
+
+    if not getattr(user, "id", None):
+        return []
+    return (SfaUnidadeResponsavel.query.filter_by(user_id=user.id, revogado_em=None)
+            .order_by(SfaUnidadeResponsavel.id).all())
+
+
+def definir_unidade_da_conta(user, unidade, por: str, *, exclusiva: bool = False) -> tuple[bool, list]:
+    """Faz a conta responder por ``unidade``; com ``exclusiva``, deixa de responder pelas outras.
+
+    A conta de uma unidade (perfil ``PERFIL_SO_NOTIFICACAO``) responde só pela dela, e assim
+    registra fichas sem precisar escolher a unidade. Devolve (concedido, vínculos revogados).
+    """
+    _, concedido = conceder(unidade, user, por)
+    revogados = []
+    if exclusiva:
+        for vinculo in vinculos_ativos(user):
+            if vinculo.unidade_id != unidade.id:
+                revogados.append(revogar(vinculo.id, por))
+    return concedido, revogados
+
+
+def auditar(funcao: str, mensagem: str, detalhes: dict, *, ator=None, id_estudo=None) -> None:
+    import json
+    from extensions import db
+    from models.sfa import SfaAuditoria
+
+    ator_id = ator.get_id() if ator is not None and hasattr(ator, "get_id") else None
+    db.session.add(SfaAuditoria(nivel="INFO", categoria="NOTIFICACAO_SINAN", funcao=funcao, id_estudo=id_estudo,
+                                mensagem=mensagem,
+                                detalhes_json=json.dumps({"ator_autenticado": str(ator_id), **detalhes},
+                                                         ensure_ascii=False, default=str)))
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +363,80 @@ def pode_completar(user, log_entry) -> bool:
         return True
     return bool(log_entry.preenchido_por_id and log_entry.preenchido_por_id == getattr(user, "id", None)
                 and log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)})
+
+
+def _caso_da_ficha(log_entry):
+    from models.sfa import SfaPaciente
+
+    if not log_entry.id_estudo_vinculado:
+        return None
+    return SfaPaciente.query.filter_by(id_estudo=log_entry.id_estudo_vinculado).first()
+
+
+def _caso_em_andamento(paciente) -> bool:
+    """O estudo já agiu sobre o caso: contato, WhatsApp, questionário ou ação registrada."""
+    from models.sfa import (SfaAcao, SfaContato, SfaContextoEpisodio, SfaEventoVinculo, SfaRespostaT0,
+                            SfaRespostaT7, SfaRespostaT10, SfaRespostaT30)
+
+    if (paciente.status_t0 or "SINAN_Aguardando_T0") != "SINAN_Aguardando_T0":
+        return True
+    if (paciente.status_whatsapp or "NAO_ENVIADO") != "NAO_ENVIADO":
+        return True
+    if (paciente.retorno_contato or "PENDENTE") != "PENDENTE":
+        return True
+    return any(modelo.query.filter_by(id_estudo=paciente.id_estudo).first() is not None
+               for modelo in (SfaRespostaT0, SfaRespostaT7, SfaRespostaT10, SfaRespostaT30, SfaContextoEpisodio,
+                              SfaContato, SfaEventoVinculo, SfaAcao))
+
+
+def _caso_criado_pela_ficha(paciente, log_entry) -> bool:
+    """O caso nasceu desta ficha (e não da planilha) e nenhum outro registro aponta para ele."""
+    from models.sfa import SfaAuditoria, SfaSinanLog
+
+    outros = SfaSinanLog.query.filter(SfaSinanLog.id_estudo_vinculado == paciente.id_estudo,
+                                      SfaSinanLog.id != log_entry.id).first()
+    if outros is not None:
+        return False
+    criacao = (SfaAuditoria.query.filter_by(funcao="salvar_ficha_pre_t0", id_estudo=paciente.id_estudo)
+               .filter(SfaAuditoria.detalhes_json.like('%"novo_caso": true%')).first())
+    return criacao is not None
+
+
+def motivo_para_nao_excluir(log_entry) -> str:
+    """Vazio quando a ficha pode ser excluída; senão o motivo, para mostrar na tela."""
+    if log_entry.n_caso:
+        return "Esta ficha também veio da planilha do SINAN. Para excluí-la, fale com a vigilância."
+    paciente = _caso_da_ficha(log_entry)
+    if paciente is not None and _caso_em_andamento(paciente):
+        return ("Esta notificação já entrou no acompanhamento do estudo (contato ou questionário). "
+                "Para excluí-la, fale com a vigilância.")
+    return ""
+
+
+def pode_excluir(user, log_entry) -> bool:
+    """Quem pode corrigir a ficha pode excluí-la, enquanto o estudo não agiu sobre ela."""
+    return pode_completar(user, log_entry) and not motivo_para_nao_excluir(log_entry)
+
+
+def excluir_ficha(log_entry) -> dict:
+    """Apaga a ficha e o caso que só ela criou. ``ValueError`` com o motivo quando não pode.
+
+    O caso do estudo sai junto apenas se nasceu desta ficha e ainda não teve
+    nenhuma ação; caso vindo de outra origem continua, só sem esta ficha.
+    """
+    from extensions import db
+
+    motivo = motivo_para_nao_excluir(log_entry)
+    if motivo:
+        raise ValueError(motivo)
+    paciente = _caso_da_ficha(log_entry)
+    remover_caso = paciente is not None and _caso_criado_pela_ficha(paciente, log_entry)
+    resumo = {"ficha_id": log_entry.id, "ficha_sinan": log_entry.ficha_sinan or "", "unidade_id": log_entry.unidade_id,
+              "id_estudo": log_entry.id_estudo_vinculado or "", "caso_removido": remover_caso}
+    db.session.delete(log_entry)
+    if remover_caso:
+        db.session.delete(paciente)
+    return resumo
 
 
 def ficha_ja_registrada(numero: object):

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Conta sem unidade · Notificação SINAN</title>
+  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+  <style>
+    body { min-height: 100vh; display: grid; place-items: center; padding: 1rem; background: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+    .cartao { max-width: 460px; padding: 1.5rem; border: 1px solid #e1e8e6; border-radius: .75rem; background: #fff; }
+    .cartao h1 { margin-bottom: .5rem; font-size: 1.2rem; font-weight: 700; color: #12343b; }
+    .cartao p { color: #5d7378; }
+  </style>
+</head>
+<body>
+  {# Conta com o perfil "Unidade de saúde (somente Notificação SINAN)" que ainda não responde por uma unidade ativa. #}
+  <main class="cartao">
+    <h1>Esta conta ainda não está ligada a uma unidade</h1>
+    <p>Ela é de uma unidade de saúde e só acessa a Notificação SINAN, mas nenhuma unidade ativa foi indicada para ela. Peça à vigilância para indicar a unidade desta conta e entre de novo.</p>
+    <a class="btn btn-outline-secondary" href="{{ url_for('logout') }}">Sair</a>
+  </main>
+</body>
+</html>

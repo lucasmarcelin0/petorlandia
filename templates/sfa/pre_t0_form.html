@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="referrer" content="no-referrer">
+  {# same-origin: o envio da ficha precisa do Referer do próprio site para passar no CSRF em HTTPS. #}
+  <meta name="referrer" content="same-origin">
   <meta name="theme-color" content="#103f46">
   {# Área das unidades de saúde (blueprints.sfa_notificacao_routes): mesma ficha, com a unidade fixa e a opção de completar depois. #}
   {% set u = unidade_ctx if unidade_ctx is defined else none %}
   {% set completar = u and u.modo == 'completar' %}
-  <title>{% if completar %}Completar ficha {{ u.ficha_sinan }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
+  <title>{% if completar %}Editar ficha {{ u.ficha_sinan }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261013">

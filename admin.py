@@ -52,6 +52,8 @@ USER_WORKER_CHOICES = [
     ('administrador', 'Administrador financeiro'),
     ('admin_clinica', 'Administrador de clínica'),
     ('master', 'Master'),
+    # services.sfa_notificacao.PERFIL_SO_NOTIFICACAO: conta de UBS que só vê a Notificação SINAN.
+    ('unidade_saude', 'Unidade de saúde (somente Notificação SINAN)'),
 ]
 
 ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
@@ -714,6 +716,15 @@ class UserAdminView(MyModelView):
             description='Preencha apenas para redefinir a senha do usuário '
                         '(mínimo 6 caracteres). Deixe em branco para manter a atual.',
         ),
+        # As opções (unidades cadastradas) entram em create_form/edit_form.
+        'unidade_sinan': SelectField(
+            'Unidade de saúde (Notificação SINAN)',
+            default='',
+            description='Unidade pela qual a conta registra fichas SINAN. Com o perfil interno '
+                        '"Unidade de saúde (somente Notificação SINAN)" a conta passa a ver só essa área, '
+                        'responde só por esta unidade e não precisa escolher a unidade ao registrar. '
+                        'Deixe "Nenhuma" para contas sem esse acesso.',
+        ),
     }
 
     column_list = (
@@ -749,10 +760,101 @@ class UserAdminView(MyModelView):
         'worker': {'choices': USER_WORKER_CHOICES},
     }
     form_columns = (
-        'name', 'email', 'new_password', 'role', 'worker',
+        'name', 'email', 'new_password', 'role', 'worker', 'unidade_sinan',
         'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica', 'profile_photo_upload'
     )
     column_details_list = column_list
+
+    def create_form(self, obj=None):
+        return self._preparar_unidade_sinan(super().create_form(obj))
+
+    def edit_form(self, obj=None):
+        return self._preparar_unidade_sinan(super().edit_form(obj))
+
+    @staticmethod
+    def _preparar_unidade_sinan(form):
+        campo = getattr(form, 'unidade_sinan', None)
+        if campo is None:
+            return form
+        from models.sfa import SfaUnidadeSaude
+        from services.entomologia_service import consultar_sem_interromper
+        unidades = consultar_sem_interromper(
+            lambda: SfaUnidadeSaude.query.order_by(SfaUnidadeSaude.ativa.desc(), SfaUnidadeSaude.nome).all(), [])
+        campo.choices = [('', 'Nenhuma')] + [
+            (str(u.id), u.nome if u.ativa else f'{u.nome} (desativada)') for u in unidades
+        ]
+        return form
+
+    @staticmethod
+    def _unidade_sinan_enviada(form):
+        """(campo, unidade escolhida) quando o campo veio no envio; outras telas que gravam o usuário não o enviam."""
+        from models.sfa import SfaUnidadeSaude
+        campo = getattr(form, 'unidade_sinan', None)
+        if campo is None or campo.name not in request.form:
+            return None, None
+        valor = str(campo.data or '')
+        return campo, (db.session.get(SfaUnidadeSaude, int(valor)) if valor.isdigit() else None)
+
+    @staticmethod
+    def _so_notificacao(worker, role):
+        from services.sfa_notificacao import PERFIL_SO_NOTIFICACAO
+        return (worker or '').strip() == PERFIL_SO_NOTIFICACAO and (role or '').lower() != 'admin'
+
+    def validate_form(self, form):
+        valido = super().validate_form(form)
+        campo, escolhida = self._unidade_sinan_enviada(form)
+        if not valido or campo is None:
+            return valido
+        if not self._so_notificacao(getattr(getattr(form, 'worker', None), 'data', None),
+                                    getattr(getattr(form, 'role', None), 'data', None)):
+            return True
+        # O painel não mostra avisos soltos: o motivo aparece embaixo do próprio campo.
+        if escolhida is None:
+            erro = ('Escolha a unidade desta conta: com o perfil "Unidade de saúde" ela só acessa '
+                    'a Notificação SINAN da própria unidade.')
+        elif not escolhida.ativa:
+            erro = f'{escolhida.nome} está desativada. Reative a unidade em "Unidades e responsáveis" ou escolha outra.'
+        else:
+            return True
+        campo.errors = [*campo.errors, erro]
+        return False
+
+    def _sincronizar_unidade_sinan(self, form, model, is_created):
+        """Liga a conta à unidade escolhida; a conta de unidade responde só por ela.
+
+        Só age quando o campo veio no envio (``validate_form`` já conferiu a
+        escolha). O formulário mostra a unidade quando a conta responde por uma
+        só: trocar a escolha troca a unidade e esvaziar o campo retira o acesso.
+        Conta que responde por várias (campo em branco) só ganha a escolhida,
+        exceto no perfil de unidade, que fica só com ela.
+        """
+        from services.sfa_notificacao import (auditar, definir_unidade_da_conta, nome_da_conta, revogar,
+                                              vinculos_ativos)
+
+        campo, escolhida = self._unidade_sinan_enviada(form)
+        if campo is None:
+            return
+        restrita = self._so_notificacao(model.worker, model.role)
+        if is_created:
+            db.session.flush()
+        por = nome_da_conta(current_user)[:160]
+        detalhes = {'user_id': model.id, 'origem': 'painel_usuarios'}
+        vinculos = vinculos_ativos(model)
+        if escolhida is None:
+            if len(vinculos) == 1:
+                vinculo = revogar(vinculos[0].id, por)
+                auditar('revogar_responsavel',
+                        f'Conta #{model.id} deixou de responder pela unidade #{vinculo.unidade_id}',
+                        {'unidade_id': vinculo.unidade_id, **detalhes}, ator=current_user)
+            return
+        concedido, revogados = definir_unidade_da_conta(model, escolhida, por,
+                                                        exclusiva=restrita or len(vinculos) <= 1)
+        if concedido:
+            auditar('conceder_responsavel', f'Conta #{model.id} passou a responder pela unidade #{escolhida.id}',
+                    {'unidade_id': escolhida.id, **detalhes}, ator=current_user)
+        for vinculo in revogados:
+            auditar('revogar_responsavel', f'Conta #{model.id} deixou de responder pela unidade #{vinculo.unidade_id}',
+                    {'unidade_id': vinculo.unidade_id, **detalhes}, ator=current_user)
 
     def on_model_change(self, form, model, is_created):
         model.worker = (model.worker or '').strip() or None
@@ -773,6 +875,7 @@ class UserAdminView(MyModelView):
             image_url = upload_to_s3(file, filename, folder="profile_photos")
             if image_url:
                 model.profile_photo = image_url
+        self._sincronizar_unidade_sinan(form, model, is_created)
 
     def on_form_prefill(self, form, id):
         obj = self.get_one(id)
@@ -781,6 +884,18 @@ class UserAdminView(MyModelView):
                 f'<img src="{escape(_admin_image_src(obj.profile_photo))}" alt="Foto atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
+        campo = getattr(form, 'unidade_sinan', None)
+        if obj and campo is not None:
+            from services.entomologia_service import consultar_sem_interromper
+            from services.sfa_notificacao import vinculos_ativos
+            vinculos = consultar_sem_interromper(lambda: vinculos_ativos(obj), [])
+            if len(vinculos) == 1 and request.method == 'GET':
+                campo.data = str(vinculos[0].unidade_id)
+            elif len(vinculos) > 1:
+                nomes = ', '.join(str(escape(v.unidade.nome)) for v in vinculos)
+                campo.description = (f'Hoje esta conta responde por {len(vinculos)} unidades ({nomes}) e por isso '
+                                     f'escolhe a unidade a cada ficha. Escolha uma aqui para deixar só ela no perfil '
+                                     f'"Unidade de saúde"; nos demais perfis, a escolhida é somada às outras.')
 
 
 

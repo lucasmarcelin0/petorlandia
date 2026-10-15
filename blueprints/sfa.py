@@ -257,13 +257,6 @@ def entomologia():
         'cadastre':url_for('sfa_routes.atlas_cadastre_drawing',code='CODE',token=_token_admin_informado() or None),
         'documents':url_for('sfa_routes.atlas_documents',token=_token_admin_informado() or None),
     }
-    dataset['fieldwork_urls'] = {
-        'state': url_for('sfa_routes.entomologia_quarteiroes_estado', token=_token_admin_informado() or None),
-        'save_blocks': url_for('sfa_routes.entomologia_quarteiroes_salvar', token=_token_admin_informado() or None),
-        'sync_visits': url_for('sfa_routes.entomologia_visitas_sincronizar', token=_token_admin_informado() or None),
-        'list_visits': url_for('sfa_routes.entomologia_visitas_listar', token=_token_admin_informado() or None),
-        'export_csv': url_for('sfa_routes.entomologia_visitas_exportar_csv', token=_token_admin_informado() or None),
-    }
     dataset['actions'] = acoes_territoriais(completo=acesso_completo)
     publicacao = publicacao_vigente()
     dataset['publication'] = ({'id': publicacao.id, 'inicio': publicacao.inicio.isoformat(),
@@ -2107,7 +2100,8 @@ def pre_t0_ficha():
     def page_response(template_name: str, **context):
         response = current_app.make_response(render_template(template_name, **context))
         response.headers["Cache-Control"] = "no-store, private"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        # O formulário envia para esta mesma rota: o CSRF em HTTPS exige o Referer do próprio site.
+        response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
 
