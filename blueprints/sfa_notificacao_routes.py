@@ -180,8 +180,8 @@ def register(bp):
     def notificacao_ficha(ficha_id):
         from extensions import db
         from models import User
-        from services.sfa_notificacao import (agravo_da_ficha, nome_da_conta, pendencias, pendencias_por_grupo,
-                                              pode_completar)
+        from services.sfa_notificacao import (agravo_da_ficha, motivo_para_nao_excluir, nome_da_conta, pendencias,
+                                              pendencias_por_grupo, pode_completar)
         from services.sfa_pre_t0 import carregar_esquema_pre_t0, obter_ficha_do_log
 
         log_entry = ensure_ficha_da_unidade(ficha_id)
@@ -197,11 +197,12 @@ def register(bp):
             revisoes.append({'em': _data_hora(revisao.get('em')), 'autor': nome_da_conta(autor) or 'Conta removida',
                              'campos': [numero for key, numero in numeros.items()
                                         if key in (revisao.get('campos') or [])]})
+        editavel = pode_completar(current_user, log_entry)
         return _sem_cache(render_template(
             'sfa/notificacao_ficha.html', log=log_entry, ficha=ficha, revisoes=revisoes,
             grupos=pendencias_por_grupo(faltam), faltando={item['chave'] for item in faltam},
             agravo=agravo_da_ficha(ficha['respostas']), autor=nome_da_conta(log_entry.preenchido_por),
-            pode_completar=pode_completar(current_user, log_entry)))
+            pode_completar=editavel, motivo_exclusao=motivo_para_nao_excluir(log_entry) if editavel else ''))
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/completar', methods=['GET', 'POST'])
     @require_notificacao_access
@@ -239,6 +240,29 @@ def register(bp):
                 flash('Nada mudou: a ficha continua como estava.', 'info')
             return redirect(destino)
         return _formulario(schema, respostas_para_formulario(respostas, schema), acao, contexto)
+
+    @bp.route('/notificacao/fichas/<int:ficha_id>/excluir', methods=['POST'])
+    @require_notificacao_access
+    @login_required
+    def notificacao_excluir(ficha_id):
+        """Exclui a ficha (e o caso que só ela criou) enquanto o estudo não agiu sobre ela."""
+        from extensions import db
+        from services.sfa_notificacao import excluir_ficha, pode_completar
+
+        log_entry = ensure_ficha_da_unidade(ficha_id)
+        if not pode_completar(current_user, log_entry):
+            abort(404)
+        try:
+            resumo = excluir_ficha(log_entry)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('sfa_routes.notificacao_ficha', ficha_id=ficha_id))
+        _auditar('excluir_ficha', f"Ficha #{resumo['ficha_id']} excluída pela área das unidades", resumo,
+                 id_estudo=resumo['id_estudo'] or None)
+        db.session.commit()
+        flash(f"Ficha {resumo['ficha_sinan'] or 'sem número'} excluída.", 'success')
+        return redirect(url_for('sfa_routes.notificacao_fichas'))
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/imprimir')
     @require_notificacao_access

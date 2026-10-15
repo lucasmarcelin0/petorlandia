@@ -421,9 +421,11 @@ def test_colega_da_unidade_ve_e_so_o_autor_completa(client, ubs, autora):
     assert 'Maria Paciente' in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
     ficha = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS)
     assert ficha.status_code == 200 and 'Ana Autora' in ficha.get_data(as_text=True)
-    assert 'Completar ficha' not in ficha.get_data(as_text=True)
+    for acao in ('Completar ficha', 'Editar ficha', 'Excluir ficha'):
+        assert acao not in ficha.get_data(as_text=True)
     assert client.get(f'/sfa/notificacao/fichas/{log.id}/completar', **HTTPS).status_code == 404
     assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome='Trocado'), **HTTPS).status_code == 404
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS).status_code == 404
 
     entrar(client, de_fora)
     assert 'Maria Paciente' not in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
@@ -471,7 +473,7 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
     assert SfaAuditoria.query.filter_by(funcao='atualizar_ficha_pre_t0').count() == 1
 
     detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
-    assert 'O que ainda falta' not in detalhe and 'Alterações depois do envio' in detalhe and 'Corrigir ficha' in detalhe
+    assert 'O que ainda falta' not in detalhe and 'Alterações depois do envio' in detalhe and 'Editar ficha' in detalhe
     lista = client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
     assert 'campos a completar' not in lista and 'Completa' in lista
     assert 'Nenhuma ficha com esse filtro' in client.get('/sfa/notificacao?pendentes=1', **HTTPS).get_data(as_text=True)
@@ -480,6 +482,56 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
     client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=completa, **HTTPS)
     db.session.refresh(log)
     assert len(json.loads(log.dados_json)[FULL_KEY]['revisoes']) == 1
+
+
+def test_autor_edita_e_exclui_a_ficha_com_o_caso_que_ela_criou(client, ubs, autora):
+    log = registrar(client, **COMPLETA)
+    log_id, id_estudo = log.id, log.id_estudo_vinculado
+    lista = BeautifulSoup(client.get('/sfa/notificacao', **HTTPS).data, 'html.parser')
+    assert lista.select_one(f'a[href$="/sfa/notificacao/fichas/{log_id}/completar"]').get_text() == 'Editar'
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log_id}', **HTTPS).get_data(as_text=True)
+    assert 'Editar ficha' in detalhe and 'Excluir ficha' in detalhe
+
+    excluida = client.post(f'/sfa/notificacao/fichas/{log_id}/excluir', **HTTPS)
+    assert excluida.status_code == 302 and excluida.headers['Location'].endswith('/sfa/notificacao')
+    assert db.session.get(SfaSinanLog, log_id) is None
+    assert SfaPaciente.query.filter_by(id_estudo=id_estudo).first() is None
+    auditoria = json.loads(SfaAuditoria.query.filter_by(funcao='excluir_ficha').one().detalhes_json)
+    assert (auditoria['ficha_sinan'], auditoria['caso_removido'], auditoria['ator_autenticado']) == ('2985999', True, str(autora.id))
+    assert 'Maria Paciente' not in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
+    assert client.get(f'/sfa/notificacao/fichas/{log_id}', **HTTPS).status_code == 404
+    # O mesmo número pode ser registrado de novo depois de excluído.
+    assert registrar(client).ficha_sinan == '2985999'
+
+
+def test_ficha_com_caso_em_acompanhamento_ou_da_planilha_nao_e_excluida(client, ubs, autora):
+    log = registrar(client)
+    paciente = SfaPaciente.query.one()
+    paciente.status_whatsapp = 'ENVIADO'
+    db.session.commit()
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+    assert 'Excluir ficha' not in detalhe and 'já entrou no acompanhamento do estudo' in detalhe
+    recusada = client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS)
+    assert recusada.status_code == 302 and recusada.headers['Location'].endswith(f'/sfa/notificacao/fichas/{log.id}')
+    assert db.session.get(SfaSinanLog, log.id) is not None and SfaPaciente.query.count() == 1
+
+    paciente.status_whatsapp = 'NAO_ENVIADO'
+    log.n_caso = '17'
+    db.session.commit()
+    client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS)
+    assert db.session.get(SfaSinanLog, log.id) is not None
+    assert 'veio da planilha do SINAN' in client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+
+
+def test_excluir_mantem_o_caso_que_nao_nasceu_da_ficha(app, client, ubs, autora):
+    existente = SfaPaciente(id_estudo='SFA-9001', ficha_sinan='2985999', nome='Caso da Planilha')
+    db.session.add(existente)
+    db.session.commit()
+    log = registrar(client)
+    assert log.id_estudo_vinculado == 'SFA-9001'
+    entrar(client, conta('admin9@example.test', role='admin'))
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS).status_code == 302
+    assert SfaSinanLog.query.count() == 0 and SfaPaciente.query.one().id_estudo == 'SFA-9001'
 
 
 def test_correcao_nao_sobrescreve_o_que_a_equipe_ajustou_no_caso(client, ubs, autora):

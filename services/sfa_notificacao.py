@@ -365,6 +365,80 @@ def pode_completar(user, log_entry) -> bool:
                 and log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)})
 
 
+def _caso_da_ficha(log_entry):
+    from models.sfa import SfaPaciente
+
+    if not log_entry.id_estudo_vinculado:
+        return None
+    return SfaPaciente.query.filter_by(id_estudo=log_entry.id_estudo_vinculado).first()
+
+
+def _caso_em_andamento(paciente) -> bool:
+    """O estudo já agiu sobre o caso: contato, WhatsApp, questionário ou ação registrada."""
+    from models.sfa import (SfaAcao, SfaContato, SfaContextoEpisodio, SfaEventoVinculo, SfaRespostaT0,
+                            SfaRespostaT7, SfaRespostaT10, SfaRespostaT30)
+
+    if (paciente.status_t0 or "SINAN_Aguardando_T0") != "SINAN_Aguardando_T0":
+        return True
+    if (paciente.status_whatsapp or "NAO_ENVIADO") != "NAO_ENVIADO":
+        return True
+    if (paciente.retorno_contato or "PENDENTE") != "PENDENTE":
+        return True
+    return any(modelo.query.filter_by(id_estudo=paciente.id_estudo).first() is not None
+               for modelo in (SfaRespostaT0, SfaRespostaT7, SfaRespostaT10, SfaRespostaT30, SfaContextoEpisodio,
+                              SfaContato, SfaEventoVinculo, SfaAcao))
+
+
+def _caso_criado_pela_ficha(paciente, log_entry) -> bool:
+    """O caso nasceu desta ficha (e não da planilha) e nenhum outro registro aponta para ele."""
+    from models.sfa import SfaAuditoria, SfaSinanLog
+
+    outros = SfaSinanLog.query.filter(SfaSinanLog.id_estudo_vinculado == paciente.id_estudo,
+                                      SfaSinanLog.id != log_entry.id).first()
+    if outros is not None:
+        return False
+    criacao = (SfaAuditoria.query.filter_by(funcao="salvar_ficha_pre_t0", id_estudo=paciente.id_estudo)
+               .filter(SfaAuditoria.detalhes_json.like('%"novo_caso": true%')).first())
+    return criacao is not None
+
+
+def motivo_para_nao_excluir(log_entry) -> str:
+    """Vazio quando a ficha pode ser excluída; senão o motivo, para mostrar na tela."""
+    if log_entry.n_caso:
+        return "Esta ficha também veio da planilha do SINAN. Para excluí-la, fale com a vigilância."
+    paciente = _caso_da_ficha(log_entry)
+    if paciente is not None and _caso_em_andamento(paciente):
+        return ("Esta notificação já entrou no acompanhamento do estudo (contato ou questionário). "
+                "Para excluí-la, fale com a vigilância.")
+    return ""
+
+
+def pode_excluir(user, log_entry) -> bool:
+    """Quem pode corrigir a ficha pode excluí-la, enquanto o estudo não agiu sobre ela."""
+    return pode_completar(user, log_entry) and not motivo_para_nao_excluir(log_entry)
+
+
+def excluir_ficha(log_entry) -> dict:
+    """Apaga a ficha e o caso que só ela criou. ``ValueError`` com o motivo quando não pode.
+
+    O caso do estudo sai junto apenas se nasceu desta ficha e ainda não teve
+    nenhuma ação; caso vindo de outra origem continua, só sem esta ficha.
+    """
+    from extensions import db
+
+    motivo = motivo_para_nao_excluir(log_entry)
+    if motivo:
+        raise ValueError(motivo)
+    paciente = _caso_da_ficha(log_entry)
+    remover_caso = paciente is not None and _caso_criado_pela_ficha(paciente, log_entry)
+    resumo = {"ficha_id": log_entry.id, "ficha_sinan": log_entry.ficha_sinan or "", "unidade_id": log_entry.unidade_id,
+              "id_estudo": log_entry.id_estudo_vinculado or "", "caso_removido": remover_caso}
+    db.session.delete(log_entry)
+    if remover_caso:
+        db.session.delete(paciente)
+    return resumo
+
+
 def ficha_ja_registrada(numero: object):
     """Registro que já guarda a ficha digital com esse número, se houver."""
     from models.sfa import SfaSinanLog

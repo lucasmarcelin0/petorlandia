@@ -58,7 +58,7 @@
             {% else %}<span class="notif-completa">Completa</span>{% endif %}
           </td>
           <td class="text-end text-nowrap">
-            {% if f.pode_completar and f.total_faltam %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=f.id) }}">Completar</a>{% endif %}
+            {% if f.pode_completar %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=f.id) }}">{{ 'Completar' if f.total_faltam else 'Editar' }}</a>{% endif %}
             <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sfa_routes.notificacao_ficha', ficha_id=f.id) }}">Abrir</a>
           </td>
         </tr>
