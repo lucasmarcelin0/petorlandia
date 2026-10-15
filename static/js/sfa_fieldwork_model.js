@@ -30,7 +30,18 @@
     return 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
   }
 
+  // Data do dia em Orlândia. toISOString() é UTC: das 21h à meia-noite já devolveria amanhã.
+  function todayIso() {
+    if (typeof window !== 'undefined' && window.PetDateBR) {
+      return window.PetDateBR.todayIso();
+    }
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   const SfaFieldworkModel = {
+    todayIso,
+
     // ------------------------------------------------------------------------
     // Gestão de Quarteirões
     // ------------------------------------------------------------------------
@@ -94,7 +105,7 @@
         larvas: Boolean(data.larvas),
         tubitos: Number(data.tubitos || 0),
         agente: data.agente || '',
-        data_visita: data.data_visita || new Date().toISOString().slice(0, 10),
+        data_visita: data.data_visita || todayIso(),
         horario_visita: data.horario_visita || new Date().toISOString(),
         observacao: data.observacao || '',
         synced: false,
@@ -165,7 +176,7 @@
     // Gamificação do Agente
     // ------------------------------------------------------------------------
     computeGamification(visits, blocks) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIso();
       const todayVisits = visits.filter(v => v.data_visita === today);
 
       let pontos = 0;

@@ -3,11 +3,13 @@
 Guarda de classe: tudo o que a ficha digital pergunta tem lugar na folha. Um campo
 novo no esquema que não entre na impressão derruba estes testes em vez de sumir do papel.
 """
+import json
 import re
 
 from bs4 import BeautifulSoup
 from werkzeug.datastructures import MultiDict
 
+from extensions import db
 from models.sfa import SfaSimulacaoGrupo, SfaSimulacaoParticipante
 from services import sfa_simulacao as simulacao
 from services.sfa_pre_t0 import carregar_esquema_pre_t0, coletar_respostas_pre_t0, montar_folha_pre_t0
@@ -222,7 +224,7 @@ def _participante_da_simulacao(client):
     return SfaSimulacaoParticipante.query.filter_by(grupo_id=grupo.id).one()
 
 
-def test_simulacao_imprime_a_ficha_sem_revelar_identificadores(app, client):
+def test_simulacao_imprime_a_ficha_com_todos_os_dados(app, client):
     participante = _participante_da_simulacao(client)
     sem_ficha = client.get(f"/sfa/simulacoes/participante/{participante.id}/ficha-sinan")
     assert sem_ficha.status_code == 404
@@ -241,13 +243,24 @@ def test_simulacao_imprime_a_ficha_sem_revelar_identificadores(app, client):
     assert resposta.headers["Cache-Control"].startswith("no-store")
     html = resposta.get_data(as_text=True)
     folha = BeautifulSoup(html, "html.parser")
-    assert "Pessoa Real Digitada" not in html
+    # A simulação guarda tudo o que foi digitado: a folha sai como a real, sem campo a completar.
     nome = folha.select_one('.folha [data-campo="nome"]')
-    assert nome.get_text() == simulacao.MARCADOR_OCULTO
-    assert "nao-guardado" in nome["class"] and nome["contenteditable"] == "true"
-    # O que a simulação guarda sai como foi preenchido, e a folha se identifica como simulação.
+    assert nome.get_text() == "Pessoa Real Digitada" and not nome.has_attr("contenteditable")
     assert folha.select_one('.folha [data-campo="bairro"]').get_text() == form["bairro"]
-    assert not folha.select_one('.folha [data-campo="bairro"]').has_attr("contenteditable")
+    assert not folha.select(".nao-guardado") and not folha.select_one(".aviso")
     for pagina in folha.select("section.folha"):
         assert "SIMULAÇÃO" in pagina.select_one(".margem").get_text()
         assert "sem valor de notificação" in pagina.select_one(".margem").get_text()
+
+    # Ficha enviada antes de a simulação guardar tudo: o identificador gravado como "[preenchido]"
+    # continua editável na tela, só para a impressão, e a folha avisa por quê.
+    enviada = simulacao.respostas_por_etapa(participante)["sinan"]
+    antiga = simulacao.carregar_respostas(enviada)
+    antiga["nome"] = simulacao.MARCADOR_OCULTO
+    enviada.respostas_json = json.dumps(antiga, ensure_ascii=False)
+    db.session.commit()
+    folha = BeautifulSoup(client.get(endereco).data, "html.parser")
+    nome = folha.select_one('.folha [data-campo="nome"]')
+    assert nome.get_text() == simulacao.MARCADOR_OCULTO and nome["contenteditable"] == "true"
+    assert "antes de a simulação guardar todos os dados" in folha.select_one(".aviso").get_text()
+    assert not folha.select_one('.folha [data-campo="bairro"]').has_attr("contenteditable")
