@@ -4,7 +4,7 @@
   root.CasaACasaPlanejamento = function (ui) {
     const { S, cfg, h, casasDe, dataBr, somarDias, corDoAgente, desenhar, desenharPainel,
       selecionarBloco, aplicarSelecao, reagendarBloco, removerDoPlano, irParaBloco, imprimir,
-      dividirBloco, juntarBloco, incluirTrabalhador, nomeDaParte, nomeDaAtividade } = ui;
+      dividirBloco, juntarBloco, incluirTrabalhador, nomeDaParte, nomeDaAtividade, fotografiaPlano } = ui;
     const M = root.CasaACasaModel;
     const nomeDia = dia => new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(new Date(dia + 'T12:00:00Z'));
     const pessoas = () => (cfg.equipe || []).concat([{ id: null, nome: 'Sem responsável' }]);
@@ -14,37 +14,126 @@
     const ver = bloco => { S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenhar(); irParaBloco(bloco); };
     const quemNoDia = (b, dia) => M.planosDoDia(b, dia).map(p => (p.r || 'Sem responsável') + (p.pt ? ' (' + p.pt + ')' : '')).join(' / ');
 
-    // Formulário de divisão em L de um quarteirão da agenda: dois Ls opostos, uma pessoa em cada.
-    function formularioDivisao(b, dia, plano) {
+    // Uma única janela de conferência, independente das atualizações ao vivo do painel.
+    function abrirDivisao(b, dia, plano, origem) {
+      if (S.salvandoPlano || document.getElementById('cac-divisao-dialogo')) return;
       const membros = cfg.equipe || [];
-      const outro = (membros.find(p => p.id === S.responsavelPlano && p.id !== plano.ri) || membros.find(p => p.id !== plano.ri) || {}).id || null;
+      const planos = M.planosDoDia(b, dia);
+      const inicial = planos.some(p => p.pt === 'NO') ? 'NO' : 'NE';
+      const atualA = planos.find(p => p.pt === inicial) || plano;
+      const atualB = planos.find(p => p.pt === M.PARTES[inicial]);
+      const outro = (membros.find(p => p.id === S.responsavelPlano && p.id !== atualA.ri) || membros.find(p => p.id !== atualA.ri) || {}).id || null;
       const escolhaPessoa = (rotulo, valor) => h('select', { 'aria-label': rotulo }, h('option', { value: '' }, 'Sem responsável'),
         membros.map(p => h('option', { value: String(p.id), selected: p.id === valor }, p.nome)));
-      const sentido = h('select', { 'aria-label': 'Como dividir' },
-        h('option', { value: 'NE' }, 'L Nordeste + L Sudoeste'), h('option', { value: 'NO' }, 'L Noroeste + L Sudeste'));
-      const primeira = escolhaPessoa('Responsável pelo primeiro L', plano.ri || null), segunda = escolhaPessoa('Responsável pelo segundo L', outro);
-      const rotulos = [h('span', {}), h('span', {})];
-      const contar = () => {
-        const parte = sentido.value, oposta = M.PARTES[parte];
-        rotulos[0].textContent = `${nomeDaParte(parte)} · ${M.casasDoL(b, casasDe(b), parte).length} imóveis`;
-        rotulos[1].textContent = `${nomeDaParte(oposta)} · ${M.casasDoL(b, casasDe(b), oposta).length} imóveis`;
-      };
-      sentido.addEventListener('change', contar);
-      contar();
+      const esperado = fotografiaPlano([b], dia);
+      const atividade = plano.at || S.atividadePlano;
+      let sentido = inicial, enviando = false;
+      const primeira = escolhaPessoa('Trabalhador da parte A', atualA.ri || null), segunda = escolhaPessoa('Trabalhador da parte B', atualB ? atualB.ri : outro);
+      const rotulos = [h('strong', {}), h('strong', {})], listas = [h('div', {}), h('div', {})];
+      const mapa = h('div', { class: 'cac-divisao-mapa' });
+      const resumo = h('p', { class: 'cac-divisao-resumo', 'aria-live': 'polite' });
+      const erro = h('p', { class: 'cac-alerta-texto', role: 'alert' });
       const numero = valor => (valor ? Number(valor) : null);
-      return h('div', { class: 'cac-dividir' },
-        h('p', { class: 'cac-nota' }, 'Cada pessoa faz um L: os dois lados do quarteirão em torno de um canto. A linha tracejada no mapa mostra a divisão.'),
-        h('label', { class: 'cac-campo' }, 'Divisão', sentido),
-        h('label', { class: 'cac-campo' }, rotulos[0], primeira),
-        h('label', { class: 'cac-campo' }, rotulos[1], segunda),
-        h('div', { class: 'cac-bloco-acoes' },
-          h('button', { type: 'button', class: 'cac-botao', onclick: () => { S.dividindo = null; desenharPainel(); } }, 'Cancelar'),
-          h('button', { type: 'button', class: 'cac-botao forte', disabled: S.salvandoPlano || !navigator.onLine, onclick: async () => {
-            if (primeira.value && primeira.value === segunda.value) { window.alert('Escolha duas pessoas diferentes, uma para cada L.'); return; }
-            const ok = await dividirBloco(b, dia, [{ parte: sentido.value, responsavel_id: numero(primeira.value) },
-              { parte: M.PARTES[sentido.value], responsavel_id: numero(segunda.value) }]);
-            if (ok) { S.dividindo = null; desenhar(); }
-          } }, 'Dividir em dois Ls')));
+      const fechar = () => { if (!enviando) dialogo.close(); };
+      const salvar = h('button', { type: 'button', class: 'cac-botao forte', onclick: async () => {
+        if (enviando || salvar.disabled) return;
+        enviando = true; atualizar();
+        const ok = await dividirBloco(b, dia, [{ parte: sentido, responsavel_id: numero(primeira.value) },
+          { parte: M.PARTES[sentido], responsavel_id: numero(segunda.value) }], esperado, atividade);
+        enviando = false;
+        if (ok) { S.selecionados.delete(b.id); dialogo.close(); desenhar(); }
+        else { atualizar(); erro.textContent = 'A divisão não foi salva. Confira a conexão. Se a agenda mudou, cancele e abra a divisão novamente.'; }
+      } }, 'Salvar divisão');
+      const cancelar = h('button', { type: 'button', class: 'cac-botao', onclick: fechar }, 'Cancelar');
+      const fecharTopo = h('button', { type: 'button', class: 'cac-icone', 'aria-label': 'Fechar divisão', onclick: fechar }, '×');
+      const opcoes = ['NE', 'NO'].map(parte => h('button', { type: 'button', class: 'cac-divisao-opcao', 'aria-pressed': String(sentido === parte),
+        onclick: () => { sentido = parte; atualizar(); } },
+      h('span', { class: 'cac-divisao-mini ' + parte, 'aria-hidden': 'true' }, h('b', {}, 'A'), h('b', {}, 'B')),
+      h('span', {}, parte === 'NE' ? 'Nordeste + Sudoeste' : 'Noroeste + Sudeste', h('small', {}, parte === 'NE' ? 'Cantos superior direito e inferior esquerdo' : 'Cantos superior esquerdo e inferior direito'))));
+      const corpo = h('div', { class: 'cac-divisao-corpo' },
+        h('section', {}, h('h3', {}, '1. Escolha os cantos'), h('p', { class: 'cac-nota' }, 'Cada parte é um L: dois lados em torno de um canto.'),
+          h('div', { class: 'cac-divisao-opcoes', role: 'group', 'aria-label': 'Como dividir o quarteirão' }, opcoes), mapa,
+          h('p', { class: 'cac-nota' }, 'Prévia dos imóveis cadastrados. A linha tracejada separa as partes A e B.')),
+        h('section', {}, h('h3', {}, '2. Defina quem faz cada parte'),
+          [primeira, segunda].map((select, i) => h('div', { class: 'cac-divisao-parte ' + (i ? 'parte-b' : 'parte-a') },
+            h('label', { class: 'cac-campo' }, h('span', {}, h('b', { class: 'cac-divisao-letra' }, i ? 'B' : 'A'), rotulos[i]), select),
+            h('details', {}, h('summary', {}, 'Conferir endereços desta parte'), listas[i]))),
+          h('button', { type: 'button', class: 'cac-botao cac-divisao-trocar', onclick: () => {
+            const valor = primeira.value; primeira.value = segunda.value; segunda.value = valor; atualizar();
+          } }, '⇄ Trocar trabalhadores'),
+          h('div', { class: 'cac-divisao-conferencia' }, h('h3', {}, '3. Confira e salve'), resumo, erro)));
+      const dialogo = h('dialog', { id: 'cac-divisao-dialogo', class: 'cac-divisao-dialogo', 'aria-labelledby': 'cac-divisao-titulo' },
+        h('header', { class: 'cac-divisao-topo' }, h('div', {}, h('p', { class: 'cac-nota' }, `QUARTEIRÃO ${b.n} · SC ${b.s} · ${dataBr(dia)}/${dia.slice(0, 4)}`),
+          h('h2', { id: 'cac-divisao-titulo' }, 'Dividir entre trabalhadores'),
+          h('p', {}, `${casasDe(b).length} imóveis · ${nomeDaAtividade(atividade) || 'Atividade do planejamento'}`)), fecharTopo), corpo,
+        h('footer', { class: 'cac-divisao-rodape' }, h('span', { class: 'cac-nota' }, 'A agenda só muda ao salvar a divisão.'), cancelar, salvar));
+      function atualizar() {
+        const partes = [sentido, M.PARTES[sentido]], seletores = [primeira, segunda];
+        const casas = partes.map(parte => M.casasDoL(b, casasDe(b), parte));
+        const nomes = seletores.map(s => s.options[s.selectedIndex].textContent);
+        opcoes.forEach((botao, i) => { botao.setAttribute('aria-pressed', String(sentido === ['NE', 'NO'][i])); botao.disabled = enviando; });
+        seletores.forEach((select, i) => {
+          select.disabled = enviando;
+          rotulos[i].textContent = `${nomeDaParte(partes[i])} · ${qtd(casas[i].length, 'imóvel', 'imóveis')}`;
+          const ruas = new Map();
+          casas[i].forEach(c => { if (!ruas.has(c.rua)) ruas.set(c.rua, []); ruas.get(c.rua).push([c.n, c.cp].filter(Boolean).join(' ')); });
+          listas[i].replaceChildren(...Array.from(ruas, ([rua, numeros]) => h('p', {}, h('strong', {}, rua + ': '), numeros.join(', '))));
+          if (!casas[i].length) listas[i].append(h('p', {}, 'Nenhum imóvel cadastrado nesta parte.'));
+        });
+        mapa.replaceChildren(previaDivisao(b, partes, casas));
+        resumo.textContent = `A: ${nomes[0]} · ${casas[0].length} imóveis. B: ${nomes[1]} · ${casas[1].length} imóveis. Total: ${casas[0].length + casas[1].length}.`;
+        const iguais = primeira.value && primeira.value === segunda.value;
+        erro.textContent = iguais ? 'Escolha trabalhadores diferentes para as partes A e B.' : !navigator.onLine ? 'Conecte à internet para salvar a divisão.'
+          : !primeira.value || !segunda.value ? 'Há uma parte sem responsável. Ela ficará pendente de atribuição na agenda.' : '';
+        salvar.disabled = enviando || S.salvandoPlano || !navigator.onLine || Boolean(iguais);
+        salvar.textContent = enviando ? 'Salvando…' : 'Salvar divisão';
+        cancelar.disabled = fecharTopo.disabled = enviando;
+        corpo.querySelector('.cac-divisao-trocar').disabled = enviando;
+      }
+      primeira.addEventListener('change', atualizar); segunda.addEventListener('change', atualizar);
+      dialogo.addEventListener('cancel', evento => { if (enviando) evento.preventDefault(); });
+      dialogo.addEventListener('close', () => {
+        window.removeEventListener('online', atualizar); window.removeEventListener('offline', atualizar);
+        dialogo.remove(); if (origem && origem.isConnected) origem.focus();
+      });
+      window.addEventListener('online', atualizar); window.addEventListener('offline', atualizar);
+      atualizar(); document.body.append(dialogo); dialogo.showModal();
+    }
+
+    // Usa a mesma geometria e a mesma lista de imóveis da divisão salva e dos roteiros A4.
+    function previaDivisao(b, partes, casas) {
+      const svg = (tag, attrs, texto) => {
+        const no = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        Object.entries(attrs).forEach(([k, v]) => no.setAttribute(k, v));
+        if (texto) no.textContent = texto;
+        return no;
+      };
+      const geo = M.geometriaDoBloco(b), cantos = Object.values(geo.cantos).map(c => c.ponto);
+      const pontos = cantos.concat(...casas.map(lista => lista.map(c => [c.x, c.y])));
+      const k = Math.cos(b.c[1] * Math.PI / 180), xs = pontos.map(p => p[0] * k), ys = pontos.map(p => p[1]);
+      const x0 = Math.min(...xs), y0 = Math.min(...ys), largura = Math.max(...xs) - x0, altura = Math.max(...ys) - y0;
+      const escala = Math.min(280 / Math.max(largura, 1e-9), 210 / Math.max(altura, 1e-9));
+      const projetar = p => [180 + (p[0] * k - x0 - largura / 2) * escala, 145 - (p[1] - y0 - altura / 2) * escala];
+      const par = p => projetar(p).join(',');
+      const raiz = svg('svg', { viewBox: '0 0 360 290', role: 'img', 'aria-label': `Prévia do quarteirão ${b.n}: parte A ${nomeDaParte(partes[0])}, parte B ${nomeDaParte(partes[1])}` });
+      const linha = M.linhaDaDivisao(b, partes[0]);
+      const forma = (b.g || []).map(pol => pol.map(anel => 'M' + anel.map(par).join('L') + 'Z').join('')).join('');
+      const clip = svg('clipPath', { id: 'cac-divisao-recorte' });
+      clip.append(svg('path', { d: forma, 'clip-rule': 'evenodd' }));
+      const defs = svg('defs', {}); defs.append(clip); raiz.append(defs);
+      partes.forEach((parte, i) => {
+        const cor = i ? '#a34b0a' : '#075f93', fundo = i ? '#fff0d6' : '#dceffc';
+        raiz.append(svg('polygon', { points: [geo.cantos[parte].ponto, ...linha].map(par).join(' '), fill: fundo, 'clip-path': 'url(#cac-divisao-recorte)' }));
+        casas[i].forEach(c => { const [cx, cy] = projetar([c.x, c.y]); raiz.append(svg('circle', { cx, cy, r: 3.5, fill: cor, stroke: '#fff', 'stroke-width': 1 })); });
+        const [x, y] = projetar(geo.cantos[parte].ponto);
+        raiz.append(svg('circle', { cx: x, cy: y, r: 13, fill: cor }));
+        raiz.append(svg('text', { x, y: y + 5, 'text-anchor': 'middle', fill: '#fff', 'font-size': 14, 'font-weight': 700 }, i ? 'B' : 'A'));
+      });
+      raiz.append(svg('path', { d: forma, fill: 'none', stroke: '#496469', 'stroke-width': 1.5 }));
+      const [a, z] = linha.map(projetar);
+      raiz.append(svg('line', { x1: a[0], y1: a[1], x2: z[0], y2: z[1], stroke: '#12343b', 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+      raiz.append(svg('text', { x: 335, y: 23, 'text-anchor': 'middle', fill: '#496469', 'font-size': 12 }, '↑ N'));
+      return raiz;
     }
 
     function semana() {
@@ -64,7 +153,7 @@
     function painel() {
       const dia = S.diaPlano || S.hoje;
       const grupos = M.agendaDoDia(S.blocos, dia);
-      const doDia = grupos.flatMap(g => g.blocos);
+      const doDia = Array.from(new Set(grupos.flatMap(g => g.blocos)));
       const selecionados = S.blocos.filter(b => S.selecionados.has(b.id));
       const quem = pessoas().find(p => p.id === (S.responsavelPlano || null)) || pessoas().at(-1);
       const campoData = h('input', { type: 'date', min: S.hoje, max: somarDias(S.hoje, 60), value: dia, disabled: S.salvandoPlano, 'aria-label': 'Data de trabalho' });
@@ -110,6 +199,12 @@
           h('p', { class: 'cac-destino' }, `${dataBr(dia)}/${dia.slice(0, 4)} · ${quem.nome}${S.origemPlano ? '' : ' · ' + nomeDaAtividade(S.atividadePlano)}`),
           h('p', {}, `Carga prevista: ${cargaAtual} atuais + ${total(acrescidos)} selecionados = ${cargaAtual + total(acrescidos)} imóveis.`),
           h('p', { class: 'cac-nota' }, selecionados.map(b => `Q ${b.n} / SC ${b.s}`).join(' · ')),
+          selecionados.length === 1 && !concluidos.length && !S.origemPlano ? h('div', { class: 'cac-divisao-atalho' },
+            h('strong', {}, 'Mais de um trabalhador neste quarteirão?'),
+            h('p', { class: 'cac-nota' }, 'Divida os imóveis em duas partes e escolha quem faz cada uma.'),
+            h('button', { type: 'button', class: 'cac-botao', disabled: S.salvandoPlano, onclick: evento => {
+              const b = selecionados[0]; abrirDivisao(b, dia, M.planosDoDia(b, dia)[0] || { ri: quem.id, at: S.atividadePlano }, evento.currentTarget);
+            } }, 'Dividir entre trabalhadores')) : null,
           S.origemPlano ? h('p', { class: 'cac-alerta-texto' }, `Reagendamento: sairá de ${dataBr(S.origemPlano)} ao salvar.`) : null,
           trocas.length ? h('p', { class: 'cac-alerta-texto' }, `Ao salvar, ${trocas.length} quarteirão(ões) passarão de outro responsável para ${quem.nome}.`) : null,
           concluidos.length ? h('p', { class: 'cac-alerta-texto' }, `${concluidos.length} concluído(s): serão preservados.`) : null,
@@ -122,7 +217,7 @@
         h('section', { class: 'cac-cartao' }, h('h2', {}, 'Organizar os próximos dias'), h('p', {}, 'Escolha o dia, o trabalhador e os quarteirões.'),
           h('h3', { class: 'cac-etapa' }, '1. Dia de trabalho'),
           h('div', { class: 'cac-dias' }, dias.map(d => {
-            const grupos = M.agendaDoDia(S.blocos, d), n = grupos.reduce((n, g) => n + g.blocos.length, 0);
+            const grupos = M.agendaDoDia(S.blocos, d), n = new Set(grupos.flatMap(g => g.blocos)).size;
             return h('button', { type: 'button', 'aria-pressed': String(dia === d), disabled: S.salvandoPlano, onclick: () => escolherDia(d) },
               h('strong', {}, d === S.hoje ? 'Hoje' : d === somarDias(S.hoje, 1) ? 'Amanhã' : nomeDia(d)), h('span', {}, dataBr(d)), h('small', {}, qtd(n, 'quarteirão', 'quarteirões')));
           })), h('label', { class: 'cac-campo' }, 'Outra data (inclui fins de semana)', campoData), semana(),
@@ -143,17 +238,18 @@
               const p = planos.find(p => (p.ri || null) === g.id) || planos[0];
               const dividido = planos.some(x => x.pt);
               const imoveis = p.pt ? M.casasDoL(b, casasDe(b), p.pt).length : casasDe(b).length;
-              const chave = b.id + '|' + dia;
               return h('div', { class: 'cac-agenda-item' },
                 h('button', { type: 'button', class: 'cac-selecionar', onclick: () => ver(b) }, h('strong', {}, `Q ${b.n} · SC ${b.s}${p.pt ? ' · ' + nomeDaParte(p.pt) : ''}`),
                   h('small', {}, `${imoveis} imóveis${p.at ? ' · ' + nomeDaAtividade(p.at) : ''}${p.c ? ' · Concluído' : ''}`)),
                 h('div', { class: 'cac-item-acoes' }, h('button', { type: 'button', onclick: () => imprimir({ bloco: b, responsavel: g.id }) }, 'Ficha A4'),
                   cfg.registra && !planos.some(x => x.c) ? [
-                    dividido ? h('button', { type: 'button', disabled: S.salvandoPlano, onclick: () => juntarBloco(b, dia, p.ri || null) }, 'Juntar Ls')
-                      : h('button', { type: 'button', disabled: S.salvandoPlano, 'aria-expanded': String(S.dividindo === chave), onclick: () => { S.dividindo = S.dividindo === chave ? null : chave; desenharPainel(); } }, 'Dividir em L'),
+                    h('button', { type: 'button', class: 'cac-divisao-abrir', disabled: S.salvandoPlano, 'aria-haspopup': 'dialog', onclick: evento => abrirDivisao(b, dia, p, evento.currentTarget) }, dividido ? 'Ajustar divisão' : 'Dividir entre trabalhadores'),
+                    dividido ? h('button', { type: 'button', disabled: S.salvandoPlano, onclick: () => {
+                      if (window.confirm(`Reunir as duas partes de Q ${b.n} em ${dataBr(dia)}? Todos os imóveis ficarão com ${g.nome}.`)) juntarBloco(b, dia, p.ri || null);
+                    } }, 'Reunir quarteirão') : null,
                     h('button', { type: 'button', disabled: S.salvandoPlano, onclick: () => reagendarBloco(b, dia) }, 'Reagendar'),
                     h('button', { type: 'button', disabled: S.salvandoPlano, onclick: () => removerDoPlano(b, dia) }, 'Retirar')] : null),
-                S.dividindo === chave && !dividido ? formularioDivisao(b, dia, p) : null);
+                dividido ? h('p', { class: 'cac-nota' }, 'Dividido entre ' + planos.map(x => `${x.r || 'Sem responsável'} (${nomeDaParte(x.pt)})`).join(' e ')) : null);
             })))),
       ];
     }

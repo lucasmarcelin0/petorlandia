@@ -234,7 +234,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261015-campo' in pagina
+    assert 'casa_a_casa.js?v=20261015-divisao' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -465,6 +465,26 @@ def test_pagina_inicial_e_aba_levam_ao_casa_a_casa(client, base):
 # ---------------------------------------------------------------------------
 # Quarteirão dividido em L, atividade, focal, imóveis de campo, relatório e equipe
 # ---------------------------------------------------------------------------
+
+def test_dividir_direto_da_selecao_preserva_atividade_e_detecta_agenda_alterada(client, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    divisao = [{'parte': 'NE', 'responsavel_id': ana.id}, {'parte': 'SO', 'responsavel_id': bia.id}]
+    resposta = planejar(client, 'dividir', [base['a']], divisao=divisao,
+                        atividade='ADL', esperado=[{'b': base['a']}])
+    assert resposta.status_code == 200, resposta.json
+    assert {p.atividade for p in Plano.query.filter_by(bloco=base['a']).all()} == {'ADL'}
+    # A fotografia de antes da abertura da janela não pode sobrescrever uma agenda nova.
+    assert planejar(client, 'dividir', [base['a']], divisao=divisao,
+                    esperado=[{'b': base['a']}]).status_code == 409
+    foto = [{k: p[k] for k in ('b', 'id', 'ri', 'c', 'v', 'pt')} for p in resposta.json['planos'] if p['b'] == base['a']]
+    nova = [{'parte': 'NO', 'responsavel_id': bia.id}, {'parte': 'SE', 'responsavel_id': ana.id}]
+    resposta = planejar(client, 'dividir', [base['a']], divisao=nova, atividade='VI_ROTINA', esperado=foto)
+    assert resposta.status_code == 200, resposta.json
+    linhas = Plano.query.filter_by(bloco=base['a']).all()
+    assert {(p.parte, p.responsavel_id) for p in linhas} == {('NO', bia.id), ('SE', ana.id)}
+    assert {p.atividade for p in linhas} == {'ADL'}
+
 
 def test_quarteirao_dividido_em_dois_ls_e_juntado_de_novo(client, base):
     ana, bia = agente(), agente('bia@example.test', 'Bia Agente')

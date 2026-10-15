@@ -121,6 +121,25 @@ anterior ao passe atual aparece só com o contorno. Depois de 60 dias
 concluir. O progresso conta as casas visitadas desde então. Visita em quarteirão
 sem plano cria a linha do plano sozinha; uma linha por quarteirão e dia.
 
+## Dividir entre trabalhadores
+
+No modo Escritório, selecione um quarteirão e use **Dividir entre trabalhadores**
+na conferência da seleção ou na agenda. A janela mostra as partes A e B sobre a
+geometria do quarteirão, os imóveis de cada parte e seus endereços. Escolha os
+cantos opostos e um trabalhador por parte; **Trocar trabalhadores** inverte a
+atribuição. A divisão só é gravada em **Salvar divisão**; cancelar não altera a agenda.
+
+Uma parte pode ficar explicitamente sem responsável. O mesmo trabalhador não
+pode ocupar as duas partes pela janela. **Ajustar divisão** reabre as escolhas
+salvas; **Reunir quarteirão** confirma quem ficará com todos os imóveis. Partes
+concluídas continuam protegidas. O total da agenda conta cada quarteirão uma vez
+e soma somente os imóveis de cada parte na carga de cada trabalhador.
+
+A janela guarda a fotografia da agenda ao abrir: se outra pessoa a alterar,
+o servidor recusa o salvamento para que a divisão seja conferida novamente.
+A divisão direta de um quarteirão livre inclui a atividade escolhida; ao ajustar
+uma divisão, a atividade já registrada é preservada.
+
 ## Sem internet
 
 - O service worker guarda a página e os arquivos dela; o aparelho guarda

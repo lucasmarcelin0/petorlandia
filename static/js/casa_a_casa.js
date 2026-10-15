@@ -596,9 +596,9 @@
   }
 
   // Divide o quarteirão do dia em dois Ls opostos, um para cada pessoa.
-  function dividirBloco(bloco, dia, divisao) {
+  function dividirBloco(bloco, dia, divisao, esperado, atividade) {
     const nomes = divisao.map(d => `${nomeDaParte(d.parte)} para ${primeiroNome((cfg.equipe.find(p => p.id === d.responsavel_id) || { nome: 'sem responsável' }).nome)}`);
-    return mudarPlano({ acao: 'dividir', blocos: [bloco.id], data: dia, divisao, esperado: fotografiaPlano([bloco], dia) },
+    return mudarPlano({ acao: 'dividir', blocos: [bloco.id], data: dia, divisao, atividade, esperado: esperado || fotografiaPlano([bloco], dia) },
       () => `${nomeDoBloco(bloco)} dividido: ${nomes.join(' e ')}.`);
   }
 
@@ -1278,7 +1278,7 @@
 
   const planejamento = window.CasaACasaPlanejamento({ S, cfg, h, casasDe, dataBr, somarDias, corDoAgente,
     desenhar, desenharPainel, selecionarBloco, aplicarSelecao, reagendarBloco, removerDoPlano, irParaBloco, imprimir,
-    dividirBloco, juntarBloco, incluirTrabalhador, nomeDaParte, nomeDaAtividade });
+    dividirBloco, juntarBloco, incluirTrabalhador, nomeDaParte, nomeDaAtividade, fotografiaPlano });
   const impressao = window.CasaACasaImpressao({ S, h, casasDe, dataBr, nomeDaParte, nomeDaAtividade });
   const relatorio = window.CasaACasaRelatorio({ S, cfg, h, dataBr, somarDias, pedir, avisar, desenharPainel, nomeDaParte, nomeDaAtividade,
     abrirBloco: id => { const bloco = S.porId.get(id); if (bloco) { S.blocoAtivo = bloco; S.aba = 'quarteirao'; desenhar(); irParaBloco(bloco); } } });

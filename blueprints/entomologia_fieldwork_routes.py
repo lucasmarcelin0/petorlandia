@@ -169,7 +169,7 @@ def register(bp, require_access):
                         raise ValueError('Divisão inválida.')
                     feitos = servico.dividir(blocos[0], dia, hoje,
                                              [(str(p.get('parte') or '').upper(), pessoa(p.get('responsavel_id')))
-                                              for p in divisao], servico.nome_da_conta(current_user))
+                                              for p in divisao], servico.nome_da_conta(current_user), pedido.get('atividade'))
                 else:
                     feitos = servico.unir(blocos[0], dia, pessoa(pedido.get('responsavel_id')))
             elif acao == 'remover':

@@ -594,11 +594,12 @@ def planejar(blocos, dia: date, hoje: date, responsavel, por: str, atividade=Non
     return feitos
 
 
-def dividir(bloco_id, dia: date, hoje: date, divisao, por: str) -> int:
+def dividir(bloco_id, dia: date, hoje: date, divisao, por: str, atividade=None) -> int:
     """Divide o quarteirão do dia em dois Ls opostos, um para cada pessoa.
 
     ``divisao``: ``[(parte, responsavel), (parte_oposta, responsavel)]``. Reaproveita
     as linhas que já existem (a atividade escolhida continua) e não mexe em parte concluída.
+    Na divisão direta de um quarteirão livre, usa a atividade recebida do planejamento.
     """
     from extensions import db
     from models.entomologia import EntomologiaQuarteiraoTrabalho as Q
@@ -612,7 +613,7 @@ def dividir(bloco_id, dia: date, hoje: date, divisao, por: str) -> int:
     linhas = _linhas_do_dia(bloco["id"], dia)
     if any(linha.concluido_em is not None for linha in linhas):
         raise ValueError("Parte deste quarteirão já foi concluída. Reabra antes de dividir de novo.")
-    atividade = next((linha.atividade for linha in linhas if linha.atividade), None)
+    atividade = next((linha.atividade for linha in linhas if linha.atividade), None) or _atividade(atividade)
     por_parte = {linha.parte: linha for linha in linhas}
     livres = [linha for linha in linhas if linha.parte not in {parte for parte, _r in divisao}]
     for parte, responsavel in divisao:
