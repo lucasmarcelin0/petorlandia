@@ -1184,8 +1184,17 @@ def vacina_pmo_animal_photo(animal_id):
         }), 403
 
     file = request.files.get('photo')
-    if not file or not getattr(file, 'filename', ''):
-        return jsonify({'success': False, 'retryable': False, 'message': 'Nenhuma foto enviada.'}), 400
+    if file is None:
+        # O aparelho mandou o formulario sem o arquivo (visto em iPhone quando
+        # o navegador descarta a foto guardada). Repetir o mesmo envio nao
+        # resolve; so uma foto nova resolve -- por isso o `code`, que a tela
+        # usa para dizer isso em vez de "Nenhuma foto enviada".
+        return jsonify({
+            'success': False,
+            'retryable': False,
+            'code': 'no_file',
+            'message': 'O aparelho não enviou o arquivo da foto. Toque em "Tirar outra" ou "Da galeria".',
+        }), 400
 
     try:
         max_photo_bytes = 8 * 1024 * 1024
@@ -1196,7 +1205,8 @@ def vacina_pmo_animal_photo(animal_id):
             return jsonify({
                 'success': False,
                 'retryable': False,
-                'message': 'A foto enviada está vazia.',
+                'code': 'empty_file',
+                'message': 'A foto chegou vazia ao servidor. Toque em "Tirar outra" ou "Da galeria".',
             }), 400
         if photo_size > max_photo_bytes:
             return jsonify({
@@ -1238,7 +1248,9 @@ def vacina_pmo_animal_photo(animal_id):
 
         from services.photo_storage import PhotoStorageError, store_photo
 
-        filename = f"{uuid.uuid4().hex}_{secure_filename(normalized_filename(file.filename, photo))}"
+        # Sem nome de arquivo (iOS as vezes manda `filename=""`) a foto boa nao
+        # pode ser recusada: o nome final vem do formato detectado.
+        filename = f"{uuid.uuid4().hex}_{secure_filename(normalized_filename(file.filename or 'foto', photo))}"
         try:
             image_url = store_photo(photo.stream, filename, folder='animals', uploader=upload_to_s3)
         except PhotoStorageError as exc:

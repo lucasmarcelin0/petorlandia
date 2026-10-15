@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#0b6568">
+  <title>Casa a Casa · Combate à dengue</title>
+  {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
+     dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261015-divisao') }}">
+</head>
+<body class="cac" data-modo="rua">
+  <header class="cac-topo">
+    <a class="cac-voltar" id="cac-voltar" href="{{ config.urls.painel }}" aria-label="Voltar ao painel do território">←</a>
+    <strong class="cac-titulo">Casa a Casa</strong>
+    <div class="cac-modos" role="group" aria-label="Modo de uso">
+      <button type="button" data-modo="rua" aria-pressed="true"><span aria-hidden="true">🚶</span> Rua</button>
+      <button type="button" data-modo="escritorio" aria-pressed="false"><span aria-hidden="true">🏢</span> Escritório</button>
+    </div>
+    <button type="button" class="cac-conexao" id="cac-conexao" aria-live="polite">…</button>
+    <button type="button" class="cac-icone" id="cac-menu-abrir" aria-haspopup="true" aria-expanded="false" aria-label="Mais opções">⋯</button>
+  </header>
+
+  <div class="cac-faixa" id="cac-faixa" hidden></div>
+
+  <main class="cac-corpo">
+    <section class="cac-mapa-area">
+      <div id="cac-mapa" role="application" aria-label="Mapa em branco dos quarteirões de Orlândia"></div>
+      <div class="cac-flutuantes">
+        <button type="button" class="cac-icone" id="cac-onde" title="Onde estou" aria-label="Mostrar onde estou">📍</button>
+        <button type="button" class="cac-icone" id="cac-ruas" title="Ruas ao fundo (precisa de internet)" aria-label="Ligar ou desligar as ruas ao fundo" aria-pressed="false">🗺️</button>
+        <button type="button" class="cac-icone" id="cac-cidade" title="Ver a cidade toda" aria-label="Ver a cidade toda">⤢</button>
+      </div>
+      <details class="cac-legenda" id="cac-legenda">
+        <summary>Cores</summary>
+        <div id="cac-legenda-itens"></div>
+      </details>
+      <div class="cac-dica" id="cac-dica" aria-live="polite"></div>
+      <button type="button" class="cac-conferir" id="cac-conferir" hidden></button>
+    </section>
+
+    <aside class="cac-painel" id="cac-painel" aria-label="Painel">
+      <button type="button" class="cac-puxador" id="cac-puxador" aria-label="Abrir ou recolher o painel" aria-expanded="true"></button>
+      <nav class="cac-abas" id="cac-abas" role="tablist"></nav>
+      <div class="cac-conteudo" id="cac-conteudo" role="tabpanel"></div>
+    </aside>
+  </main>
+
+  <div class="cac-folha-fundo" id="cac-ficha" hidden>
+    <div class="cac-folha" role="dialog" aria-modal="true" aria-labelledby="cac-ficha-titulo" tabindex="-1">
+      <header class="cac-folha-topo">
+        <div>
+          <h2 id="cac-ficha-titulo">Imóvel</h2>
+          <p id="cac-ficha-sub"></p>
+        </div>
+        <button type="button" class="cac-icone" id="cac-ficha-fechar" aria-label="Fechar">×</button>
+      </header>
+      <div id="cac-ficha-corpo"></div>
+    </div>
+  </div>
+
+  <div class="cac-menu" id="cac-menu" hidden role="menu"></div>
+  <div class="cac-avisos" id="cac-avisos" aria-live="polite"></div>
+  <section class="cac-impressao" id="cac-impressao" aria-hidden="true"></section>
+  <noscript><p class="cac-sem-js">O Casa a Casa precisa de JavaScript ligado no navegador.</p></noscript>
+
+  <script type="application/json" id="cac-config">{{ config | tojson }}</script>
+  <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261015-divisao') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261015-divisao') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261015-divisao') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261015-divisao') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261015-divisao') }}"></script>
+</body>
+</html>

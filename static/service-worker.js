@@ -1,5 +1,9 @@
 // Bump the cache name to force old caches to be cleared after updates
 const CACHE_NAME = 'petorlandia-cache-v10';
+// Casa a casa (combate à dengue): a tela de campo precisa abrir sem internet. A própria página guarda aqui a
+// sua casca e os arquivos de que precisa (static/js/casa_a_casa.js); os dados ficam no segundo cache.
+const CASA_A_CASA = '/sfa/entomologia/casa-a-casa';
+const CACHES_CASA_A_CASA = ['petorlandia-casa-a-casa-v1', 'petorlandia-casa-a-casa-dados-v1'];
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
@@ -24,7 +28,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE_NAME && !CACHES_CASA_A_CASA.includes(k)).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -59,6 +63,23 @@ self.addEventListener('fetch', event => {
 
   // Requisições de navegação (visitar uma página) — rede primeiro, sem
   // cachear a resposta (páginas são dinâmicas e dependem de autenticação).
+  if (event.request.mode === 'navigate' && new URL(event.request.url).pathname === CASA_A_CASA) {
+    // Com rede, a página vem do servidor e a cópia guardada é renovada; sem rede, abre a cópia.
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const semToken = !new URL(event.request.url).search.includes('token=');
+        if (response.ok && !response.redirected && semToken) {
+          const copia = response.clone();
+          caches.open(CACHES_CASA_A_CASA[0]).then(cache => cache.put(CASA_A_CASA, copia)).catch(() => {});
+        }
+        return response;
+      }).catch(() => caches.open(CACHES_CASA_A_CASA[0])
+        .then(cache => cache.match(CASA_A_CASA, { ignoreSearch: true, ignoreVary: true }))
+        .then(cached => cached || caches.match('/static/offline.html')))
+    );
+    return;
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request).then(cached => cached || caches.match('/static/offline.html')))

@@ -15,7 +15,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_route.css', v='20261004-ux') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_nav.css', v='20261006-bussola') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_atlas_accordion.css', v='20261004-acordeao') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_fieldwork.css', v='20261013-casa') }}">
 {% endblock %}
 {% block content %}
 <div class="ento-page">
@@ -121,174 +120,16 @@
   </dialog>
 
   <section id="panel-fieldwork" role="tabpanel" aria-labelledby="tab-fieldwork" hidden>
-    <!-- Prancha de Impressão A4 (Visível exclusivamente no Print) -->
-    <div class="fieldwork-print-board" hidden>
-      <div class="fieldwork-print-header">
-        <div>
-          <div class="fieldwork-print-title">MUNICÍPIO DE ORLÂNDIA · CONTROLE DE VETORES</div>
-          <div style="font-size: 11pt; font-weight: 700; color: #1e293b;">Roteiro de Campo — Visitas Casa a Casa (Aedes aegypti)</div>
-        </div>
-        <div class="fieldwork-print-meta">
-          <span id="print-meta-data">Data: —</span>
-          <span id="print-meta-quadra">Quadra: —</span>
-          <span id="print-meta-agente">Agente: —</span>
-        </div>
-      </div>
-      <div class="fieldwork-print-table-wrap">
-        <table class="fieldwork-print-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;">Quadra</th>
-              <th style="width: 150px;">Logradouro</th>
-              <th style="width: 50px;">Nº</th>
-              <th style="width: 90px;">Situação (A/F/R/D)</th>
-              <th style="width: 140px;">Criadouros com Água</th>
-              <th style="width: 65px;">Larvas?</th>
-              <th>Observações de Campo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for _ in range(12) %}
-            <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="fieldwork-container">
-      <!-- Cabeçalho da Aba -->
-      <header class="fieldwork-header">
-        <div class="fieldwork-header-left">
-          <h2 class="fieldwork-title"><i class="fas fa-home" aria-hidden="true" style="color: #0284c7;"></i> Trabalho Casa a Casa & Quarteirões</h2>
-          <p class="fieldwork-subtitle">Mapa em branco de Orlândia. Pinte quarteirões com cores suaves para impressão A4 ou use o modo campo no celular (100% offline & gamificado).</p>
-        </div>
-        <div class="fieldwork-header-actions">
-          <div class="fieldwork-mode-switch" role="group" aria-label="Modo de Operação">
-            <button type="button" id="btn-mode-office" class="fieldwork-mode-btn is-active"><i class="fas fa-print"></i> Modo Escritório & Impressão</button>
-            <button type="button" id="btn-mode-field" class="fieldwork-mode-btn"><i class="fas fa-mobile-alt"></i> Modo Celular (Campo)</button>
-          </div>
-          <span id="fieldwork-sync-status" class="fieldwork-status-badge fieldwork-status-online">🟢 Online</span>
-          <button type="button" id="fieldwork-sync-btn" class="fieldwork-sync-btn" disabled>Tudo Sincronizado ✔️</button>
-        </div>
-      </header>
-
-      <!-- Barra de Ferramentas do Modo Escritório (Pintura de Quadras & Impressão) -->
-      <div id="fieldwork-office-tools" class="fieldwork-office-bar">
-        <div class="fieldwork-palette-group">
-          <label for="fieldwork-sector-select" class="fieldwork-palette-label">Setor:</label>
-          <select id="fieldwork-sector-select" class="form-select form-select-sm" style="width: 170px;">
-            <option value="">Todos os setores</option>
-          </select>
-          <span class="fieldwork-palette-label ms-2">Cor suave da equipe:</span>
-          <div id="fieldwork-swatches" class="fieldwork-swatches"></div>
-          <input type="text" id="fieldwork-agent-name" class="fieldwork-agent-input" placeholder="Agente / Dia da semana">
-        </div>
-        <div class="fieldwork-office-actions">
-          <button type="button" id="btn-mark-worked" class="fieldwork-btn-secondary" title="Marcar quarteirão selecionado como trabalhado"><i class="fas fa-check-circle text-success"></i> Marcar Trabalhado</button>
-          <button type="button" id="btn-print-board" class="fieldwork-btn-print" title="Gerar prancha A4 para imprimir e levar na prancheta"><i class="fas fa-print"></i> Imprimir Roteiro A4</button>
-          <button type="button" id="btn-export-csv" class="fieldwork-btn-secondary" title="Exportar histórico de visitas em CSV"><i class="fas fa-file-csv"></i> Exportar CSV</button>
-        </div>
-      </div>
-
-      <!-- Área Central: Mapa e Painel Lateral -->
-      <div class="fieldwork-main-grid">
-        <div class="fieldwork-map-wrapper">
-          <div id="fieldwork-map" role="region" aria-label="Mapa em branco de quarteirões e residências de Orlândia"></div>
-          <div id="fieldwork-zoom-note" class="fieldwork-zoom-indicator">🗺️ Visão de quarteirões · Aproxime para ver cada residência</div>
-        </div>
-
-        <!-- Painel Lateral: Resumo da Quadra, Gamificação e Conquistas -->
-        <aside class="fieldwork-sidebar">
-          <div class="fieldwork-card">
-            <div class="fieldwork-card-title">
-              <span id="fieldwork-block-num">Selecione uma quadra</span>
-              <small id="fieldwork-block-sector" class="text-muted">Clique no mapa</small>
-            </div>
-            <div class="fieldwork-progress-box">
-              <div class="fieldwork-progress-labels">
-                <span>Progresso Casa a Casa</span>
-                <strong id="fieldwork-prog-pct">0%</strong>
-              </div>
-              <div class="fieldwork-progress-bar-track">
-                <div id="fieldwork-prog-fill" class="fieldwork-progress-bar-fill" style="width: 0%;"></div>
-              </div>
-              <small id="fieldwork-prog-count" class="text-muted mt-1 d-block">0 visitas registradas</small>
-            </div>
-            <div class="fieldwork-kpi-grid">
-              <div class="fieldwork-kpi-item"><div id="kpi-abertas" class="fieldwork-kpi-val text-success">0</div><div class="fieldwork-kpi-lbl">Abertas</div></div>
-              <div class="fieldwork-kpi-item"><div id="kpi-fechadas" class="fieldwork-kpi-val text-warning">0</div><div class="fieldwork-kpi-lbl">Fechadas</div></div>
-              <div class="fieldwork-kpi-item"><div id="kpi-recusas" class="fieldwork-kpi-val text-danger">0</div><div class="fieldwork-kpi-lbl">Recusas</div></div>
-              <div class="fieldwork-kpi-item"><div id="kpi-larvas" class="fieldwork-kpi-val" style="color: #9333ea;">0</div><div class="fieldwork-kpi-lbl">Com Larvas</div></div>
-            </div>
-          </div>
-
-          <!-- Card de Gamificação & Conquistas -->
-          <div class="fieldwork-card">
-            <div class="fieldwork-card-title">
-              <span>🏆 Conquistas do Agente</span>
-              <span id="game-points" class="badge bg-success">0 pts</span>
-            </div>
-            <p id="game-level" class="fw-bold mb-1 text-primary small">Nível 1 · Agente Aprendiz</p>
-            <div class="fieldwork-kpi-grid mb-2">
-              <div class="fieldwork-kpi-item"><div id="game-familias" class="fieldwork-kpi-val text-primary">0</div><div class="fieldwork-kpi-lbl">Famílias Protegidas</div></div>
-              <div class="fieldwork-kpi-item"><div id="game-visitas-hoje" class="fieldwork-kpi-val">0</div><div class="fieldwork-kpi-lbl">Casas Hoje</div></div>
-            </div>
-            <div id="fieldwork-badges-list" class="fieldwork-gamify-badges"></div>
-          </div>
-        </aside>
-      </div>
-    </div>
-
-    <!-- BottomSheet / Modal Tátil de Visita Domiciliar (1 Toque) -->
-    <div id="fieldwork-house-sheet" class="fieldwork-sheet-backdrop" hidden>
-      <div class="fieldwork-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-address-title">
-        <div class="fieldwork-sheet-header">
-          <div>
-            <h3 id="sheet-address-title" class="fieldwork-sheet-address">Rua 12, nº 450</h3>
-            <p id="sheet-address-sub" class="fieldwork-sheet-sub">Quadra 524 · SC 028</p>
-          </div>
-          <button type="button" id="sheet-close-btn" class="fieldwork-sheet-close" aria-label="Fechar ficha">&times;</button>
-        </div>
-
-        <!-- Situação do Imóvel -->
-        <label class="fieldwork-group-title">Situação do Imóvel:</label>
-        <div class="fieldwork-options-grid">
-          <button type="button" class="fieldwork-opt-btn is-active" data-situation="ABERTA">🏠 Aberta</button>
-          <button type="button" class="fieldwork-opt-btn" data-situation="FECHADA">🔒 Fechada</button>
-          <button type="button" class="fieldwork-opt-btn" data-situation="RECUSA">⛔ Recusa</button>
-          <button type="button" class="fieldwork-opt-btn" data-situation="DESABITADO">🏚️ Desabitado</button>
-        </div>
-
-        <!-- Criadouros SUCEN com Água -->
-        <div class="fieldwork-criadouros-group">
-          <label class="fieldwork-group-title"><i class="fas fa-tint text-primary"></i> Recipientes com Água (SUCEN / MS):</label>
-          <div class="fieldwork-criadouros-grid">
-            <label class="fieldwork-chip"><input type="checkbox" value="A1"><span>🚰 A1 Caixa Alta</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="A2"><span>🛢️ A2 Tambor/Chão</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="B"><span>🪴 B Vasos/Pratos</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="C"><span>🚿 C Calhas/Ralos</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="D1"><span>🛞 D1 Pneus</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="D2"><span>🗑️ D2 Lixo/Garrafas</span></label>
-            <label class="fieldwork-chip"><input type="checkbox" value="E"><span>🌿 E Naturais</span></label>
-          </div>
-        </div>
-
-        <!-- Presença de Larvas -->
-        <div class="fieldwork-larvas-card">
-          <label class="fieldwork-larvas-toggle">
-            <input type="checkbox" id="sheet-larvas-toggle" class="form-check-input me-2">
-            <span>🚨 FOCO DE LARVAS ENCONTRADO?</span>
-          </label>
-        </div>
-
-        <div class="mb-3">
-          <label for="sheet-obs" class="form-label small fw-bold">Observações do Agente:</label>
-          <input type="text" id="sheet-obs" class="form-control form-control-sm" placeholder="Ex.: Morador orientado, caixa vedada...">
-        </div>
-
-        <button type="button" id="sheet-save-btn" class="fieldwork-save-visit-btn"><i class="fas fa-check"></i> Salvar Visita ✨</button>
-      </div>
+    <div class="ento-panel">
+      <div class="ento-eyebrow">TRABALHO DE CAMPO</div>
+      <h2>Casa a Casa</h2>
+      <p>Mapa em branco dos quarteirões, plano do dia e o resultado de cada imóvel, ao vivo. Abre em tela cheia, feito para o celular, e continua funcionando quando falta internet na rua.</p>
+      <p><a class="btn btn-primary" href="{{ url_for('sfa_routes.casa_a_casa', token=token) }}"><i class="fas fa-house-circle-check" aria-hidden="true"></i> Abrir o Casa a Casa</a></p>
+      <ul class="mb-0">
+        <li><strong>No escritório:</strong> escolha o dia e o agente e clique nos quarteirões que serão trabalhados.</li>
+        <li><strong>Na rua:</strong> toque no número da casa e marque o resultado, com os campos do boletim “Visita a Imóvel”.</li>
+        <li><strong>Ao vivo:</strong> as casas e os quarteirões vão ganhando cor conforme a equipe registra.</li>
+      </ul>
     </div>
   </section>
 
@@ -455,8 +296,6 @@
 <script src="{{ url_for('static', filename='js/sfa_atlas_editor.js', v='20261002-cnefe') }}"></script>
 {% if cadastral_admin_enabled %}<script src="{{ url_for('static', filename='js/sfa_property_lookup.js', v='20261007-contatos') }}"></script>{% endif %}
 <script src="{{ url_for('static', filename='js/sfa_field_map.js', v='20261005-cadastro-admin') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_fieldwork_model.js', v='20261015-casa') }}"></script>
-<script src="{{ url_for('static', filename='js/sfa_fieldwork.js', v='20261015-casa') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_entomologia.js', v='20260930') }}"></script>
 <script src="{{ url_for('static', filename='js/sfa_atlas_accordion.js', v='20261004-acordeao') }}"></script>
 {% endblock %}
