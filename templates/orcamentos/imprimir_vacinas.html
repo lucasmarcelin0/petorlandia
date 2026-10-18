@@ -1,10 +1,11 @@
 {% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
+{% from 'components/titulo_impressao.html' import titulo_impressao %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteira de Vacinação de {{ animal.name }}</title>
+  <title>{{ titulo_impressao('Carteira de Vacinação', animal) }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
 </head>
 <body>

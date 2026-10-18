@@ -6,6 +6,11 @@
 # fica registrado em Actions e as mesmas travas do script manual valem aqui:
 # preflight antes, suite completa antes, push sem --force e espera pelo
 # release phase depois.
+#
+# O caminho normal agora e a integracao GitHub do Heroku: todo merge na main
+# publica sozinho depois dos testes (DEPLOY.md). Este workflow fica para
+# publicar outro ref ou republicar; ele NAO roda no push, senao cada merge
+# geraria dois deploys.
 name: Deploy (Heroku)
 
 on:
@@ -62,6 +67,11 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+
+      # Token expirado falhava la no meio, com um 401 sem explicacao. Aqui ele
+      # falha logo, dizendo como trocar o secret.
+      - name: Conferir token do Heroku
+        run: python scripts/check_heroku_token.py --avisar-dias 0
 
       # O nome do app nao precisa estar configurado em lugar nenhum: o token
       # ja diz quais apps a conta tem. Isso e o que torna o deploy possivel

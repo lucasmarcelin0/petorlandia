@@ -1,12 +1,17 @@
 # Deploy no Heroku
 
-## O caminho normal
+**O caminho normal é mesclar na `main`**: o Heroku publica sozinho depois que
+os testes passam (veja "Automatico: merge na main publica" abaixo). Os
+caminhos manuais desta página ficam para emergência.
+
+## Pelo computador (script PowerShell)
 
 ```bash
 powershell -File scripts/deploy_heroku.ps1
 ```
 
-É isso. O script faz, nesta ordem, e para no primeiro problema:
+Publique por aqui só a `main` (o próximo merge substitui qualquer outra
+branch publicada assim). O script faz, nesta ordem, e para no primeiro problema:
 
 1. confere que o remoto `heroku` existe e aponta para o Git do Heroku;
 2. confere que não há alteração rastreada sem commit;
@@ -25,23 +30,44 @@ powershell -File scripts/deploy_heroku.ps1 -PreflightOnly
 powershell -File scripts/deploy_heroku.ps1 -TestPath tests -PytestArgs "-q"
 ```
 
+## Automatico: merge na main publica
+
+O app usa a integracao GitHub do Heroku (Dashboard > app > Deploy > Automatic
+deploys from `main`), com **Wait for GitHub checks to pass** marcado. Todo
+merge na `main` vira release sozinho, mas so depois que os checks do commit
+(Test Suite e authorization-gate) passam; se algum falhar, nada vai para o ar.
+O release phase (`flask db upgrade`) roda como em qualquer deploy, e o
+andamento fica na aba Activity do app.
+
+Regra que vem junto: **publique sempre pela `main`**. A integracao publica a
+`main` por cima do que estiver no ar, sem a trava de fast-forward do workflow
+abaixo: um commit publicado direto no Heroku (script PowerShell ou
+`git push heroku` de outra branch) some de producao no proximo merge. Se algo
+precisar ir ao ar antes, mescle na `main`.
+
+Para publicar a `main` na hora, sem esperar um merge: Deploy > Manual deploy >
+`main` > **Deploy Branch**.
+
 ## Pelo GitHub Actions (sem depender da sua maquina)
 
-O caminho acima precisa do remoto `heroku` configurado no computador de quem
-publica. Quando isso nao existe -- outra maquina, outra pessoa, um agente --
-use o workflow **Deploy (Heroku)**, em Actions > Deploy (Heroku) > Run
-workflow. Ele pede o `ref` a publicar (padrao `main`), o `app` (vazio =
-descobre sozinho) e se deve rodar a suite antes (padrao sim). Funciona pelo
-app do GitHub no celular.
+Fallback, quando a integracao nao serve (republicar com as travas, ou um
+ref especifico em emergencia -- lembrando que o proximo merge na `main`
+substitui o que for publicado assim): o workflow **Deploy (Heroku)**, em
+Actions > Deploy (Heroku) > Run workflow. Ele nao roda sozinho no push, senao
+cada merge geraria dois deploys. Ele pede o `ref` a publicar (padrao `main`),
+o `app` (vazio = descobre sozinho) e se deve rodar a suite antes (padrao sim).
+Funciona pelo app do GitHub no celular.
 
 O workflow faz, na ordem, as mesmas travas do script manual:
 
-1. preflight (`scripts/preflight_deploy.py`);
-2. suite completa, com os mesmos comandos do workflow de testes;
-3. guarda de artefatos sensiveis;
-4. push **sem `--force`**, recusando publicar se o Heroku tem commit que o ref
+1. confere o token do Heroku (`scripts/check_heroku_token.py`) e, se ele foi
+   recusado, para logo dizendo como trocar;
+2. preflight (`scripts/preflight_deploy.py`);
+3. suite completa, com os mesmos comandos do workflow de testes;
+4. guarda de artefatos sensiveis;
+5. push **sem `--force`**, recusando publicar se o Heroku tem commit que o ref
    nao tem;
-5. espera o release phase terminar (`scripts/wait_heroku_release.py`) e falha
+6. espera o release phase terminar (`scripts/wait_heroku_release.py`) e falha
    com o log quando o `flask db upgrade` quebra.
 
 ### Configuracao (uma vez)
@@ -50,10 +76,27 @@ Em Settings > Secrets and variables > Actions, crie **um** secret:
 
 | Secret | Valor |
 |---|---|
-| `HEROKU_API_KEY` | token da conta -- gere um com prazo: `heroku authorizations:create -d "GitHub Actions deploy" -e 2592000` |
+| `HEROKU_API_KEY` | token sem validade: `heroku authorizations:create -d "GitHub Actions deploy"` (sem `-e`) |
 
-Prefira o token com prazo ao permanente: se vazar, ele expira sozinho. Para
-revogar, `heroku authorizations` e `heroku authorizations:revoke <id>`.
+O token com prazo (`-e 2592000`, 30 dias) era o que travava o deploy de tempos
+em tempos com um 401: ele expirava em silencio. Agora a recomendacao e o token
+sem validade, com duas protecoes no lugar do prazo:
+
+- o workflow Deploy (Heroku) confere o token no primeiro passo
+  (`scripts/check_heroku_token.py`) e, se ele foi recusado, para dizendo como
+  trocar; o mesmo script confere a validade a mao;
+- se vazar, revogue na hora: `heroku authorizations` e
+  `heroku authorizations:revoke <id>`, e gere outro.
+
+Sem computador a mao, a API Key de dashboard.heroku.com/account (Account
+settings > API Key > Reveal) tambem serve: nao expira por data, mas deixa de
+valer quando a senha da conta muda.
+
+O mesmo token vai na variavel `HEROKU_API_KEY` do ambiente do Claude na nuvem
+(menu do ambiente > Editar), para o agente conseguir publicar e ler logs.
+
+Com a integracao GitHub ligada, o token nao e mais necessario para o deploy
+normal: so para este workflow manual, para o CLI e para o agente ler logs.
 
 O nome do app nao precisa ser configurado. O token ja diz quais apps a conta
 tem, e o workflow escolhe nesta ordem:

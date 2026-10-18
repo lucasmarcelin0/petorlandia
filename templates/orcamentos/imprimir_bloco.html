@@ -1,10 +1,11 @@
 {% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
+{% from 'components/titulo_impressao.html' import titulo_impressao %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Receita de {{ bloco.animal.name }} | {{ clinica.nome if clinica else '' }}</title>
+  <title>{{ titulo_impressao('Receita', bloco.animal, clinica) }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
   {# Datas e horas sempre no padrão brasileiro. Sem defer de propósito: os
      scripts das telas usam window.PetDateBR já durante o carregamento. #}
