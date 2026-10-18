@@ -209,6 +209,187 @@ def test_sem_conta_ou_sem_unidade_nao_entra(client, restrito, ubs):
 
 
 # ---------------------------------------------------------------------------
+# Conta da própria unidade: perfil "somente Notificação SINAN"
+# ---------------------------------------------------------------------------
+
+def conta_da_unidade(registro, email='ubs2@example.test', name='UBS 2'):
+    user = responsavel(registro, email, name)
+    user.worker = notificacao.PERFIL_SO_NOTIFICACAO
+    db.session.commit()
+    return user
+
+
+def test_conta_da_unidade_so_ve_a_notificacao_e_registra_sem_escolher(client, restrito, ubs):
+    unidade('UBS Vizinha', '1111111')
+    ubs2 = conta_da_unidade(ubs)
+    entrar(client, ubs2)
+
+    inicio = client.get('/', **HTTPS)
+    assert inicio.status_code == 302 and inicio.headers['Location'].endswith('/sfa/notificacao')
+    for rota in ('/painel/user/', '/profile', '/sfa/', '/sfa/pacientes', '/sfa/entomologia'):
+        bloqueada = client.get(rota, **HTTPS)
+        assert bloqueada.status_code == 302 and bloqueada.headers['Location'].endswith('/sfa/notificacao'), rota
+    assert client.get('/sfa/pacientes', headers={'Accept': 'application/json'}, **HTTPS).status_code == 404
+    assert client.post('/profile', data={'name': 'Trocado'}, **HTTPS).status_code == 404
+    assert client.get('/sfa/notificacao/unidades', **HTTPS).status_code == 404
+    assert client.get('/change_password', **HTTPS).status_code == 200
+
+    pagina = client.get('/sfa/notificacao', **HTTPS)
+    assert pagina.status_code == 200
+    sidebar = BeautifulSoup(pagina.data, 'html.parser').select_one('.sfa-sidebar')
+    textos = sidebar.get_text(' ')
+    assert 'Nova ficha' in textos and 'Fichas da unidade' in textos and 'Sair' in textos and 'Alterar senha' in textos
+    assert 'Página inicial' not in textos and 'Pacientes' not in textos
+
+    formulario = client.get('/sfa/notificacao/ficha', **HTTPS).get_data(as_text=True)
+    assert 'name="ficha_sinan"' in formulario and 'value="UBS Teste"' in formulario
+    log = registrar(client)
+    assert (log.unidade_id, log.preenchido_por_id) == (ubs.id, ubs2.id)
+    assert 'Maria Paciente' in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
+    assert client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).status_code == 200
+    assert client.get(f'/sfa/notificacao/fichas/{log.id}/imprimir', **HTTPS).status_code == 200
+    assert client.get('/sfa/notificacao/panorama', **HTTPS).status_code == 200
+
+    saida = client.get('/logout', **HTTPS)
+    assert saida.status_code == 302 and '/sfa/' not in saida.headers['Location']
+
+
+def test_perfil_de_unidade_nao_restringe_admin_nem_outras_contas(client, restrito, ubs):
+    admin = conta('admin6@example.test', role='admin')
+    admin.worker = notificacao.PERFIL_SO_NOTIFICACAO
+    db.session.commit()
+    entrar(client, admin)
+    assert client.get('/', **HTTPS).status_code == 200
+    entrar(client, responsavel(ubs, 'enfermeira2@example.test'))
+    assert client.get('/', **HTTPS).status_code == 200
+    pagina = client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
+    assert 'Página inicial' in pagina and 'Alterar senha' not in pagina
+
+
+def test_conta_da_unidade_sem_unidade_ativa_ve_aviso(client, restrito, ubs):
+    pessoa = conta('ubs9@example.test')
+    pessoa.worker = notificacao.PERFIL_SO_NOTIFICACAO
+    db.session.commit()
+    entrar(client, pessoa)
+    for rota in ('/', '/sfa/notificacao', '/sfa/notificacao/ficha'):
+        aviso = client.get(rota, **HTTPS)
+        assert aviso.status_code == 403 and 'ainda não está ligada a uma unidade' in aviso.get_data(as_text=True), rota
+    assert client.get('/logout', **HTTPS).status_code == 302
+
+
+def editar_conta(client, user, **campos):
+    dados = {'name': user.name, 'email': user.email, 'new_password': '', 'role': user.role or 'adotante',
+             'worker': user.worker or ''}
+    dados.update(campos)
+    return client.post(f'/painel/user/edit/?id={user.id}', data=dados, **HTTPS)
+
+
+def test_painel_de_usuarios_deixa_a_conta_so_com_a_propria_unidade(client, ubs):
+    ubs2 = unidade('UBS 2', '2222222')
+    ubs2_conta = responsavel(ubs, 'ubs2@example.test', 'UBS 2')
+    notificacao.conceder(ubs2, ubs2_conta, 'Admin')  # indicada por engano nas duas unidades
+    db.session.commit()
+    admin = conta('admin7@example.test', role='admin', name='Admin')
+    entrar(client, admin)
+
+    tela = BeautifulSoup(client.get(f'/painel/user/edit/?id={ubs2_conta.id}', **HTTPS).data, 'html.parser')
+    opcoes = {o['value']: o.get_text() for o in tela.select('select[name="unidade_sinan"] option')}
+    assert opcoes == {'': 'Nenhuma', str(ubs.id): 'UBS Teste', str(ubs2.id): 'UBS 2'}
+    assert 'responde por 2 unidades' in tela.get_text()
+    perfis = [o['value'] for o in tela.select('select[name="worker"] option')]
+    assert notificacao.PERFIL_SO_NOTIFICACAO in perfis
+
+    # Perfil de unidade exige a unidade; nada muda enquanto ela não é escolhida.
+    sem_unidade = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO, unidade_sinan='')
+    assert sem_unidade.status_code == 200 and 'Escolha a unidade desta conta' in sem_unidade.get_data(as_text=True)
+    db.session.refresh(ubs2_conta)
+    assert ubs2_conta.worker is None and len(notificacao.vinculos_ativos(ubs2_conta)) == 2
+
+    salvo = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO, unidade_sinan=str(ubs2.id))
+    assert salvo.status_code == 302
+    db.session.refresh(ubs2_conta)
+    assert ubs2_conta.worker == notificacao.PERFIL_SO_NOTIFICACAO and ubs2_conta.role == 'tutor'
+    assert [v.unidade_id for v in notificacao.vinculos_ativos(ubs2_conta)] == [ubs2.id]
+    revogado = SfaUnidadeResponsavel.query.filter_by(user_id=ubs2_conta.id, unidade_id=ubs.id).one()
+    assert revogado.revogado_por == 'Admin'
+    auditoria = SfaAuditoria.query.filter_by(funcao='revogar_responsavel').one()
+    assert json.loads(auditoria.detalhes_json)['origem'] == 'painel_usuarios'
+
+    tela = BeautifulSoup(client.get(f'/painel/user/edit/?id={ubs2_conta.id}', **HTTPS).data, 'html.parser')
+    assert tela.select_one('select[name="unidade_sinan"] option[selected]')['value'] == str(ubs2.id)
+    # Outra tela que grava o usuário sem o campo não mexe nos vínculos.
+    assert editar_conta(client, ubs2_conta, name='UBS Dois').status_code == 302
+    assert [v.unidade_id for v in notificacao.vinculos_ativos(ubs2_conta)] == [ubs2.id]
+    unidades = client.get('/sfa/notificacao/unidades', **HTTPS).get_data(as_text=True)
+    assert 'só SINAN' in unidades and f'/painel/user/edit/?id={ubs2_conta.id}' in unidades
+
+    entrar(client, ubs2_conta)
+    formulario = client.get('/sfa/notificacao/ficha', **HTTPS).get_data(as_text=True)
+    assert 'name="ficha_sinan"' in formulario and 'value="UBS 2"' in formulario
+    assert 'Por qual unidade' not in formulario
+
+
+def test_painel_de_usuarios_troca_soma_ou_retira_unidade_das_demais_contas(client, ubs):
+    vizinha = unidade('UBS Vizinha', '1111111')
+    terceira = unidade('UBS Três', '3333333')
+    entrar(client, conta('admin8@example.test', role='admin', name='Admin'))
+
+    # Uma unidade só aparece no campo: escolher outra troca a unidade; esvaziar retira o acesso.
+    enfermeira = responsavel(ubs, 'enfermeira3@example.test', 'Enfermeira')
+    assert editar_conta(client, enfermeira, unidade_sinan=str(vizinha.id)).status_code == 302
+    assert [v.unidade_id for v in notificacao.vinculos_ativos(enfermeira)] == [vizinha.id]
+    assert db.session.get(User, enfermeira.id).worker is None
+    assert editar_conta(client, enfermeira, unidade_sinan='').status_code == 302
+    assert notificacao.vinculos_ativos(enfermeira) == []
+
+    # Várias unidades (campo em branco): fora do perfil de unidade, a escolhida é somada.
+    coordenadora = responsavel(ubs, 'coordenadora@example.test', 'Coordenadora')
+    notificacao.conceder(vizinha, coordenadora, 'Admin')
+    db.session.commit()
+    assert editar_conta(client, coordenadora, unidade_sinan='').status_code == 302
+    assert len(notificacao.vinculos_ativos(coordenadora)) == 2
+    assert editar_conta(client, coordenadora, unidade_sinan=str(terceira.id)).status_code == 302
+    assert len(notificacao.vinculos_ativos(coordenadora)) == 3
+
+    vizinha.ativa = False
+    db.session.commit()
+    desativada = client.post('/painel/user/new/', data={'name': 'UBS 5', 'email': 'ubs5@example.test', 'new_password': 'senha-123',
+                                                        'role': 'adotante', 'worker': notificacao.PERFIL_SO_NOTIFICACAO,
+                                                        'unidade_sinan': str(vizinha.id)}, **HTTPS)
+    assert desativada.status_code == 200 and 'UBS Vizinha está desativada' in desativada.get_data(as_text=True)
+    assert User.query.filter_by(email='ubs5@example.test').first() is None
+    nova = client.post('/painel/user/new/', data={'name': 'UBS 5', 'email': 'ubs5@example.test', 'new_password': 'senha-123',
+                                                  'role': 'adotante', 'worker': notificacao.PERFIL_SO_NOTIFICACAO,
+                                                  'unidade_sinan': str(terceira.id)}, **HTTPS)
+    assert nova.status_code == 302
+    criada = User.query.filter_by(email='ubs5@example.test').one()
+    assert [v.unidade_id for v in notificacao.vinculos_ativos(criada)] == [terceira.id]
+
+
+def test_ficha_enviada_pelo_navegador_passa_no_csrf_em_https(app, client, ubs, autora):
+    """Em produção a ficha voltava em branco: o CSRF em HTTPS exige o Referer e a página mandava não enviá-lo."""
+    app.config['WTF_CSRF_ENABLED'] = True
+    pagina = client.get('/sfa/notificacao/ficha', **HTTPS)
+    assert pagina.headers['Referrer-Policy'] == 'same-origin'
+    tela = BeautifulSoup(pagina.data, 'html.parser')
+    assert tela.select_one('meta[name="referrer"]')['content'] == 'same-origin'
+    token = tela.select_one('input[name="csrf_token"]')['value']
+    for rota in ('/sfa/notificacao', '/sfa/notificacao/panorama'):
+        assert client.get(rota, **HTTPS).headers['Referrer-Policy'] == 'same-origin', rota
+
+    # Sem a origem (o que no-referrer fazia o navegador mandar), o envio é recusado e nada é gravado.
+    navegador = {'Accept': 'text/html'}
+    recusada = client.post('/sfa/notificacao/ficha', data={**ficha_form(), 'csrf_token': token},
+                           headers=navegador, **HTTPS)
+    assert recusada.status_code == 303 and SfaSinanLog.query.count() == 0
+    # Com same-origin o navegador manda o endereço do próprio site, e a ficha é gravada.
+    aceita = client.post('/sfa/notificacao/ficha', data={**ficha_form(), 'csrf_token': token},
+                         headers={**navegador, 'Referer': 'https://localhost/sfa/notificacao/ficha'}, **HTTPS)
+    assert aceita.status_code == 302 and '/sfa/notificacao/fichas/' in aceita.headers['Location']
+    assert SfaSinanLog.query.one().unidade_id == ubs.id
+
+
+# ---------------------------------------------------------------------------
 # Registrar e consultar fichas
 # ---------------------------------------------------------------------------
 
@@ -240,9 +421,11 @@ def test_colega_da_unidade_ve_e_so_o_autor_completa(client, ubs, autora):
     assert 'Maria Paciente' in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
     ficha = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS)
     assert ficha.status_code == 200 and 'Ana Autora' in ficha.get_data(as_text=True)
-    assert 'Completar ficha' not in ficha.get_data(as_text=True)
+    for acao in ('Completar ficha', 'Editar ficha', 'Excluir ficha'):
+        assert acao not in ficha.get_data(as_text=True)
     assert client.get(f'/sfa/notificacao/fichas/{log.id}/completar', **HTTPS).status_code == 404
     assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome='Trocado'), **HTTPS).status_code == 404
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS).status_code == 404
 
     entrar(client, de_fora)
     assert 'Maria Paciente' not in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
@@ -290,7 +473,7 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
     assert SfaAuditoria.query.filter_by(funcao='atualizar_ficha_pre_t0').count() == 1
 
     detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
-    assert 'O que ainda falta' not in detalhe and 'Alterações depois do envio' in detalhe and 'Corrigir ficha' in detalhe
+    assert 'O que ainda falta' not in detalhe and 'Alterações depois do envio' in detalhe and 'Editar ficha' in detalhe
     lista = client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
     assert 'campos a completar' not in lista and 'Completa' in lista
     assert 'Nenhuma ficha com esse filtro' in client.get('/sfa/notificacao?pendentes=1', **HTTPS).get_data(as_text=True)
@@ -299,6 +482,56 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
     client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=completa, **HTTPS)
     db.session.refresh(log)
     assert len(json.loads(log.dados_json)[FULL_KEY]['revisoes']) == 1
+
+
+def test_autor_edita_e_exclui_a_ficha_com_o_caso_que_ela_criou(client, ubs, autora):
+    log = registrar(client, **COMPLETA)
+    log_id, id_estudo = log.id, log.id_estudo_vinculado
+    lista = BeautifulSoup(client.get('/sfa/notificacao', **HTTPS).data, 'html.parser')
+    assert lista.select_one(f'a[href$="/sfa/notificacao/fichas/{log_id}/completar"]').get_text() == 'Editar'
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log_id}', **HTTPS).get_data(as_text=True)
+    assert 'Editar ficha' in detalhe and 'Excluir ficha' in detalhe
+
+    excluida = client.post(f'/sfa/notificacao/fichas/{log_id}/excluir', **HTTPS)
+    assert excluida.status_code == 302 and excluida.headers['Location'].endswith('/sfa/notificacao')
+    assert db.session.get(SfaSinanLog, log_id) is None
+    assert SfaPaciente.query.filter_by(id_estudo=id_estudo).first() is None
+    auditoria = json.loads(SfaAuditoria.query.filter_by(funcao='excluir_ficha').one().detalhes_json)
+    assert (auditoria['ficha_sinan'], auditoria['caso_removido'], auditoria['ator_autenticado']) == ('2985999', True, str(autora.id))
+    assert 'Maria Paciente' not in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
+    assert client.get(f'/sfa/notificacao/fichas/{log_id}', **HTTPS).status_code == 404
+    # O mesmo número pode ser registrado de novo depois de excluído.
+    assert registrar(client).ficha_sinan == '2985999'
+
+
+def test_ficha_com_caso_em_acompanhamento_ou_da_planilha_nao_e_excluida(client, ubs, autora):
+    log = registrar(client)
+    paciente = SfaPaciente.query.one()
+    paciente.status_whatsapp = 'ENVIADO'
+    db.session.commit()
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+    assert 'Excluir ficha' not in detalhe and 'já entrou no acompanhamento do estudo' in detalhe
+    recusada = client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS)
+    assert recusada.status_code == 302 and recusada.headers['Location'].endswith(f'/sfa/notificacao/fichas/{log.id}')
+    assert db.session.get(SfaSinanLog, log.id) is not None and SfaPaciente.query.count() == 1
+
+    paciente.status_whatsapp = 'NAO_ENVIADO'
+    log.n_caso = '17'
+    db.session.commit()
+    client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS)
+    assert db.session.get(SfaSinanLog, log.id) is not None
+    assert 'veio da planilha do SINAN' in client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+
+
+def test_excluir_mantem_o_caso_que_nao_nasceu_da_ficha(app, client, ubs, autora):
+    existente = SfaPaciente(id_estudo='SFA-9001', ficha_sinan='2985999', nome='Caso da Planilha')
+    db.session.add(existente)
+    db.session.commit()
+    log = registrar(client)
+    assert log.id_estudo_vinculado == 'SFA-9001'
+    entrar(client, conta('admin9@example.test', role='admin'))
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/excluir', **HTTPS).status_code == 302
+    assert SfaSinanLog.query.count() == 0 and SfaPaciente.query.one().id_estudo == 'SFA-9001'
 
 
 def test_correcao_nao_sobrescreve_o_que_a_equipe_ajustou_no_caso(client, ubs, autora):

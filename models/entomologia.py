@@ -99,26 +99,44 @@ class EntomologiaAtlasArtefato(db.Model):
 
 
 class EntomologiaQuarteiraoTrabalho(db.Model):
-    """Estado de planejamento e trabalho dos quarteirões pela equipe de campo."""
+    """Quarteirão escolhido para o casa a casa de um dia.
+
+    Uma linha por quarteirão e dia. Fica em aberto até alguém concluir. Quem
+    registra visita em quarteirão sem plano aberto cria a linha sozinho, de modo
+    que todo quarteirão trabalhado tem a sua.
+    """
     __tablename__ = "entomologia_quarteirao_trabalho"
     __table_args__ = (
-        db.UniqueConstraint("setor", "quarteirao", "ciclo", name="uq_entomologia_quarteirao_ciclo"),
+        db.UniqueConstraint("bloco", "data", "parte", name="uq_entomologia_quarteirao_dia_parte"),
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    setor = db.Column(db.String(20), nullable=False, index=True)
-    quarteirao = db.Column(db.String(20), nullable=False, index=True)
-    ciclo = db.Column(db.String(40), nullable=False, default="vigente", index=True)
-    cor = db.Column(db.String(30))
+    bloco = db.Column(db.String(40), nullable=False, index=True)   # source_id na malha de quarteirões
+    setor = db.Column(db.String(20), nullable=False)
+    quarteirao = db.Column(db.String(20), nullable=False)
+    data = db.Column(db.Date, nullable=False, index=True)
+    # Quarteirão inteiro ("") ou um L, os dois lados em torno de um canto: NE, NO, SE ou SO.
+    # Dividido entre duas pessoas, o dia tem duas linhas com Ls opostos (NE + SO ou NO + SE).
+    parte = db.Column(db.String(2), nullable=False, default="", server_default="")
+    # services.entomologia_casa_a_casa.ATIVIDADES; vazio em planos anteriores à escolha.
+    atividade = db.Column(db.String(20))
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     responsavel = db.Column(db.String(160))
-    status = db.Column(db.String(30), nullable=False, default="PLANEJADO", index=True)  # PLANEJADO, EM_ANDAMENTO, TRABALHADO
-    trabalhado_em = db.Column(db.DateTime(timezone=True))
-    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    concluido_em = db.Column(db.DateTime(timezone=True))
+    concluido_por = db.Column(db.String(160))
+    concluido_por_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    criado_por = db.Column(db.String(160), nullable=False)
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class EntomologiaVisitaDomiciliar(db.Model):
-    """Visita casa a casa registrada pelo agente (online ou sincronizada do modo offline)."""
+    """Visita a um imóvel no casa a casa, com os campos do boletim oficial "Visita a Imóvel".
+
+    Uma visita não é alterada depois de gravada: corrigir é registrar outra, e
+    vale a mais recente de cada imóvel. ``uuid_local`` vem do aparelho e torna o
+    envio repetível (o modo sem internet reenvia até ter confirmação).
+    """
     __tablename__ = "entomologia_visita_domiciliar"
     __table_args__ = (
         db.UniqueConstraint("uuid_local", name="uq_entomologia_visita_uuid"),
@@ -126,22 +144,60 @@ class EntomologiaVisitaDomiciliar(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     uuid_local = db.Column(db.String(64), nullable=False, index=True)
-    setor = db.Column(db.String(20), nullable=False, index=True)
-    quarteirao = db.Column(db.String(20), nullable=False, index=True)
+    bloco = db.Column(db.String(40), nullable=False, index=True)
+    setor = db.Column(db.String(20), nullable=False)
+    quarteirao = db.Column(db.String(20), nullable=False)
+    # Endereço na base do atlas ou, para imóvel acrescentado em campo, "novo-<uuid>".
+    imovel = db.Column(db.String(80), nullable=False, index=True)
     logradouro = db.Column(db.String(200))
     numero = db.Column(db.String(50))
-    cnefe_id = db.Column(db.String(100), index=True)
+    complemento = db.Column(db.String(80))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
-    situacao = db.Column(db.String(30), nullable=False, default="ABERTA")  # ABERTA, FECHADA, RECUSA, DESABITADO
-    criadouros_json = db.Column(db.Text)  # lista JSON dos tipos de recipientes encontrados: ["A1", "B", ...]
+    situacao = db.Column(db.String(20), nullable=False)   # services.entomologia_casa_a_casa.SITUACOES
+    recipientes_existentes = db.Column(db.Integer, nullable=False, default=0)
+    recipientes_agua = db.Column(db.Integer, nullable=False, default=0)
+    recipientes_larva = db.Column(db.Integer, nullable=False, default=0)
+    # Recipientes por tipo da ficha do SISAWEB (1 a 40): [{"t": 12, "e": 3, "a": 2, "l": 1}]. Vazio = só os totais.
+    recipientes_json = db.Column(db.Text)
     larvas_encontradas = db.Column(db.Boolean, nullable=False, default=False)
-    larvas_quantidade_tubitos = db.Column(db.Integer, default=0)
-    larvas_especie = db.Column(db.String(50))
-    agente = db.Column(db.String(160))
-    data_visita = db.Column(db.Date)
-    horario_visita = db.Column(db.DateTime(timezone=True))
+    tubitos = db.Column(db.Integer, nullable=False, default=0)
+    controle_mecanico = db.Column(db.Boolean, nullable=False, default=False)
+    controle_alternativo = db.Column(db.Boolean, nullable=False, default=False)
+    tratamento_focal = db.Column(db.Boolean, nullable=False, default=False)
+    # Larvicida do focal: NATULAR, VECTOBAC ou os dois separados por vírgula.
+    focal_produto = db.Column(db.String(30))
+    atividade = db.Column(db.String(20))
+    # Pendência anterior (fechado, recusa, temporada) resolvida por esta visita.
+    recuperacao = db.Column(db.Boolean, nullable=False, default=False)
     observacao = db.Column(db.Text)
-    sincronizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    agente_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    agente = db.Column(db.String(160))
+    data_visita = db.Column(db.Date, nullable=False, index=True)
+    horario_visita = db.Column(db.DateTime(timezone=True))
+    recebido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
+
+class EntomologiaImovelCampo(db.Model):
+    """Imóvel que faltava na base oficial e foi acrescentado por um agente em campo.
+
+    Passa a fazer parte do mapa do casa a casa (base, roteiros e contagens) para
+    todos. ``imovel`` é o mesmo identificador das visitas ("novo-...").
+    """
+    __tablename__ = "entomologia_imovel_campo"
+
+    id = db.Column(db.Integer, primary_key=True)
+    imovel = db.Column(db.String(80), nullable=False, unique=True)
+    bloco = db.Column(db.String(40), nullable=False, index=True)
+    setor = db.Column(db.String(20), nullable=False)
+    quarteirao = db.Column(db.String(20), nullable=False)
+    logradouro = db.Column(db.String(200), nullable=False)
+    numero = db.Column(db.String(50), nullable=False)
+    complemento = db.Column(db.String(80))
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    removido_em = db.Column(db.DateTime(timezone=True))
+    removido_por = db.Column(db.String(160))

@@ -16,6 +16,11 @@
 <div class="no-print print-toolbar" aria-label="Ações da receita">
   <div class="print-toolbar__row">
     <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+    {# PDF gerado no servidor: no celular, o "Salvar como PDF" do Imprimir pode
+       gravar um arquivo vazio, que não abre nem é aceito pelo assinador gov.br. #}
+    {% if pdf_url %}
+      <a class="print-action" href="{{ pdf_url }}">Baixar PDF</a>
+    {% endif %}
     <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar</button>
 
     {% if bloco.assinatura_enviada %}
@@ -59,6 +64,17 @@
 
     <a class="print-action print-action--ghost print-toolbar__back" href="{{ return_url or url_for('consulta_direct', animal_id=animal.id) }}">Voltar</a>
   </div>
+  {# O envio da receita assinada volta para esta página: sem isto o aviso
+     (enviada, arquivo vazio…) só aparecia na próxima tela do sistema. #}
+  {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% if mensagens %}
+      <ul class="print-toolbar__flashes" role="status">
+        {% for categoria, mensagem in mensagens %}
+          <li class="print-toolbar__flash print-toolbar__flash--{{ categoria }}">{{ mensagem }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -212,7 +228,13 @@
   }
 
   function abrirAssinatura() {
-    if (confirm('Abrir página de assinatura digital?')) {
+    const passos =
+      'Para assinar no gov.br:\n' +
+      '1) Toque em "Baixar PDF" e salve a receita;\n' +
+      '2) No assinador, toque em "Escolher arquivo" e selecione o PDF baixado;\n' +
+      '3) Baixe o arquivo assinado e envie aqui em "Enviar receita assinada".\n\n' +
+      'Abrir o assinador agora?';
+    if (confirm(passos)) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
     }
   }

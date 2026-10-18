@@ -242,6 +242,9 @@
        href="{{ url_for('sfa_routes.entomologia') }}" {% if request.endpoint == 'sfa_routes.entomologia' %}aria-current="page"{% endif %}>
       <i class="fas fa-map-location-dot" aria-hidden="true"></i> Dados entomológicos<br><span class="ms-4">e censitários</span>
     </a>
+    <a class="nav-link px-2" href="{{ url_for('sfa_routes.casa_a_casa') }}">
+      <i class="fas fa-house-circle-check" aria-hidden="true"></i> Casa a casa
+    </a>
     <a class="nav-link px-2 {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}active{% endif %}"
        href="{{ url_for('sfa_routes.entomologia_atualizar') }}" {% if request.endpoint == 'sfa_routes.entomologia_atualizar' %}aria-current="page"{% endif %}>
       <i class="fas fa-upload" aria-hidden="true"></i> Atualizar dados
@@ -249,7 +252,13 @@
   </div>
   {% endif %}
   {% if not sfa_completo %}
+  {% if sfa_conta_so_notificacao is defined and sfa_conta_so_notificacao() %}
+  {# Conta de unidade de saúde: o resto do site está fechado para ela (request_hooks). #}
+  <a class="nav-link mx-3 px-2" href="{{ url_for('change_password') }}"><i class="fas fa-key" aria-hidden="true"></i> Alterar senha</a>
+  <a class="nav-link mx-3 px-2" href="{{ url_for('logout') }}"><i class="fas fa-right-from-bracket" aria-hidden="true"></i> Sair</a>
+  {% else %}
   <a class="nav-link mx-3 px-2" href="/"><i class="fas fa-house" aria-hidden="true"></i> Página inicial</a>
+  {% endif %}
   {% endif %}
   <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
 </nav>

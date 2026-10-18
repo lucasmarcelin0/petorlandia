@@ -11,9 +11,16 @@
 {% block content %}
 <div class="d-flex flex-wrap gap-2 mb-3">
   <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.notificacao_fichas') }}"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Fichas da unidade</a>
-  {% if pode_completar %}<a class="btn btn-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id) }}"><i class="fas fa-pen me-1" aria-hidden="true"></i>{{ 'Completar ficha' if grupos else 'Corrigir ficha' }}</a>{% endif %}
+  {% if pode_completar %}<a class="btn btn-primary" href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id) }}"><i class="fas fa-pen me-1" aria-hidden="true"></i>{{ 'Completar ficha' if grupos else 'Editar ficha' }}</a>{% endif %}
   <a class="btn btn-outline-primary" href="{{ url_for('sfa_routes.notificacao_imprimir', ficha_id=log.id) }}"><i class="fas fa-print me-1" aria-hidden="true"></i>Imprimir no formato SINAN</a>
+  {% if pode_completar and not motivo_exclusao %}
+  <form class="ms-auto" method="post" action="{{ url_for('sfa_routes.notificacao_excluir', ficha_id=log.id) }}" onsubmit="return confirm('Excluir esta ficha? Ela sai da lista da unidade e não pode ser recuperada.')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline-danger"><i class="fas fa-trash-can me-1" aria-hidden="true"></i>Excluir ficha</button>
+  </form>
+  {% endif %}
 </div>
+{% if pode_completar and motivo_exclusao %}<p class="notif-nota mb-3">Excluir: {{ motivo_exclusao }}</p>{% endif %}
 
 <section class="notif-painel mb-3">
   <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">

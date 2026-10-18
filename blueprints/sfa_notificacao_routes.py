@@ -4,7 +4,6 @@ Registradas no blueprint do SFA. Ao contrário das telas internas, aqui o token
 do SFA não vale: toda rota exige uma conta, porque cada ficha fica atribuída a
 quem preencheu e à unidade pela qual a pessoa responde.
 """
-import json
 import re
 from functools import wraps
 
@@ -28,6 +27,11 @@ def usuario_pode_acessar():
 def usuario_administra():
     from services.sfa_notificacao import eh_admin
     return eh_admin(_usuario())
+
+
+def usuario_so_notificacao():
+    from services.sfa_notificacao import conta_so_notificacao
+    return conta_so_notificacao(_usuario())
 
 
 def require_notificacao_access(view):
@@ -54,7 +58,9 @@ def ensure_notificacao_admin():
 def _sem_cache(response):
     response = current_app.make_response(response)
     response.headers['Cache-Control'] = 'private, no-store'
-    response.headers['Referrer-Policy'] = 'no-referrer'
+    # same-origin, não no-referrer: em HTTPS o CSRF exige o Referer do próprio site, e sem ele todo
+    # envio (ficha, responsáveis, unidades) era recusado. Para fora do site nada é enviado.
+    response.headers['Referrer-Policy'] = 'same-origin'
     response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return response
 
@@ -73,18 +79,15 @@ def _enumerar(itens):
 
 
 def _auditar(funcao, mensagem, detalhes, id_estudo=None):
-    from extensions import db
-    from models.sfa import SfaAuditoria
-    db.session.add(SfaAuditoria(nivel='INFO', categoria='NOTIFICACAO_SINAN', funcao=funcao, id_estudo=id_estudo,
-                                mensagem=mensagem,
-                                detalhes_json=json.dumps({'ator_autenticado': str(current_user.get_id()), **detalhes},
-                                                         ensure_ascii=False, default=str)))
+    from services.sfa_notificacao import auditar
+    auditar(funcao, mensagem, detalhes, ator=current_user, id_estudo=id_estudo)
 
 
 def register(bp):
     @bp.context_processor
     def _inject_notificacao():
-        return {'sfa_acesso_notificacao': usuario_pode_acessar, 'sfa_notificacao_admin': usuario_administra}
+        return {'sfa_acesso_notificacao': usuario_pode_acessar, 'sfa_notificacao_admin': usuario_administra,
+                'sfa_conta_so_notificacao': usuario_so_notificacao}
 
     def ensure_ficha_da_unidade(ficha_id):
         """A ficha, se é de uma unidade ao alcance da conta; senão 404, sem revelar que ela existe."""
@@ -177,8 +180,8 @@ def register(bp):
     def notificacao_ficha(ficha_id):
         from extensions import db
         from models import User
-        from services.sfa_notificacao import (agravo_da_ficha, nome_da_conta, pendencias, pendencias_por_grupo,
-                                              pode_completar)
+        from services.sfa_notificacao import (agravo_da_ficha, motivo_para_nao_excluir, nome_da_conta, pendencias,
+                                              pendencias_por_grupo, pode_completar)
         from services.sfa_pre_t0 import carregar_esquema_pre_t0, obter_ficha_do_log
 
         log_entry = ensure_ficha_da_unidade(ficha_id)
@@ -194,11 +197,12 @@ def register(bp):
             revisoes.append({'em': _data_hora(revisao.get('em')), 'autor': nome_da_conta(autor) or 'Conta removida',
                              'campos': [numero for key, numero in numeros.items()
                                         if key in (revisao.get('campos') or [])]})
+        editavel = pode_completar(current_user, log_entry)
         return _sem_cache(render_template(
             'sfa/notificacao_ficha.html', log=log_entry, ficha=ficha, revisoes=revisoes,
             grupos=pendencias_por_grupo(faltam), faltando={item['chave'] for item in faltam},
             agravo=agravo_da_ficha(ficha['respostas']), autor=nome_da_conta(log_entry.preenchido_por),
-            pode_completar=pode_completar(current_user, log_entry)))
+            pode_completar=editavel, motivo_exclusao=motivo_para_nao_excluir(log_entry) if editavel else ''))
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/completar', methods=['GET', 'POST'])
     @require_notificacao_access
@@ -236,6 +240,29 @@ def register(bp):
                 flash('Nada mudou: a ficha continua como estava.', 'info')
             return redirect(destino)
         return _formulario(schema, respostas_para_formulario(respostas, schema), acao, contexto)
+
+    @bp.route('/notificacao/fichas/<int:ficha_id>/excluir', methods=['POST'])
+    @require_notificacao_access
+    @login_required
+    def notificacao_excluir(ficha_id):
+        """Exclui a ficha (e o caso que só ela criou) enquanto o estudo não agiu sobre ela."""
+        from extensions import db
+        from services.sfa_notificacao import excluir_ficha, pode_completar
+
+        log_entry = ensure_ficha_da_unidade(ficha_id)
+        if not pode_completar(current_user, log_entry):
+            abort(404)
+        try:
+            resumo = excluir_ficha(log_entry)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('sfa_routes.notificacao_ficha', ficha_id=ficha_id))
+        _auditar('excluir_ficha', f"Ficha #{resumo['ficha_id']} excluída pela área das unidades", resumo,
+                 id_estudo=resumo['id_estudo'] or None)
+        db.session.commit()
+        flash(f"Ficha {resumo['ficha_sinan'] or 'sem número'} excluída.", 'success')
+        return redirect(url_for('sfa_routes.notificacao_fichas'))
 
     @bp.route('/notificacao/fichas/<int:ficha_id>/imprimir')
     @require_notificacao_access
@@ -275,8 +302,11 @@ def register(bp):
     def notificacao_unidades():
         ensure_notificacao_admin()
         from models.sfa import SfaUnidadeSaude
+        from services.sfa_notificacao import PERFIL_SO_NOTIFICACAO
         unidades = SfaUnidadeSaude.query.order_by(SfaUnidadeSaude.ativa.desc(), SfaUnidadeSaude.nome).all()
-        return _sem_cache(render_template('sfa/notificacao_unidades.html', unidades=unidades))
+        return _sem_cache(render_template('sfa/notificacao_unidades.html', unidades=unidades,
+                                          perfil_so_notificacao=PERFIL_SO_NOTIFICACAO,
+                                          editar_conta='user.edit_view' in current_app.view_functions))
 
     @bp.route('/notificacao/unidades', methods=['POST'])
     @require_notificacao_access

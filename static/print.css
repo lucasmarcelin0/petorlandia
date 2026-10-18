@@ -566,6 +566,42 @@ footer span + span::before {
   font-weight: 700;
 }
 
+.print-toolbar__flashes {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.print-toolbar__flash {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 10pt;
+  line-height: 1.4;
+  background: #eef4f8;
+  color: var(--primary-color);
+  border: 1px solid var(--border-color);
+}
+
+.print-toolbar__flash--success {
+  background: #ecfdf3;
+  color: #146c43;
+  border-color: #b7ebc9;
+}
+
+.print-toolbar__flash--warning {
+  background: #fff8e6;
+  color: #8a5a00;
+  border-color: #f5d98b;
+}
+
+.print-toolbar__flash--danger {
+  background: #fdecec;
+  color: #a12622;
+  border-color: #f3b9b7;
+}
+
 .no-print button,
 .no-print a {
   background-color: var(--primary-color);

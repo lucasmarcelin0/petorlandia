@@ -2696,9 +2696,13 @@ def short_treatment_url(tratamento_id):
     return redirect(url_for('consulta_routes.acompanhamento_tratamento', **kwargs))
 
 
-@bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
-def imprimir_bloco_prescricao(bloco_id):
-    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+def _acesso_receita(bloco):
+    """Quem pode abrir a receita — vale para a tela de impressão e para o PDF.
+
+    Devolve ``(resposta, papeis)``. Quando ``resposta`` não é ``None`` é o
+    redirect que a rota deve devolver; ``papeis`` traz ``owner_access``,
+    ``is_vet`` e ``is_admin`` já apurados.
+    """
     animal = bloco.animal
     tutor = animal.owner if animal else None
 
@@ -2714,7 +2718,7 @@ def imprimir_bloco_prescricao(bloco_id):
         login_user(token_user, remember=True)
 
     if not current_user.is_authenticated and not has_token_access:
-        return redirect(url_for('login_view', next=request.full_path or request.path))
+        return redirect(url_for('login_view', next=request.full_path or request.path)), None
 
     owner_access = _current_user_owns_animal(animal) or has_token_access
     is_vet = current_user.is_authenticated and is_veterinarian(current_user)
@@ -2726,8 +2730,14 @@ def imprimir_bloco_prescricao(bloco_id):
 
     if not owner_access and not is_admin and not is_vet:
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
-        return redirect(url_for('index'))
+        return redirect(url_for('index')), None
 
+    return None, {'owner_access': owner_access, 'is_vet': is_vet, 'is_admin': is_admin}
+
+
+def _responsaveis_receita(bloco, is_vet):
+    """Consulta, veterinário responsável, clínica e quem salvou a receita."""
+    animal = bloco.animal
     consulta = animal.consultas[-1] if animal and animal.consultas else None
     veterinario = get_responsible_veterinarian(
         bloco.saved_by,
@@ -2738,6 +2748,23 @@ def imprimir_bloco_prescricao(bloco_id):
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
     salvo_por = bloco.saved_by or veterinario
+    return consulta, veterinario, clinica, salvo_por
+
+
+@bp.route('/bloco_prescricao/<int:bloco_id>/imprimir')
+def imprimir_bloco_prescricao(bloco_id):
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    animal = bloco.animal
+    tutor = animal.owner if animal else None
+
+    resposta, papeis = _acesso_receita(bloco)
+    if resposta is not None:
+        return resposta
+    owner_access = papeis['owner_access']
+    is_vet = papeis['is_vet']
+    is_admin = papeis['is_admin']
+
+    consulta, veterinario, clinica, salvo_por = _responsaveis_receita(bloco, is_vet)
     prescription_next_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id)
     prescription_public_url = url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
     first_access_url = url_for('first_access', next=prescription_next_url, _external=True)
@@ -2803,8 +2830,41 @@ def imprimir_bloco_prescricao(bloco_id):
         pode_ativar_acompanhamento=pode_ativar_acompanhamento,
         pode_enviar_assinatura=pode_enviar_assinatura,
         tratamento_first_access_url=tratamento_first_access_url,
+        pdf_url=url_for(
+            'consulta_routes.baixar_pdf_bloco_prescricao',
+            bloco_id=bloco.id,
+            token=request.args.get('token') or None,
+        ),
         return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
+
+
+# PDF pronto do servidor: o "Salvar como PDF" de alguns celulares grava um
+# arquivo vazio (0 B), que não abre nem é aceito pelo assinador do gov.br.
+@bp.route('/bloco_prescricao/<int:bloco_id>/pdf')
+def baixar_pdf_bloco_prescricao(bloco_id):
+    from services.receita_pdf import gerar_pdf_receita, nome_arquivo_receita
+
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    resposta, papeis = _acesso_receita(bloco)
+    if resposta is not None:
+        return resposta
+
+    _consulta, veterinario, clinica, salvo_por = _responsaveis_receita(bloco, papeis['is_vet'])
+    pdf = gerar_pdf_receita(
+        bloco=bloco,
+        clinica=clinica,
+        veterinario=veterinario,
+        salvo_por=salvo_por,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
+    )
+    response = current_app.response_class(pdf, mimetype='application/pdf')
+    response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo_receita(bloco)}"'
+    response.headers['Content-Length'] = str(len(pdf))
+    # Documento clínico: não fica em cache compartilhado.
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @bp.route('/bloco_prescricao/<int:bloco_id>/assinatura', methods=['POST'])
@@ -2821,6 +2881,21 @@ def enviar_assinatura_bloco_prescricao(bloco_id):
     if not arquivo or not arquivo.filename:
         flash('Selecione o arquivo da receita assinada.', 'warning')
         return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    # Arquivo de 0 B é o PDF quebrado que o "Salvar como PDF" de alguns
+    # celulares grava: guardá-lo como receita assinada só repassaria o erro.
+    stream = arquivo.stream
+    if hasattr(stream, 'seek') and hasattr(stream, 'tell'):
+        stream.seek(0, os.SEEK_END)
+        vazio = stream.tell() == 0
+        stream.seek(0)
+        if vazio:
+            flash(
+                'O arquivo selecionado está vazio (0 B). Baixe a receita em "Baixar PDF", '
+                'assine no gov.br e envie o arquivo assinado.',
+                'warning',
+            )
+            return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
 
     original_name = secure_filename(arquivo.filename) or 'receita_assinada.pdf'
     stored_url = upload_to_s3(arquivo, f"{uuid.uuid4().hex}_{original_name}", folder='receitas_assinadas')
