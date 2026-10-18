@@ -172,13 +172,17 @@ def register(bp, require_access):
         resposta = service.respostas_por_etapa(participante).get("sinan")
         if resposta is None:
             abort(404)
+        folha = montar_folha_pre_t0(service.carregar_respostas(resposta))
+        # A simulação guarda tudo o que foi digitado e a folha sai igual à real. Só fichas enviadas
+        # antes disso trazem "[preenchido]" no lugar dos identificadores; nelas o campo fica editável.
+        antiga = service.MARCADOR_OCULTO in folha["valores"].values()
         return privado(render_template(
-            "sfa/pre_t0_print.html", folha=montar_folha_pre_t0(service.carregar_respostas(resposta)),
+            "sfa/pre_t0_print.html", folha=folha,
             recebida_em=service.formatar_data_hora(resposta.enviado_em),
             voltar_url=url_for("sfa_routes.simulacao_participante", participante_id=participante.id),
             voltar_rotulo=f"Voltar a {participante.codigo}",
             simulacao={"grupo": participante.grupo.nome, "participante": participante.codigo},
-            oculto=service.MARCADOR_OCULTO))
+            oculto=service.MARCADOR_OCULTO if antiga else ""))
 
     @bp.route("/simulacoes/participante/<int:participante_id>/excluir", methods=["POST"])
     @require_access

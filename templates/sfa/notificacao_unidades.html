@@ -20,6 +20,7 @@
   <div>
     <h1>Unidades e responsáveis</h1>
     <p>Quem responde por uma unidade registra fichas em nome dela, vê as fichas dessa unidade e o panorama. Cada unidade pode ter vários responsáveis, e uma mesma pessoa pode responder por mais de uma unidade. Não acessam pacientes nem as demais telas do SFA; os outros acessos da conta continuam iguais.</p>
+    <p class="mt-1">Conta da própria unidade (ex.: o e-mail da UBS)? Em “Editar conta”, escolha o perfil interno <strong>Unidade de saúde (somente Notificação SINAN)</strong> e a unidade: a conta passa a ver só esta área e registra fichas sem escolher a unidade.</p>
   </div>
   <a class="btn btn-primary" href="#nova-unidade"><i class="fas fa-plus me-1" aria-hidden="true"></i>Nova unidade</a>
 </div>
@@ -39,8 +40,8 @@
       <tbody>
         {% for v in ativos %}
         <tr>
-          <td>{{ v.user.name or '—' }}</td><td>{{ v.user.email }}</td><td>{{ v.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ v.concedido_por }}</td>
-          <td class="text-end"><form method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_revogar', vinculo_id=v.id) }}" onsubmit="return confirm('Revogar o acesso desta conta à unidade?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger">Revogar</button></form></td>
+          <td>{{ v.user.name or '—' }}{% if (v.user.worker or '') == perfil_so_notificacao and v.user.role != 'admin' %} <span class="notif-selo">só SINAN</span>{% endif %}</td><td>{{ v.user.email }}</td><td>{{ v.concedido_em.strftime('%d/%m/%Y') }}</td><td>{{ v.concedido_por }}</td>
+          <td class="text-end text-nowrap">{% if editar_conta %}<a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('user.edit_view', id=v.user_id, url=url_for('sfa_routes.notificacao_unidades')) }}">Editar conta</a>{% endif %}<form class="d-inline" method="post" action="{{ url_for('sfa_routes.notificacao_responsavel_revogar', vinculo_id=v.id) }}" onsubmit="return confirm('Revogar o acesso desta conta à unidade?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger">Revogar</button></form></td>
         </tr>
         {% else %}
         <tr><td colspan="5" class="text-muted">Ninguém responde por esta unidade ainda.</td></tr>

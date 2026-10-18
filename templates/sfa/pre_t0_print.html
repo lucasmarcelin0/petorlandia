@@ -44,8 +44,8 @@
     <span>Ficha no formato da folha SINAN · 2 páginas A4</span>
     <button type="button" data-imprimir>Imprimir</button>
   </nav>
-  {% if simulacao %}
-  <p class="aviso">Na simulação, nome, telefone, endereço e os demais identificadores não são guardados: aparecem como “{{ oculto }}”. Para mostrar a folha completa, clique em um campo tracejado e digite antes de imprimir. O que for digitado aqui não é salvo.</p>
+  {% if simulacao and oculto %}
+  <p class="aviso">Esta ficha foi enviada antes de a simulação guardar todos os dados: nome, telefone, endereço e os demais identificadores aparecem como “{{ oculto }}”. Para mostrar a folha completa, clique em um campo tracejado e digite antes de imprimir. O que for digitado aqui não é salvo.</p>
   {% endif %}
 
   <section class="folha" data-pagina="1">

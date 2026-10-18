@@ -352,6 +352,7 @@ DATAS_JA_FORMATADAS_NO_SERVIDOR = {
     ("sfa/analise_respostas.html", "row.t30_data"): "services/sfa_service.py formata com formatar_data().",
     ("sfa/paciente_detail.html", "form.submitted_at"): "services/sfa_service.py entrega o texto já formatado.",
     ("sfa/pre_t0_print.html", "recebida_em"): "As duas rotas de impressão entregam o texto em %d/%m/%Y %H:%M.",
+    ("sfa/notificacao_panorama.html", "p.sem_data"): "Contagem de registros sem data de notificação, não é data.",
     ("sfa/print_dashboard_testes.html", "generated_at"): "blueprints/sfa.py formata antes de renderizar.",
     ("sfa/print_form_questions.html", "generated_at"): "blueprints/sfa.py formata antes de renderizar.",
     ("sfa/review_summary.html", "comment.created_at"): "blueprints/sfa.py formata em %d/%m/%Y %H:%M.",
