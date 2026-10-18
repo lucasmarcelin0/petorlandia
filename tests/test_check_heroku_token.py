@@ -101,15 +101,18 @@ def test_main_usa_variavel_de_ambiente_e_codigo_de_saida(monkeypatch, capsys):
     assert TOKEN not in saida.out + saida.err
 
 
-def test_deploy_publica_sozinho_no_merge_da_main_com_a_suite():
-    """O merge na main publica; a suíte nunca é pulada nesse caminho."""
+def test_workflow_de_deploy_e_so_manual_e_confere_o_token():
+    """A integração GitHub do Heroku já publica cada merge na main.
+
+    Se o workflow também rodasse no push, cada merge geraria dois deploys.
+    """
     raiz = os.path.join(os.path.dirname(__file__), '..', '.github', 'workflows')
     with open(os.path.join(raiz, 'deploy.yml'), encoding='utf-8') as arquivo:
         deploy = arquivo.read()
 
-    assert 'push:\n    branches: [main]' in deploy
-    assert "if: ${{ github.event_name == 'push' || inputs.run_tests }}" in deploy
-    assert 'ref: ${{ inputs.ref || github.sha }}' in deploy
+    gatilhos = deploy.split('\non:\n', 1)[1].split('\n\n', 1)[0]
+    assert 'workflow_dispatch' in gatilhos
+    assert 'push' not in gatilhos
     assert 'scripts/check_heroku_token.py' in deploy
     # A trava contra apagar produção continua: nada de push forçado.
     assert not [linha for linha in deploy.splitlines() if 'git push' in linha and '--force' in linha]

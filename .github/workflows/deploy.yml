@@ -7,17 +7,13 @@
 # preflight antes, suite completa antes, push sem --force e espera pelo
 # release phase depois.
 #
-# Todo merge (push) na main publica sozinho, sempre com a suite completa: o
-# "Run workflow" manual fica para publicar outro ref ou republicar.
+# O caminho normal agora e a integracao GitHub do Heroku: todo merge na main
+# publica sozinho depois dos testes (DEPLOY.md). Este workflow fica para
+# publicar outro ref ou republicar; ele NAO roda no push, senao cada merge
+# geraria dois deploys.
 name: Deploy (Heroku)
 
 on:
-  push:
-    branches: [main]
-    # So documentacao nao muda o que roda em producao.
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
   workflow_dispatch:
     inputs:
       ref:
@@ -61,8 +57,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # No push nao ha inputs: publica exatamente o commit que chegou.
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ inputs.ref }}
           # Historico completo: o push para o Heroku precisa dos commits, e a
           # checagem de fast-forward compara com o que ja esta em producao.
           fetch-depth: 0
@@ -74,8 +69,7 @@ jobs:
           cache: pip
 
       # Token expirado falhava la no meio, com um 401 sem explicacao. Aqui ele
-      # falha logo, dizendo como trocar o secret. A validade curta e avisada
-      # pela verificacao semanal (heroku-token.yml), sem travar o deploy.
+      # falha logo, dizendo como trocar o secret.
       - name: Conferir token do Heroku
         run: python scripts/check_heroku_token.py --avisar-dias 0
 
@@ -105,8 +99,7 @@ jobs:
       # Mesmos comandos do workflow de testes: o que reprova um PR tem de
       # reprovar um deploy tambem.
       - name: Suite de testes
-        # No push a suite e obrigatoria; so o disparo manual pode desligar.
-        if: ${{ github.event_name == 'push' || inputs.run_tests }}
+        if: ${{ inputs.run_tests }}
         env:
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: python -m pytest tests/ -q -p no:cacheprovider
@@ -168,8 +161,7 @@ jobs:
             echo "### Deploy Heroku"
             echo ""
             echo "- app: \`${{ steps.app.outputs.nome || 'nao resolvido' }}\`"
-            echo "- disparo: \`${{ github.event_name == 'push' && 'merge na main (automatico)' || 'manual' }}\`"
-            echo "- ref publicado: \`${{ inputs.ref || github.ref_name }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
-            echo "- suite executada: \`${{ github.event_name == 'push' || inputs.run_tests }}\`"
+            echo "- ref publicado: \`${{ inputs.ref }}\` (\`$(git rev-parse --short HEAD 2>/dev/null || echo '?')\`)"
+            echo "- suite executada: \`${{ inputs.run_tests }}\`"
             echo "- publicou: \`${{ steps.push.outputs.publicou || 'nao chegou a publicar' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

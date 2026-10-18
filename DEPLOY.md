@@ -1,12 +1,17 @@
 # Deploy no Heroku
 
-## O caminho normal
+**O caminho normal é mesclar na `main`**: o Heroku publica sozinho depois que
+os testes passam (veja "Automatico: merge na main publica" abaixo). Os
+caminhos manuais desta página ficam para emergência.
+
+## Pelo computador (script PowerShell)
 
 ```bash
 powershell -File scripts/deploy_heroku.ps1
 ```
 
-É isso. O script faz, nesta ordem, e para no primeiro problema:
+Publique por aqui só a `main` (o próximo merge substitui qualquer outra
+branch publicada assim). O script faz, nesta ordem, e para no primeiro problema:
 
 1. confere que o remoto `heroku` existe e aponta para o Git do Heroku;
 2. confere que não há alteração rastreada sem commit;
@@ -27,17 +32,29 @@ powershell -File scripts/deploy_heroku.ps1 -TestPath tests -PytestArgs "-q"
 
 ## Automatico: merge na main publica
 
-Todo merge (push) na `main` dispara o workflow **Deploy (Heroku)** sozinho,
-sempre com a suite completa e as mesmas travas abaixo. Mudanca so em `*.md` ou
-`docs/` nao publica. Se algum passo falhar, nada vai para o ar e o GitHub
-avisa por e-mail; o motivo fica no resumo da execucao em Actions.
+O app usa a integracao GitHub do Heroku (Dashboard > app > Deploy > Automatic
+deploys from `main`), com **Wait for GitHub checks to pass** marcado. Todo
+merge na `main` vira release sozinho, mas so depois que os checks do commit
+(Test Suite e authorization-gate) passam; se algum falhar, nada vai para o ar.
+O release phase (`flask db upgrade`) roda como em qualquer deploy, e o
+andamento fica na aba Activity do app.
+
+Regra que vem junto: **publique sempre pela `main`**. A integracao publica a
+`main` por cima do que estiver no ar, sem a trava de fast-forward do workflow
+abaixo: um commit publicado direto no Heroku (script PowerShell ou
+`git push heroku` de outra branch) some de producao no proximo merge. Se algo
+precisar ir ao ar antes, mescle na `main`.
+
+Para publicar a `main` na hora, sem esperar um merge: Deploy > Manual deploy >
+`main` > **Deploy Branch**.
 
 ## Pelo GitHub Actions (sem depender da sua maquina)
 
-O script PowerShell do inicio precisa do remoto `heroku` configurado no
-computador de quem publica. Quando isso nao existe -- outra maquina, outra pessoa, um agente --
-ou para publicar outro ref, use o workflow **Deploy (Heroku)**, em Actions >
-Deploy (Heroku) > Run workflow. Ele pede o `ref` a publicar (padrao `main`),
+Fallback, quando a integracao nao serve (republicar com as travas, ou um
+ref especifico em emergencia -- lembrando que o proximo merge na `main`
+substitui o que for publicado assim): o workflow **Deploy (Heroku)**, em
+Actions > Deploy (Heroku) > Run workflow. Ele nao roda sozinho no push, senao
+cada merge geraria dois deploys. Ele pede o `ref` a publicar (padrao `main`),
 o `app` (vazio = descobre sozinho) e se deve rodar a suite antes (padrao sim).
 Funciona pelo app do GitHub no celular.
 
@@ -65,9 +82,9 @@ O token com prazo (`-e 2592000`, 30 dias) era o que travava o deploy de tempos
 em tempos com um 401: ele expirava em silencio. Agora a recomendacao e o token
 sem validade, com duas protecoes no lugar do prazo:
 
-- o workflow **Conferir token do Heroku** (`heroku-token.yml`) roda toda
-  segunda e falha -- com e-mail do GitHub -- se o token foi recusado ou expira
-  em menos de 15 dias;
+- o workflow Deploy (Heroku) confere o token no primeiro passo
+  (`scripts/check_heroku_token.py`) e, se ele foi recusado, para dizendo como
+  trocar; o mesmo script confere a validade a mao;
 - se vazar, revogue na hora: `heroku authorizations` e
   `heroku authorizations:revoke <id>`, e gere outro.
 
@@ -78,10 +95,8 @@ valer quando a senha da conta muda.
 O mesmo token vai na variavel `HEROKU_API_KEY` do ambiente do Claude na nuvem
 (menu do ambiente > Editar), para o agente conseguir publicar e ler logs.
 
-Por que nao a integracao GitHub nativa do Heroku (aba Deploy > Automatic
-deploys)? Ela dispensa token, mas publica a `main` por cima do que estiver no
-ar, sem a trava acima: um commit publicado direto no Heroku (acontece neste
-projeto) sumiria de producao sem aviso. O workflow recusa nesse caso.
+Com a integracao GitHub ligada, o token nao e mais necessario para o deploy
+normal: so para este workflow manual, para o CLI e para o agente ler logs.
 
 O nome do app nao precisa ser configurado. O token ja diz quais apps a conta
 tem, e o workflow escolhe nesta ordem:

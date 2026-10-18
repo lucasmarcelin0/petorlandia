@@ -3,9 +3,9 @@
 
 Motivo: o token expirava em silencio (o DEPLOY.md antigo sugeria 30 dias) e so
 se descobria na hora de publicar, com um erro 401 sem explicacao no meio do
-deploy. Este script roda no comeco do deploy e toda semana pelo GitHub
-Actions: se o token foi recusado, ou se vai expirar em breve, a execucao falha
-dizendo exatamente o que fazer -- e o GitHub avisa por e-mail.
+deploy manual. Este script roda no comeco do workflow Deploy (Heroku): se o
+token foi recusado, ou expira em menos de --avisar-dias, falha dizendo
+exatamente o que fazer. Serve tambem para conferir o token a mao.
 
 Uso:
 

@@ -28,12 +28,26 @@ def app():
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
+    # O limite de login (10/min por e-mail) guarda contadores entre arquivos
+    # de teste; sem zerar antes e depois, os logins daqui estouravam a cota
+    # de quem roda em seguida com o mesmo e-mail (ver tests/conftest.py).
+    _zerar_limite_de_login()
     with flask_app.app_context():
         db.drop_all()
         db.create_all()
     yield flask_app
     with flask_app.app_context():
         db.drop_all()
+    _zerar_limite_de_login()
+
+
+def _zerar_limite_de_login():
+    from extensions import limiter
+
+    try:
+        limiter.reset()
+    except Exception:  # noqa: BLE001 - storage pode não suportar reset
+        pass
 
 
 def _texto_do_pdf(pdf: bytes) -> str:
