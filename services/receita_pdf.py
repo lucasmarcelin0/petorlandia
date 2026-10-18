@@ -411,7 +411,7 @@ def gerar_pdf_receita(*, bloco, clinica, veterinario, salvo_por, printing_user, 
         canvas.restoreState()
 
     buffer = BytesIO()
-    titulo_pdf = f"Receita de {animal.name if animal else ''}".strip()
+    titulo_pdf = f"Receita de {animal.name}" if animal and animal.name else 'Receita'
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,

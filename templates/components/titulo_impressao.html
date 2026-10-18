@@ -1,0 +1,8 @@
+{# Título das telas de impressão.
+
+   No celular ele vira o nome do arquivo do "Salvar como PDF", então nunca
+   pode sair "Receita de None" (animal sem nome) nem terminar em " | " (sem
+   clínica). Partes vazias simplesmente somem. #}
+{% macro titulo_impressao(documento, animal=None, clinica=None) -%}
+  {{ documento }}{% if animal and animal.name %} de {{ animal.name }}{% endif %}{% if clinica and clinica.nome %} | {{ clinica.nome }}{% endif %}
+{%- endmacro %}

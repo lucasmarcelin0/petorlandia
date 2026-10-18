@@ -274,3 +274,39 @@ def test_texto_fora_da_fonte_vira_equivalente_ou_some():
 
     assert _texto('Peso ≥ 10kg 🐶 ½ comp. & <1x>') == 'Peso &gt;= 10kg  ½ comp. &amp; &lt;1x&gt;'
     assert _texto('Linha 1\nLinha 2') == 'Linha 1<br/>Linha 2'
+
+
+def test_titulo_sem_nome_do_animal_nao_mostra_none(app):
+    """O título vira o nome do arquivo ao salvar em PDF no celular."""
+    with app.app_context():
+        bloco_id = _criar_receita()
+        bloco = db.session.get(BlocoPrescricao, bloco_id)
+        bloco.animal.name = None
+        db.session.commit()
+
+    client = app.test_client()
+    with client:
+        _login(client, 'vet@example.com', 'pw-vet')
+        html = client.get(f'/bloco_prescricao/{bloco_id}/imprimir').get_data(as_text=True)
+        pdf = client.get(f'/bloco_prescricao/{bloco_id}/pdf')
+
+    assert '<title>Receita | Clinica Prescricao</title>' in html
+    assert pdf.status_code == 200
+    assert b'/Title (Receita)' in pdf.get_data()
+    assert 'None' not in _texto_do_pdf(pdf.get_data())
+    assert f'receita-{bloco_id}.pdf' in pdf.headers['Content-Disposition']
+
+
+def test_macro_de_titulo_omite_partes_vazias(app):
+    from flask import render_template_string
+
+    modelo = (
+        "{% from 'components/titulo_impressao.html' import titulo_impressao %}"
+        "[{{ titulo_impressao(doc, animal, clinica) }}]"
+    )
+    animal = SimpleNamespace(name='Rex')
+    clinica = SimpleNamespace(nome='Clínica X')
+    with app.test_request_context():
+        assert render_template_string(modelo, doc='Exames', animal=animal, clinica=clinica) == '[Exames de Rex | Clínica X]'
+        assert render_template_string(modelo, doc='Exames', animal=animal, clinica=None) == '[Exames de Rex]'
+        assert render_template_string(modelo, doc='Exames', animal=SimpleNamespace(name=None), clinica=clinica) == '[Exames | Clínica X]'

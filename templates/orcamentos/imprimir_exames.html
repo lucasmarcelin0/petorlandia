@@ -1,11 +1,12 @@
 {% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
+{% from 'components/titulo_impressao.html' import titulo_impressao %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>Exames de {{ animal.name }} | {{ clinica.nome }}</title>
+  <title>{{ titulo_impressao('Exames', animal, clinica) }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
   <script src="{{ url_for('static', filename='csrf_fetch.js') }}" defer></script>
 </head>
