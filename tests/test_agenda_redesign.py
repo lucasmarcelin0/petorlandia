@@ -20,7 +20,7 @@ import pytest
 from app import app as flask_app, db
 from models import Animal, Appointment, Clinica, Consulta, User, Veterinario
 from services.appointment_status import status_label, status_meta
-from time_utils import utcnow
+from time_utils import BR_TZ, utcnow
 
 
 @pytest.fixture
@@ -111,6 +111,7 @@ def test_partial_returns_only_agenda_fragment(client, monkeypatch):
 def test_partial_respects_kind_filter(client, monkeypatch):
     """O filtro por tipo vale também no fragmento pedido via AJAX."""
 
+    agendado = utcnow() + timedelta(hours=5)
     with flask_app.app_context():
         clinic, vet_user, vet, tutor, animal = _build_clinic()
         db.session.add(Appointment(
@@ -118,7 +119,7 @@ def test_partial_respects_kind_filter(client, monkeypatch):
             animal=animal,
             tutor=tutor,
             veterinario=vet,
-            scheduled_at=utcnow() + timedelta(hours=5),
+            scheduled_at=agendado,
             status='scheduled',
             kind='vacina',
             clinica_id=clinic.id,
@@ -128,7 +129,14 @@ def test_partial_respects_kind_filter(client, monkeypatch):
         ids = (vet_user.id, vet.id, clinic.id)
 
     login(monkeypatch, _fake_vet(*ids))
-    base = '/appointments?view_as=veterinario&veterinario_id=1&partial=agenda'
+    # Período explícito com o dia do agendamento: sem ele a agenda mostra a
+    # semana corrente, e "agora + 5h" num domingo à noite já cai na semana
+    # seguinte — o teste falhava só nesse horário.
+    dia = agendado.astimezone(BR_TZ).date().isoformat()
+    base = (
+        '/appointments?view_as=veterinario&veterinario_id=1&partial=agenda'
+        f'&start={dia}&end={dia}'
+    )
 
     todos = client.get(base + '&tipo=todos').data.decode()
     exames = client.get(base + '&tipo=exame').data.decode()

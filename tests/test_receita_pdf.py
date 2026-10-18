@@ -120,6 +120,8 @@ def test_veterinario_baixa_pdf_valido_da_receita(app):
     pdf = resp.get_data()
     assert pdf.startswith(b'%PDF-')
     assert pdf.rstrip().endswith(b'%%EOF')
+    # Clínica sem logotipo sai sem logo: nunca com o logo do site.
+    assert b'/Subtype /Image' not in pdf
     assert int(resp.headers['Content-Length']) == len(pdf)
 
     texto = _texto_do_pdf(pdf)

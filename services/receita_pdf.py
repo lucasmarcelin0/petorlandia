@@ -104,7 +104,9 @@ def _texto(valor) -> str:
 
 
 def _carregar_logo(clinica):
-    """Logotipo da clínica reduzido, em JPEG: ``(arquivo, largura, altura)``.
+    """Logotipo da própria clínica, reduzido, em JPEG: ``(bytes, largura, altura)``.
+
+    Nunca cai para o logo do site: clínica sem logotipo sai sem logo.
 
     Devolve ``None`` se não der para obter. Falhar aqui nunca impede o PDF:
     a receita sai sem o logotipo.
@@ -144,8 +146,7 @@ def _carregar_logo(clinica):
         fundo.paste(img, mask=img.split()[-1])
         arquivo = BytesIO()
         fundo.save(arquivo, format='JPEG', quality=90)
-        arquivo.seek(0)
-        return arquivo, fundo.size[0], fundo.size[1]
+        return arquivo.getvalue(), fundo.size[0], fundo.size[1]
     except Exception:  # noqa: BLE001 - logotipo é opcional
         logger.info('Logotipo da clínica indisponível para o PDF da receita', exc_info=True)
         return None
@@ -223,13 +224,19 @@ def gerar_pdf_receita(*, bloco, clinica, veterinario, salvo_por, printing_user, 
 
         logo = _carregar_logo(clinica)
         if logo is not None:
-            arquivo_logo, largura_px, altura_px = logo
+            # Logo da clínica dos dois lados, como na receita impressa.
+            dados_logo, largura_px, altura_px = logo
             lado = 1.9 * cm
             proporcao = largura_px / float(altura_px or 1)
             largura_logo, altura_logo = (lado, lado / proporcao) if proporcao >= 1 else (lado * proporcao, lado)
+            coluna_logo = lado + 0.4 * cm
             cabecalho = Table(
-                [[Image(arquivo_logo, width=largura_logo, height=altura_logo), bloco_texto]],
-                colWidths=[lado + 0.4 * cm, largura_util - lado - 0.4 * cm],
+                [[
+                    Image(BytesIO(dados_logo), width=largura_logo, height=altura_logo, hAlign='LEFT'),
+                    bloco_texto,
+                    Image(BytesIO(dados_logo), width=largura_logo, height=altura_logo, hAlign='RIGHT'),
+                ]],
+                colWidths=[coluna_logo, largura_util - 2 * coluna_logo, coluna_logo],
             )
         else:
             cabecalho = Table([[bloco_texto]], colWidths=[largura_util])
@@ -237,6 +244,7 @@ def gerar_pdf_receita(*, bloco, clinica, veterinario, salvo_por, printing_user, 
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('ALIGN', (-1, 0), (-1, 0), 'RIGHT'),
         ]))
         historia.append(cabecalho)
         historia.append(Spacer(1, 6))
