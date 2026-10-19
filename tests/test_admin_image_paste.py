@@ -84,8 +84,8 @@ def test_admin_create_pages_load_the_global_image_paste_experience(app, client):
         html = response.data.decode('utf-8')
         assert response.status_code == 200, path
         assert 'data-image-paste="true"' in html, path
-        assert '/static/admin/image_paste.css?v=20260802' in html, path
-        assert '/static/admin/image_paste.js?v=20260802' in html, path
+        assert '/static/admin/image_paste.css?v=20261019' in html, path
+        assert '/static/admin/image_paste.js?v=20261019' in html, path
 
 
 def test_admin_image_paste_script_keeps_clipboard_upload_safe_and_observable(app):
@@ -126,3 +126,4 @@ def test_admin_rejects_a_non_image_file_in_product_upload(app, client):
 
     assert response.status_code == 200
     assert 'Envie uma imagem JPG, PNG, GIF, WebP ou BMP.' in response.data.decode('utf-8')
+

@@ -46,17 +46,75 @@
     if (!elements) return;
     setStatus(input, `${file.name} · ${formatBytes(file.size)}`, 'success');
     const reader = new FileReader();
+    elements.file = file;
+    const generation = elements.generation = (elements.generation || 0) + 1;
     reader.addEventListener('load', () => {
+      if (elements.generation !== generation) return;
       elements.preview.replaceChildren();
       const image = createElement('img');
-      image.src = reader.result;
       image.alt = 'Pré-visualização da imagem selecionada';
+      if (input.dataset.logo === 'true') {
+        image.onload = () => {
+          if (elements.generation !== generation) return;
+          const canvas = document.createElement('canvas');
+          const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#fff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          const cleanup = input.form?.querySelector('[data-logo-cleanup="true"]');
+          if (cleanup?.checked) {
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+            whitenExterior(pixels.data, canvas.width, canvas.height);
+            context.putImageData(pixels, 0, 0);
+          }
+          canvas.setAttribute('role', 'img');
+          canvas.setAttribute('aria-label', 'Prévia do logotipo com fundo branco');
+          elements.preview.replaceChildren(canvas);
+        };
+      }
+      image.src = reader.result;
       elements.preview.appendChild(image);
     });
     reader.addEventListener('error', () => {
       setStatus(input, 'A imagem foi anexada, mas a pré-visualização não pôde ser exibida.', 'error');
     });
     reader.readAsDataURL(file);
+  }
+
+  // Only light, neutral pixels connected to the image boundary are selected.
+  function whitenExterior(data, width, height) {
+    const visited = new Uint8Array(width * height);
+    const queue = new Int32Array(width * height);
+    let head = 0;
+    let tail = 0;
+    function visit(index) {
+      if (visited[index]) return;
+      visited[index] = 1;
+      const offset = index * 4;
+      const low = Math.min(data[offset], data[offset + 1], data[offset + 2]);
+      const high = Math.max(data[offset], data[offset + 1], data[offset + 2]);
+      if (low >= 150 && high - low <= 18) queue[tail++] = index;
+    }
+    for (let x = 0; x < width; x++) {
+      visit(x);
+      visit((height - 1) * width + x);
+    }
+    for (let y = 0; y < height; y++) {
+      visit(y * width);
+      visit(y * width + width - 1);
+    }
+    while (head < tail) {
+      const index = queue[head++];
+      const offset = index * 4;
+      data[offset] = data[offset + 1] = data[offset + 2] = 255;
+      if (index % width) visit(index - 1);
+      if (index % width < width - 1) visit(index + 1);
+      if (index >= width) visit(index - width);
+      if (index < width * (height - 1)) visit(index + width);
+    }
   }
 
   function validateFile(input, file) {
@@ -128,6 +186,13 @@
     zone.append(preview, copy);
     input.insertAdjacentElement('afterend', zone);
     decoratedInputs.set(input, { zone, preview, status, transfer: null });
+    if (input.dataset.logo === 'true') {
+      zone.classList.add('admin-logo-paste-zone');
+      input.form?.querySelector('[data-logo-cleanup="true"]')?.addEventListener('change', () => {
+        const file = input.files?.[0];
+        if (file && validateFile(input, file)) showPreview(input, file);
+      });
+    }
 
     input.addEventListener('focus', () => setActive(input));
     input.addEventListener('click', () => setActive(input));
@@ -206,3 +271,4 @@
 
   window.AdminImagePaste = Object.freeze({ initAll, applyFile });
 }());
+

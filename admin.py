@@ -11,6 +11,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed
 from wtforms import (
     SelectField,
+    BooleanField,
     DateField,
     FileField,
     DecimalField,
@@ -60,7 +61,7 @@ ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
 ADMIN_IMAGE_ACCEPT = ','.join(f'image/{extension}' for extension in ADMIN_IMAGE_EXTENSIONS)
 
 
-def _admin_image_upload_field(label):
+def _admin_image_upload_field(label, *, logo=False):
     return FileField(
         label,
         validators=[
@@ -69,12 +70,32 @@ def _admin_image_upload_field(label):
                 'Envie uma imagem JPG, PNG, GIF, WebP ou BMP.',
             )
         ],
+        description=('O logotipo será salvo com fundo branco. Para fundo quadriculado ou cinza, marque a limpeza abaixo e confira a prévia.' if logo else ''),
         render_kw={
+            'data-logo': 'true' if logo else 'false',
             'accept': ADMIN_IMAGE_ACCEPT,
             'data-image-paste': 'true',
             'data-max-bytes': str(20 * 1024 * 1024),
         },
     )
+
+
+
+def _logo_cleanup_field():
+    return BooleanField(
+        'Limpar fundo externo cinza ou quadriculado',
+        description='Opcional: clareia somente áreas claras e neutras ligadas às bordas. Pode afetar logos cinza; confira a prévia antes de salvar.',
+        render_kw={'data-logo-cleanup': 'true'},
+    )
+
+
+def _prepare_admin_logo(form, file):
+    from logo_processing import prepare_logo
+    from werkzeug.datastructures import FileStorage
+    clean = bool(getattr(getattr(form, 'logo_clean_background', None), 'data', False))
+    stream = prepare_logo(file.stream, clean_background=clean)
+    filename = f"{uuid.uuid4().hex}_logo.png"
+    return FileStorage(stream=stream, filename=filename, content_type='image/png'), filename
 
 
 def _admin_image_src(value):
@@ -749,7 +770,7 @@ class UserAdminView(MyModelView):
             f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'profile_photo': lambda v, c, m, p: Markup(
-            f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100" style="background:#fff;object-fit:contain;">'
         ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
@@ -882,7 +903,7 @@ class UserAdminView(MyModelView):
         if obj and obj.profile_photo:
             form.profile_photo_upload.description = Markup(
                 f'<img src="{escape(_admin_image_src(obj.profile_photo))}" alt="Foto atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'style="max-height:150px;margin-top:10px;background:#fff;">'
             )
         campo = getattr(form, 'unidade_sinan', None)
         if obj and campo is not None:
@@ -1057,7 +1078,8 @@ class VeterinarianSettingsView(BaseView):
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': _admin_image_upload_field('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo', logo=True),
+        'logo_clean_background': _logo_cleanup_field()
     }
 
     form_ajax_refs = {
@@ -1067,21 +1089,21 @@ class ClinicaAdmin(MyModelView):
     }
 
     form_columns = [
-        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload', 'owner'
+        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload', 'logo_clean_background', 'owner'
     ]
 
     column_list = ['nome', 'cnpj', 'logotipo', 'owner']
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(
-            f'<img src="{escape(_admin_image_src(m.logotipo))}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.logotipo))}" width="100" style="background:#fff;object-fit:contain;">'
         ) if m.logotipo else ''
     }
 
     def on_model_change(self, form, model, is_created):
         file = form.logotipo_upload.data
         if file and getattr(file, "filename", ""):
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            file, filename = _prepare_admin_logo(form, file)
             from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="clinicas")
             if image_url:
@@ -1092,7 +1114,7 @@ class ClinicaAdmin(MyModelView):
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
                 f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'style="max-height:150px;margin-top:10px;background:#fff;">'
             )
 
 
@@ -1297,13 +1319,13 @@ class AnimalAdminView(MyModelView):
         if obj and obj.image:
             form.image_upload.description = Markup(
                 f'<img src="{escape(_admin_image_src(obj.image))}" alt="Imagem atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'style="max-height:150px;margin-top:10px;background:#fff;">'
             )
 
 
     column_formatters = {
         'image': lambda v, c, m, p: Markup(
-            f'<img src="{escape(_admin_image_src(m.image))}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.image))}" width="100" style="background:#fff;object-fit:contain;">'
         ) if m.image else '',
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
@@ -1588,7 +1610,8 @@ class ProductAdmin(MyModelView):
 
 class CasaDeRacaoAdminView(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': _admin_image_upload_field('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo', logo=True),
+        'logo_clean_background': _logo_cleanup_field()
     }
 
     column_list = (
@@ -1622,6 +1645,7 @@ class CasaDeRacaoAdminView(MyModelView):
         'prazo_entrega_max',
         'owner',
         'logotipo_upload',
+        'logo_clean_background',
         'photo_rotation',
         'photo_zoom',
         'photo_offset_x',
@@ -1675,9 +1699,8 @@ class CasaDeRacaoAdminView(MyModelView):
     }
 
     def on_model_change(self, form, model, is_created):
-        if form.logotipo_upload.data:
-            file = form.logotipo_upload.data
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+        if form.logotipo_upload.data and getattr(form.logotipo_upload.data, "filename", ""):
+            file, filename = _prepare_admin_logo(form, form.logotipo_upload.data)
             from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="casas_de_racao")
             if image_url:
@@ -1688,7 +1711,7 @@ class CasaDeRacaoAdminView(MyModelView):
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
                 f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'style="max-height:150px;margin-top:10px;background:#fff;">'
             )
 
 
@@ -2001,3 +2024,4 @@ def init_admin(app):
     ))
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))
+

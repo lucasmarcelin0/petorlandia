@@ -9,8 +9,8 @@ from werkzeug.datastructures import FileStorage
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from admin import ClinicaAdmin  # noqa: E402
-from models import Clinica, db  # noqa: E402
+from admin import ClinicaAdmin, CasaDeRacaoAdminView  # noqa: E402
+from models import Clinica, CasaDeRacao, db  # noqa: E402
 import app as app_module  # noqa: E402
 
 
@@ -48,3 +48,39 @@ def test_admin_skips_empty_logo(monkeypatch, app):
     clinic = Clinica(nome="Test", logotipo="existing")
     view.on_model_change(form, clinic, False)
     assert clinic.logotipo == "existing"
+
+
+@pytest.mark.parametrize('view_class,model_class,folder', [
+    (ClinicaAdmin, Clinica, 'clinicas'),
+    (CasaDeRacaoAdminView, CasaDeRacao, 'casas_de_racao'),
+])
+@pytest.mark.parametrize('clean', [False, True])
+def test_admin_uploads_processed_logo(monkeypatch, app, view_class, model_class, folder, clean):
+    image = Image.new('RGBA', (3, 1), (190, 190, 190, 255))
+    image.putpixel((1, 0), (0, 0, 0, 0))
+    image.putpixel((2, 0), (255, 0, 0, 255))
+    stream = BytesIO()
+    image.save(stream, format='PNG')
+    stream.seek(0)
+    file = FileStorage(stream=stream, filename='logo.webp', content_type='image/webp')
+
+    def capture(upload, filename, **kwargs):
+        assert kwargs['folder'] == folder
+        assert filename.endswith('_logo.png')
+        assert upload.content_type == 'image/png'
+        saved = Image.open(upload.stream)
+        assert saved.mode == 'RGB'
+        assert saved.getpixel((0, 0)) == ((255, 255, 255) if clean else (190, 190, 190))
+        assert saved.getpixel((1, 0)) == (255, 255, 255)
+        assert saved.getpixel((2, 0)) == (255, 0, 0)
+        return 'http://processed-logo'
+
+    monkeypatch.setattr(app_module, 'upload_to_s3', capture)
+    form = SimpleNamespace(
+        logotipo_upload=SimpleNamespace(data=file),
+        logo_clean_background=SimpleNamespace(data=clean),
+    )
+    model = model_class(nome='Test')
+    view_class(model_class, db.session).on_model_change(form, model, True)
+    assert model.logotipo == 'http://processed-logo'
+
