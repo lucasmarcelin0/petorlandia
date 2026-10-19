@@ -349,7 +349,7 @@ def minha_clinica():
             file = form.logotipo.data
             if file and getattr(file, "filename", ""):
                 filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                image_url = upload_to_s3(file, filename, folder="clinicas")
+                image_url = upload_to_s3(file, filename, folder="clinicas", keep_transparency=True)
                 if image_url:
                     clinica.logotipo = image_url
                     clinica.photo_rotation = form.photo_rotation.data
@@ -511,6 +511,66 @@ def clinic_mercadopago_direct_save(clinica_id):
     db.session.commit()
     flash('Credenciais do Mercado Pago salvas. A clínica já pode receber pagamentos.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+
+# O upload antigo achatava todo logo em JPEG: o transparente virava um quadrado
+# branco atrás do desenho. Estas rotas tiram esse fundo do logo já salvo, sem
+# precisar do arquivo original (dá para fazer pelo celular), e permitem desfazer.
+def _chave_logo_anterior(clinica_id):
+    return f"logo_anterior_{clinica_id}"
+
+
+@bp.route("/clinica/<int:clinica_id>/logo/remover-fundo", methods=["POST"])
+@login_required
+def remover_fundo_logo_clinica(clinica_id):
+    from flask import session
+    from services.logo_fundo import FundoNaoRemovivel, abrir_logo, png_em_memoria, remover_fundo
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    destino = url_for('clinic_detail', clinica_id=clinica.id)
+    try:
+        sem_fundo = remover_fundo(abrir_logo(clinica.logotipo))
+    except FundoNaoRemovivel as erro:
+        flash(str(erro), 'warning')
+        return redirect(destino)
+    except Exception:  # noqa: BLE001 - rede/arquivo ilegível
+        current_app.logger.exception('Falha ao remover o fundo do logo da clínica %s', clinica.id)
+        flash('Não foi possível abrir o logo agora. Tente de novo em instantes.', 'danger')
+        return redirect(destino)
+
+    nova_url = upload_to_s3(
+        png_em_memoria(sem_fundo),
+        f"{uuid.uuid4().hex}_logo_sem_fundo.png",
+        folder="clinicas",
+        keep_transparency=True,
+    )
+    if not nova_url:
+        flash('Não foi possível salvar o logo sem fundo. Tente de novo.', 'danger')
+        return redirect(destino)
+
+    session[_chave_logo_anterior(clinica.id)] = clinica.logotipo
+    clinica.logotipo = nova_url
+    db.session.commit()
+    flash('Fundo do logo removido. Se não ficou bom, use "Desfazer".', 'success')
+    return redirect(destino)
+
+
+@bp.route("/clinica/<int:clinica_id>/logo/desfazer-fundo", methods=["POST"])
+@login_required
+def desfazer_fundo_logo_clinica(clinica_id):
+    from flask import session
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    anterior = session.pop(_chave_logo_anterior(clinica.id), None)
+    if anterior:
+        clinica.logotipo = anterior
+        db.session.commit()
+        flash('Logo anterior restaurado.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id))
 
 
 @bp.route("/clinica/<int:clinica_id>/valor")
@@ -685,7 +745,7 @@ def clinic_detail(clinica_id):
         file = clinic_form.logotipo.data
         if file and getattr(file, 'filename', ''):
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            image_url = upload_to_s3(file, filename, folder="clinicas")
+            image_url = upload_to_s3(file, filename, folder="clinicas", keep_transparency=True)
             if image_url:
                 clinica.logotipo = image_url
         else:

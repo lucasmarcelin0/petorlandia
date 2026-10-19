@@ -810,12 +810,23 @@ def _runtime_module_attr(name, default):
     return default
 
 
-def upload_to_s3(file, filename, folder="uploads", *, reraise: bool = False, **kwargs) -> str | None:
+def upload_to_s3(
+    file,
+    filename,
+    folder="uploads",
+    *,
+    reraise: bool = False,
+    keep_transparency: bool = False,
+    **kwargs,
+) -> str | None:
     """Compress and upload a file to S3.
 
     Falls back to saving the file locally under ``static/uploads`` if the
     S3 bucket is not configured or the upload fails for any reason.  Returns
     the public URL of the uploaded file or ``None`` on failure.
+
+    ``keep_transparency`` é para logotipos: imagem com fundo transparente sai
+    em PNG, preservando o transparente, em vez de virar JPEG com fundo branco.
     """
     try:
         stream = getattr(file, "stream", file)
@@ -872,25 +883,38 @@ def upload_to_s3(file, filename, folder="uploads", *, reraise: bool = False, **k
                 stream.seek(0)
             image = Image.open(stream)
             image = ImageOps.exif_transpose(image)  # baixa o EXIF: pixels já saem na orientação certa
-            # JPEG does not support alpha. A direct RGBA-to-RGB conversion
-            # turns transparent product backgrounds black, so flatten them on
-            # the neutral white background used by the catalog.
-            if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
-                foreground = image.convert("RGBA")
-                background = Image.new("RGBA", foreground.size, "white")
-                background.alpha_composite(foreground)
-                image = background.convert("RGB")
+            has_alpha = image.mode in {"RGBA", "LA", "PA"} or "transparency" in image.info
+            if keep_transparency and has_alpha:
+                # Logotipo: o transparente faz parte do desenho. Achatado em
+                # JPEG ele virava um quadrado branco atrás do logo em todo
+                # fundo que não é branco (cabeçalhos, cartões, modo escuro).
+                image = image.convert("RGBA")
+                image.thumbnail((1280, 1280))
+                buffer = BytesIO()
+                image.save(buffer, format="PNG", optimize=True)
+                content_type = "image/png"
+                target_exts, target_ext = {".png"}, ".png"
             else:
-                image = image.convert("RGB")
-            image.thumbnail((1280, 1280))
-            buffer = BytesIO()
-            image.save(buffer, format="JPEG", optimize=True, quality=85)
+                # JPEG does not support alpha. A direct RGBA-to-RGB conversion
+                # turns transparent product backgrounds black, so flatten them on
+                # the neutral white background used by the catalog.
+                if has_alpha:
+                    foreground = image.convert("RGBA")
+                    background = Image.new("RGBA", foreground.size, "white")
+                    background.alpha_composite(foreground)
+                    image = background.convert("RGB")
+                else:
+                    image = image.convert("RGB")
+                image.thumbnail((1280, 1280))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG", optimize=True, quality=85)
+                content_type = "image/jpeg"
+                target_exts, target_ext = {".jpg", ".jpeg"}, ".jpg"
             buffer.seek(0)
             fileobj = buffer
-            content_type = "image/jpeg"
             name, ext = os.path.splitext(filename)
-            if ext.lower() not in {".jpg", ".jpeg"}:
-                filename = f"{name}.jpg"
+            if ext.lower() not in target_exts:
+                filename = f"{name}{target_ext}"
 
         filename = secure_filename(filename)
         key = f"{folder}/{filename}"
