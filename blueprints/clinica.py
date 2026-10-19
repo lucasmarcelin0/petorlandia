@@ -527,6 +527,7 @@ def remover_fundo_logo_clinica(clinica_id):
     from services.logo_fundo import FundoNaoRemovivel, abrir_logo, png_em_memoria, remover_fundo
 
     clinica = Clinica.query.get_or_404(clinica_id)
+    ensure_clinic_access(clinica.id)
     if not _user_can_manage_clinic(clinica):
         abort(403)
     destino = url_for('clinic_detail', clinica_id=clinica.id)
@@ -563,6 +564,7 @@ def desfazer_fundo_logo_clinica(clinica_id):
     from flask import session
 
     clinica = Clinica.query.get_or_404(clinica_id)
+    ensure_clinic_access(clinica.id)
     if not _user_can_manage_clinic(clinica):
         abort(403)
     anterior = session.pop(_chave_logo_anterior(clinica.id), None)
