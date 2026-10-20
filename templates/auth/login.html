@@ -20,6 +20,18 @@
             Entre com sua conta de veterinário para conectar o PetOrlândia ao ChatGPT e autorizar cadastros direto no sistema.
         </div>
         {% endif %}
+        {# Tutor que veio do link da receita/tratamento no WhatsApp quase nunca
+           tem senha: o caminho dele é o primeiro acesso pelo celular, então ele
+           vem primeiro e em destaque, antes do formulário de senha. #}
+        {% set _veio_do_whatsapp = next_url and (next_url.startswith('/bloco_prescricao/') or next_url.startswith('/tratamento/')) %}
+        {% if _veio_do_whatsapp %}
+        <div class="alert alert-success rounded-4 mb-4" role="note" data-first-access-hint>
+            <p class="fw-semibold mb-1">Recebeu a receita pelo WhatsApp?</p>
+            <p class="small mb-3">Se é a primeira vez, você não precisa de e-mail: basta o seu número de celular para criar uma senha e abrir a receita.</p>
+            <a href="{{ url_for('first_access', next=next_url) }}" class="btn btn-success rounded-pill w-100">Primeiro acesso com meu celular</a>
+        </div>
+        <p class="text-center text-muted small mb-3">Já tem senha? Entre abaixo.</p>
+        {% endif %}
 
         {% with label='Entrar com Google', next_url=next_url %}
           {% include 'components/google_button.html' %}

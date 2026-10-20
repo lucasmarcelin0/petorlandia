@@ -70,6 +70,11 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
         store = db.session.get(CasaDeRacao, store_id)
         store.status = 'ativa'
         db.session.commit()
+    # No teste, as requisições rodam dentro do app context da fixture e
+    # reaproveitam a mesma sessão do banco (em produção cada requisição tem a
+    # sua). O toggle anterior parou no aviso sem commit, então a loja ficava
+    # em cache como 'pendente' e o teste falhava dependendo da ordem da suíte.
+    db.session.expire_all()
     client.post(f'/casa-de-racao/{store_id}/produto/{product_id}/toggle')
     with app.app_context():
         assert db.session.get(Product, product_id).status == 'active'
