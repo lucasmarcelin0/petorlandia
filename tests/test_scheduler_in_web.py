@@ -128,3 +128,20 @@ def test_gancho_do_gunicorn_inicia_e_nunca_derruba_o_worker(monkeypatch):
     monkeypatch.setattr(scheduler, 'start_in_web', boom)
     conf.post_worker_init(Worker())  # não propaga a exceção
     assert calls[-1][0] == 'log'
+
+
+def test_jobs_de_intervalo_caem_em_horarios_fixos_apos_reinicio():
+    """Reiniciar o processo não adia os jobs de intervalo (worker reciclado)."""
+    from datetime import datetime, timezone
+
+    fire_times = []
+    for _ in range(2):  # dois "boots" seguidos
+        sched = BackgroundScheduler(timezone='UTC')
+        scheduler.register_jobs(sched)
+        for job_id in ('pmo-sheet-sync', 'mercadopago-membership-reconciliation'):
+            trigger = sched.get_job(job_id).trigger
+            now = datetime(2026, 10, 20, 22, 7, 31, tzinfo=timezone.utc)
+            fire_times.append((job_id, trigger.get_next_fire_time(None, now)))
+    assert fire_times[0] == fire_times[2] and fire_times[1] == fire_times[3]
+    assert fire_times[0][1].minute == 10 and fire_times[0][1].second == 0
+    assert fire_times[1][1].minute == 30 and fire_times[1][1].second == 0

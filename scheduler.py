@@ -227,6 +227,17 @@ def _scheduler_timezone() -> str:
     return os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
 
 
+# Âncora fixa dos jobs de intervalo: as execuções caem sempre nos mesmos
+# horários de relógio (ex.: :00, :10, :20...), não contados a partir do boot.
+# Assim um reinício do processo (deploy, ciclo diário do dyno ou reciclagem do
+# worker do gunicorn por --max-requests) não empurra a próxima execução.
+INTERVAL_ANCHOR = datetime(2020, 1, 1, tzinfo=dt_timezone.utc)
+
+
+def _interval(minutes: int) -> IntervalTrigger:
+    return IntervalTrigger(minutes=minutes, start_date=INTERVAL_ANCHOR)
+
+
 def register_jobs(scheduler) -> None:
     """Registra todos os jobs no agendador recebido.
 
@@ -249,7 +260,7 @@ def register_jobs(scheduler) -> None:
     pmo_interval = _env_int("PMO_SYNC_INTERVAL_MINUTES", DEFAULT_PMO_SYNC_MINUTES, 1, 1440)
     scheduler.add_job(
         _run_pmo_sync,
-        IntervalTrigger(minutes=pmo_interval),
+        _interval(pmo_interval),
         id='pmo-sheet-sync',
         replace_existing=True,
         max_instances=1,
@@ -273,7 +284,7 @@ def register_jobs(scheduler) -> None:
     )
     scheduler.add_job(
         _memory_bounded_job(_run_veterinarian_billing_reconciliation_job),
-        IntervalTrigger(minutes=billing_interval),
+        _interval(billing_interval),
         id="mercadopago-membership-reconciliation",
         replace_existing=True,
         max_instances=1,
@@ -282,7 +293,7 @@ def register_jobs(scheduler) -> None:
     # Índice de busca do atlas: logo ao subir (depois de um deploy) e, depois, a cada poucos minutos.
     scheduler.add_job(
         _run_atlas_artefatos,
-        IntervalTrigger(minutes=_env_int("ATLAS_ARTEFATOS_INTERVAL_MINUTES", 5, 1, 1440)),
+        _interval(_env_int("ATLAS_ARTEFATOS_INTERVAL_MINUTES", 5, 1, 1440)),
         id='atlas-artefatos',
         replace_existing=True,
         max_instances=1,
