@@ -3416,7 +3416,11 @@ def _first_access_user_allowed(user: User | None, invite=None, token_user: User 
     if token_user:
         return token_user.id == user.id
     if _is_provisional_first_access_user(user):
-        return True
+        # Só o celular basta enquanto a conta nunca foi usada. Depois do
+        # primeiro login, quem sabe apenas o número não pode mais trocar a
+        # senha da pessoa: daí em diante o caminho é a senha ou o link
+        # assinado que a clínica envia (o ``token_user`` acima).
+        return user.last_login is None
     return bool(invite and invite.tutor_id == user.id)
 
 

@@ -221,20 +221,16 @@ def first_access():
             return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
         user = matches[0] if matches else None
         if not user or not _first_access_user_allowed(user, invite, token_user):
-            # Cada caso diz o próximo passo: a pessoa nunca fica num beco
-            # sem saída. A regra de quem pode entrar continua a mesma.
-            if user:
-                flash(
-                    'Este celular já está ligado a uma conta com e-mail. Entre com seu e-mail e senha '
-                    'ou toque em "Esqueceu sua senha?" para receber um link de nova senha no e-mail.',
-                    'warning',
-                )
-            else:
-                flash(
-                    'Não encontramos uma conta com este celular. Confira o número (com DDD) '
-                    'ou peça à clínica que enviou a receita para conferir seu cadastro.',
-                    'danger',
-                )
+            # A mesma mensagem para "celular sem conta" e "conta que não pode
+            # usar o primeiro acesso": respostas diferentes deixariam qualquer
+            # um descobrir quais celulares têm conta. Ela lista todas as
+            # saídas, para a pessoa nunca ficar num beco sem saída.
+            flash(
+                'Não foi possível liberar o primeiro acesso para este celular. Confira o número (com DDD). '
+                'Se você já criou uma senha, entre pela tela de login ou use "Esqueceu sua senha?". '
+                'Se ainda não, abra o link que a clínica enviou pelo WhatsApp ou peça à clínica para conferir seu cadastro.',
+                'warning',
+            )
             return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
 
         session['first_access_user_id'] = user.id

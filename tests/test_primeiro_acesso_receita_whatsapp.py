@@ -148,13 +148,69 @@ def test_primeiro_acesso_continua_bloqueado_para_conta_com_email_real(app):
         assert "first_access_user_id" not in sessao
 
 
-def test_primeiro_acesso_com_celular_desconhecido_explica_o_que_fazer(app):
+def test_primeiro_acesso_nao_revela_se_o_celular_tem_conta(app):
+    """Celular com conta bloqueada e celular sem conta recebem a mesma resposta."""
     with app.app_context():
         _reset_db()
+        _criar_receita(tutor_email="vilma@example.com", tutor_phone="16991234567")
 
-    client = app.test_client()
-    corpo = client.post("/primeiro-acesso", data={"phone": "16990001111"}).get_data(as_text=True)
-    assert "Confira o número" in corpo
+    com_conta = app.test_client().post("/primeiro-acesso", data={"phone": "16991234567"}).get_data(as_text=True)
+    sem_conta = app.test_client().post("/primeiro-acesso", data={"phone": "16990001111"}).get_data(as_text=True)
+
+    mensagem = "Não foi possível liberar o primeiro acesso para este celular."
+    assert mensagem in com_conta
+    assert mensagem in sem_conta
+    assert "Confira o número" in sem_conta
+    assert "já está ligado" not in com_conta
+    assert "Não encontramos uma conta" not in sem_conta
+
+
+def test_so_o_celular_nao_troca_a_senha_de_quem_ja_entrou(app):
+    """Depois do primeiro acesso, saber o número não basta para trocar a senha."""
+    with app.app_context():
+        _reset_db()
+        bloco_id, tutor_id = _criar_receita(
+            tutor_email=build_placeholder_email(),
+            tutor_phone="16991234567",
+        )
+
+    tutora = app.test_client()
+    tutora.post("/primeiro-acesso", data={"phone": "16991234567"})
+    tutora.post(
+        "/primeiro-acesso/senha",
+        data={"email": "", "password": "senhadavilma", "confirm_password": "senhadavilma"},
+    )
+
+    # Nos testes as requisições compartilham o app context da fixture, e o
+    # Flask-Login guarda o usuário logado em ``g``: sem limpar, o próximo
+    # cliente "herdaria" a tutora. Em produção cada requisição tem o seu ``g``.
+    from flask import g
+
+    g.pop("_login_user", None)
+
+    # Outra pessoa, que só sabe o celular, tenta o primeiro acesso de novo.
+    estranho = app.test_client()
+    resp = estranho.post("/primeiro-acesso", data={"phone": "16991234567"})
+    assert resp.status_code == 200
+    assert "Não foi possível liberar o primeiro acesso" in resp.get_data(as_text=True)
+    with estranho.session_transaction() as sessao:
+        assert "first_access_user_id" not in sessao
+
+    with app.app_context():
+        tutor = db.session.get(User, tutor_id)
+        assert tutor.check_password("senhadavilma")
+
+        from app import _first_access_token_for_user
+
+        token = _first_access_token_for_user(tutor)
+
+    # Com o link assinado que a clínica envia, a própria tutora ainda consegue
+    # refazer a senha se esquecer.
+    g.pop("_login_user", None)
+    reenvio = app.test_client()
+    resp = reenvio.post(f"/primeiro-acesso?token={token}", data={"phone": "16991234567", "token": token})
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/primeiro-acesso/senha")
 
 
 def test_login_vindo_da_receita_destaca_primeiro_acesso(app):
