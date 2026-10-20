@@ -3354,6 +3354,11 @@ _FIRST_ACCESS_EMAIL_DOMAINS = (
     '@petorlandia.local',
     '@cadastro.petorlandia.local',
     '@convite.petorlandia.local',
+    # Tutor cadastrado pela clínica sem e-mail (``build_placeholder_email``).
+    # Sem este domínio, quem a clínica cadastrou "sem e-mail" — justamente
+    # quem mais depende do primeiro acesso por celular — ouvia que não tinha
+    # primeiro acesso ativo e ficava sem como abrir a receita.
+    '@nao-informado.petorlandia.invalid',
 )
 _FIRST_ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 60
 

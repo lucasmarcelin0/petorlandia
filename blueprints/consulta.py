@@ -2803,9 +2803,25 @@ def imprimir_bloco_prescricao(bloco_id):
         ofertas_receita = build_prescription_offers(bloco.prescricoes)
         compra_em_lote = bulk_buyable_products(ofertas_receita)
 
-    short_prescription_url = url_for('consulta_routes.short_prescription_url', bloco_id=bloco.id, _external=True)
+    # Os links curtos vão no WhatsApp do tutor, então levam o token assinado
+    # dele: sem o token, o tutor que nunca criou senha (cadastrado pela
+    # clínica, muitas vezes sem e-mail) caía no login e não tinha como ver a
+    # receita nem comprar. O token só autentica o próprio tutor do animal
+    # (``_acesso_receita`` confere) — o id na URL continua sem abrir nada.
+    tutor_token = _first_access_token_for_user(tutor) if tutor else None
+    short_prescription_url = url_for(
+        'consulta_routes.short_prescription_url',
+        bloco_id=bloco.id,
+        token=tutor_token,
+        _external=True,
+    )
     short_treatment_url = (
-        url_for('consulta_routes.short_treatment_url', tratamento_id=acompanhamento.id, _external=True)
+        url_for(
+            'consulta_routes.short_treatment_url',
+            tratamento_id=acompanhamento.id,
+            token=tutor_token,
+            _external=True,
+        )
         if acompanhamento else None
     )
 
