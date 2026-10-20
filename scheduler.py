@@ -1,4 +1,4 @@
-"""Blocking scheduler responsible for periodic maintenance jobs."""
+"""Agendador dos jobs periódicos: roda no dyno `scheduler` ou, com SCHEDULER_IN_WEB=1, dentro do web."""
 
 from __future__ import annotations
 
@@ -223,9 +223,17 @@ def _run_adoption_reminders() -> None:
             current_app.logger.exception("[Scheduler] Falha nos lembretes de adocao.")
 
 
-def main() -> None:
-    timezone = os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
-    scheduler = BlockingScheduler(timezone=timezone)
+def _scheduler_timezone() -> str:
+    return os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
+
+
+def register_jobs(scheduler) -> None:
+    """Registra todos os jobs no agendador recebido.
+
+    Usado pelo dyno dedicado (``main``) e pelo modo dentro do web
+    (``start_in_web``): os dois rodam exatamente o mesmo conjunto de jobs.
+    """
+
     trigger = CronTrigger(
         day=_env_int('ACCOUNTING_BACKFILL_DAY', DEFAULT_DAY, 1, 28),
         hour=_env_int('ACCOUNTING_BACKFILL_HOUR', DEFAULT_HOUR, 0, 23),
@@ -319,6 +327,67 @@ def main() -> None:
             doses_trigger,
             billing_interval,
         )
+
+
+# --- Modo "dentro do web" -------------------------------------------------
+# Com SCHEDULER_IN_WEB=1 os mesmos jobs rodam numa thread do worker do
+# gunicorn (gunicorn.conf.py chama start_in_web), e o dyno `scheduler` pode
+# ficar em 0 -- economiza um dyno. Desligado (padrão), nada muda: os jobs
+# rodam só no dyno dedicado. NUNCA ligue com o dyno scheduler em 1: os jobs
+# rodariam duas vezes.
+
+_web_scheduler = None
+
+
+def web_mode_enabled() -> bool:
+    return _env_bool("SCHEDULER_IN_WEB", False)
+
+
+def start_in_web():
+    """Inicia os jobs numa thread deste processo, uma única vez.
+
+    Retorna o agendador iniciado, ou ``None`` quando o modo está desligado.
+    """
+
+    global _web_scheduler
+    if _web_scheduler is not None:
+        return _web_scheduler
+    if not web_mode_enabled() or app.config.get("TESTING"):
+        return None
+    if os.getenv("ENABLE_WEB_SCHEDULER") == "1":
+        # O modo antigo do app.py já está rodando jobs diários neste processo.
+        with app.app_context():
+            current_app.logger.warning(
+                "[Scheduler] SCHEDULER_IN_WEB ignorado: ENABLE_WEB_SCHEDULER=1 já agenda jobs no web."
+            )
+        return None
+
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    scheduler = BackgroundScheduler(
+        timezone=_scheduler_timezone(),
+        # No web a thread disputa CPU com as requisições: um atraso de alguns
+        # segundos não pode fazer um lembrete diário ser pulado.
+        job_defaults={"misfire_grace_time": _env_int("SCHEDULER_MISFIRE_GRACE_SECONDS", 300, 1)},
+    )
+    register_jobs(scheduler)
+    scheduler.start()
+    _web_scheduler = scheduler
+    with app.app_context():
+        current_app.logger.info("[Scheduler] Rodando dentro do processo web (SCHEDULER_IN_WEB=1).")
+    return scheduler
+
+
+def stop_in_web() -> None:
+    global _web_scheduler
+    scheduler, _web_scheduler = _web_scheduler, None
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+
+
+def main() -> None:
+    scheduler = BlockingScheduler(timezone=_scheduler_timezone())
+    register_jobs(scheduler)
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
