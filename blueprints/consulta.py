@@ -2696,6 +2696,22 @@ def short_treatment_url(tratamento_id):
     return redirect(url_for('consulta_routes.acompanhamento_tratamento', **kwargs))
 
 
+def _redirect_visitante_sem_chave(token, token_user, next_path=None):
+    """Para onde vai quem abre receita/tratamento sem estar logado e sem chave.
+
+    Quase sempre é o tutor com um link antigo (sem token) ou expirado. Em vez
+    do login genérico — que pede uma senha que ele nunca criou —, vai para o
+    primeiro acesso já no contexto da receita: confirmar o celular, entrar com
+    senha ou pedir à clínica um link novo. Nada disso autentica sozinho.
+    """
+    kwargs = {'next': next_path or request.path}
+    # Token que não abriu nada (expirado/inválido) segue junto só para a tela
+    # avisar que o link expirou; um token válido de outra pessoa não segue.
+    if token and token_user is None:
+        kwargs['token'] = token
+    return redirect(url_for('first_access', **kwargs))
+
+
 def _acesso_receita(bloco):
     """Quem pode abrir a receita — vale para a tela de impressão e para o PDF.
 
@@ -2718,7 +2734,12 @@ def _acesso_receita(bloco):
         login_user(token_user, remember=True)
 
     if not current_user.is_authenticated and not has_token_access:
-        return redirect(url_for('login_view', next=request.full_path or request.path)), None
+        # O PDF também leva à tela da receita: é lá que a pessoa baixa.
+        return _redirect_visitante_sem_chave(
+            token,
+            token_user,
+            next_path=url_for('consulta_routes.imprimir_bloco_prescricao', bloco_id=bloco.id),
+        ), None
 
     owner_access = _current_user_owns_animal(animal) or has_token_access
     is_vet = current_user.is_authenticated and is_veterinarian(current_user)
@@ -2987,7 +3008,7 @@ def acompanhamento_tratamento(tratamento_id):
         login_user(token_user, remember=True)
 
     if not current_user.is_authenticated and not has_token_access:
-        return redirect(url_for('login_view', next=request.full_path or request.path))
+        return _redirect_visitante_sem_chave(token, token_user)
 
     is_owner = _current_user_owns_animal(animal) or has_token_access
     is_admin = current_user.is_authenticated and _is_global_admin(current_user)
