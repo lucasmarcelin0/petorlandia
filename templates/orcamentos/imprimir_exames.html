@@ -12,11 +12,13 @@
 </head>
 <body>
 
-<div class="no-print">
-  <button onclick="window.print()">🖨️ Imprimir</button>
-  <button onclick="abrirAssinatura()">🔏 Assinar</button>
-  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
-  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
+<div class="no-print print-toolbar" role="region" aria-label="Ações do documento">
+  <div class="print-toolbar__row">
+  <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+  <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar</button>
+  <button type="button" class="print-action" onclick="enviarWhatsApp()" id="btn-whatsapp">Enviar WhatsApp</button>
+  <a class="print-action print-action--ghost print-toolbar__back" href="{{ url_for('consulta_direct', animal_id=animal.id) }}">Voltar</a>
+  </div>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}

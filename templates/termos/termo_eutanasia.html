@@ -8,25 +8,22 @@
 </head>
 <body>
 
-<div class="no-print">
-  <button onclick="window.print()">🖨️ Imprimir</button>
-  <button onclick="abrirAssinatura()">🔏 Assinar</button>
-  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
-  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+<div class="no-print print-toolbar" role="region" aria-label="Ações do documento">
+  <div class="print-toolbar__row">
+  <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+  <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar</button>
+  <button type="button" class="print-action" onclick="enviarWhatsApp()" id="btn-whatsapp">Enviar WhatsApp</button>
+  <a class="print-action print-action--ghost print-toolbar__back" href="{{ url_for('ficha_animal', animal_id=animal.id) }}">Voltar</a>
   <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
+  </div>
 </div>
 
-{% from 'components/logo.html' import clinic_logo %}
 <div class="document">
-  {% if clinica %}
-    <div class="header">
-      {{ clinic_logo(clinica) }}
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      {{ clinic_logo(clinica) }}
-    </div>
-  {% endif %}
+  {% include 'components/cabecalho_impressao.html' %}
 
-  <h2>Termo de Eutanásia</h2>
+  <div class="document-title-group">
+    <h1 class="document-title">Termo de Eutanásia</h1>
+  </div>
 
   <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização do procedimento de eutanásia no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
 
@@ -36,7 +33,7 @@
 
   <p contenteditable="true">Fica definido que o destino do corpo será: ____________________________________________ (sepultamento, cremação ou descarte adequado).</p>
 
-  <div class="assinatura">
+  <div class="assinatura signature">
     ___________________________________________<br>
     <span>{{ tutor.name }}</span>
   </div>

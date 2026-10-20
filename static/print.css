@@ -736,3 +736,58 @@ footer span + span::before {
     display: none !important;
   }
 }
+
+/* Mesma largura útil e paginação em todos os documentos clínicos. */
+.document,
+.no-print {
+  box-sizing: border-box;
+  width: calc(100% - 24px);
+}
+
+.info-card,
+.info-list li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.assinatura {
+  margin-top: 56px;
+  text-align: center;
+  color: var(--secondary-color);
+  font-size: 10.5pt;
+}
+
+@media print {
+  .document {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* As regras para celular não devem transformar tabelas A4 em blocos. */
+  table {
+    display: table;
+    overflow: visible;
+  }
+
+  thead { display: table-header-group; }
+  tr,
+  .header,
+  .info-card,
+  .print-attribution,
+  .prescricao-item,
+  .exame-item,
+  .signature-block,
+  .signature-grid,
+  .assinatura {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .section-title,
+  .document-title-group {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  p { orphans: 3; widows: 3; }
+}
