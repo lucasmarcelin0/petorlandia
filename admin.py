@@ -1083,7 +1083,7 @@ class ClinicaAdmin(MyModelView):
         if file and getattr(file, "filename", ""):
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
             from app import upload_to_s3
-            image_url = upload_to_s3(file, filename, folder="clinicas")
+            image_url = upload_to_s3(file, filename, folder="clinicas", keep_transparency=True)
             if image_url:
                 model.logotipo = image_url
 
@@ -1679,7 +1679,7 @@ class CasaDeRacaoAdminView(MyModelView):
             file = form.logotipo_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
             from app import upload_to_s3
-            image_url = upload_to_s3(file, filename, folder="casas_de_racao")
+            image_url = upload_to_s3(file, filename, folder="casas_de_racao", keep_transparency=True)
             if image_url:
                 model.logotipo = image_url
 

@@ -332,7 +332,7 @@ def minha_casa_de_racao():
         file = form.logotipo.data
         if file and getattr(file, 'filename', ''):
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            image_url = upload_to_s3(file, filename, folder='casas_de_racao')
+            image_url = upload_to_s3(file, filename, folder='casas_de_racao', keep_transparency=True)
             if image_url:
                 nova_casa.logotipo = image_url
                 nova_casa.photo_rotation = form.photo_rotation.data
@@ -417,7 +417,7 @@ def casa_de_racao_dashboard(casa_id):
             logo_marked_as_selected = request.form.get('store_logo_has_new_file') == '1'
             if file and getattr(file, 'filename', ''):
                 filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                image_url = upload_to_s3(file, filename, folder='casas_de_racao')
+                image_url = upload_to_s3(file, filename, folder='casas_de_racao', keep_transparency=True)
                 if image_url:
                     casa.logotipo = image_url
                     casa.photo_rotation = store_form.photo_rotation.data

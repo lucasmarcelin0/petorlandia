@@ -196,8 +196,9 @@ def test_create_clinic_without_logo_does_not_upload(monkeypatch, app):
 
         called = {}
 
-        def fake_upload(file, filename, folder="uploads"):
+        def fake_upload(file, filename, folder="uploads", **kwargs):
             called["called"] = True
+            called["keep_transparency"] = kwargs.get("keep_transparency")
             return "http://img"
 
         monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
@@ -236,8 +237,9 @@ def test_create_clinic_with_logo_uploads(monkeypatch, app):
 
         called = {}
 
-        def fake_upload(file, filename, folder="uploads"):
+        def fake_upload(file, filename, folder="uploads", **kwargs):
             called["called"] = True
+            called["keep_transparency"] = kwargs.get("keep_transparency")
             return "http://img"
 
         monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
@@ -259,3 +261,5 @@ def test_create_clinic_with_logo_uploads(monkeypatch, app):
         clinica = Clinica.query.first()
         assert clinica.logotipo == "http://img"
         assert "called" in called
+        # Logo preserva o fundo transparente (não vira JPEG com fundo branco).
+        assert called["keep_transparency"] is True
