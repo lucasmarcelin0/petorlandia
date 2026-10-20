@@ -1,6 +1,7 @@
 """Views do domínio auth_routes (migrado do app.py)."""
 from flask import Blueprint
-import hashlib, os, uuid
+import hashlib, os, re, uuid
+from urllib.parse import quote
 from datetime import datetime
 from extensions import csrf, db, limiter, mail
 from services.product_analytics import queue_ga_event, track_event
@@ -26,6 +27,7 @@ from app import (  # noqa: E402
     _is_provisional_first_access_user,
     _sanitize_login_next_url,
     _update_coordinates_from_request,
+    brazilian_mobile_variants,
     find_user_by_login_identifier,
     find_users_by_phone,
     s,
@@ -190,6 +192,77 @@ def _first_access_welcome(invite, token_user=None, user=None):
     }
 
 
+_RECEITA_NEXT_RE = re.compile(r'^/bloco_prescricao/(\d+)/imprimir/?$')
+_TRATAMENTO_NEXT_RE = re.compile(r'^/tratamento/(\d+)/?$')
+
+
+def _contexto_receita(next_url):
+    """Clínica da receita/tratamento para onde a pessoa está indo.
+
+    Só devolve dados públicos da clínica (nome, telefone) e o número da
+    receita — nada do tutor nem do pet, porque quem chega aqui ainda não
+    provou quem é. Serve para a saída que sempre funciona: pedir à clínica,
+    pelo WhatsApp, que reenvie o link de acesso.
+    """
+    path = urlparse(next_url or '').path
+    receita = _RECEITA_NEXT_RE.match(path)
+    tratamento = _TRATAMENTO_NEXT_RE.match(path)
+    if not receita and not tratamento:
+        return None
+
+    from models import BlocoPrescricao
+    from models.consulta import TratamentoAcompanhamento
+
+    clinica = None
+    if receita:
+        tipo, codigo = 'receita', int(receita.group(1))
+        bloco = db.session.get(BlocoPrescricao, codigo)
+        if bloco is None:
+            return None
+        clinica = bloco.clinica
+    else:
+        tipo, codigo = 'tratamento', int(tratamento.group(1))
+        acompanhamento = db.session.get(TratamentoAcompanhamento, codigo)
+        if acompanhamento is None:
+            return None
+        clinica = acompanhamento.bloco.clinica if acompanhamento.bloco else None
+
+    clinic_name = ((getattr(clinica, 'nome', None) or '').strip()) or None
+    clinic_phone = normalize_phone(getattr(clinica, 'telefone', None))
+    clinic_ddd = None
+    whatsapp_url = None
+    if clinic_phone and clinic_phone.startswith('+55') and len(clinic_phone) >= 13:
+        clinic_ddd = clinic_phone[3:5]
+        do_tipo = 'da receita' if tipo == 'receita' else 'do tratamento'
+        texto = (
+            f'Olá! Recebi o link {do_tipo} nº {codigo} do PetOrlândia, mas não consegui abrir. '
+            'Pode me reenviar o link de acesso?'
+        )
+        whatsapp_url = f'https://wa.me/{clinic_phone.lstrip("+")}?text={quote(texto)}'
+
+    return {
+        'tipo': tipo,
+        'label': 'a receita' if tipo == 'receita' else 'o acompanhamento do tratamento',
+        'codigo': codigo,
+        'clinic_name': clinic_name,
+        'clinic_ddd': clinic_ddd,
+        'clinic_whatsapp_url': whatsapp_url,
+    }
+
+
+def _phone_with_default_ddd(raw_phone, ddd):
+    """Celular digitado sem DDD ganha o DDD da clínica (mesma cidade)."""
+    digits = ''.join(ch for ch in (raw_phone or '') if ch.isdigit())
+    if ddd and len(digits) in (8, 9):
+        return ddd + digits
+    return raw_phone
+
+
+def _phone_missing_ddd(raw_phone):
+    digits = ''.join(ch for ch in (raw_phone or '') if ch.isdigit())
+    return len(digits) in (8, 9)
+
+
 @bp.route("/primeiro-acesso", methods=['GET', 'POST'])
 @csrf.exempt
 @limiter.limit("10 per minute", methods=["POST"])
@@ -204,21 +277,39 @@ def first_access():
     if request.method == 'GET' and token_user and token_user.phone:
         form.phone.data = token_user.phone
     if token and not invite and not token_user:
-        flash('Este link de primeiro acesso expirou ou é inválido.', 'warning')
+        flash('Este link de acesso expirou ou é inválido. Peça à clínica para reenviar, ou confirme seu celular abaixo.', 'warning')
 
     raw_next = request.values.get('next')
     next_url = _sanitize_login_next_url(raw_next) if raw_next else ''
+    receita = _contexto_receita(next_url)
+
+    def _render(failed=False):
+        return render_template(
+            'auth/first_access_phone.html',
+            form=form,
+            invite=invite,
+            token=token,
+            next_url=next_url,
+            welcome=_first_access_welcome(invite, token_user),
+            receita=receita,
+            first_access_failed=failed,
+        )
 
     if form.validate_on_submit():
-        matches = find_users_by_phone(form.phone.data)
+        typed_phone = _phone_with_default_ddd(form.phone.data, receita and receita['clinic_ddd'])
+        if _phone_missing_ddd(typed_phone):
+            # Erro de formato, não de cadastro: dá para dizer exatamente o que falta.
+            form.phone.errors.append('Faltou o DDD. Digite o celular com DDD, por exemplo (16) 99123-4567.')
+            return _render()
+        matches = find_users_by_phone(typed_phone, tolerant=True)
         # O link assinado da carteirinha já diz qual conta é a dessa pessoa. Sem
         # isso, quem divide o celular com outra família (comum na campanha PMO)
         # travava aqui e não tinha e-mail real para usar como alternativa.
-        if token_user and any(match.id == token_user.id for match in matches):
+        if token_user and normalize_phone(token_user.phone) in brazilian_mobile_variants(normalize_phone(typed_phone)):
             matches = [token_user]
         if len(matches) > 1:
             flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
+            return _render(failed=True)
         user = matches[0] if matches else None
         if not user or not _first_access_user_allowed(user, invite, token_user):
             # A mesma mensagem para "celular sem conta" e "conta que não pode
@@ -231,7 +322,7 @@ def first_access():
                 'Se ainda não, abra o link que a clínica enviou pelo WhatsApp ou peça à clínica para conferir seu cadastro.',
                 'warning',
             )
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
+            return _render(failed=True)
 
         session['first_access_user_id'] = user.id
         session['first_access_invite_token'] = token if invite else ''
@@ -242,7 +333,7 @@ def first_access():
         session['first_access_next'] = _first_access_next_url(invite)
         return redirect(url_for('first_access_password'))
 
-    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=next_url, welcome=_first_access_welcome(invite, token_user))
+    return _render()
 
 
 @bp.route("/primeiro-acesso/senha", methods=['GET', 'POST'])

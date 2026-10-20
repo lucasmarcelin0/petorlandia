@@ -34,6 +34,8 @@
                     O histórico de <strong>{{ welcome.pet_name }}</strong> já está esperando por você.
                 {% elif welcome and welcome.clinic_name %}
                     {{ welcome.clinic_name }} preparou seu acesso.
+                {% elif receita %}
+                    Para abrir {{ receita.label }}{% if receita.clinic_name %} de {{ receita.clinic_name }}{% endif %} com segurança, confirme o celular que você informou no atendimento.
                 {% else %}
                     Seu acesso já está preparado — falta só criar uma senha.
                 {% endif %}
@@ -61,6 +63,21 @@
             {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
         </form>
 
+        {# Saída que sempre funciona: a clínica reenvia o link com a chave de
+           acesso. Fica em destaque quando o celular não foi liberado. #}
+        {% if receita and receita.clinic_whatsapp_url %}
+            <div class="first-access-help {{ 'first-access-help--alert' if first_access_failed else '' }} mt-4" data-receita-reenvio>
+                <p class="fw-semibold mb-1">{% if first_access_failed %}Não conseguiu entrar?{% else %}O link não abriu?{% endif %}</p>
+                <p class="small mb-2">
+                    {{ receita.clinic_name or 'A clínica' }} pode reenviar pelo WhatsApp um link que abre {{ receita.label }} direto, sem senha.
+                </p>
+                <a href="{{ receita.clinic_whatsapp_url }}" target="_blank" rel="noopener"
+                   class="btn {{ 'btn-success' if first_access_failed else 'btn-outline-success' }} rounded-pill w-100">
+                    <i class="fab fa-whatsapp me-1" aria-hidden="true"></i> Pedir novo link à clínica
+                </a>
+            </div>
+        {% endif %}
+
         <ul class="first-access-reassure list-unstyled mt-4 mb-0">
             <li><i class="fas fa-heart" aria-hidden="true"></i> Gratuito para tutores, sem cartão.</li>
             <li><i class="fas fa-lock" aria-hidden="true"></i> Os dados do seu pet são seus.</li>
@@ -68,7 +85,11 @@
         </ul>
 
         <div class="text-center mt-4">
-            <a href="{{ url_for('login_view', next=next_url) if next_url else url_for('login_view') }}" class="text-decoration-none">Já tenho senha</a>
+            {% if receita %}
+                <a href="{{ url_for('login_view', next=next_url) }}" class="btn btn-outline-secondary rounded-pill w-100">Já tenho senha — entrar</a>
+            {% else %}
+                <a href="{{ url_for('login_view', next=next_url) if next_url else url_for('login_view') }}" class="text-decoration-none">Já tenho senha</a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -93,6 +114,18 @@
     padding: 10px 12px;
     font-size: 0.9rem;
     color: #334155;
+  }
+
+  .first-access-help {
+    border: 1px solid #d1e7dd;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #f6fbf8;
+  }
+
+  .first-access-help--alert {
+    border-color: #198754;
+    background: #e7f5ec;
   }
 
   .first-access-reassure li {

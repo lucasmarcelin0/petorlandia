@@ -1824,20 +1824,58 @@ from template_filters import (
 
 register_template_filters(app)
 
-def find_users_by_phone(phone: str | None, *, exclude_user_id: int | None = None) -> list[User]:
-    """Return users whose stored phone matches the normalized phone value."""
+def brazilian_mobile_variants(normalized_phone: str | None) -> set[str]:
+    """Formas equivalentes de um celular brasileiro já normalizado (+55...).
+
+    Muito cadastro antigo guardou o celular sem o 9 da frente (16 9123-4567) e
+    a pessoa digita com ele (16 99123-4567), ou o contrário. Para quem só quer
+    entrar, os dois são o mesmo número.
+    """
+    if not normalized_phone:
+        return set()
+    variants = {normalized_phone}
+    if not normalized_phone.startswith('+55'):
+        return variants
+    national = normalized_phone[3:]
+    if len(national) == 11 and national[2] == '9':
+        variants.add('+55' + national[:2] + national[3:])
+    elif len(national) == 10 and national[2] in '6789':
+        variants.add('+55' + national[:2] + '9' + national[2:])
+    return variants
+
+
+def find_users_by_phone(
+    phone: str | None,
+    *,
+    exclude_user_id: int | None = None,
+    tolerant: bool = False,
+) -> list[User]:
+    """Return users whose stored phone matches the normalized phone value.
+
+    ``tolerant=True`` também aceita a mesma linha com/sem o 9 da frente. Fica
+    restrito aos fluxos de entrar na conta (login e primeiro acesso), onde a
+    senha ou o próprio fluxo decidem; as checagens de "celular já usado" do
+    cadastro continuam exatas, como sempre foram.
+    """
     normalized_phone = normalize_phone(phone)
     if not normalized_phone:
         return []
+    accepted = brazilian_mobile_variants(normalized_phone) if tolerant else {normalized_phone}
 
-    matches = []
+    exact = []
+    similar = []
     candidates = User.query.filter(User.phone.isnot(None), User.phone != "").all()
     for candidate in candidates:
         if exclude_user_id is not None and candidate.id == exclude_user_id:
             continue
-        if normalize_phone(candidate.phone) == normalized_phone:
-            matches.append(candidate)
-    return matches
+        candidate_phone = normalize_phone(candidate.phone)
+        if candidate_phone == normalized_phone:
+            exact.append(candidate)
+        elif candidate_phone in accepted:
+            similar.append(candidate)
+    # A grafia exata sempre vence: a variante só entra quando ninguém tem o
+    # número exatamente como foi digitado.
+    return exact or similar
 
 
 def find_user_by_login_identifier(
@@ -1856,7 +1894,7 @@ def find_user_by_login_identifier(
     if normalized_email and "@" in normalized_email:
         return User.query.filter(func.lower(User.email) == normalized_email).first(), None
 
-    phone_matches = find_users_by_phone(identifier)
+    phone_matches = find_users_by_phone(identifier, tolerant=True)
     if len(phone_matches) > 1:
         if password:
             by_password = [user for user in phone_matches if user.check_password(password)]

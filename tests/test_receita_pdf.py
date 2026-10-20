@@ -184,7 +184,8 @@ def test_visitante_sem_token_nao_recebe_o_pdf(app):
 
     resp = app.test_client().get(f'/bloco_prescricao/{bloco_id}/pdf')
     assert resp.status_code == 302
-    assert '/login' in resp.headers['Location']
+    # Vai para o primeiro acesso no contexto da receita, nunca direto ao PDF.
+    assert '/primeiro-acesso' in resp.headers['Location']
     assert not resp.get_data().startswith(b'%PDF-')
 
 
