@@ -1,0 +1,40 @@
+name: Publicar correcao solicitada
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    branches: [main]
+  workflow_run:
+    workflows: [Test Suite, Authorization Gate]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Numero do PR com pedido explicito de publicacao
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  actions: write
+
+concurrency:
+  group: publicar-correcao-${{ github.event.pull_request.head.ref || github.event.workflow_run.head_branch || inputs.pr }}
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Sempre a main confiável. NUNCA checkout do head/ref de um PR aqui.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { publish } = require('./scripts/mobile_publish.cjs');
+            await publish({ github, context, core });

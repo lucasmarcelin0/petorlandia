@@ -1,0 +1,36 @@
+name: Confirmar publicacao no Heroku
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: confirmar-publicacao
+  cancel-in-progress: true
+
+jobs:
+  confirmar:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'petorlandia')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirmar token, release, commit e site
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          EXPECTED_SHA: ${{ github.event.deployment.sha || github.sha }}
+        run: |
+          python scripts/check_heroku_token.py --avisar-dias 0
+          python scripts/check_cloud_deploy.py --app petorlandia --sha "$EXPECTED_SHA" --timeout 900

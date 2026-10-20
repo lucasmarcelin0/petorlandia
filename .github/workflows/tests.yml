@@ -1,6 +1,7 @@
 name: Test Suite
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [ main, master ]
@@ -18,6 +19,11 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+
+      - name: Publication policy tests
+        run: |
+          node --test scripts/mobile_publish.test.cjs
+          python -m unittest discover -s scripts -p test_check_cloud_deploy.py
 
       - name: Install dependencies
         run: |

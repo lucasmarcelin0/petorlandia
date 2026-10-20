@@ -4,6 +4,52 @@
 os testes passam (veja "Automatico: merge na main publica" abaixo). Os
 caminhos manuais desta página ficam para emergência.
 
+## Pelo celular: Codex Cloud e Claude Code Cloud
+
+O fluxo compartilhado está em `AGENTS.md` (Codex) e `CLAUDE.md` (Claude).
+Ele funciona com o PC desligado: **agente na nuvem → branch/PR no GitHub →
+testes → merge → integração GitHub do Heroku → confirmação do release/site**.
+
+Quando o pedido incluir publicar, o agente deve incluir no último commit:
+
+```text
+PetOrlandia-Publish: true
+```
+
+O workflow **Publicar correcao solicitada** reconhece esse marcador (ou a
+label `publicar`), aceita somente PRs do próprio repositório de autores com
+permissão de escrita e integra após `pytest` e `authorization-tests` aprovados.
+Sem o marcador/label, não integra automaticamente. Rascunhos com pedido
+explícito são convertidos para prontos. Conflitos e testes reprovados bloqueiam.
+
+O merge usa `GITHUB_TOKEN`; por isso o workflow dispara explicitamente os dois
+CI na `main` via `workflow_dispatch` (eventos de push gerados pelo token de
+automação não disparam outros workflows). Não precisa de PAT pessoal adicional.
+Após aprovação, a integração nativa publica e **Confirmar publicacao no Heroku**
+confere o SHA do slug, o release concluído e a resposta HTTP 200 do site.
+Esse último workflow também pode ser executado manualmente para diagnosticar.
+
+No celular:
+
+- **Codex**: escolha um ambiente Cloud publicado com o repositório
+  `lucasmarcelin0/petorlandia`. Se ainda não existir, crie/publique uma vez
+  pela web/desktop, com Python 3.12 e as dependências de teste do projeto.
+- **Claude**: abra a aba **Code**, escolha uma sessão **Cloud** e o mesmo
+  repositório. A conexão GitHub deve permitir criar branches e PRs.
+- Peça: “Corrija [problema], teste e publique no PetOrlândia. Siga AGENTS.md.”
+  Ao final, confira o link do deployment e da confirmação.
+- Controle remoto de uma sessão **Local** nos dois aplicativos exige o PC
+  ligado. Um chat comum sem acesso ao repositório não configura esse fluxo.
+
+O agente não precisa de token do Heroku no ambiente Cloud para esse caminho.
+A credencial dedicada de automação fica apenas em `HEROKU_API_KEY` no GitHub
+Actions; `HEROKU_APP_NAME=petorlandia` fixa o alvo dos workflows de fallback.
+Renovar o login no PC não renova os secrets do GitHub automaticamente.
+
+Referências: [Codex Cloud](https://learn.chatgpt.com/docs/environments/cloud-environments),
+[Claude Cloud](https://code.claude.com/docs/en/claude-code-on-the-web),
+[integração Heroku/GitHub](https://devcenter.heroku.com/articles/github-integration).
+
 ## Pelo computador (script PowerShell)
 
 ```bash
@@ -92,8 +138,9 @@ Sem computador a mao, a API Key de dashboard.heroku.com/account (Account
 settings > API Key > Reveal) tambem serve: nao expira por data, mas deixa de
 valer quando a senha da conta muda.
 
-O mesmo token vai na variavel `HEROKU_API_KEY` do ambiente do Claude na nuvem
-(menu do ambiente > Editar), para o agente conseguir publicar e ler logs.
+O fluxo Cloud normal não exige copiar esse token para o Claude/Codex. Para
+diagnóstico e contingência, prefira os workflows deste repositório, que usam
+o secret do GitHub; credenciais adicionais no agente só se forem indispensáveis.
 
 Com a integracao GitHub ligada, o token nao e mais necessario para o deploy
 normal: so para este workflow manual, para o CLI e para o agente ler logs.
