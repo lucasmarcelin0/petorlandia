@@ -80,25 +80,7 @@
 
 {% from 'components/logo.html' import clinic_logo %}
 <div class="document">
-  {% if clinica %}
-    <div class="header">
-      <div class="header-logo">
-        {{ clinic_logo(clinica) }}
-      </div>
-      <div class="header-info">
-        <div class="clinica-nome">{{ clinica.nome }}</div>
-        <div class="clinica-contato">
-          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
-          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
-          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
-        </div>
-      </div>
-      <div class="header-logo header-logo--right">
-        {{ clinic_logo(clinica) }}
-      </div>
-    </div>
-  {% endif %}
+  {% include 'components/cabecalho_impressao.html' %}
 
   <div class="document-title-group">
     <h1 class="document-title">Receita Médico-Veterinária</h1>

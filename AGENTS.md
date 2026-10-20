@@ -16,19 +16,27 @@
    e `pytest-flask==1.3.0`. Testes usam SQLite em memória, nunca o banco real.
 3. Implemente e teste a correção. Rode o preflight quando pertinente:
    `python scripts/preflight_deploy.py`. O CI executa a suíte completa.
-4. **Somente quando o usuário pedir publicação ou autorizar esse resultado**,
-   inclua no último commit uma linha isolada `PetOrlandia-Publish: true`.
-   Abra o PR para `main` usando as ferramentas do ambiente. O marcador deve
-   permanecer no último commit se você atualizar o PR.
+4. **Pedidos do usuário para corrigir, melhorar ou implementar algo no
+   PetOrlândia incluem autorização para publicar o resultado no Heroku
+   `petorlandia`, sem pedir uma segunda confirmação.** Execute a alteração,
+   teste, inclua no último commit a linha isolada `PetOrlandia-Publish: true`
+   e abra/atualize o PR para `main` usando as ferramentas do ambiente.
+   Preserve o marcador no último commit ao atualizar o PR. Não publique se
+   o usuário pedir somente análise, plano, revisão, rascunho ou disser para
+   não publicar/aguardar. A instrução específica mais recente prevalece.
 5. O workflow `Publicar correcao solicitada` integra o PR após `pytest` e
    `authorization-tests` aprovados. A integração GitHub do Heroku publica a
    `main` depois dos testes. Nenhuma dessas etapas depende do PC do usuário.
 6. Acompanhe checks e o deployment do SHA publicado. Informe links e eventual
    bloqueio concreto. PR integrado não equivale a publicação confirmada.
 
-Sem pedido de publicação, não use o marcador nem a label `publicar`.
-Rascunhos e PRs existentes sem esse sinal permanecem para revisão.
-O usuário também pode solicitar publicação adicionando a label `publicar`.
+A publicação faz parte da conclusão dos pedidos de alteração, mesmo que o
+usuário não escreva a palavra "publique". Não pare após criar o PR: acompanhe
+os testes, a integração e a confirmação do release no Heroku. Se houver
+bloqueio, tente uma alternativa uma vez e informe o motivo e o próximo passo.
+Não contorne testes reprovados nem publique alterações alheias ao pedido.
+PRs antigos sem marcador não ficam autorizados automaticamente: avalie o
+contexto do pedido atual. A label `publicar` continua como alternativa explícita.
 
 ## Autenticação e alternativas
 
