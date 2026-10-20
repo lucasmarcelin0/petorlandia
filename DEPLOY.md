@@ -10,7 +10,14 @@ O fluxo compartilhado está em `AGENTS.md` (Codex) e `CLAUDE.md` (Claude).
 Ele funciona com o PC desligado: **agente na nuvem → branch/PR no GitHub →
 testes → merge → integração GitHub do Heroku → confirmação do release/site**.
 
-Quando o pedido incluir publicar, o agente deve incluir no último commit:
+Pedidos para corrigir, melhorar ou implementar algo no PetOrlândia já
+incluem autorização para publicar no Heroku `petorlandia`, sem confirmação
+adicional. Exceções: somente análise, plano, revisão ou rascunho, ou instrução
+expressa para não publicar/aguardar. A instrução específica mais recente
+prevalece. O agente deve testar, publicar e confirmar o release/site;
+criar ou integrar o PR, por si só, não conclui a publicação.
+
+Nos pedidos de alteração, inclua no último commit:
 
 ```text
 PetOrlandia-Publish: true
@@ -36,7 +43,8 @@ No celular:
   pela web/desktop, com Python 3.12 e as dependências de teste do projeto.
 - **Claude**: abra a aba **Code**, escolha uma sessão **Cloud** e o mesmo
   repositório. A conexão GitHub deve permitir criar branches e PRs.
-- Peça: “Corrija [problema], teste e publique no PetOrlândia. Siga AGENTS.md.”
+- Peça: “Corrija [problema] no PetOrlândia.” Testar e publicar já fazem parte
+  da execução; para só revisar, diga explicitamente “não publique”.
   Ao final, confira o link do deployment e da confirmação.
 - Controle remoto de uma sessão **Local** nos dois aplicativos exige o PC
   ligado. Um chat comum sem acesso ao repositório não configura esse fluxo.
