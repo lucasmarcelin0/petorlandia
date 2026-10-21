@@ -3,11 +3,12 @@ from flask import render_template
 from werkzeug.datastructures import MultiDict
 
 from services.sfa_pre_t0 import CampoInvalido, carregar_esquema_pre_t0, coletar_respostas_pre_t0
+from tests.test_sfa_pre_t0_obrigatorios import OBRIGATORIOS
 
 
 def _form(**extra):
     dados = {"ficha_sinan": "2985999", "agravo": "2", "data_notificacao": "2026-09-01",
-             "data_inicio_sintomas": "2026-08-30", "nome": "Teste"}
+             "data_inicio_sintomas": "2026-08-30", "nome": "Teste", **OBRIGATORIOS}
     dados.update(extra)
     return MultiDict(dados)
 

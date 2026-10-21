@@ -271,19 +271,23 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
     # Notificação e investigação
     if not texto("ficha_sinan"):
         falta("notificacao", "ficha_sinan")
-    if not texto("data_nascimento") and not str(grupo("idade").get("valor") or "").strip():
-        falta("notificacao", "data_nascimento", rotulo="Data de nascimento ou idade")
+    if not texto("data_nascimento"):
+        falta("notificacao", "data_nascimento")
     if not texto("sexo"):
         falta("notificacao", "sexo")
-    elif texto("sexo") == "F" and not texto("gestante"):
+    elif texto("sexo") != "M" and not texto("gestante"):
         falta("notificacao", "gestante")
-    for key in ("raca_cor", "escolaridade", "municipio_residencia", "bairro", "logradouro", "zona",
-                "data_investigacao"):
+    for key in ("raca_cor", "escolaridade", "nome_mae", "municipio_residencia", "bairro", "logradouro",
+                "numero_residencia", "zona", "data_investigacao", "ocupacao"):
         if not texto(key):
             falta("notificacao", key)
-    if not grupo("doencas_preexistentes"):
-        primeira = campos["doencas_preexistentes"]["items"][0][0]
-        falta("notificacao", "doencas_preexistentes", campo=f"doencas_preexistentes__{primeira}")
+    if "1" not in grupo("sinais_clinicos").values():
+        primeiro = campos["sinais_clinicos"]["items"][0][0]
+        falta("notificacao", "sinais_clinicos", campo=f"sinais_clinicos__{primeiro}")
+    doencas = grupo("doencas_preexistentes")
+    sem_resposta = [item for item, _rotulo in campos["doencas_preexistentes"]["items"] if not doencas.get(item)]
+    if sem_resposta:
+        falta("notificacao", "doencas_preexistentes", campo=f"doencas_preexistentes__{sem_resposta[0]}")
     hospitalizacao = texto("hospitalizacao")
     if not hospitalizacao:
         falta("notificacao", "hospitalizacao")

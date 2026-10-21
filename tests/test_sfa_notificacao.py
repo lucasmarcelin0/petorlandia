@@ -15,6 +15,7 @@ from services import sfa_service
 from services.sfa_pre_t0 import (FULL_KEY, carregar_esquema_pre_t0, coletar_respostas_pre_t0,
                                  respostas_para_formulario)
 from services.sfa_workflow import hoje_local
+from tests.test_sfa_pre_t0_obrigatorios import OBRIGATORIOS
 
 HTTPS = {'base_url': 'https://localhost'}
 
@@ -52,7 +53,7 @@ def responsavel(registro, email, name='Pessoa da Unidade'):
 
 def ficha_form(**extra):
     dados = {'ficha_sinan': '2985999', 'agravo': '1', 'data_notificacao': '2026-10-12',
-             'data_inicio_sintomas': '2026-10-10', 'nome': 'Maria Paciente'}
+             'data_inicio_sintomas': '2026-10-10', 'nome': 'Maria Paciente', **OBRIGATORIOS}
     dados.update(extra)
     return dados
 
@@ -68,6 +69,14 @@ COMPLETA = dict(
 
 def respostas(**extra):
     return coletar_respostas_pre_t0(MultiDict(ficha_form(**extra)))
+
+
+def ficha_antiga(**form):
+    """Respostas de uma ficha gravada antes de a ficha exigir campos: qualquer um pode estar em branco."""
+    schema = carregar_esquema_pre_t0()
+    sem_exigencia = [{**secao, 'fields': [{k: v for k, v in campo.items() if k not in ('required', 'required_with')}
+                                          for campo in secao['fields']]} for secao in schema['sections']]
+    return coletar_respostas_pre_t0(MultiDict(form), {**schema, 'sections': sem_exigencia})
 
 
 def chaves(itens):
@@ -513,7 +522,8 @@ def test_colega_da_unidade_ve_e_so_o_autor_completa(client, ubs, autora):
 
 
 def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
-    log = registrar(client, ns1_data_coleta='2026-10-11')
+    # NS1 com data já exige o resultado no envio; o RT-PCR pode ficar aguardando o laboratório.
+    log = registrar(client, rt_pcr_data='2026-10-11')
     detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
     assert 'O que ainda falta nesta ficha' in detalhe and 'aguardando resultado' in detalhe
     assert f'/sfa/notificacao/fichas/{log.id}/completar?campo=classificacao' in detalhe
@@ -522,14 +532,15 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
 
     edicao = BeautifulSoup(client.get(f'/sfa/notificacao/fichas/{log.id}/completar?campo=classificacao', **HTTPS).data, 'html.parser')
     assert edicao.select_one('#input-nome')['value'] == 'Maria Paciente'
-    assert edicao.select_one('#input-ns1_data_coleta')['value'] == '2026-10-11'
+    assert edicao.select_one('#input-rt_pcr_data')['value'] == '2026-10-11'
     assert edicao.select_one('#input-ficha_sinan').has_attr('readonly')
     assert edicao.select_one('form[data-step-form]')['data-focus-field'] == 'classificacao'
-    assert edicao.select_one('[data-ir-para="ns1_resultado"]') and edicao.select_one('#campo-classificacao.is-pending')
+    assert edicao.select_one('[data-ir-para="rt_pcr_resultado"]') and edicao.select_one('#campo-classificacao.is-pending')
     assert not edicao.select_one('#campo-nome.is-pending')
 
-    completa = ficha_form(ficha_sinan='9999999', nome='Maria Paciente Corrigida', ns1_data_coleta='2026-10-11',
-                          ns1_resultado='1', unidade_notificante='Trocada', **COMPLETA)
+    completa = ficha_form(ficha_sinan='9999999', nome='Maria Paciente Corrigida', rt_pcr_data='2026-10-11',
+                          rt_pcr_resultado='2', ns1_data_coleta='2026-10-11', ns1_resultado='1',
+                          unidade_notificante='Trocada', **COMPLETA)
     salva = client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=completa, **HTTPS)
     assert salva.status_code == 302
     db.session.refresh(log)
@@ -715,6 +726,46 @@ def test_formulario_reabre_com_erro_no_campo(client, ubs, autora):
     assert form['data-error-field'] == 'cep' and form['action'].endswith(f'/sfa/notificacao/ficha?unidade={ubs.id}')
 
 
+def test_ficha_sem_campo_obrigatorio_nao_e_registrada_e_volta_no_campo(client, ubs, autora):
+    for extra, campo in (({'nome_mae': ''}, 'nome_mae'), ({'numero_residencia': ''}, 'numero_residencia'),
+                         ({'sinais_clinicos__febre': ''}, 'sinais_clinicos__febre'),
+                         ({'ns1_data_coleta': '2026-10-11'}, 'ns1_resultado')):
+        resposta = client.post('/sfa/notificacao/ficha', data=ficha_form(**extra), **HTTPS)
+        assert resposta.status_code == 200, campo
+        pagina = BeautifulSoup(resposta.data, 'html.parser')
+        assert pagina.select_one('form[data-step-form]')['data-error-field'] == campo
+        assert pagina.select_one('#input-nome')['value'] == 'Maria Paciente'
+    assert SfaSinanLog.query.count() == 0 and SfaPaciente.query.count() == 0
+
+
+def test_ficha_antiga_mostra_o_que_ficou_obrigatorio_e_salva_quando_completa(client, ubs, autora):
+    from services.sfa_pre_t0 import salvar_ficha_pre_t0
+
+    salvo = salvar_ficha_pre_t0(ficha_antiga(ficha_sinan='2985999', agravo='1', data_notificacao='2026-10-12',
+                                             data_inicio_sintomas='2026-10-10', nome='Maria Paciente'),
+                                autor_id=autora.id, unidade=ubs)
+    log = db.session.get(SfaSinanLog, salvo['log_id'])
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+    assert f'/sfa/notificacao/fichas/{log.id}/completar?campo=nome_mae' in detalhe
+    edicao = BeautifulSoup(client.get(f'/sfa/notificacao/fichas/{log.id}/completar', **HTTPS).data, 'html.parser')
+    assert edicao.select_one('#campo-nome_mae.is-pending') and edicao.select_one('#campo-doencas_preexistentes.is-pending')
+    # Como na ficha nova, as doenças pré-existentes já vêm marcadas como "Não".
+    assert edicao.select_one('input[name="doencas_preexistentes__diabetes"][checked]')['value'] == '2'
+
+    recusada = client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome_mae=''), **HTTPS)
+    assert recusada.status_code == 200
+    assert BeautifulSoup(recusada.data, 'html.parser').select_one('form[data-step-form]')['data-error-field'] == 'nome_mae'
+    db.session.refresh(log)
+    assert 'revisoes' not in json.loads(log.dados_json)[FULL_KEY]
+
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(), **HTTPS).status_code == 302
+    db.session.refresh(log)
+    gravadas = json.loads(log.dados_json)[FULL_KEY]['respostas']
+    assert gravadas['nome_mae'] == 'Joana da Silva' and gravadas['numero_residencia'] == '100'
+    pendentes = set(chaves(notificacao.pendencias(gravadas)))
+    assert not pendentes & {'nome_mae', 'numero_residencia', 'ocupacao', 'sinais_clinicos', 'doencas_preexistentes'}
+
+
 # ---------------------------------------------------------------------------
 # O que ainda falta
 # ---------------------------------------------------------------------------
@@ -725,20 +776,32 @@ def test_ficha_completa_nao_tem_pendencia(app):
 
 
 def test_pendencias_seguem_o_que_a_ficha_ja_diz(app):
-    minima = notificacao.pendencias(respostas())
+    # Ficha gravada antes de a ficha exigir campos: tudo o que hoje é obrigatório aparece como pendente.
+    minima = notificacao.pendencias(ficha_antiga(ficha_sinan='2985999', agravo='1', nome='Maria Paciente'))
     assert [g['chave'] for g in notificacao.pendencias_por_grupo(minima)] == ['notificacao', 'encerramento']
-    assert chaves(minima)[:3] == ['data_nascimento', 'sexo', 'raca_cor']
+    assert [i['chave'] for i in minima if i['grupo'] == 'notificacao'] == [
+        'data_nascimento', 'sexo', 'raca_cor', 'escolaridade', 'nome_mae', 'municipio_residencia', 'bairro',
+        'logradouro', 'numero_residencia', 'zona', 'data_investigacao', 'ocupacao', 'sinais_clinicos',
+        'doencas_preexistentes', 'hospitalizacao']
     assert {'classificacao', 'criterio_confirmacao', 'evolucao_caso', 'data_encerramento', 'caso_autoctone'} <= set(chaves(minima))
     assert 'data_internacao' not in chaves(minima) and 'gestante' not in chaves(minima)
 
     def falta(**extra):
-        return notificacao.pendencias(respostas(**{**COMPLETA, **extra}))
+        return notificacao.pendencias(ficha_antiga(**{**ficha_form(**COMPLETA), **extra}))
 
-    # Idade vale no lugar da data de nascimento; mulher precisa da resposta de gestante.
-    assert falta(data_nascimento='', idade_valor='36', idade_unidade='4') == []
+    assert falta() == []
+    # A idade não substitui mais a data de nascimento; gestante só não se aplica ao sexo masculino.
+    assert chaves(falta(data_nascimento='', idade_valor='36', idade_unidade='4')) == ['data_nascimento']
     # Sem o número da notificação, ele fica listado para ser informado depois.
     assert [(i['grupo'], i['chave'], i['numero']) for i in falta(ficha_sinan='')] == [('notificacao', 'ficha_sinan', 'Nº')]
-    assert chaves(falta(sexo='F', gestante='')) == ['gestante']
+    assert chaves(falta(sexo='F', gestante='')) == ['gestante'] == chaves(falta(sexo='I', gestante=''))
+    assert falta(sexo='M', gestante='') == []
+    assert chaves(falta(nome_mae='', numero_residencia='', ocupacao='')) == ['nome_mae', 'numero_residencia', 'ocupacao']
+    # Sinais clínicos: nenhum presente. Doenças pré-existentes: item sem resposta. O atalho leva ao item.
+    assert [(i['chave'], i['campo']) for i in falta(sinais_clinicos__febre='2')] == [
+        ('sinais_clinicos', 'sinais_clinicos__febre')]
+    assert [(i['chave'], i['campo']) for i in falta(doencas_preexistentes__hepatopatias='')] == [
+        ('doencas_preexistentes', 'doencas_preexistentes__hepatopatias')]
     # Exame: coleta espera resultado; resultado espera a data; "não realizado" não espera nada.
     aguardando = falta(rt_pcr_data='2026-10-11')
     assert [(i['grupo'], i['chave'], i['detalhe']) for i in aguardando] == [

@@ -16,6 +16,7 @@ from models.sfa import (SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT3
                         SfaSimulacaoGrupo, SfaSimulacaoParticipante, SfaSimulacaoResposta)
 from services import sfa_service
 from services import sfa_simulacao as service
+from services.sfa_pre_t0 import FIELD_SPECS
 
 
 def _sinan(**extra):
@@ -28,6 +29,10 @@ def _sinan(**extra):
         "logradouro": "Rua Verdadeira", "codigo_logradouro": "77",
         "sinais_clinicos__febre": "1", "sinais_clinicos__cefaleia": "1", "sinais_clinicos__exantema": "2",
         "ns1_resultado": "1", "investigador__nome": "Investigador Real", "investigador__funcao": "Enfermeira",
+        # Demais campos que a ficha exige no envio.
+        "data_nascimento": "1992-01-15", "gestante": "5", "raca_cor": "4", "municipio_residencia": "Orlândia",
+        "numero_residencia": "100", "ocupacao": "Professora", "hospitalizacao": "2",
+        **{f"doencas_preexistentes__{item}": "2" for item, _rotulo in FIELD_SPECS["34"]["items"]},
     }
     dados.update(extra)
     return dados
