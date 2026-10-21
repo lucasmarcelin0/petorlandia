@@ -4,6 +4,8 @@ O administrador cadastra as unidades e indica as contas responsáveis por cada
 uma. Ser responsável é um papel adicional: ``User.role`` e os demais acessos
 da conta não mudam. Quem responde por uma unidade registra fichas em nome dela,
 vê as fichas da própria unidade e um panorama só com contagens das demais.
+A conta master da notificação vê e registra fichas de todas as unidades, sem
+administrar unidades nem o restante do site.
 """
 from __future__ import annotations
 
@@ -19,6 +21,8 @@ from services.entomologia_service import consultar_sem_interromper
 ROTULO_AREA = "Notificação SINAN"
 # Perfil interno (``User.worker``) da conta de uma unidade de saúde que só usa esta área.
 PERFIL_SO_NOTIFICACAO = "unidade_saude"
+# Perfil interno da conta que também só usa esta área, mas acompanha as fichas de todas as unidades.
+PERFIL_MASTER_NOTIFICACAO = "master_notificacao"
 LIMITE_FICHAS = 300
 SEM_UNIDADE = "Unidade não identificada"
 
@@ -68,20 +72,33 @@ def unidades_do_usuario(user) -> list:
     return cache[user.id]
 
 
+def _perfil(user) -> str:
+    if not getattr(user, "is_authenticated", False) or eh_admin(user):
+        return ""
+    return (getattr(user, "worker", None) or "").strip().lower()
+
+
+def conta_master(user) -> bool:
+    """Conta master da notificação: vê e registra fichas de todas as unidades, sem administrar o site."""
+    return _perfil(user) == PERFIL_MASTER_NOTIFICACAO
+
+
+def ve_todas_as_unidades(user) -> bool:
+    return eh_admin(user) or conta_master(user)
+
+
 def pode_acessar(user) -> bool:
-    return eh_admin(user) or bool(unidades_do_usuario(user))
+    return ve_todas_as_unidades(user) or bool(unidades_do_usuario(user))
 
 
 def conta_so_notificacao(user) -> bool:
-    """Conta de unidade de saúde: o resto do site fica fechado para ela. O administrador nunca é restrito."""
-    return bool(getattr(user, "is_authenticated", False)
-                and (getattr(user, "worker", None) or "").strip().lower() == PERFIL_SO_NOTIFICACAO
-                and not eh_admin(user))
+    """Conta de unidade de saúde ou master: o resto do site fica fechado para ela. O administrador nunca é restrito."""
+    return _perfil(user) in (PERFIL_SO_NOTIFICACAO, PERFIL_MASTER_NOTIFICACAO)
 
 
 def unidades_para_registrar(user) -> list:
-    """Em nome de quais unidades a conta pode abrir uma ficha: o administrador, de qualquer unidade ativa."""
-    if eh_admin(user):
+    """Em nome de quais unidades a conta pode abrir uma ficha: administrador e master, de qualquer unidade ativa."""
+    if ve_todas_as_unidades(user):
         from models.sfa import SfaUnidadeSaude
         return SfaUnidadeSaude.query.filter(SfaUnidadeSaude.ativa.is_(True)).order_by(SfaUnidadeSaude.nome).all()
     return unidades_do_usuario(user)
@@ -354,17 +371,18 @@ def ficha_visivel(user, ficha_id: int):
     log_entry = db.session.get(SfaSinanLog, ficha_id)
     if log_entry is None or log_entry.unidade_id is None or _respostas(log_entry) is None:
         return None
-    if eh_admin(user) or log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)}:
+    if ve_todas_as_unidades(user) or log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)}:
         return log_entry
     return None
 
 
 def pode_completar(user, log_entry) -> bool:
-    """Completar depois é do autor (enquanto responde pela unidade) e do administrador."""
+    """Completar depois é do autor (enquanto responde pela unidade, ou sendo master) e do administrador."""
     if eh_admin(user):
         return True
     return bool(log_entry.preenchido_por_id and log_entry.preenchido_por_id == getattr(user, "id", None)
-                and log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)})
+                and (conta_master(user)
+                     or log_entry.unidade_id in {unidade.id for unidade in unidades_do_usuario(user)}))
 
 
 def _caso_da_ficha(log_entry):
@@ -456,7 +474,7 @@ def listar_fichas(user, *, unidade_id: int | None = None, busca: str = "", so_pe
     from services.sfa_pre_t0 import carregar_esquema_pre_t0
 
     consulta = SfaSinanLog.query.filter(SfaSinanLog.unidade_id.isnot(None))
-    if not eh_admin(user):
+    if not ve_todas_as_unidades(user):
         consulta = consulta.filter(SfaSinanLog.unidade_id.in_([u.id for u in unidades_do_usuario(user)] or [0]))
     if unidade_id:
         consulta = consulta.filter(SfaSinanLog.unidade_id == unidade_id)

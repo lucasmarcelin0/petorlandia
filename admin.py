@@ -54,6 +54,8 @@ USER_WORKER_CHOICES = [
     ('master', 'Master'),
     # services.sfa_notificacao.PERFIL_SO_NOTIFICACAO: conta de UBS que só vê a Notificação SINAN.
     ('unidade_saude', 'Unidade de saúde (somente Notificação SINAN)'),
+    # services.sfa_notificacao.PERFIL_MASTER_NOTIFICACAO: só a Notificação SINAN, com todas as unidades.
+    ('master_notificacao', 'Master da Notificação SINAN (todas as unidades)'),
 ]
 
 ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
@@ -723,7 +725,8 @@ class UserAdminView(MyModelView):
             description='Unidade pela qual a conta registra fichas SINAN. Com o perfil interno '
                         '"Unidade de saúde (somente Notificação SINAN)" a conta passa a ver só essa área, '
                         'responde só por esta unidade e não precisa escolher a unidade ao registrar. '
-                        'Deixe "Nenhuma" para contas sem esse acesso.',
+                        'O perfil "Master da Notificação SINAN" não precisa de unidade: vê só essa área, '
+                        'com as fichas de todas as unidades. Deixe "Nenhuma" para contas sem esse acesso.',
         ),
     }
 
@@ -802,6 +805,13 @@ class UserAdminView(MyModelView):
 
     def validate_form(self, form):
         valido = super().validate_form(form)
+        from services.sfa_notificacao import PERFIL_MASTER_NOTIFICACAO
+        worker, role = getattr(form, 'worker', None), getattr(form, 'role', None)
+        if (valido and worker is not None and (worker.data or '').strip() == PERFIL_MASTER_NOTIFICACAO
+                and (getattr(role, 'data', '') or '').lower() == 'admin'):
+            worker.errors = [*worker.errors, 'O administrador continua vendo o site inteiro. Para a conta ficar só '
+                                             'com a Notificação SINAN, escolha outro tipo de conta.']
+            return False
         campo, escolhida = self._unidade_sinan_enviada(form)
         if not valido or campo is None:
             return valido

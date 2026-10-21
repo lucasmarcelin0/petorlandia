@@ -266,6 +266,58 @@ def test_perfil_de_unidade_nao_restringe_admin_nem_outras_contas(client, restrit
     assert 'Página inicial' in pagina and 'Alterar senha' not in pagina
 
 
+def test_conta_master_ve_so_a_notificacao_de_todas_as_unidades(client, restrito, ubs, autora):
+    vizinha = unidade('UBS Vizinha', '1111111')
+    fechada = unidade('UBS Fechada', '2222222')
+    fechada.ativa = False
+    db.session.commit()
+    da_ubs = registrar(client)
+    carla = conta('carla@example.test', name='Carla')
+    carla.worker = notificacao.PERFIL_MASTER_NOTIFICACAO
+    db.session.commit()
+    entrar(client, carla)
+
+    inicio = client.get('/', **HTTPS)
+    assert inicio.status_code == 302 and inicio.headers['Location'].endswith('/sfa/notificacao')
+    for rota in ('/painel/user/', '/profile', '/sfa/', '/sfa/pacientes', '/sfa/entomologia', '/sfa/pre-t0'):
+        bloqueada = client.get(rota, **HTTPS)
+        assert bloqueada.status_code == 302 and bloqueada.headers['Location'].endswith('/sfa/notificacao'), rota
+    assert client.get('/sfa/notificacao/unidades', **HTTPS).status_code == 404
+
+    pagina = BeautifulSoup(client.get('/sfa/notificacao', **HTTPS).data, 'html.parser')
+    sidebar = pagina.select_one('.sfa-sidebar').get_text(' ')
+    assert 'Nova ficha' in sidebar and 'Fichas da unidade' in sidebar and 'Sair' in sidebar and 'Alterar senha' in sidebar
+    assert 'Página inicial' not in sidebar and 'Pacientes' not in sidebar and 'Unidades e responsáveis' not in sidebar
+    assert '2 unidades' in pagina.get_text() and 'Maria Paciente' in pagina.get_text()
+    opcoes = [o.get_text() for o in pagina.select('#notif-unidade option')]
+    assert opcoes == ['Todas', 'UBS Teste', 'UBS Vizinha']
+
+    # A ficha de outra pessoa é vista e impressa; corrigir e excluir continuam com quem preencheu.
+    assert client.get(f'/sfa/notificacao/fichas/{da_ubs.id}', **HTTPS).status_code == 200
+    assert client.get(f'/sfa/notificacao/fichas/{da_ubs.id}/imprimir', **HTTPS).status_code == 200
+    assert client.get(f'/sfa/notificacao/fichas/{da_ubs.id}/completar', **HTTPS).status_code == 404
+    assert client.post(f'/sfa/notificacao/fichas/{da_ubs.id}/excluir', **HTTPS).status_code == 404
+
+    escolha = client.get('/sfa/notificacao/ficha', **HTTPS).get_data(as_text=True)
+    assert f'/sfa/notificacao/ficha?unidade={vizinha.id}' in escolha and f'?unidade={fechada.id}' not in escolha
+    salva = client.post(f'/sfa/notificacao/ficha?unidade={vizinha.id}',
+                        data=ficha_form(ficha_sinan='5550002', nome='Caso da Carla'), **HTTPS)
+    assert salva.status_code == 302
+    dela = SfaSinanLog.query.filter_by(ficha_sinan='5550002').one()
+    assert (dela.unidade_id, dela.preenchido_por_id) == (vizinha.id, carla.id)
+    assert client.get(f'/sfa/notificacao/fichas/{dela.id}/completar', **HTTPS).status_code == 200
+    assert client.get('/sfa/notificacao/panorama', **HTTPS).status_code == 200
+    assert [f['nome'] for f in notificacao.listar_fichas(carla)['fichas']] == ['Caso da Carla', 'Maria Paciente']
+
+    # O perfil interno "Master" antigo não tem relação com a notificação e não restringe a conta.
+    antiga = conta('master-antigo@example.test')
+    antiga.worker = 'master'
+    db.session.commit()
+    entrar(client, antiga)
+    assert client.get('/', **HTTPS).status_code == 200
+    assert client.get('/sfa/notificacao', **HTTPS).status_code == 404
+
+
 def test_conta_da_unidade_sem_unidade_ativa_ve_aviso(client, restrito, ubs):
     pessoa = conta('ubs9@example.test')
     pessoa.worker = notificacao.PERFIL_SO_NOTIFICACAO
@@ -327,6 +379,26 @@ def test_painel_de_usuarios_deixa_a_conta_so_com_a_propria_unidade(client, ubs):
     formulario = client.get('/sfa/notificacao/ficha', **HTTPS).get_data(as_text=True)
     assert 'name="ficha_sinan"' in formulario and 'value="UBS 2"' in formulario
     assert 'Por qual unidade' not in formulario
+
+
+def test_painel_de_usuarios_torna_a_conta_master_sem_escolher_unidade(client, ubs):
+    entrar(client, conta('admin10@example.test', role='admin', name='Admin'))
+    carla = conta('carla2@example.test', name='Carla')
+    tela = BeautifulSoup(client.get(f'/painel/user/edit/?id={carla.id}', **HTTPS).data, 'html.parser')
+    assert notificacao.PERFIL_MASTER_NOTIFICACAO in [o['value'] for o in tela.select('select[name="worker"] option')]
+
+    # Administrador continua vendo o site inteiro: o painel avisa em vez de gravar um perfil sem efeito.
+    recusada = editar_conta(client, carla, worker=notificacao.PERFIL_MASTER_NOTIFICACAO, role='admin', unidade_sinan='')
+    assert recusada.status_code == 200 and 'O administrador continua vendo o site inteiro' in recusada.get_data(as_text=True)
+    db.session.refresh(carla)
+    assert (carla.worker, carla.role) == (None, 'tutor')
+
+    salvo = editar_conta(client, carla, worker=notificacao.PERFIL_MASTER_NOTIFICACAO, unidade_sinan='')
+    assert salvo.status_code == 302
+    db.session.refresh(carla)
+    assert carla.worker == notificacao.PERFIL_MASTER_NOTIFICACAO and notificacao.vinculos_ativos(carla) == []
+    assert notificacao.conta_so_notificacao(carla) and notificacao.pode_acessar(carla)
+    assert [u.id for u in notificacao.unidades_para_registrar(carla)] == [ubs.id]
 
 
 def test_painel_de_usuarios_troca_soma_ou_retira_unidade_das_demais_contas(client, ubs):
