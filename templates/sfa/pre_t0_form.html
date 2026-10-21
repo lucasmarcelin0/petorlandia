@@ -123,7 +123,7 @@
 
         <div class="field-grid">
           {% for field in section.fields %}
-          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}{% if completar and field.key in u.faltando %} is-pending{% endif %}" id="campo-{{ field.key }}" data-field-card="{{ field.key }}"{% if field.required_with %} data-required-with="{{ field.required_with }}"{% endif %}{% if field.required and field.type == 'matrix' and field.options|length == 2 %} data-exige-marcado{% endif %}>
+          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}{% if completar and field.key in u.faltando %} is-pending{% endif %}" id="campo-{{ field.key }}" data-field-card="{{ field.key }}"{% if field.required_with %} data-required-with="{{ field.required_with }}"{% endif %}>
             {% if field.type == 'fixed' %}
               {{ question_label(field) }}
               <input type="hidden" name="{{ field.key }}" value="{{ field.value }}">
@@ -153,7 +153,7 @@
             {% elif field.type == 'matrix' %}
               {% set apenas_sim_nao = field.options|length == 2 %}
               <div class="matrix-heading"><span class="field-label">{{ question_label(field) }}</span>{% if not apenas_sim_nao %}<span class="matrix-options">{% for option in field.options %}<span>{{ option.label.split(' - ')[-1] }}</span>{% endfor %}</span>{% endif %}</div>
-              {% if apenas_sim_nao %}<p class="field-hint matrix-hint">{% if field.required %}Marque pelo menos um sinal presente. {% else %}Marque apenas o que está presente. {% endif %}O que ficar sem marcar é registrado como "Não".</p>
+              {% if apenas_sim_nao %}<p class="field-hint matrix-hint">Marque apenas o que está presente. O que ficar sem marcar é registrado como "Não".</p>
               {% elif field.default %}<p class="field-hint matrix-hint">Cada item já vem marcado como "Não". Altere só o que for diferente.</p>{% endif %}
               <div class="matrix-list">
                 {% for item_key, item_label in field['items'] %}
@@ -167,7 +167,7 @@
 
             {% elif field.type == 'flag_matrix' %}
               <span class="field-label">{{ question_label(field) }}</span>
-              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
+              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}{% if field.required and loop.first %} required aria-required="true"{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
               <p class="field-hint matrix-hint">Sinais correspondentes:</p>
               <div class="flag-list">{% for item_key, item_label in field['items'] %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}</div>
 
@@ -186,7 +186,7 @@
 
             {% elif field.type == 'severity' %}
               <span class="field-label">{{ question_label(field) }}</span>
-              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
+              <div class="choice-grid choice-grid-compact" role="radiogroup" aria-label="{{ field.campo }}">{% for option in field.options %}<label class="choice-card"><input type="radio" name="{{ field.key }}" value="{{ option.value }}" {% if submitted.get(field.key) == option.value %}checked{% endif %}{% if field.required and loop.first %} required aria-required="true"{% endif %}><span class="choice-mark" aria-hidden="true"></span><span class="choice-text">{{ option.label }}</span></label>{% endfor %}</div>
               <div class="severity-groups">{% for group_label, items in field.groups %}<div class="severity-group"><h3>{{ group_label }}</h3>{% for item_key, item_label in items %}<label class="flag-choice"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span class="flag-box" aria-hidden="true"></span><span>{{ item_label }}</span></label>{% endfor %}{% if group_label == 'Comprometimento grave de órgãos' %}<label class="other-organs-label" for="input-outros_orgaos_especificar">Especificar outros órgãos</label><input id="input-outros_orgaos_especificar" type="text" name="outros_orgaos_especificar" maxlength="180" value="{{ submitted.get('outros_orgaos_especificar', '') }}">{% endif %}</div>{% endfor %}</div>
 
             {% elif field.type == 'textarea' %}
@@ -213,6 +213,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>{{ u.unidade_nome if u else 'Preenchimento anterior ao T0' }}</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20261021" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20261021b" defer></script>
 </body>
 </html>

@@ -46,13 +46,13 @@ a tela marca cada um com "Obrigatório" e não avança a etapa sem eles.
 | Sexo (11), raça/cor (13), hospitalização (50) | Sempre; há a opção "Ignorado" |
 | Gestante (12) | Exceto sexo masculino (a tela esconde e registra 6 - Não se aplica) |
 | Nome da mãe (16) | Sempre; se a pessoa não souber, escreve-se IGNORADO |
-| Endereço: município (18), bairro (20), logradouro (21), número (22) | Sempre; número aceita S/N. Os demais campos da residência seguem opcionais; o CEP preenche rua, bairro e município |
+| Residência: logradouro (21), número (22), telefone (28), zona (29) | Sempre; número aceita S/N e, sem telefone, vale o de um contato ou SEM TELEFONE. Os demais campos da residência (município, bairro, CEP...) seguem opcionais |
 | Ocupação (32) | Sempre, com sugestões (estudante, do lar, aposentado(a), desempregado(a), não se aplica) |
-| Sinais clínicos (33) | Pelo menos um marcado como presente |
-| Doenças pré-existentes (34) | Todos os itens respondidos; a tela já traz cada um como "Não" |
+| Sinais clínicos (33) e doenças pré-existentes (34) | Todos os itens respondidos; a tela já traz cada um como "Não", com Sim e Ignorado para trocar |
 | Resultado do NS1 (42) | Só quando a data da coleta (41) foi informada |
+| Caso autóctone (56), sinais de alarme (68), dengue grave (70) | Sempre; 68 e 70 têm "Não" e "Ignorado" |
 
-Caso autóctone (56) e o número da notificação continuam opcionais.
+O número da notificação continua opcional.
 
 ## O que ainda falta
 
@@ -61,9 +61,9 @@ espera, em três grupos. Ficha sem pendência não mostra aviso nenhum.
 
 | Grupo | Entra quando |
 |---|---|
-| Notificação e investigação | Em branco: nascimento (9), sexo (11), gestante (12, exceto sexo M), raça/cor (13), escolaridade (14), nome da mãe (16), município de residência (18), bairro (20), logradouro (21), número (22), zona (29), data da investigação (31), ocupação (32), hospitalização (50). Nenhum sinal clínico presente (33); doença pré-existente sem resposta (34). Com hospitalização = Sim: data da internação (51) e hospital (54) |
+| Notificação e investigação | Em branco: nascimento (9), sexo (11), gestante (12, exceto sexo M), raça/cor (13), escolaridade (14), nome da mãe (16), município de residência (18), bairro (20), logradouro (21), número (22), telefone (28), zona (29), data da investigação (31), ocupação (32), hospitalização (50). Item sem resposta em sinais clínicos (33) ou doenças pré-existentes (34). Com hospitalização = Sim: data da internação (51) e hospital (54) |
 | Exames | Coleta registrada sem resultado (39–46 e chikungunya 35–38), ou resultado informado sem a data da coleta. "Não realizado" não espera nada |
-| Encerramento do caso | Em branco: caso autóctone (56), classificação (62), critério (63), evolução (65), data de encerramento (67). Óbito pede a data (66); chikungunya pede apresentação clínica (64); sinais de alarme ou dengue grave pedem a resposta do bloco (68/70) e, se Sim, a data (69/71). Caso descartado encerra só com critério e data |
+| Encerramento do caso | Em branco: caso autóctone (56), classificação (62), critério (63), evolução (65), data de encerramento (67), sinais de alarme (68), dengue grave (70). Óbito pede a data (66); chikungunya pede apresentação clínica (64); classificado com sinais de alarme ou dengue grave e resposta Sim no bloco pede a data (69/71). Caso descartado dispensa evolução |
 
 ## Panorama das unidades
 

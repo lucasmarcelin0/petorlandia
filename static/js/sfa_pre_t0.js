@@ -87,11 +87,6 @@
     const idade = cartao.querySelector("#input-idade_valor");
     const unidade = cartao.querySelector("#input-idade_unidade");
     if (idade && unidade && idade.value.trim() && !unidade.value) erros.push({ controle: unidade, mensagem: "Selecione a unidade da idade." });
-    // Caixas "Sim" obrigatórias (sinais clínicos): pelo menos um item marcado.
-    if (cartao.hasAttribute("data-exige-marcado")) {
-      const caixas = Array.from(cartao.querySelectorAll('input[type="checkbox"]'));
-      if (caixas.length && !caixas.some((c) => c.checked)) erros.push({ controle: caixas[0], mensagem: "Marque pelo menos um item presente." });
-    }
     return erros;
   }
 
