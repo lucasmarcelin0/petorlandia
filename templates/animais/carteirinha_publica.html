@@ -45,6 +45,15 @@
           {% if animal.date_of_birth %}Nascimento: {{ animal.date_of_birth.strftime('%d/%m/%Y') }}{% elif animal.age %}Idade: {{ animal.age }}{% endif %}
           {% if animal.peso %} · {{ '%.1f'|format(animal.peso) }} kg{% endif %}
         </div>
+        {% if selo_prefeitura %}
+        <div class="mt-2">
+          {% if selo_prefeitura.valido %}
+          <span class="badge rounded-pill text-bg-success">✓ Registrado na Prefeitura · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}</span>
+          {% else %}
+          <span class="badge rounded-pill text-bg-secondary">Registro na Prefeitura vencido em {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
     </div>
 

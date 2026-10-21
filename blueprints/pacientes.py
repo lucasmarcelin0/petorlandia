@@ -1115,6 +1115,9 @@ def ficha_animal(animal_id):
             )
             message = f'Carteirinha digital de {animal.name}: {card_url}'
             health_card_whatsapp_url = f'https://wa.me/?text={quote(message)}'
+    from services.selo_prefeitura import selo_atual, situacao_do_selo
+
+    selo_prefeitura = situacao_do_selo(selo_atual(animal))
     return render_template(
         'animais/ficha_animal.html',
         animal=animal,
@@ -1123,6 +1126,8 @@ def ficha_animal(animal_id):
         history_url=history_url,
         pet_opportunities=pet_opportunities,
         health_card_whatsapp_url=health_card_whatsapp_url,
+        selo_prefeitura=selo_prefeitura,
+        hoje=date.today(),
     )
 
 
@@ -3460,6 +3465,64 @@ def carteirinha_desativar(animal_id):
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
 
+# ---------------------------------------------------------------------------
+# Selo de registro na Prefeitura (somente administradores)
+# ---------------------------------------------------------------------------
+
+@bp.route('/animal/<int:animal_id>/selo-prefeitura', methods=['POST'])
+@login_required
+def selo_prefeitura_conceder(animal_id):
+    from services import selo_prefeitura
+
+    if current_user.role != 'admin':
+        abort(403)
+    animal = get_animal_or_404(animal_id)
+    inicio_raw = (request.form.get('inicio') or '').strip()
+    try:
+        inicio = datetime.strptime(inicio_raw, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Informe a data de início do registro.', 'warning')
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+    try:
+        selo_prefeitura.garantir_tabela()
+        selo_prefeitura.conceder_selo(
+            animal, inicio, current_user.id, request.form.get('observacao')
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falha ao conceder selo da Prefeitura ao animal %s', animal_id)
+        flash('Não foi possível registrar o selo agora. Tente novamente.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal_id))
+    validade = selo_prefeitura.validade_do_selo(inicio)
+    flash(
+        f'Selo da Prefeitura registrado para {animal.name}: válido até {validade.strftime("%d/%m/%Y")}.',
+        'success',
+    )
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
+@bp.route('/animal/<int:animal_id>/selo-prefeitura/remover', methods=['POST'])
+@login_required
+def selo_prefeitura_remover(animal_id):
+    from services import selo_prefeitura
+
+    if current_user.role != 'admin':
+        abort(403)
+    animal = get_animal_or_404(animal_id)
+    try:
+        removidos = selo_prefeitura.retirar_selo(animal)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        removidos = 0
+    if removidos:
+        flash(f'Selo da Prefeitura retirado de {animal.name}.', 'info')
+    else:
+        flash('Este animal não tinha selo da Prefeitura.', 'info')
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
 @bp.route('/carteirinha/<token>')
 def carteirinha_publica(token):
     """Página pública da carteirinha — não exige login.
@@ -3556,9 +3619,12 @@ def carteirinha_publica(token):
 
     track_event('health_card_viewed', feature='health_card', channel='public')
 
+    from services.selo_prefeitura import selo_atual, situacao_do_selo
+
     return render_template(
         'animais/carteirinha_publica.html',
         animal=animal,
+        selo_prefeitura=situacao_do_selo(selo_atual(animal)),
         proximas_acoes=proximas_acoes,
         doses_a_revisar=doses_a_revisar,
         vacinas_recentes=vacinas_aplicadas[:6],
