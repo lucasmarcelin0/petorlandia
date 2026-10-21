@@ -19,6 +19,16 @@ def test_agravo_fica_na_primeira_pagina_ao_lado_do_numero_da_notificacao(app):
     assert all(campo["key"] != "agravo" for secao in secoes[1:] for campo in secao["fields"])
 
 
+def test_numero_da_notificacao_e_opcional_mas_curto_continua_recusado(app):
+    with app.app_context():
+        secao = carregar_esquema_pre_t0()["sections"][0]
+        assert not next(campo for campo in secao["fields"] if campo["key"] == "ficha_sinan").get("required")
+        assert coletar_respostas_pre_t0(_form(ficha_sinan=""))["ficha_sinan"] == ""
+        with pytest.raises(CampoInvalido) as erro:
+            coletar_respostas_pre_t0(_form(ficha_sinan="123"))
+    assert erro.value.campo == "ficha_sinan"
+
+
 def test_campos_numericos_aceitam_separadores_do_preenchimento_automatico(app):
     with app.app_context():
         respostas = coletar_respostas_pre_t0(_form(cep="14620-000", cartao_sus="898 0011 2233 4455", ficha_sinan="2985-999"))

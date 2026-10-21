@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -28,7 +29,7 @@ LAB_RESULTS = _options(
 
 
 FIELD_SPECS: dict[str, dict] = {
-    "Nº": {"key": "ficha_sinan", "type": "text", "required": True, "numeric": True, "minlength": 5, "maxlength": 50},
+    "Nº": {"key": "ficha_sinan", "type": "text", "numeric": True, "minlength": 5, "maxlength": 50},
     "1": {"key": "tipo_notificacao", "type": "fixed", "value": "2", "options": _options(("2", "2 - Individual"))},
     "2": {"key": "agravo", "type": "radio", "required": True, "options": _options(("1", "1 - DENGUE"), ("2", "2 - CHIKUNGUNYA"))},
     "3": {"key": "data_notificacao", "type": "date", "required": True},
@@ -268,7 +269,7 @@ def _answer_field(form, field: dict) -> object:
     if kind in {"text", "tel"}:
         value = _field_text(form, key, field.get("maxlength", 160), required=field.get("required", False),
                             numeric=field.get("numeric", False), uppercase=field.get("uppercase", False))
-        if field.get("minlength") and len(value) < field["minlength"]:
+        if field.get("minlength") and value and len(value) < field["minlength"]:
             raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", key)
         return value
     if kind == "paired_text":
@@ -367,6 +368,11 @@ def chave_dedup_da_ficha(numero: object) -> str:
     return f"FICHA-{digitos}" if len(digitos) >= 5 else ""
 
 
+def _chave_ficha_sem_numero() -> str:
+    """Ficha registrada sem o número da notificação: chave própria, que nunca coincide com a da planilha."""
+    return f"DIGITAL-{uuid.uuid4().hex}"
+
+
 def _texto_resposta(answers: dict, key: str) -> str:
     value = answers.get(key)
     if isinstance(value, dict):
@@ -449,7 +455,9 @@ def salvar_ficha_pre_t0(answers: dict, *, autor_id: int | None = None, unidade=N
     )
 
     ficha = str(answers.get("ficha_sinan") or "").strip()
-    dedup_key = chave_dedup_da_ficha(ficha)
+    # O número da notificação é opcional: sem ele a ficha não se junta a outro registro
+    # e pode recebê-lo depois, ao ser editada.
+    dedup_key = chave_dedup_da_ficha(ficha) if ficha else _chave_ficha_sem_numero()
     if not dedup_key:
         raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", "ficha_sinan")
     full_key = FULL_KEY
@@ -461,7 +469,7 @@ def salvar_ficha_pre_t0(answers: dict, *, autor_id: int | None = None, unidade=N
     existing_patient = None
     if existing_log and existing_log.id_estudo_vinculado:
         existing_patient = SfaPaciente.query.filter_by(id_estudo=existing_log.id_estudo_vinculado).first()
-    if existing_patient is None:
+    if existing_patient is None and ficha:
         existing_patient = SfaPaciente.query.filter_by(ficha_sinan=ficha).first()
 
     old_json = {}
@@ -565,7 +573,8 @@ def atualizar_ficha_pre_t0(log_id: int, answers: dict, *, autor_id: int | None =
                            preservar: tuple[str, ...] = ()) -> dict:
     """Completa ou corrige uma ficha já enviada.
 
-    O número da ficha não muda. Cada gravação guarda, junto da própria ficha,
+    O número da ficha não muda depois de informado; a ficha registrada sem ele
+    pode recebê-lo aqui. Cada gravação guarda, junto da própria ficha,
     quem alterou, quando, quais campos e o conteúdo anterior deles.
     """
     from extensions import db
@@ -581,12 +590,28 @@ def atualizar_ficha_pre_t0(log_id: int, answers: dict, *, autor_id: int | None =
 
     antigas = full_form["respostas"]
     novas = dict(answers)
-    for key in ("ficha_sinan", *preservar):
+    numero_anterior = str(log_entry.ficha_sinan or antigas.get("ficha_sinan") or "").strip()
+    for key in (("ficha_sinan",) if numero_anterior else ()) + tuple(preservar):
         novas[key] = antigas.get(key)
     alterados = sorted(key for key in set(antigas) | set(novas) if antigas.get(key) != novas.get(key))
     resultado = {"id_estudo": log_entry.id_estudo_vinculado, "log_id": log_entry.id, "alterados": alterados}
     if not alterados:
         return resultado
+
+    numero_novo = "" if numero_anterior else str(novas.get("ficha_sinan") or "").strip()
+    nova_chave = chave_dedup_da_ficha(numero_novo) if numero_novo else ""
+    if numero_novo and not nova_chave:
+        raise CampoInvalido("Informe o número da ficha SINAN com pelo menos cinco dígitos.", "ficha_sinan")
+    if nova_chave:
+        # Número já usado por outra ficha, pela planilha ou por outro caso: juntar os registros
+        # fica com a vigilância, para nada ser sobrescrito.
+        outro_registro = SfaSinanLog.query.filter(SfaSinanLog.chave_dedup == nova_chave,
+                                                  SfaSinanLog.id != log_entry.id).first()
+        outro_caso = SfaPaciente.query.filter(SfaPaciente.ficha_sinan == numero_novo,
+                                              SfaPaciente.id_estudo != (log_entry.id_estudo_vinculado or "")).first()
+        if outro_registro is not None or outro_caso is not None:
+            raise CampoInvalido("Já existe uma ficha registrada com esse número. Confira o número ou "
+                                "fale com a vigilância.", "ficha_sinan")
 
     agora = now_in_brazil().isoformat(timespec="seconds")
     revisoes = list(full_form["revisoes"]) if isinstance(full_form.get("revisoes"), list) else []
@@ -608,6 +633,10 @@ def atualizar_ficha_pre_t0(log_id: int, answers: dict, *, autor_id: int | None =
                if log_entry.id_estudo_vinculado else None)
     if patient is not None:
         acompanhar(patient, antes, depois)
+    if nova_chave:
+        log_entry.chave_dedup, log_entry.ficha_sinan = nova_chave, numero_novo
+        if patient is not None and not str(patient.ficha_sinan or "").strip():
+            patient.ficha_sinan = numero_novo
     datas = ("data_notificacao", "data_inicio_sintomas")
     acompanhar(log_entry,
                {**{k: antes[k] for k in ("nome", "telefone", "bairro")}, **{k: str(antigas.get(k) or "") for k in datas}},
