@@ -781,9 +781,10 @@ def test_pendencias_seguem_o_que_a_ficha_ja_diz(app):
     assert [g['chave'] for g in notificacao.pendencias_por_grupo(minima)] == ['notificacao', 'encerramento']
     assert [i['chave'] for i in minima if i['grupo'] == 'notificacao'] == [
         'data_nascimento', 'sexo', 'raca_cor', 'escolaridade', 'nome_mae', 'municipio_residencia', 'bairro',
-        'logradouro', 'numero_residencia', 'zona', 'data_investigacao', 'ocupacao', 'sinais_clinicos',
+        'logradouro', 'numero_residencia', 'telefone', 'zona', 'data_investigacao', 'ocupacao', 'sinais_clinicos',
         'doencas_preexistentes', 'hospitalizacao']
-    assert {'classificacao', 'criterio_confirmacao', 'evolucao_caso', 'data_encerramento', 'caso_autoctone'} <= set(chaves(minima))
+    assert {'classificacao', 'criterio_confirmacao', 'evolucao_caso', 'data_encerramento', 'caso_autoctone',
+            'sinais_alarme', 'dengue_grave'} <= set(chaves(minima))
     assert 'data_internacao' not in chaves(minima) and 'gestante' not in chaves(minima)
 
     def falta(**extra):
@@ -796,10 +797,12 @@ def test_pendencias_seguem_o_que_a_ficha_ja_diz(app):
     assert [(i['grupo'], i['chave'], i['numero']) for i in falta(ficha_sinan='')] == [('notificacao', 'ficha_sinan', 'Nº')]
     assert chaves(falta(sexo='F', gestante='')) == ['gestante'] == chaves(falta(sexo='I', gestante=''))
     assert falta(sexo='M', gestante='') == []
-    assert chaves(falta(nome_mae='', numero_residencia='', ocupacao='')) == ['nome_mae', 'numero_residencia', 'ocupacao']
-    # Sinais clínicos: nenhum presente. Doenças pré-existentes: item sem resposta. O atalho leva ao item.
-    assert [(i['chave'], i['campo']) for i in falta(sinais_clinicos__febre='2')] == [
-        ('sinais_clinicos', 'sinais_clinicos__febre')]
+    assert chaves(falta(nome_mae='', numero_residencia='', telefone='', ocupacao='')) == [
+        'nome_mae', 'numero_residencia', 'telefone', 'ocupacao']
+    # Sinais clínicos e doenças pré-existentes: item sem resposta. O atalho leva ao item.
+    assert falta(sinais_clinicos__febre='2', sinais_clinicos__mialgia='9') == []
+    assert [(i['chave'], i['campo']) for i in falta(sinais_clinicos__mialgia='')] == [
+        ('sinais_clinicos', 'sinais_clinicos__mialgia')]
     assert [(i['chave'], i['campo']) for i in falta(doencas_preexistentes__hepatopatias='')] == [
         ('doencas_preexistentes', 'doencas_preexistentes__hepatopatias')]
     # Exame: coleta espera resultado; resultado espera a data; "não realizado" não espera nada.
@@ -814,12 +817,15 @@ def test_pendencias_seguem_o_que_a_ficha_ja_diz(app):
     # Internação, óbito e gravidade só pedem detalhe quando aconteceram.
     assert chaves(falta(hospitalizacao='1')) == ['data_internacao', 'nome_hospital']
     assert chaves(falta(evolucao_caso='2')) == ['data_obito']
-    assert chaves(falta(classificacao='11')) == ['sinais_alarme']
+    # Sinais de alarme (68) e dengue grave (70): resposta sempre exigida; a data, no caso classificado assim.
+    assert chaves(falta(sinais_alarme='', dengue_grave='')) == ['sinais_alarme', 'dengue_grave']
+    assert falta(sinais_alarme='1') == []
     assert chaves(falta(classificacao='11', sinais_alarme='1')) == ['data_inicio_sinais_alarme']
     assert chaves(falta(classificacao='12', dengue_grave='2')) == []
     assert chaves(falta(classificacao='13')) == ['apresentacao_clinica']
-    # Caso descartado encerra só com critério e data.
-    assert falta(classificacao='5', caso_autoctone='', evolucao_caso='') == []
+    # Caso descartado encerra sem evolução; o caso autóctone (56) é sempre exigido.
+    assert falta(classificacao='5', evolucao_caso='') == []
+    assert chaves(falta(classificacao='5', caso_autoctone='')) == ['caso_autoctone']
     assert chaves(falta(classificacao='5', data_encerramento='')) == ['data_encerramento']
 
 

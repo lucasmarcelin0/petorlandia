@@ -21,6 +21,7 @@ from services.sfa_pre_t0 import FIELD_SPECS
 
 def _sinan(**extra):
     dados = {
+        **{f"sinais_clinicos__{item}": "2" for item, _rotulo in FIELD_SPECS["33"]["items"]},
         "ficha_sinan": "1234567", "tipo_notificacao": "2", "agravo": "1",
         "data_notificacao": "2026-09-22", "data_inicio_sintomas": "2026-09-20",
         "nome": "Pessoa Real Digitada", "nome_mae": "Mãe Real", "telefone": "16999990000",
@@ -31,7 +32,8 @@ def _sinan(**extra):
         "ns1_resultado": "1", "investigador__nome": "Investigador Real", "investigador__funcao": "Enfermeira",
         # Demais campos que a ficha exige no envio.
         "data_nascimento": "1992-01-15", "gestante": "5", "raca_cor": "4", "municipio_residencia": "Orlândia",
-        "numero_residencia": "100", "ocupacao": "Professora", "hospitalizacao": "2",
+        "numero_residencia": "100", "zona": "1", "ocupacao": "Professora", "hospitalizacao": "2",
+        "caso_autoctone": "1", "sinais_alarme": "2", "dengue_grave": "2",
         **{f"doencas_preexistentes__{item}": "2" for item, _rotulo in FIELD_SPECS["34"]["items"]},
     }
     dados.update(extra)

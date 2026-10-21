@@ -278,16 +278,15 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
     elif texto("sexo") != "M" and not texto("gestante"):
         falta("notificacao", "gestante")
     for key in ("raca_cor", "escolaridade", "nome_mae", "municipio_residencia", "bairro", "logradouro",
-                "numero_residencia", "zona", "data_investigacao", "ocupacao"):
+                "numero_residencia", "telefone", "zona", "data_investigacao", "ocupacao"):
         if not texto(key):
             falta("notificacao", key)
-    if "1" not in grupo("sinais_clinicos").values():
-        primeiro = campos["sinais_clinicos"]["items"][0][0]
-        falta("notificacao", "sinais_clinicos", campo=f"sinais_clinicos__{primeiro}")
-    doencas = grupo("doencas_preexistentes")
-    sem_resposta = [item for item, _rotulo in campos["doencas_preexistentes"]["items"] if not doencas.get(item)]
-    if sem_resposta:
-        falta("notificacao", "doencas_preexistentes", campo=f"doencas_preexistentes__{sem_resposta[0]}")
+    # Sinais clínicos e doenças pré-existentes: cada item precisa de resposta; o atalho leva ao primeiro em branco.
+    for key in ("sinais_clinicos", "doencas_preexistentes"):
+        respostas = grupo(key)
+        sem_resposta = [item for item, _rotulo in campos[key]["items"] if not respostas.get(item)]
+        if sem_resposta:
+            falta("notificacao", key, campo=f"{key}__{sem_resposta[0]}")
     hospitalizacao = texto("hospitalizacao")
     if not hospitalizacao:
         falta("notificacao", "hospitalizacao")
@@ -320,7 +319,7 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
 
     # Encerramento
     classificacao = texto("classificacao")
-    if classificacao != _DESCARTADO and not texto("caso_autoctone"):
+    if not texto("caso_autoctone"):
         falta("encerramento", "caso_autoctone")
     if not classificacao:
         falta("encerramento", "classificacao")
@@ -336,14 +335,13 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
             falta("encerramento", "data_obito")
     if not texto("data_encerramento"):
         falta("encerramento", "data_encerramento")
+    # Sinais de alarme e dengue grave: a resposta é sempre exigida; a data, só no caso classificado assim.
     for codigo, key, data_key in ((_ALARME, "sinais_alarme", "data_inicio_sinais_alarme"),
                                   (_GRAVE, "dengue_grave", "data_inicio_sinais_gravidade")):
-        if classificacao != codigo:
-            continue
         status = str(grupo(key).get("status") or "")
         if not status:
             falta("encerramento", key)
-        elif status == "1" and not texto(data_key):
+        elif status == "1" and classificacao == codigo and not texto(data_key):
             falta("encerramento", data_key)
     return itens
 

@@ -18,7 +18,6 @@ def _options(*items: tuple[str, str]) -> list[dict[str, str]]:
     return [{"value": value, "label": label} for value, label in items]
 
 
-YES_NO = _options(("1", "1 - Sim"), ("2", "2 - Não"))
 YES_NO_UNKNOWN = _options(("1", "1 - Sim"), ("2", "2 - Não"), ("9", "9 - Ignorado"))
 LAB_RESULTS = _options(
     ("1", "1 - Positivo"),
@@ -69,10 +68,10 @@ FIELD_SPECS: dict[str, dict] = {
     "16": {"key": "nome_mae", "type": "text", "required": True, "maxlength": 200,
            "hint": "Se a pessoa não souber, escreva IGNORADO."},
     "17": {"key": "uf_residencia", "type": "text", "maxlength": 2, "uppercase": True},
-    # Endereço: município, bairro, logradouro e número bastam; os demais campos da residência seguem opcionais.
-    "18": {"key": "municipio_residencia", "type": "paired_text", "required": True, "maxlength": 120, "extra_key": "codigo_municipio_residencia", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
+    "18": {"key": "municipio_residencia", "type": "paired_text", "maxlength": 120, "extra_key": "codigo_municipio_residencia", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
     "19": {"key": "distrito_residencia", "type": "text", "maxlength": 120},
-    "20": {"key": "bairro", "type": "text", "required": True, "maxlength": 120},
+    "20": {"key": "bairro", "type": "text", "maxlength": 120},
+    # Residência: obrigatórios só logradouro, número, telefone e zona; os demais campos seguem opcionais.
     "21": {"key": "logradouro", "type": "paired_text", "required": True, "maxlength": 180, "extra_key": "codigo_logradouro", "extra_label": "Código", "extra_maxlength": 12},
     "22": {"key": "numero_residencia", "type": "text", "required": True, "maxlength": 30,
            "hint": "Sem número? Escreva S/N."},
@@ -81,22 +80,23 @@ FIELD_SPECS: dict[str, dict] = {
     "25": {"key": "geo_campo_2", "type": "text", "maxlength": 80},
     "26": {"key": "ponto_referencia", "type": "text", "maxlength": 160},
     "27": {"key": "cep", "type": "text", "numeric": True, "maxlength": 9},
-    "28": {"key": "telefone", "type": "tel", "maxlength": 25, "autocomplete": "tel"},
-    "29": {"key": "zona", "type": "radio", "options": _options(("1", "1 - Urbana"), ("2", "2 - Rural"), ("3", "3 - Periurbana"), ("9", "9 - Ignorado"))},
+    "28": {"key": "telefone", "type": "tel", "required": True, "maxlength": 25, "autocomplete": "tel",
+           "hint": "Sem telefone? Informe o de um contato ou escreva SEM TELEFONE."},
+    "29": {"key": "zona", "type": "radio", "required": True, "options": _options(("1", "1 - Urbana"), ("2", "2 - Rural"), ("3", "3 - Periurbana"), ("9", "9 - Ignorado"))},
     "30": {"key": "pais_residencia", "type": "text", "maxlength": 100},
     "31": {"key": "data_investigacao", "type": "date"},
     "32": {"key": "ocupacao", "type": "text", "required": True, "maxlength": 160,
            "hint": "Sem trabalho remunerado? Escreva estudante, do lar, aposentado(a), desempregado(a) "
                    "ou não se aplica (criança)."},
-    # Obrigatório: pelo menos um sinal marcado como presente (o que fica sem marcar vale "Não").
-    "33": {"key": "sinais_clinicos", "type": "matrix", "required": True, "options": YES_NO, "items": [
+    # 33 e 34: obrigatórios, com todos os itens respondidos; a tela já traz cada um marcado como "Não".
+    "33": {"key": "sinais_clinicos", "type": "matrix", "required": True, "default": "2",
+           "options": YES_NO_UNKNOWN, "items": [
         ("febre", "Febre"), ("mialgia", "Mialgia"), ("cefaleia", "Cefaleia"), ("exantema", "Exantema"),
         ("vomito", "Vômito"), ("nauseas", "Náuseas"), ("dor_nas_costas", "Dor nas costas"),
         ("conjuntivite", "Conjuntivite"), ("artrite", "Artrite"), ("artralgia_intensa", "Artralgia intensa"),
         ("petequias", "Petéquias"), ("leucopenia", "Leucopenia"),
         ("prova_laco_positiva", "Prova do laço positiva"), ("dor_retroorbital", "Dor retroorbital"),
     ]},
-    # Obrigatório: todos os itens respondidos; a tela já traz cada um marcado como "Não".
     "34": {"key": "doencas_preexistentes", "type": "matrix", "required": True, "default": "2",
            "options": YES_NO_UNKNOWN, "items": [
         ("diabetes", "Diabetes"), ("doencas_hematologicas", "Doenças hematológicas"),
@@ -129,7 +129,7 @@ FIELD_SPECS: dict[str, dict] = {
     "53": {"key": "municipio_hospital", "type": "paired_text", "maxlength": 120, "extra_key": "codigo_municipio_hospital", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
     "54": {"key": "nome_hospital", "type": "paired_text", "maxlength": 180, "extra_key": "codigo_hospital", "extra_label": "Código", "extra_maxlength": 12},
     "55": {"key": "telefone_hospital", "type": "tel", "maxlength": 25},
-    "56": {"key": "caso_autoctone", "type": "radio", "options": _options(("1", "1 - Sim"), ("2", "2 - Não"), ("3", "3 - Indeterminado"))},
+    "56": {"key": "caso_autoctone", "type": "radio", "required": True, "options": _options(("1", "1 - Sim"), ("2", "2 - Não"), ("3", "3 - Indeterminado"))},
     "57": {"key": "uf_local_infeccao", "type": "text", "maxlength": 2, "uppercase": True},
     "58": {"key": "pais_local_infeccao", "type": "text", "maxlength": 100},
     "59": {"key": "municipio_local_infeccao", "type": "paired_text", "maxlength": 120, "extra_key": "codigo_municipio_local_infeccao", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
@@ -149,7 +149,7 @@ FIELD_SPECS: dict[str, dict] = {
     )},
     "66": {"key": "data_obito", "type": "date"},
     "67": {"key": "data_encerramento", "type": "date"},
-    "68": {"key": "sinais_alarme", "type": "flag_matrix", "options": YES_NO_UNKNOWN, "items": [
+    "68": {"key": "sinais_alarme", "type": "flag_matrix", "required": True, "options": YES_NO_UNKNOWN, "items": [
         ("hipotensao_postural_lipotimia", "Hipotensão postural e/ou lipotímia"),
         ("queda_plaquetas", "Queda abrupta de plaquetas"), ("vomitos_persistentes", "Vômitos persistentes"),
         ("dor_abdominal", "Dor abdominal intensa e contínua"), ("letargia_irritabilidade", "Letargia ou irritabilidade"),
@@ -158,7 +158,7 @@ FIELD_SPECS: dict[str, dict] = {
         ("hepatomegalia", "Hepatomegalia >= 2cm"), ("acumulo_liquidos", "Acúmulo de líquidos"),
     ]},
     "69": {"key": "data_inicio_sinais_alarme", "type": "date"},
-    "70": {"key": "dengue_grave", "type": "severity", "options": YES_NO_UNKNOWN, "groups": [
+    "70": {"key": "dengue_grave", "type": "severity", "required": True, "options": YES_NO_UNKNOWN, "groups": [
         ("Extravasamento grave de plasma", [
             ("pulso_debil", "Pulso débil ou indetectável"), ("pa_convergente", "PA convergente <= 20 mmHg"),
             ("tempo_enchimento_capilar", "Tempo de enchimento capilar"),
@@ -303,15 +303,9 @@ def _answer_field(form, field: dict) -> object:
             if value:
                 answers[item_key] = value
         if field.get("required"):
-            if len(field["options"]) == 2:
-                # Caixas "Sim": o que fica sem marcar vale "Não", então basta um item presente.
-                if "1" not in answers.values():
-                    raise CampoInvalido(f"Marque pelo menos um item em “{field['campo']}”.",
-                                        f"{key}__{field['items'][0][0]}")
-            else:
-                faltando = next((item_key for item_key, _label in field["items"] if item_key not in answers), "")
-                if faltando:
-                    raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", f"{key}__{faltando}")
+            faltando = next((item_key for item_key, _label in field["items"] if item_key not in answers), "")
+            if faltando:
+                raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", f"{key}__{faltando}")
         return answers
     if kind == "test_result":
         # Um resultado por exame (S1, S2, PRNT). "amostras" e "resultado" seguem existindo para
@@ -335,7 +329,7 @@ def _answer_field(form, field: dict) -> object:
         result = _field_choice(form, key, field["options"])
         return {"amostras": samples, "resultado": result, "resultados": {}}
     if kind == "flag_matrix":
-        status = _field_choice(form, key, field["options"])
+        status = _field_choice(form, key, field["options"], required=field.get("required", False))
         items = []
         for item_key, _label in field["items"]:
             value = str(form.get(f"{key}__{item_key}") or "").strip()
@@ -345,7 +339,7 @@ def _answer_field(form, field: dict) -> object:
                 items.append(item_key)
         return {"status": status, "sinais_marcados": items}
     if kind == "severity":
-        status = _field_choice(form, key, field["options"])
+        status = _field_choice(form, key, field["options"], required=field.get("required", False))
         answers = {}
         for _group, items in field["groups"]:
             for item_key, _label in items:
