@@ -797,6 +797,37 @@ def logout():
     return redirect(url_for('index'))
 
 
+@bp.route("/ver-como/<int:user_id>", methods=['GET', 'POST'])
+@login_required
+def ver_como_iniciar(user_id):
+    """O administrador confirma e passa a ver o site como a conta escolhida, só lendo (services.ver_como)."""
+    from services import ver_como
+
+    alvo = ver_como.ensure_conta_para_ver_como(current_user, user_id)
+    motivo = ver_como.motivo_para_nao_ver(current_user, alvo)
+    voltar = url_for('user.index_view') if 'user.index_view' in current_app.view_functions else url_for('index')
+    if request.method == 'POST' and not motivo:
+        ver_como.iniciar(current_user, alvo, voltar)
+        db.session.commit()
+        return redirect(url_for('index'))
+    return render_template('auth/ver_como_confirmar.html', alvo=alvo, motivo=motivo, voltar=voltar,
+                           minutos=int(ver_como.DURACAO.total_seconds() // 60))
+
+
+@bp.route("/ver-como/sair", methods=['GET'])
+@login_required
+def ver_como_sair():
+    """Volta à conta do administrador. Sem o modo ativo, só leva à página inicial."""
+    from services import ver_como
+
+    dados = ver_como.encerrar()
+    if dados is None:
+        return redirect(url_for('index'))
+    db.session.commit()
+    flash('Você voltou à sua conta.', 'info')
+    return redirect(dados.get('voltar') or url_for('index'))
+
+
 @bp.route("/profile", methods=['GET', 'POST'])
 @login_required
 def profile():

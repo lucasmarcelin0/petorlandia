@@ -3302,7 +3302,10 @@ from models import User   # noqa: E402  (import depois de alias)
 
 @login.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    user = User.query.get(int(user_id))
+    # "Ver como" (services.ver_como): o administrador navega como outra conta, só lendo.
+    from services.ver_como import conta_vista
+    return conta_vista(user) or user
 
 
 from flask_login import user_logged_in  # noqa: E402

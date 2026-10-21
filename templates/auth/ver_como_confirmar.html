@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Ver como {{ alvo.name or alvo.email }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block main %}
+<div class="container d-flex justify-content-center mt-5">
+  <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 520px;">
+    <h3 class="mb-3"><i class="fa fa-eye me-2" aria-hidden="true"></i>Ver o site como esta conta</h3>
+    <dl class="mb-3">
+      <dt>Conta</dt><dd>{{ alvo.name or '—' }} · {{ alvo.email }}</dd>
+      <dt>Tipo de conta</dt><dd>{{ alvo.role or '—' }}{% if alvo.worker %} · perfil interno {{ alvo.worker }}{% endif %}</dd>
+    </dl>
+    {% if motivo %}
+    <div class="alert alert-warning" role="alert">{{ motivo }}</div>
+    <a class="btn btn-outline-secondary" href="{{ voltar }}">Voltar</a>
+    {% else %}
+    <p>Você vai ver o PetOrlândia exatamente como essa conta vê, por até {{ minutos }} minutos.</p>
+    <ul>
+      <li><strong>Somente leitura:</strong> nenhum envio é aceito, e nada é gravado em nome dessa conta.</li>
+      <li>Uma faixa no rodapé mostra que o modo está ativo e leva de volta à sua conta.</li>
+      <li>Vale para todas as abas deste navegador. Para usar a sua conta ao mesmo tempo, comece o Ver como numa janela anônima.</li>
+      <li>O início e o fim ficam registrados na auditoria.</li>
+    </ul>
+    <form method="POST" class="d-flex gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary">Começar</button>
+      <a class="btn btn-outline-secondary" href="{{ voltar }}">Cancelar</a>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
