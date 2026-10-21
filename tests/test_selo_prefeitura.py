@@ -136,3 +136,16 @@ def test_ficha_mostra_formulario_so_para_admin(app, client, monkeypatch):
     assert resp.status_code == 200
     assert b"data-selo-prefeitura-admin" not in resp.data
     assert "Registrado na Prefeitura".encode() in resp.data
+
+
+def test_inicio_futuro_nao_aparece_como_valido(app):
+    from services.selo_prefeitura import situacao_do_selo
+
+    selo = AnimalHealthRecord(
+        kind="registro_prefeitura", title="x",
+        occurred_on=date(2027, 1, 1), next_due_on=date(2028, 1, 1),
+    )
+    antes = situacao_do_selo(selo, hoje=date(2026, 10, 21))
+    assert antes["futuro"] is True and antes["valido"] is False and antes["vence_em_breve"] is False
+    durante = situacao_do_selo(selo, hoje=date(2027, 1, 1))
+    assert durante["futuro"] is False and durante["valido"] is True

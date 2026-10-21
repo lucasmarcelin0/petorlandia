@@ -57,7 +57,11 @@
         </div>
         {% if selo_prefeitura %}
         <div class="mt-3" data-selo-prefeitura>
-          {% if selo_prefeitura.valido %}
+          {% if selo_prefeitura.futuro %}
+          <span class="badge rounded-pill text-bg-info fs-6 fw-semibold">
+            <i class="bi bi-hourglass-split me-1"></i>Registro na Prefeitura a partir de {{ selo_prefeitura.inicio.strftime('%d/%m/%Y') }} · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}
+          </span>
+          {% elif selo_prefeitura.valido %}
           <span class="badge rounded-pill {{ 'text-bg-warning' if selo_prefeitura.vence_em_breve else 'text-bg-success' }} fs-6 fw-semibold">
             <i class="bi bi-patch-check-fill me-1"></i>Registrado na Prefeitura · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}
           </span>

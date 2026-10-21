@@ -52,13 +52,17 @@ def situacao_do_selo(selo, hoje: date | None = None) -> dict | None:
         return None
     hoje = hoje or date.today()
     dias = (selo.next_due_on - hoje).days
+    # Início futuro: o registro ainda não vale (nem válido, nem vencido).
+    futuro = selo.occurred_on is not None and selo.occurred_on > hoje
+    valido = not futuro and dias >= 0
     return {
         'registro': selo,
         'inicio': selo.occurred_on,
         'validade': selo.next_due_on,
-        'valido': dias >= 0,
+        'futuro': futuro,
+        'valido': valido,
         'dias_restantes': dias,
-        'vence_em_breve': 0 <= dias <= 30,
+        'vence_em_breve': valido and dias <= 30,
     }
 
 
