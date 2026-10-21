@@ -33,6 +33,27 @@ O administrador cuida disso em **Unidades e responsáveis**
 - O cadastro do caso acompanha a correção só onde ainda guardava o que a ficha
   tinha informado; o que a equipe do SFA ajustou à mão não é sobrescrito.
 
+## Campos obrigatórios
+
+Valem para a ficha inteira (`/sfa/pre-t0`, área das unidades e simulações), no
+envio e ao completar depois. Ficam em `FIELD_SPECS` (`services/sfa_pre_t0.py`);
+a tela marca cada um com "Obrigatório" e não avança a etapa sem eles.
+
+| Campo | Regra |
+|---|---|
+| Agravo (2), data da notificação (3), primeiros sintomas (7), nome (8) | Sempre (já eram) |
+| Data de nascimento (9) | Sempre. Digitar a idade (10) preenche a data estimada |
+| Sexo (11), raça/cor (13), hospitalização (50) | Sempre; há a opção "Ignorado" |
+| Gestante (12) | Exceto sexo masculino (a tela esconde e registra 6 - Não se aplica) |
+| Nome da mãe (16) | Sempre; se a pessoa não souber, escreve-se IGNORADO |
+| Endereço: município (18), bairro (20), logradouro (21), número (22) | Sempre; número aceita S/N. Os demais campos da residência seguem opcionais; o CEP preenche rua, bairro e município |
+| Ocupação (32) | Sempre, com sugestões (estudante, do lar, aposentado(a), desempregado(a), não se aplica) |
+| Sinais clínicos (33) | Pelo menos um marcado como presente |
+| Doenças pré-existentes (34) | Todos os itens respondidos; a tela já traz cada um como "Não" |
+| Resultado do NS1 (42) | Só quando a data da coleta (41) foi informada |
+
+Caso autóctone (56) e o número da notificação continuam opcionais.
+
 ## O que ainda falta
 
 `services.sfa_notificacao.pendencias` devolve os campos que a ficha ainda
@@ -40,7 +61,7 @@ espera, em três grupos. Ficha sem pendência não mostra aviso nenhum.
 
 | Grupo | Entra quando |
 |---|---|
-| Notificação e investigação | Em branco: nascimento ou idade (9/10), sexo (11), gestante (12, só para sexo F), raça/cor (13), escolaridade (14), município de residência (18), bairro (20), logradouro (21), zona (29), data da investigação (31), doenças pré-existentes (34), hospitalização (50). Com hospitalização = Sim: data da internação (51) e hospital (54) |
+| Notificação e investigação | Em branco: nascimento (9), sexo (11), gestante (12, exceto sexo M), raça/cor (13), escolaridade (14), nome da mãe (16), município de residência (18), bairro (20), logradouro (21), número (22), zona (29), data da investigação (31), ocupação (32), hospitalização (50). Nenhum sinal clínico presente (33); doença pré-existente sem resposta (34). Com hospitalização = Sim: data da internação (51) e hospital (54) |
 | Exames | Coleta registrada sem resultado (39–46 e chikungunya 35–38), ou resultado informado sem a data da coleta. "Não realizado" não espera nada |
 | Encerramento do caso | Em branco: caso autóctone (56), classificação (62), critério (63), evolução (65), data de encerramento (67). Óbito pede a data (66); chikungunya pede apresentação clínica (64); sinais de alarme ou dengue grave pedem a resposta do bloco (68/70) e, se Sim, a data (69/71). Caso descartado encerra só com critério e data |
 

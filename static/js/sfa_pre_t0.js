@@ -54,16 +54,27 @@
     return titulo ? titulo.textContent.trim() : "Campo";
   };
 
+  // Resposta exigida só quando outro campo foi preenchido (ex.: resultado do NS1 com a data da coleta).
+  const exigidoPorOutroCampo = (cartao) => {
+    const origem = cartao.dataset.requiredWith && form.querySelector(`[name="${cartao.dataset.requiredWith}"]`);
+    return Boolean(origem && origem.value.trim());
+  };
+
   function errosDoCartao(cartao) {
     const erros = [];
     const gruposVistos = new Set();
+    const condicional = exigidoPorOutroCampo(cartao);
     cartao.querySelectorAll("input, select, textarea").forEach((c) => {
       if (c.type === "hidden" || c.disabled || c.type === "checkbox") return;
+      // Espelho dd/mm/aaaa de date_br.js: quem guarda a data é o campo original, conferido no lugar dele.
+      if (c.dataset && c.dataset.dateBrKind) return;
       if (c.type === "radio") {
         if (gruposVistos.has(c.name)) return;
         gruposVistos.add(c.name);
         const grupo = Array.from(cartao.querySelectorAll(`input[type="radio"]`)).filter((r) => r.name === c.name);
-        if (grupo.some((r) => r.required) && !grupo.some((r) => r.checked)) erros.push({ controle: c, mensagem: "Escolha uma das opções." });
+        if ((condicional || grupo.some((r) => r.required)) && !grupo.some((r) => r.checked)) {
+          erros.push({ controle: c, mensagem: condicional ? "Com a data da coleta preenchida, informe o resultado." : "Escolha uma das opções." });
+        }
         return;
       }
       const valor = c.value.trim();
@@ -76,6 +87,11 @@
     const idade = cartao.querySelector("#input-idade_valor");
     const unidade = cartao.querySelector("#input-idade_unidade");
     if (idade && unidade && idade.value.trim() && !unidade.value) erros.push({ controle: unidade, mensagem: "Selecione a unidade da idade." });
+    // Caixas "Sim" obrigatórias (sinais clínicos): pelo menos um item marcado.
+    if (cartao.hasAttribute("data-exige-marcado")) {
+      const caixas = Array.from(cartao.querySelectorAll('input[type="checkbox"]'));
+      if (caixas.length && !caixas.some((c) => c.checked)) erros.push({ controle: caixas[0], mensagem: "Marque pelo menos um item presente." });
+    }
     return erros;
   }
 

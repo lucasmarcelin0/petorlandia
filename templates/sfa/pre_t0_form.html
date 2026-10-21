@@ -30,12 +30,12 @@
         <p class="eyebrow">{% if u %}NOTIFICAÇÃO SINAN · {{ u.unidade_nome|upper }}{% else %}NOTIFICAÇÃO · ETAPA ANTERIOR AO T0{% endif %}</p>
         <h1>Ficha de investigação<br><em>Dengue e Febre de Chikungunya</em></h1>
         {% if completar %}
-        {% if u.ficha_sinan %}<p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
-        {% else %}<p class="hero-lede">Ficha ainda sem número da notificação. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. Depois de informado, o número não muda; a unidade também não.</p>{% endif %}
+        {% if u.ficha_sinan %}<p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; os campos marcados como obrigatórios precisam estar preenchidos e o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
+        {% else %}<p class="hero-lede">Ficha ainda sem número da notificação. Preencha o que já souber e salve; os campos marcados como obrigatórios precisam estar preenchidos e o que continuar em branco fica listado para depois. Depois de informado, o número não muda; a unidade também não.</p>{% endif %}
         {% elif u %}
-        <p class="hero-lede">Registre a notificação com o que já se sabe. O que ficar em branco pode ser completado depois, em Fichas da unidade. Use “Ignorado” quando essa opção existir.</p>
+        <p class="hero-lede">Registre a notificação com o que já se sabe. Os campos marcados como obrigatórios precisam ser preenchidos; o restante pode ser completado depois, em Fichas da unidade. Use “Ignorado” quando essa opção existir.</p>
         {% else %}
-        <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Se um dado ainda não estiver disponível, deixe o campo em branco; use “Ignorado” quando essa opção existir.</p>
+        <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Os campos marcados como obrigatórios precisam ser preenchidos; nos demais, se um dado ainda não estiver disponível, deixe o campo em branco. Use “Ignorado” quando essa opção existir.</p>
         {% endif %}
         <div class="hero-tags"><span>71 campos do modelo</span><span>Etapas curtas</span><span>Funciona no celular</span></div>
         {% if simulacao %}
@@ -88,6 +88,10 @@
         <option value="São Paulo" data-codigo="3550308" data-uf="SP">São Paulo/SP · 3550308</option>
       </datalist>
       <datalist id="sugestoes-uf"><option value="SP"></datalist>
+      <datalist id="sugestoes-ocupacao">
+        <option value="Estudante"><option value="Do lar"><option value="Aposentado(a)"><option value="Desempregado(a)">
+        <option value="Não se aplica (criança)"><option value="Ignorado">
+      </datalist>
       <datalist id="sugestoes-unidade">
         <option value="Hospital Beneficente Santo Antônio" data-codigo="2745798" data-telefone="(16) 3820-4200">CNES 2745798 · Rua 3, 941, Centro</option>
         <option value="CAPS I Sebastião Boschin" data-codigo="6746012" data-telefone="(16) 3820-8244">CNES 6746012 · Rua 3, 1635, Jardim Nova Orlândia</option>
@@ -106,7 +110,8 @@
         <span class="question-title">
           {% if field.number %}<span class="question-number">{{ field.number }}</span>{% endif %}
           <span>{{ field.campo }}</span>
-          {% if field.required %}<span class="required-mark" title="Obrigatório">Obrigatório</span>{% endif %}
+          {% if field.required %}<span class="required-mark" title="Obrigatório">Obrigatório</span>
+          {% elif field.required_with %}<span class="required-mark" title="Obrigatório quando a data da coleta estiver preenchida">Obrigatório se houver data</span>{% endif %}
           {% if completar and field.key in u.faltando %}<span class="pending-mark">Falta</span>{% endif %}
         </span>
       {%- endmacro %}
@@ -118,7 +123,7 @@
 
         <div class="field-grid">
           {% for field in section.fields %}
-          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}{% if completar and field.key in u.faltando %} is-pending{% endif %}" id="campo-{{ field.key }}" data-field-card="{{ field.key }}">
+          <article class="field-card field-{{ field.type }}{% if field.type in ['matrix','flag_matrix','severity'] %} field-wide{% endif %}{% if completar and field.key in u.faltando %} is-pending{% endif %}" id="campo-{{ field.key }}" data-field-card="{{ field.key }}"{% if field.required_with %} data-required-with="{{ field.required_with }}"{% endif %}{% if field.required and field.type == 'matrix' and field.options|length == 2 %} data-exige-marcado{% endif %}>
             {% if field.type == 'fixed' %}
               {{ question_label(field) }}
               <input type="hidden" name="{{ field.key }}" value="{{ field.value }}">
@@ -126,11 +131,12 @@
 
             {% elif field.type == 'paired_text' %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <div class="paired-text-row{% if field.key == 'logradouro' %} paired-stacked{% endif %}"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'unidade_notificante' %} list="sugestoes-unidade" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'logradouro' %} autocomplete="address-line1"{% elif field.key == 'nome_hospital' %} list="sugestoes-hospital" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}" data-telefone-alvo="input-telefone_hospital"{% endif %}{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" autocomplete="off" data-numeric maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}></label></div>
+              <div class="paired-text-row{% if field.key == 'logradouro' %} paired-stacked{% endif %}"><input id="input-{{ field.key }}" name="{{ field.key }}" type="text" maxlength="{{ field.maxlength }}" aria-label="{{ field.campo }}" value="{{ submitted.get(field.key, '') }}"{% if field.required %} required aria-required="true"{% endif %}{% if field.key.startswith('municipio_') %} list="sugestoes-municipio" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'unidade_notificante' %} list="sugestoes-unidade" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}"{% elif field.key == 'logradouro' %} autocomplete="address-line1"{% elif field.key == 'nome_hospital' %} list="sugestoes-hospital" autocomplete="off" data-sugestao data-codigo-alvo="input-{{ field.extra_key }}" data-telefone-alvo="input-telefone_hospital"{% endif %}{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}><label for="input-{{ field.extra_key }}">{{ field.extra_label }}<input id="input-{{ field.extra_key }}" name="{{ field.extra_key }}" type="text" inputmode="numeric" autocomplete="off" data-numeric maxlength="{{ field.extra_maxlength }}" value="{{ submitted.get(field.extra_key, '') }}"{% if u and field.key == 'unidade_notificante' %} readonly{% endif %}></label></div>
 
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}{% if completar and field.key == 'ficha_sinan' and u.ficha_sinan %} readonly{% endif %}>
+              {% if field.hint %}<p class="field-hint" id="dica-{{ field.key }}">{{ field.hint }}</p>{% endif %}
+              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}"{% if field.hint %} aria-describedby="dica-{{ field.key }}"{% endif %} value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% elif field.key == 'ocupacao' %} list="sugestoes-ocupacao" autocomplete="off"{% endif %}{% if completar and field.key == 'ficha_sinan' and u.ficha_sinan %} readonly{% endif %}>
 
             {% elif field.type == 'radio' %}
               <span class="field-label">{{ question_label(field) }}</span>
@@ -147,13 +153,14 @@
             {% elif field.type == 'matrix' %}
               {% set apenas_sim_nao = field.options|length == 2 %}
               <div class="matrix-heading"><span class="field-label">{{ question_label(field) }}</span>{% if not apenas_sim_nao %}<span class="matrix-options">{% for option in field.options %}<span>{{ option.label.split(' - ')[-1] }}</span>{% endfor %}</span>{% endif %}</div>
-              {% if apenas_sim_nao %}<p class="field-hint matrix-hint">Marque apenas o que está presente. O que ficar sem marcar é registrado como "Não".</p>{% endif %}
+              {% if apenas_sim_nao %}<p class="field-hint matrix-hint">{% if field.required %}Marque pelo menos um sinal presente. {% else %}Marque apenas o que está presente. {% endif %}O que ficar sem marcar é registrado como "Não".</p>
+              {% elif field.default %}<p class="field-hint matrix-hint">Cada item já vem marcado como "Não". Altere só o que for diferente.</p>{% endif %}
               <div class="matrix-list">
                 {% for item_key, item_label in field['items'] %}
                 {% if apenas_sim_nao %}
                 <div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><label class="matrix-toggle"><input type="checkbox" name="{{ field.key }}__{{ item_key }}" value="1" {% if submitted.get(field.key ~ '__' ~ item_key) == '1' %}checked{% endif %}><span>Sim</span></label><input type="hidden" name="{{ field.key }}__{{ item_key }}" value="2"></div>
                 {% else %}
-                <div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><div class="matrix-answer" role="radiogroup" aria-label="{{ item_label }}">{% for option in field.options %}{% set palavra = option.label.split(' - ')[-1] %}<label class="matrix-choice"><input type="radio" name="{{ field.key }}__{{ item_key }}" value="{{ option.value }}" {% if submitted.get(field.key ~ '__' ~ item_key) == option.value %}checked{% endif %}><span>{{ 'Ign.' if palavra == 'Ignorado' else palavra }}</span><span class="sr-only">{{ option.label }}</span></label>{% endfor %}</div></div>
+                {% set marcada = submitted.get(field.key ~ '__' ~ item_key) or field.default %}<div class="matrix-row"><span class="matrix-item">{{ item_label }}</span><div class="matrix-answer" role="radiogroup" aria-label="{{ item_label }}">{% for option in field.options %}{% set palavra = option.label.split(' - ')[-1] %}<label class="matrix-choice"><input type="radio" name="{{ field.key }}__{{ item_key }}" value="{{ option.value }}" {% if marcada == option.value %}checked{% endif %}{% if field.required and loop.first %} required aria-required="true"{% endif %}><span>{{ 'Ign.' if palavra == 'Ignorado' else palavra }}</span><span class="sr-only">{{ option.label }}</span></label>{% endfor %}</div></div>
                 {% endif %}
                 {% endfor %}
               </div>
@@ -206,6 +213,6 @@
 
     <footer class="page-footer"><span class="footer-seal" aria-hidden="true">S</span><p><strong>SFA Orlândia</strong><br>Ficha SINAN · modelo SVS de 14/03/2016</p><span>{{ u.unidade_nome if u else 'Preenchimento anterior ao T0' }}</span></footer>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20261013" defer></script>
+  <script src="{{ url_for('static', filename='js/sfa_pre_t0.js') }}?v=20261021" defer></script>
 </body>
 </html>

@@ -38,18 +38,19 @@ FIELD_SPECS: dict[str, dict] = {
     "6": {"key": "unidade_notificante", "type": "paired_text", "maxlength": 180, "extra_key": "codigo_unidade_notificante", "extra_label": "Código", "extra_maxlength": 12},
     "7": {"key": "data_inicio_sintomas", "type": "date", "required": True},
     "8": {"key": "nome", "type": "text", "required": True, "maxlength": 200, "autocomplete": "name"},
-    "9": {"key": "data_nascimento", "type": "date"},
+    "9": {"key": "data_nascimento", "type": "date", "required": True},
     "10": {
         "key": "idade",
         "type": "age",
         "units": _options(("1", "1 - Hora"), ("2", "2 - Dia"), ("3", "3 - Mês"), ("4", "4 - Ano")),
     },
-    "11": {"key": "sexo", "type": "radio", "options": _options(("M", "M - Masculino"), ("F", "F - Feminino"), ("I", "I - Ignorado"))},
-    "12": {"key": "gestante", "type": "radio", "options": _options(
+    "11": {"key": "sexo", "type": "radio", "required": True, "options": _options(("M", "M - Masculino"), ("F", "F - Feminino"), ("I", "I - Ignorado"))},
+    # Gestante não se aplica ao sexo masculino: a tela esconde a pergunta e registra 6 (Não se aplica).
+    "12": {"key": "gestante", "type": "radio", "required": True, "required_unless": ("sexo", "M"), "options": _options(
         ("1", "1 - 1º Trimestre"), ("2", "2 - 2º Trimestre"), ("3", "3 - 3º Trimestre"),
         ("4", "4 - Idade gestacional ignorada"), ("5", "5 - Não"), ("6", "6 - Não se aplica"), ("9", "9 - Ignorado"),
     )},
-    "13": {"key": "raca_cor", "type": "radio", "options": _options(
+    "13": {"key": "raca_cor", "type": "radio", "required": True, "options": _options(
         ("1", "1 - Branca"), ("2", "2 - Preta"), ("3", "3 - Amarela"),
         ("4", "4 - Parda"), ("5", "5 - Indígena"), ("9", "9 - Ignorado"),
     )},
@@ -65,13 +66,16 @@ FIELD_SPECS: dict[str, dict] = {
         ("9", "9 - Ignorado"), ("10", "10 - Não se aplica"),
     )},
     "15": {"key": "cartao_sus", "type": "text", "numeric": True, "maxlength": 20},
-    "16": {"key": "nome_mae", "type": "text", "maxlength": 200},
+    "16": {"key": "nome_mae", "type": "text", "required": True, "maxlength": 200,
+           "hint": "Se a pessoa não souber, escreva IGNORADO."},
     "17": {"key": "uf_residencia", "type": "text", "maxlength": 2, "uppercase": True},
-    "18": {"key": "municipio_residencia", "type": "paired_text", "maxlength": 120, "extra_key": "codigo_municipio_residencia", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
+    # Endereço: município, bairro, logradouro e número bastam; os demais campos da residência seguem opcionais.
+    "18": {"key": "municipio_residencia", "type": "paired_text", "required": True, "maxlength": 120, "extra_key": "codigo_municipio_residencia", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
     "19": {"key": "distrito_residencia", "type": "text", "maxlength": 120},
-    "20": {"key": "bairro", "type": "text", "maxlength": 120},
-    "21": {"key": "logradouro", "type": "paired_text", "maxlength": 180, "extra_key": "codigo_logradouro", "extra_label": "Código", "extra_maxlength": 12},
-    "22": {"key": "numero_residencia", "type": "text", "maxlength": 30},
+    "20": {"key": "bairro", "type": "text", "required": True, "maxlength": 120},
+    "21": {"key": "logradouro", "type": "paired_text", "required": True, "maxlength": 180, "extra_key": "codigo_logradouro", "extra_label": "Código", "extra_maxlength": 12},
+    "22": {"key": "numero_residencia", "type": "text", "required": True, "maxlength": 30,
+           "hint": "Sem número? Escreva S/N."},
     "23": {"key": "complemento", "type": "text", "maxlength": 120},
     "24": {"key": "geo_campo_1", "type": "text", "maxlength": 80},
     "25": {"key": "geo_campo_2", "type": "text", "maxlength": 80},
@@ -81,15 +85,20 @@ FIELD_SPECS: dict[str, dict] = {
     "29": {"key": "zona", "type": "radio", "options": _options(("1", "1 - Urbana"), ("2", "2 - Rural"), ("3", "3 - Periurbana"), ("9", "9 - Ignorado"))},
     "30": {"key": "pais_residencia", "type": "text", "maxlength": 100},
     "31": {"key": "data_investigacao", "type": "date"},
-    "32": {"key": "ocupacao", "type": "text", "maxlength": 160},
-    "33": {"key": "sinais_clinicos", "type": "matrix", "options": YES_NO, "items": [
+    "32": {"key": "ocupacao", "type": "text", "required": True, "maxlength": 160,
+           "hint": "Sem trabalho remunerado? Escreva estudante, do lar, aposentado(a), desempregado(a) "
+                   "ou não se aplica (criança)."},
+    # Obrigatório: pelo menos um sinal marcado como presente (o que fica sem marcar vale "Não").
+    "33": {"key": "sinais_clinicos", "type": "matrix", "required": True, "options": YES_NO, "items": [
         ("febre", "Febre"), ("mialgia", "Mialgia"), ("cefaleia", "Cefaleia"), ("exantema", "Exantema"),
         ("vomito", "Vômito"), ("nauseas", "Náuseas"), ("dor_nas_costas", "Dor nas costas"),
         ("conjuntivite", "Conjuntivite"), ("artrite", "Artrite"), ("artralgia_intensa", "Artralgia intensa"),
         ("petequias", "Petéquias"), ("leucopenia", "Leucopenia"),
         ("prova_laco_positiva", "Prova do laço positiva"), ("dor_retroorbital", "Dor retroorbital"),
     ]},
-    "34": {"key": "doencas_preexistentes", "type": "matrix", "options": YES_NO_UNKNOWN, "items": [
+    # Obrigatório: todos os itens respondidos; a tela já traz cada um marcado como "Não".
+    "34": {"key": "doencas_preexistentes", "type": "matrix", "required": True, "default": "2",
+           "options": YES_NO_UNKNOWN, "items": [
         ("diabetes", "Diabetes"), ("doencas_hematologicas", "Doenças hematológicas"),
         ("hepatopatias", "Hepatopatias"), ("doenca_renal_cronica", "Doença renal crônica"),
         ("hipertensao_arterial", "Hipertensão arterial"), ("doenca_acido_peptica", "Doença ácido-péptica"),
@@ -104,7 +113,7 @@ FIELD_SPECS: dict[str, dict] = {
     "39": {"key": "dengue_igm_data", "type": "date"},
     "40": {"key": "dengue_igm_resultado", "type": "radio", "options": LAB_RESULTS},
     "41": {"key": "ns1_data_coleta", "type": "date"},
-    "42": {"key": "ns1_resultado", "type": "radio", "options": LAB_RESULTS},
+    "42": {"key": "ns1_resultado", "type": "radio", "required_with": "ns1_data_coleta", "options": LAB_RESULTS},
     "43": {"key": "isolamento_data", "type": "date"},
     "44": {"key": "isolamento_resultado", "type": "radio", "options": LAB_RESULTS},
     "45": {"key": "rt_pcr_data", "type": "date"},
@@ -114,7 +123,7 @@ FIELD_SPECS: dict[str, dict] = {
         ("1", "1 - Compatível"), ("2", "2 - Incompatível"), ("3", "3 - Inconclusivo"), ("4", "4 - Não realizado"),
     )},
     "49": {"key": "imunohistoquimica_resultado", "type": "radio", "options": LAB_RESULTS},
-    "50": {"key": "hospitalizacao", "type": "radio", "options": YES_NO_UNKNOWN},
+    "50": {"key": "hospitalizacao", "type": "radio", "required": True, "options": YES_NO_UNKNOWN},
     "51": {"key": "data_internacao", "type": "date"},
     "52": {"key": "uf_hospital", "type": "text", "maxlength": 2, "uppercase": True},
     "53": {"key": "municipio_hospital", "type": "paired_text", "maxlength": 120, "extra_key": "codigo_municipio_hospital", "extra_label": "Código (IBGE)", "extra_maxlength": 7},
@@ -293,6 +302,16 @@ def _answer_field(form, field: dict) -> object:
             value = _field_choice(form, f"{key}__{item_key}", field["options"])
             if value:
                 answers[item_key] = value
+        if field.get("required"):
+            if len(field["options"]) == 2:
+                # Caixas "Sim": o que fica sem marcar vale "Não", então basta um item presente.
+                if "1" not in answers.values():
+                    raise CampoInvalido(f"Marque pelo menos um item em “{field['campo']}”.",
+                                        f"{key}__{field['items'][0][0]}")
+            else:
+                faltando = next((item_key for item_key, _label in field["items"] if item_key not in answers), "")
+                if faltando:
+                    raise CampoInvalido("Preencha os campos obrigatórios indicados antes de enviar.", f"{key}__{faltando}")
         return answers
     if kind == "test_result":
         # Um resultado por exame (S1, S2, PRNT). "amostras" e "resultado" seguem existindo para
@@ -344,6 +363,17 @@ def _answer_field(form, field: dict) -> object:
     raise ValueError("A ficha contém um controle desconhecido.")
 
 
+def _exigencia_condicional(field: dict, answers: dict) -> dict:
+    """Obrigatoriedade que depende de uma resposta anterior da ficha (já coletada, pela ordem dos campos)."""
+    if field.get("required_with"):
+        # Ex.: resultado do NS1, exigido quando a data da coleta foi informada.
+        return {**field, "required": bool(_texto_resposta(answers, field["required_with"]).strip())}
+    chave, valor = field.get("required_unless") or ("", None)
+    if chave and answers.get(chave) == valor:
+        return {**field, "required": False}
+    return field
+
+
 def coletar_respostas_pre_t0(form, schema: dict | None = None) -> dict:
     schema = schema or carregar_esquema_pre_t0()
     answers = {}
@@ -351,7 +381,7 @@ def coletar_respostas_pre_t0(form, schema: dict | None = None) -> dict:
         for field in section["fields"]:
             if field["key"] in answers:
                 raise RuntimeError("A ficha contém identificadores duplicados.")
-            answers[field["key"]] = _answer_field(form, field)
+            answers[field["key"]] = _answer_field(form, _exigencia_condicional(field, answers))
     return answers
 
 
