@@ -10,7 +10,7 @@
   {# Área das unidades de saúde (blueprints.sfa_notificacao_routes): mesma ficha, com a unidade fixa e a opção de completar depois. #}
   {% set u = unidade_ctx if unidade_ctx is defined else none %}
   {% set completar = u and u.modo == 'completar' %}
-  <title>{% if completar %}Editar ficha {{ u.ficha_sinan }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
+  <title>{% if completar %}Editar ficha {{ u.ficha_sinan or 'sem número' }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261013">
@@ -30,7 +30,8 @@
         <p class="eyebrow">{% if u %}NOTIFICAÇÃO SINAN · {{ u.unidade_nome|upper }}{% else %}NOTIFICAÇÃO · ETAPA ANTERIOR AO T0{% endif %}</p>
         <h1>Ficha de investigação<br><em>Dengue e Febre de Chikungunya</em></h1>
         {% if completar %}
-        <p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
+        {% if u.ficha_sinan %}<p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
+        {% else %}<p class="hero-lede">Ficha ainda sem número da notificação. Preencha o que já souber e salve; o que continuar em branco fica listado para depois. Depois de informado, o número não muda; a unidade também não.</p>{% endif %}
         {% elif u %}
         <p class="hero-lede">Registre a notificação com o que já se sabe. O que ficar em branco pode ser completado depois, em Fichas da unidade. Use “Ignorado” quando essa opção existir.</p>
         {% else %}
@@ -129,7 +130,7 @@
 
             {% elif field.type in ['text','tel','date'] %}
               <label for="input-{{ field.key }}">{{ question_label(field) }}</label>
-              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}{% if completar and field.key == 'ficha_sinan' %} readonly{% endif %}>
+              <input id="input-{{ field.key }}" name="{{ field.key }}" type="{{ 'text' if field.type == 'tel' else field.type }}" value="{{ submitted.get(field.key, '') }}" {% if field.type == 'tel' %}inputmode="tel"{% endif %} {% if field.numeric %}inputmode="numeric" data-numeric{% endif %} {% if field.minlength %}minlength="{{ field.minlength }}"{% endif %} {% if field.maxlength %}maxlength="{{ field.maxlength }}"{% endif %} {% if field.required %}required aria-required="true"{% endif %} {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %} {% if field.uppercase %}autocapitalize="characters"{% endif %}{% if field.key.startswith('uf_') %} list="sugestoes-uf" autocomplete="off"{% endif %}{% if completar and field.key == 'ficha_sinan' and u.ficha_sinan %} readonly{% endif %}>
 
             {% elif field.type == 'radio' %}
               <span class="field-label">{{ question_label(field) }}</span>

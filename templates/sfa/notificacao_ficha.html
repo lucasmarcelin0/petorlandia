@@ -1,7 +1,7 @@
 {% extends "sfa/base.html" %}
 
-{% block title %}Ficha {{ log.ficha_sinan }} · Notificação SINAN{% endblock %}
-{% block page_title %}Notificação SINAN · Ficha {{ log.ficha_sinan }}{% endblock %}
+{% block title %}Ficha {{ log.ficha_sinan or 'sem número' }} · Notificação SINAN{% endblock %}
+{% block page_title %}Notificação SINAN · Ficha {{ log.ficha_sinan or 'sem número' }}{% endblock %}
 
 {% block head %}
 {{ super() }}

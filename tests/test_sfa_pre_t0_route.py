@@ -44,3 +44,9 @@ def test_pre_t0_form_keeps_item_answers_after_validation_error(client):
     assert 'name="sinais_clinicos__febre" value="1" checked' in html
     assert 'name="sinais_alarme__queda_plaquetas" value="1" checked' in html
     assert 'value="Equipe Teste"' in html
+
+
+def test_numero_da_notificacao_nao_aparece_como_obrigatorio(client):
+    html = client.get("/sfa/pre-t0").get_data(as_text=True)
+    campo = html.split('id="input-ficha_sinan"', 1)[1].split(">", 1)[0]
+    assert "required" not in campo and 'minlength="5"' in campo

@@ -484,6 +484,59 @@ def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
     assert len(json.loads(log.dados_json)[FULL_KEY]['revisoes']) == 1
 
 
+def test_ficha_sem_numero_e_registrada_e_recebe_o_numero_depois(client, ubs, autora):
+    log = registrar(client, ficha_sinan='')
+    outra = registrar(client, ficha_sinan='', nome='Outra Paciente')
+    # Sem número, cada ficha é um caso próprio: nada se junta por engano.
+    assert log.id != outra.id and log.id_estudo_vinculado != outra.id_estudo_vinculado
+    assert log.ficha_sinan == '' and log.chave_dedup.startswith('DIGITAL-') and log.chave_dedup != outra.chave_dedup
+    assert SfaPaciente.query.count() == 2
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+    assert 'Ficha sem número' in detalhe and f'/sfa/notificacao/fichas/{log.id}/completar?campo=ficha_sinan' in detalhe
+    assert 'sem número' in client.get('/sfa/notificacao', **HTTPS).get_data(as_text=True)
+
+    edicao = BeautifulSoup(client.get(f'/sfa/notificacao/fichas/{log.id}/completar?campo=ficha_sinan', **HTTPS).data,
+                           'html.parser')
+    assert not edicao.select_one('#input-ficha_sinan').has_attr('readonly')
+    assert edicao.select_one('#campo-ficha_sinan.is-pending')
+    salva = client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(ficha_sinan='2985-999'), **HTTPS)
+    assert salva.status_code == 302
+    db.session.refresh(log)
+    payload = json.loads(log.dados_json)
+    assert (log.ficha_sinan, log.chave_dedup, payload[FULL_KEY]['respostas']['ficha_sinan']) == (
+        '2985999', 'FICHA-2985999', '2985999')
+    assert payload['numero_controle'] == '2985999' and 'ficha_sinan' in payload[FULL_KEY]['revisoes'][0]['campos']
+    assert SfaPaciente.query.filter_by(id_estudo=log.id_estudo_vinculado).one().ficha_sinan == '2985999'
+    # Depois de informado, o número não muda mais.
+    edicao = BeautifulSoup(client.get(f'/sfa/notificacao/fichas/{log.id}/completar', **HTTPS).data, 'html.parser')
+    assert edicao.select_one('#input-ficha_sinan').has_attr('readonly')
+    client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(ficha_sinan='5550001'), **HTTPS)
+    db.session.refresh(log)
+    assert log.ficha_sinan == '2985999'
+
+    # O número de outra ficha não é aceito, e a ficha continua como estava.
+    recusada = client.post(f'/sfa/notificacao/fichas/{outra.id}/completar', data=ficha_form(ficha_sinan='2985999'), **HTTPS)
+    assert recusada.status_code == 200 and 'Já existe uma ficha registrada com esse número' in recusada.get_data(as_text=True)
+    assert BeautifulSoup(recusada.data, 'html.parser').select_one('form[data-step-form]')['data-error-field'] == 'ficha_sinan'
+    db.session.refresh(outra)
+    assert outra.ficha_sinan == '' and outra.chave_dedup.startswith('DIGITAL-')
+    # Registrar de novo o número já informado leva à ficha existente, como antes.
+    repetida = client.post('/sfa/notificacao/ficha', data=ficha_form(ficha_sinan='2985999'), **HTTPS)
+    assert repetida.headers['Location'].endswith(f'/sfa/notificacao/fichas/{log.id}') and SfaSinanLog.query.count() == 2
+
+
+def test_numero_informado_depois_nao_junta_a_ficha_com_a_planilha(client, ubs, autora):
+    log = registrar(client, ficha_sinan='')
+    db.session.add(SfaSinanLog(chave_dedup='FICHA-7000001', ficha_sinan='7000001', nome='Nome da Planilha'))
+    db.session.add(SfaPaciente(id_estudo='SFA-701', ficha_sinan='7000002', nome='Caso da Planilha'))
+    db.session.commit()
+    for numero in ('7000001', '7000002'):
+        resposta = client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(ficha_sinan=numero), **HTTPS)
+        assert resposta.status_code == 200 and 'fale com a vigilância' in resposta.get_data(as_text=True), numero
+    db.session.refresh(log)
+    assert log.ficha_sinan == '' and SfaSinanLog.query.filter_by(ficha_sinan='7000001').one().nome == 'Nome da Planilha'
+
+
 def test_autor_edita_e_exclui_a_ficha_com_o_caso_que_ela_criou(client, ubs, autora):
     log = registrar(client, **COMPLETA)
     log_id, id_estudo = log.id, log.id_estudo_vinculado
@@ -611,6 +664,8 @@ def test_pendencias_seguem_o_que_a_ficha_ja_diz(app):
 
     # Idade vale no lugar da data de nascimento; mulher precisa da resposta de gestante.
     assert falta(data_nascimento='', idade_valor='36', idade_unidade='4') == []
+    # Sem o número da notificação, ele fica listado para ser informado depois.
+    assert [(i['grupo'], i['chave'], i['numero']) for i in falta(ficha_sinan='')] == [('notificacao', 'ficha_sinan', 'Nº')]
     assert chaves(falta(sexo='F', gestante='')) == ['gestante']
     # Exame: coleta espera resultado; resultado espera a data; "não realizado" não espera nada.
     aguardando = falta(rt_pcr_data='2026-10-11')

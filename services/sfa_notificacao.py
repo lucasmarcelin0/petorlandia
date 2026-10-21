@@ -252,6 +252,8 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
                       "chave": key, "campo": campo or key, "detalhe": detalhe})
 
     # Notificação e investigação
+    if not texto("ficha_sinan"):
+        falta("notificacao", "ficha_sinan")
     if not texto("data_nascimento") and not str(grupo("idade").get("valor") or "").strip():
         falta("notificacao", "data_nascimento", rotulo="Data de nascimento ou idade")
     if not texto("sexo"):
