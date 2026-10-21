@@ -128,7 +128,7 @@ def current_experience():
         from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao
         from helpers import _user_can_access_accounting, is_veterinarian
         from services.entomologia_acesso import membro_equipe
-        from services.sfa_notificacao import unidades_do_usuario
+        from services.sfa_notificacao import pode_acessar as pode_acessar_sinan
 
         g.user_experience = resolve_experience(
             current_user,
@@ -137,7 +137,7 @@ def current_experience():
             store=inject_minha_casa_de_racao()['minha_casa_de_racao'],
             clinic_access=inject_has_clinic_access()['has_clinic_access'],
             dengue=membro_equipe(current_user),
-            sinan=bool(unidades_do_usuario(current_user)),
+            sinan=pode_acessar_sinan(current_user),
         )
     return g.user_experience
 

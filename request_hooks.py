@@ -144,7 +144,8 @@ _LIVRES_CONTA_UNIDADE = frozenset({
 
 
 def _manter_conta_de_unidade_na_notificacao():
-    """Conta com o perfil "Unidade de saúde (somente Notificação SINAN)" fica dentro da área SINAN.
+    """Conta com o perfil "Unidade de saúde (somente Notificação SINAN)" ou "Master da
+    Notificação SINAN" fica dentro da área SINAN.
 
     As rotas da área já conferem a unidade de cada ficha; aqui só se fecha o
     resto do site. Demais contas não são afetadas.
@@ -152,14 +153,14 @@ def _manter_conta_de_unidade_na_notificacao():
     endpoint = request.endpoint or ""
     if not endpoint or endpoint == "static" or endpoint.endswith(".static"):
         return None
-    from services.sfa_notificacao import conta_so_notificacao, unidades_do_usuario
+    from services.sfa_notificacao import conta_so_notificacao, pode_acessar
 
     if not conta_so_notificacao(current_user):
         return None
     nome = endpoint.rsplit(".", 1)[-1]
     if nome in _LIVRES_CONTA_UNIDADE:
         return None
-    if not unidades_do_usuario(current_user):
+    if not pode_acessar(current_user):
         return render_template("sfa/notificacao_sem_unidade.html"), 403
     if nome.startswith("notificacao_"):
         return None
