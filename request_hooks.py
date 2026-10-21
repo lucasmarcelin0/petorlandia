@@ -7,6 +7,7 @@ Extraído de app.py durante a modularização. Registrar com:
 """
 from __future__ import annotations
 
+import re
 import uuid
 from urllib.parse import urlsplit, urlunsplit
 
@@ -18,6 +19,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user
@@ -139,8 +141,52 @@ def _redirect_insecure_request():
 # própria senha e o que as páginas dela carregam (CEP da ficha, token CSRF, worker).
 _LIVRES_CONTA_UNIDADE = frozenset({
     "logout", "change_password", "login_view", "api_cep_lookup", "fresh_csrf_token",
-    "service_worker", "favicon_ico", "health_live", "health_ready",
+    "service_worker", "favicon_ico", "health_live", "health_ready", "ver_como_sair",
 })
+
+
+def _ver_como_somente_leitura():
+    """No "Ver como" (services.ver_como) o administrador só lê: envios que gravam são recusados.
+
+    "Sair" da conta vista devolve o administrador à própria conta, sem deslogar.
+    """
+    from services.ver_como import CHAVE_SESSAO, MENSAGEM_SOMENTE_LEITURA, METODOS_DE_LEITURA, ativo
+
+    if CHAVE_SESSAO not in session:
+        return None
+    current_user.is_authenticated  # carrega a conta e, com ela, o modo
+    if not ativo():
+        return None
+    nome = (request.endpoint or "").rsplit(".", 1)[-1]
+    if nome == "logout":
+        return redirect(url_for("ver_como_sair"))
+    if nome == "ver_como_sair" or request.method in METODOS_DE_LEITURA:
+        return None
+    if request.accept_mimetypes["application/json"] >= request.accept_mimetypes["text/html"]:
+        return jsonify(success=False, error="Forbidden", message=MENSAGEM_SOMENTE_LEITURA,
+                       category="warning"), 403
+    flash(MENSAGEM_SOMENTE_LEITURA, "warning")
+    return redirect(_back_to_form_target(), code=303)
+
+
+_BODY = re.compile(r"<body\b[^>]*>", re.IGNORECASE)
+
+
+def _faixa_ver_como(response):
+    """Faixa fixa em toda página HTML enquanto o administrador vê o site como outra conta."""
+    from services.ver_como import ativo
+
+    dados = ativo()
+    if (not dados or response.direct_passthrough or response.is_streamed or response.mimetype != "text/html"
+            or response.headers.get("Content-Encoding")):
+        return response
+    corpo = response.get_data(as_text=True)
+    marca = _BODY.search(corpo)
+    if marca is None:
+        return response
+    faixa = render_template("partials/ver_como_faixa.html", ver_como=dados)
+    response.set_data(corpo[:marca.end()] + faixa + corpo[marca.end():])
+    return response
 
 
 def _manter_conta_de_unidade_na_notificacao():
@@ -384,8 +430,10 @@ def handle_unhandled_exception(err):
 def register_request_hooks(app):
     app.before_request(_redirect_insecure_request)
     app.before_request(_attach_request_id)
+    app.before_request(_ver_como_somente_leitura)
     app.before_request(_manter_conta_de_unidade_na_notificacao)
     app.after_request(_set_request_id_header)
+    app.after_request(_faixa_ver_como)
     app.add_url_rule("/live", endpoint="health_live", view_func=lambda: _health_response(False), methods=["GET"])
     app.add_url_rule("/ready", endpoint="health_ready", view_func=lambda: _health_response(True), methods=["GET"])
     app.add_url_rule(

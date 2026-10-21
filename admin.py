@@ -1,6 +1,7 @@
 from flask_admin import Admin, BaseView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.model import typefmt
+from flask_admin.model.template import EndpointLinkRowAction
 from flask_admin.form import fields as admin_form_fields
 from wtforms import fields as wtforms_fields, widgets as wtforms_widgets
 from wtforms.fields.core import UnboundField
@@ -756,6 +757,11 @@ class UserAdminView(MyModelView):
         ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
+
+    # "Ver como" (services.ver_como): o administrador vê o site como a conta, só lendo.
+    column_extra_row_actions = [
+        EndpointLinkRowAction('fa fa-eye', 'ver_como_iniciar', title='Ver como esta conta', id_arg='user_id'),
+    ]
 
     form_overrides = {'role': SelectField, 'worker': SelectField, 'date_of_birth': DateField}
     form_args = {
