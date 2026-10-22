@@ -549,14 +549,42 @@ def pessoa_no_documento(user=None):
 
 
 def acting_clinic_id(user=None):
-    """Clínica de atuação: cadastro do usuário, do perfil ou do estágio."""
+    """Clínica de atuação do usuário.
+
+    Para estagiário, só vale vínculo operacional (equipe da clínica ou estágio
+    ativo): ``User.clinica_id`` também marca de qual clínica a pessoa é
+    cliente e não pode abrir a agenda de outra clínica. Demais perfis seguem
+    a ordem de antes (cadastro do usuário, perfil veterinário, estágio).
+    """
 
     user = _resolve_user(user)
     if not user:
         return None
+    vet = getattr(user, 'veterinario', None)
+    intern = (
+        (vet is not None and getattr(vet, 'is_estagiario', False))
+        or is_intern_account(user)
+        or active_internship_staff(user) is not None
+    )
+    if intern:
+        operacionais = []
+        for staff in getattr(user, 'clinic_roles', None) or []:
+            clinic_id = getattr(staff, 'clinic_id', None)
+            if not clinic_id:
+                continue
+            try:
+                vigente = (not staff.is_intern) or staff.internship_active
+            except Exception:  # noqa: BLE001 -- vínculo malformado nunca vira acesso
+                vigente = False
+            if vigente:
+                operacionais.append(clinic_id)
+        preferida = getattr(vet, 'clinica_id', None)
+        if preferida in operacionais:
+            return preferida
+        return operacionais[0] if operacionais else None
     return (
         getattr(user, 'clinica_id', None)
-        or getattr(getattr(user, 'veterinario', None), 'clinica_id', None)
+        or getattr(vet, 'clinica_id', None)
         or internship_clinic_id(user)
     )
 
