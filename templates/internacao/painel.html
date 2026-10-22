@@ -30,7 +30,7 @@
     <li class="ih-dose-card {% if late %}ih-dose--late{% endif %}" id="dose-{{ dose.id }}" data-ih-dose-card {% if late %}data-ih-late{% endif %}>
       <div class="ih-dose-card__time ih-dose__time">{{ horario(dose.prevista_para) }}{% if late %}<small>Horário vencido</small>{% endif %}</div>
       <div class="ih-dose-card__who"><strong>{{ dose.internacao.animal.name }}</strong><small>{{ dose.internacao.leito or 'Sem leito definido' }}</small></div>
-      <div class="ih-dose-card__what"><strong>{{ dose.prescricao.medicamento }}</strong><small>{{ dose.prescricao.dose }} · {{ dose.prescricao.via }}</small></div>
+      <div class="ih-dose-card__what"><strong>{{ dose.prescricao.medicamento }}</strong>{% if dose.prescricao.apresentacao %}<small>{{ dose.prescricao.apresentacao }}</small>{% endif %}<small><b>{{ dose.prescricao.dose }}</b> · {{ dose.prescricao.via }}</small></div>
       <div class="ih-dose-card__status"><span data-ih-dose-status>{{ estado(dose.status) }}</span><small data-ih-dose-info hidden></small></div>
       <div class="ih-dose-card__actions">
         {% with contexto_dose='painel' %}{% include 'internacao/_dose_form.html' %}{% endwith %}

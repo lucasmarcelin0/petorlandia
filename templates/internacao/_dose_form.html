@@ -16,7 +16,7 @@
     <form method="post" action="{{ url_for('internacao.registrar', dose_id=dose.id) }}" data-ih-submit data-ih-ajax="dose"
           data-ih-dose="{{ dose.id }}" data-prevista="{{ dose.prevista_para|internacao_iso }}" data-tolerancia="{{ tol }}"
           {% if historico %}data-ih-historico{% endif %}>
-      <div class="ih-notice mb-3"><strong>{{ ep.animal.name }}</strong> · Leito {{ ep.leito or 'não informado' }}<br>{{ dose.prescricao.medicamento }} · <b>{{ dose.prescricao.dose }}</b> · {{ dose.prescricao.via }}<br><span class="ih-small">Previsto: {{ dose.prevista_para|internacao_datetime }}</span>{% if no_painel and ep.alergias %}<br><span class="ih-small"><strong>Alergias / alertas:</strong> {{ ep.alergias }}</span>{% endif %}</div>
+      <div class="ih-notice mb-3"><strong>{{ ep.animal.name }}</strong> · Leito {{ ep.leito or 'não informado' }}<br>{{ dose.prescricao.medicamento }}{% if dose.prescricao.apresentacao %} ({{ dose.prescricao.apresentacao }}){% endif %} · <b>{{ dose.prescricao.dose }}</b> · {{ dose.prescricao.via }}<br><span class="ih-small">Previsto: {{ dose.prevista_para|internacao_datetime }}</span>{% if no_painel and ep.alergias %}<br><span class="ih-small"><strong>Alergias / alertas:</strong> {{ ep.alergias }}</span>{% endif %}</div>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="idempotency_key" value="{{ vals.get('idempotency_key') or idempotency_key() }}">
       {% if no_painel %}<input type="hidden" name="voltar" value="painel">{% if filtro_doses is defined and filtro_doses == 'atrasadas' %}<input type="hidden" name="doses" value="atrasadas">{% endif %}{% endif %}

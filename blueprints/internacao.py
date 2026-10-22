@@ -1,4 +1,5 @@
 """Prontuário hospitalar: acesso da equipe, execução e documentos por clínica."""
+import re
 from datetime import timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
@@ -68,7 +69,9 @@ def format_time(value):
 @bp.app_context_processor
 def hospital_context():
     return {'pode_acessar_internacao': pode_acessar_internacao,
-            'idempotency_key': lambda: str(uuid4())}
+            'idempotency_key': lambda: str(uuid4()),
+            'unidades_dose': DOSE_UNITS, 'unidades_intervalo': INTERVAL_UNITS,
+            'separar_dose': split_dose, 'separar_intervalo': split_interval}
 
 
 SESSION_CLINIC_KEY = 'internacao_clinica_id'
@@ -159,6 +162,147 @@ def _evolution_data():
     if parameters:
         data['parametros'] = parameters
     return data
+
+
+# Quantidade e intervalo chegam do formulário em campos compactos (número +
+# unidade) e são gravados nos campos de sempre (``dose`` em texto e
+# ``intervalo_horas``). Envios com ``dose``/``intervalo_horas`` continuam valendo.
+DOSE_UNITS = (
+    ('mL', 'mL', 'mL', 'mL'),
+    ('gota', 'gota', 'gotas', 'gota(s)'),
+    ('comprimido', 'comprimido', 'comprimidos', 'comprimido(s)'),
+    ('capsula', 'cápsula', 'cápsulas', 'cápsula(s)'),
+    ('mg', 'mg', 'mg', 'mg'),
+    ('g', 'g', 'g', 'g (grama)'),
+    ('mcg', 'mcg', 'mcg', 'mcg'),
+    ('UI', 'UI', 'UI', 'UI'),
+    ('ampola', 'ampola', 'ampolas', 'ampola(s)'),
+    ('sache', 'sachê', 'sachês', 'sachê(s)'),
+    ('aplicacao', 'aplicação', 'aplicações', 'aplicação(ões)'),
+)
+DOSE_UNIT_OTHER = 'outra'
+INTERVAL_UNITS = (('minutos', 'minutos'), ('horas', 'horas'), ('dias', 'dias'))
+MAX_INTERVAL_HOURS = Decimal(720)
+_DOSE_UNIT_BY_KEY = {key: (singular, plural) for key, singular, plural, _ in DOSE_UNITS}
+_DOSE_UNIT_BY_TEXT = {text.casefold(): key for key, singular, plural, _ in DOSE_UNITS
+                      for text in (singular, plural)}
+_AMOUNT_RE = re.compile(r'^(\d{1,6}(?:[.,]\d{1,3})?|\d{1,3}/\d{1,3})$')
+_DOSE_TEXT_RE = re.compile(r'^\s*(\d{1,6}(?:[.,]\d{1,3})?|\d{1,3}/\d{1,3})\s+(\S.*?)\s*$')
+
+
+def _decimal_text(value):
+    return format(Decimal(value).normalize(), 'f').replace('.', ',')
+
+
+def _amount(raw):
+    """Quantidade digitada (0,5 · 0.5 · 1/2) → (texto exibido, valor numérico)."""
+    text = str(raw or '').strip().replace(' ', '')
+    if not _AMOUNT_RE.match(text):
+        raise hospital.InternacaoError('Informe a quantidade com números, como 0,5 · 2 · 1/2.')
+    if '/' in text:
+        numerator, denominator = (int(part) for part in text.split('/'))
+        if not numerator or not denominator:
+            raise hospital.InternacaoError('Informe uma fração válida, como 1/2 ou 1/4.')
+        return text, Decimal(numerator) / Decimal(denominator)
+    value = Decimal(text.replace(',', '.'))
+    if value <= 0:
+        raise hospital.InternacaoError('A quantidade a administrar deve ser maior que zero.')
+    return _decimal_text(value), value
+
+
+def _dose_text(data):
+    unit = str(data.get('dose_unidade') or '').strip()
+    other = str(data.get('dose_unidade_outra') or '').strip()
+    raw_amount = str(data.get('dose_valor') or '').strip()
+    if unit == DOSE_UNIT_OTHER:
+        if not other:
+            raise hospital.InternacaoError('Descreva a unidade da quantidade a administrar.')
+        return f'{_amount(raw_amount)[0]} {other}' if raw_amount else other
+    if unit not in _DOSE_UNIT_BY_KEY:
+        raise hospital.InternacaoError('Escolha a unidade da quantidade a administrar.')
+    if not raw_amount:
+        raise hospital.InternacaoError('Informe a quantidade a administrar.')
+    text, value = _amount(raw_amount)
+    singular, plural = _DOSE_UNIT_BY_KEY[unit]
+    return f'{text} {plural if value >= 2 else singular}'
+
+
+def _interval_hours(data, prefix, label, maximum=None):
+    unit = str(data.get(f'{prefix}_unidade') or 'horas').strip()
+    raw = str(data.get(f'{prefix}_valor') or '').strip().replace(',', '.')
+    if unit not in dict(INTERVAL_UNITS):
+        raise hospital.InternacaoError(f'Escolha a unidade de {label}: minutos, horas ou dias.')
+    try:
+        value = Decimal(raw)
+        if not value.is_finite() or value <= 0:
+            raise ValueError()
+    except (InvalidOperation, ValueError):
+        raise hospital.InternacaoError(f'Informe {label} com um número maior que zero.') from None
+    if unit == 'minutos':
+        if value != value.to_integral_value():
+            raise hospital.InternacaoError(f'Informe {label} em minutos inteiros.')
+        hours = value / 60
+    else:
+        hours = value * 24 if unit == 'dias' else value
+    if hours != hours.quantize(Decimal('0.001')):
+        raise hospital.InternacaoError(
+            f'{label.capitalize()} precisa formar horários exatos: em minutos, use múltiplos de 3 '
+            '(15, 30, 45…); em horas ou dias, até 3 casas decimais.')
+    if maximum is not None and hours > maximum:
+        raise hospital.InternacaoError(f'{label.capitalize()} pode ser de no máximo 30 dias (720 horas).')
+    return format(hours.quantize(Decimal('0.001')).normalize(), 'f')
+
+
+def _prescription_data():
+    data = _data()
+    if 'dose_valor' in data or 'dose_unidade' in data:
+        data['dose'] = _dose_text(data)
+    if data.get('modo') == 'intervalo' and 'intervalo_valor' in data:
+        data['intervalo_horas'] = _interval_hours(data, 'intervalo', 'o intervalo', MAX_INTERVAL_HOURS)
+    if data.get('modo') == 'prn' and 'intervalo_minimo_valor' in data:
+        data['intervalo_minimo_horas'] = _interval_hours(data, 'intervalo_minimo', 'o intervalo mínimo')
+    return data
+
+
+def split_dose(text):
+    """Separa ``dose`` gravada em número e unidade para preencher o formulário."""
+    text = str(text or '').strip()
+    match = _DOSE_TEXT_RE.match(text)
+    if not match:
+        return {'valor': '', 'unidade': DOSE_UNIT_OTHER if text else '', 'outra': text}
+    amount, unit_text = match.groups()
+    key = _DOSE_UNIT_BY_TEXT.get(unit_text.casefold())
+    if key:
+        return {'valor': amount, 'unidade': key, 'outra': ''}
+    return {'valor': amount, 'unidade': DOSE_UNIT_OTHER, 'outra': unit_text}
+
+
+def split_interval(hours):
+    """Intervalo em horas → (número, unidade) mais natural para o formulário."""
+    try:
+        value = Decimal(str(hours).replace(',', '.')) if hours not in (None, '') else None
+    except InvalidOperation:
+        return str(hours), 'horas'
+    if value is None or not value.is_finite() or value <= 0:
+        return ('' if value is None else str(hours)), 'horas'
+    if value >= 24 and value % 24 == 0:
+        return _decimal_text(value / 24), 'dias'
+    if value < 1 and (value * 60) == (value * 60).to_integral_value():
+        return _decimal_text(value * 60), 'minutos'
+    return _decimal_text(value), 'horas'
+
+
+@bp.app_template_filter('internacao_intervalo')
+def format_interval(hours):
+    """Intervalo legível: 30 min · 8 h · 1,5 h · 2 dias."""
+    amount, unit = split_interval(hours)
+    if not amount:
+        return '—'
+    if unit == 'minutos':
+        return f'{amount} min'
+    if unit == 'dias':
+        return f'{amount} dia' if amount == '1' else f'{amount} dias'
+    return f'{amount} h'
 
 
 def _integer(value, label='Identificador'):
@@ -589,7 +733,7 @@ def previa(internacao_id):
     try:
         if episode.status != 'ativa':
             raise hospital.InternacaoError('Esta internação já foi encerrada.')
-        times = hospital.prever_horarios(_data())
+        times = hospital.prever_horarios(_prescription_data())
         return jsonify(ok=True, horarios=[_utc(value).isoformat() for value in times],
                        total=len(times), fuso='America/Sao_Paulo')
     except hospital.InternacaoError as error:
@@ -601,7 +745,7 @@ def previa(internacao_id):
 def prescrever(internacao_id):
     episode = ensure_internacao(internacao_id, prescriber=True)
     try:
-        order = hospital.prescrever(episode, current_user, _data())
+        order = hospital.prescrever(episode, current_user, _prescription_data())
         return _result(order, 'Prescrição publicada e horários programados.', episode.id, 201,
                        anchor=f'prescricao-{order.id}')
     except (hospital.InternacaoError, IntegrityError) as error:
@@ -613,7 +757,7 @@ def prescrever(internacao_id):
 def revisar(prescricao_id):
     order = ensure_prescricao(prescricao_id, prescriber=True)
     try:
-        revision = hospital.revisar_prescricao(order, current_user, _data())
+        revision = hospital.revisar_prescricao(order, current_user, _prescription_data())
         return _result(revision, 'Nova versão publicada. O histórico anterior foi preservado.', order.internacao_id, 201,
                        anchor=f'prescricao-{revision.id}')
     except (hospital.InternacaoError, IntegrityError) as error:

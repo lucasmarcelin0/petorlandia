@@ -292,6 +292,150 @@ def test_busca_de_medicamento_da_prescricao_consulta_o_catalogo(client, ward):
     assert any(item["nome"] == "Dipirona sódica" for item in results)
 
 
+# Campos compactos: número + unidade para quantidade e intervalo -----------------
+
+def _compact_form(**changes):
+    data = _prescription_data(dose_valor="2", dose_unidade="comprimido", intervalo_valor="8",
+                              intervalo_unidade="horas", inicio_em="2026-10-22T13:00",
+                              fim_em="2026-10-23T13:00")
+    del data["dose"], data["intervalo_horas"]
+    data.update(changes)
+    return data
+
+
+@pytest.mark.parametrize("valor, unidade, outra, esperado", [
+    ("2", "comprimido", "", "2 comprimidos"),
+    ("1,5", "comprimido", "", "1,5 comprimido"),
+    ("1/2", "comprimido", "", "1/2 comprimido"),
+    ("0.50", "mL", "", "0,5 mL"),
+    ("20", "gota", "", "20 gotas"),
+    ("10", "g", "", "10 g"),
+    ("2,5", "outra", "mL/kg/h", "2,5 mL/kg/h"),
+    ("", "outra", "Conforme tabela anexa", "Conforme tabela anexa"),
+])
+def test_quantidade_compacta_vira_texto_da_dose(valor, unidade, outra, esperado):
+    from blueprints.internacao import _dose_text
+
+    assert _dose_text({"dose_valor": valor, "dose_unidade": unidade, "dose_unidade_outra": outra}) == esperado
+
+
+@pytest.mark.parametrize("dados", [
+    {"dose_valor": "2", "dose_unidade": ""},
+    {"dose_valor": "", "dose_unidade": "mL"},
+    {"dose_valor": "0", "dose_unidade": "mL"},
+    {"dose_valor": "dois", "dose_unidade": "mL"},
+    {"dose_valor": "1", "dose_unidade": "outra", "dose_unidade_outra": ""},
+])
+def test_quantidade_compacta_recusa_valores_invalidos(dados):
+    from blueprints.internacao import _dose_text
+
+    with pytest.raises(hospital.InternacaoError):
+        _dose_text(dados)
+
+
+@pytest.mark.parametrize("valor, unidade, horas", [
+    ("8", "horas", "8"), ("1,5", "horas", "1.5"), ("30", "minutos", "0.5"),
+    ("15", "minutos", "0.25"), ("2", "dias", "48"),
+])
+def test_intervalo_compacto_converte_para_horas(valor, unidade, horas):
+    from blueprints.internacao import _interval_hours
+
+    assert _interval_hours({"x_valor": valor, "x_unidade": unidade}, "x", "o intervalo") == horas
+
+
+@pytest.mark.parametrize("valor, unidade", [
+    ("20", "minutos"), ("7,5", "minutos"), ("0", "horas"), ("31", "dias"), ("8", "semanas"),
+])
+def test_intervalo_compacto_recusa_horarios_inexatos_ou_invalidos(valor, unidade):
+    from blueprints.internacao import MAX_INTERVAL_HOURS, _interval_hours
+
+    with pytest.raises(hospital.InternacaoError):
+        _interval_hours({"x_valor": valor, "x_unidade": unidade}, "x", "o intervalo", MAX_INTERVAL_HOURS)
+
+
+@pytest.mark.parametrize("texto, partes", [
+    ("2 comprimidos", {"valor": "2", "unidade": "comprimido", "outra": ""}),
+    ("0,5 mL", {"valor": "0,5", "unidade": "mL", "outra": ""}),
+    ("1/2 comprimido", {"valor": "1/2", "unidade": "comprimido", "outra": ""}),
+    ("2,5 mL/kg/h", {"valor": "2,5", "unidade": "outra", "outra": "mL/kg/h"}),
+    ("Meia ampola", {"valor": "", "unidade": "outra", "outra": "Meia ampola"}),
+    ("", {"valor": "", "unidade": "", "outra": ""}),
+])
+def test_dose_gravada_volta_separada_para_o_formulario(texto, partes):
+    from blueprints.internacao import split_dose
+
+    assert split_dose(texto) == partes
+
+
+@pytest.mark.parametrize("horas, partes, exibido", [
+    ("8.000", ("8", "horas"), "8 h"), ("0.5", ("30", "minutos"), "30 min"),
+    ("48", ("2", "dias"), "2 dias"), ("24", ("1", "dias"), "1 dia"), ("1.5", ("1,5", "horas"), "1,5 h"),
+])
+def test_intervalo_gravado_volta_na_unidade_natural(horas, partes, exibido):
+    from blueprints.internacao import format_interval, split_interval
+
+    assert split_interval(horas) == partes
+    assert format_interval(horas) == exibido
+
+
+def test_prescricao_pelo_formulario_compacto_grava_dose_e_intervalo(client, ward):
+    from models.internacao import InternacaoPrescricao
+
+    admission = _admit(ward)
+    _login(client, ward.vet)
+    path = f"/internacao/{admission.id}/prescricoes"
+    preview = client.post(f"{path}/previa", data=_compact_form(intervalo_valor="30", intervalo_unidade="minutos"),
+                          headers=JSON_HEADERS)
+    assert preview.status_code == 200 and preview.get_json()["total"] == 48
+    response = client.post(path, data=_compact_form(
+        apresentacao="500 mg comprimido", intervalo_valor="30", intervalo_unidade="minutos"))
+    assert response.status_code == 303
+    order = InternacaoPrescricao.query.one()
+    assert order.dose == "2 comprimidos" and order.apresentacao == "500 mg comprimido"
+    assert float(order.intervalo_horas) == 0.5
+    html = client.get(f"/internacao/{admission.id}").get_data(as_text=True)
+    assert "A cada 30 min" in html
+    revision = re.search(rf'<form[^>]*action="/internacao/prescricoes/{order.id}/revisar".*?</form>', html, re.S).group(0)
+    assert 'name="dose_valor" value="2"' in revision
+    assert '<option value="comprimido" selected>' in revision
+    assert 'name="intervalo_valor" value="30"' in revision
+    assert '<option value="minutos" selected>' in revision
+
+
+def test_prn_aceita_intervalo_minimo_em_dias(client, ward):
+    from models.internacao import InternacaoPrescricao
+
+    admission = _admit(ward)
+    _login(client, ward.vet)
+    data = _compact_form(modo="prn", indicacao_prn="Dor", intervalo_minimo_valor="1",
+                         intervalo_minimo_unidade="dias", max_doses_24h="1")
+    del data["intervalo_valor"], data["intervalo_unidade"]
+    assert client.post(f"/internacao/{admission.id}/prescricoes", data=data).status_code == 303
+    assert float(InternacaoPrescricao.query.one().intervalo_minimo_horas) == 24
+
+
+def test_intervalo_em_minutos_inexato_explica_e_nao_grava(client, ward):
+    from models.internacao import InternacaoPrescricao
+
+    admission = _admit(ward)
+    _login(client, ward.vet)
+    response = client.post(f"/internacao/{admission.id}/prescricoes",
+                           data=_compact_form(intervalo_valor="20", intervalo_unidade="minutos"),
+                           headers=JSON_HEADERS)
+    assert response.status_code == 400
+    assert "múltiplos de 3" in response.get_json()["erro"]
+    assert InternacaoPrescricao.query.count() == 0
+
+
+def test_dose_mostra_apresentacao_no_painel_e_na_checagem(client, ward):
+    _prescribe(ward, apresentacao="500 mg/mL gotas", dose="20 gotas")
+    _login(client, ward.vet)
+    html = client.get(f"/internacao?clinica_id={ward.clinic.id}").get_data(as_text=True)
+    card = html[html.index("ih-dose-card__what"):]
+    assert card.index("500 mg/mL gotas") < card.index("20 gotas")
+    assert "(500 mg/mL gotas)" in html
+
+
 # Gargalo 10 — busca na admissão --------------------------------------------
 
 def test_admissao_busca_por_animal_ou_tutor_alem_da_lista(client, ward):

@@ -106,9 +106,131 @@
     return parts.filter(function (part) { return typeof part === 'string' && part.trim(); }).join(' · ');
   }
 
+  function plainText(value) {
+    return String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  }
+
+  const PRACTICAL_UNITS = {
+    ml: 'mL', gota: 'gota', gotas: 'gota', comprimido: 'comprimido', comprimidos: 'comprimido',
+    capsula: 'capsula', capsulas: 'capsula', ampola: 'ampola', ampolas: 'ampola', sache: 'sache',
+    saches: 'sache', aplicacao: 'aplicacao', g: 'g', mg: 'mg', mcg: 'mcg', ui: 'UI'
+  };
+
+  // Quantidade: "Outra" abre a descrição livre; a unidade sugerida pela
+  // apresentação só substitui a escolhida pela própria sugestão.
+  function setupDoseFields(form) {
+    const amount = form.querySelector('[data-ih-dose-valor]');
+    const unit = form.querySelector('[data-ih-dose-unidade]');
+    const other = form.querySelector('[data-ih-dose-outra]');
+    if (!amount || !unit || !other) return null;
+    function sync() {
+      const isOther = unit.value === 'outra';
+      other.hidden = !isOther;
+      other.required = isOther;
+      amount.required = !isOther;
+    }
+    unit.addEventListener('change', function () {
+      unit.dataset.ihAuto = 'false';
+      sync();
+      if (unit.value === 'outra') other.focus();
+    });
+    sync();
+    return {
+      suggest: function (practical) {
+        const key = PRACTICAL_UNITS[plainText(practical)];
+        if (!key || (unit.value && unit.dataset.ihAuto !== 'true')) return;
+        unit.value = key;
+        unit.dataset.ihAuto = 'true';
+        sync();
+      }
+    };
+  }
+
+  function setupPresentations(form, dose) {
+    const select = form.querySelector('[data-ih-apresentacoes]');
+    const input = form.querySelector('[data-ih-apresentacao]');
+    const help = form.querySelector('[data-ih-apresentacoes-ajuda]');
+    const medication = form.querySelector('[data-ih-medicamento]');
+    if (!select || !input || !medication || !medication.dataset.detailUrl) return null;
+    const defaultHelp = help ? help.textContent : '';
+    let sequence = 0;
+    let options = [];
+
+    function setHelp(text) {
+      if (help) help.textContent = text || defaultHelp;
+    }
+
+    function clear() {
+      sequence += 1;
+      options = [];
+      select.replaceChildren();
+      select.hidden = true;
+      setHelp('');
+    }
+
+    select.addEventListener('change', function () {
+      const chosen = options[Number(select.value)];
+      if (!chosen) return;
+      input.value = chosen.descricao;
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+      if (dose) dose.suggest(chosen.unidade_pratica);
+    });
+
+    async function load(detail) {
+      clear();
+      const id = Number(detail.id);
+      if (!id) return;
+      const current = sequence;
+      setHelp('Buscando apresentações no catálogo…');
+      const url = new URL(medication.dataset.detailUrl.replace(/\/0\/detalhe$/, '/' + id + '/detalhe'), window.location.origin);
+      if (detail.nome) url.searchParams.set('nome_exibicao', detail.nome);
+      if (detail.comercial) url.searchParams.set('nome_comercial_filtro', detail.comercial);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(function () { controller.abort(); }, 8000);
+      try {
+        const response = await fetch(url, {
+          headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: controller.signal
+        });
+        if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error();
+        const result = await response.json();
+        if (current !== sequence) return;
+        const seen = new Set();
+        options = (Array.isArray(result.apresentacoes) ? result.apresentacoes : []).filter(function (item) {
+          const label = item && typeof item.descricao === 'string' ? item.descricao.trim() : '';
+          if (!label || seen.has(label.toLowerCase())) return false;
+          seen.add(label.toLowerCase());
+          item.descricao = label.slice(0, input.maxLength > 0 ? input.maxLength : 200);
+          return true;
+        });
+        if (!options.length) {
+          setHelp('Este medicamento não tem apresentações cadastradas. Digite a apresentação, se houver.');
+          return;
+        }
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Escolher do catálogo (' + options.length + ')';
+        select.appendChild(placeholder);
+        options.forEach(function (item, index) {
+          const option = document.createElement('option');
+          option.value = String(index);
+          option.textContent = item.descricao;
+          select.appendChild(option);
+        });
+        select.hidden = false;
+        setHelp('Escolha uma apresentação cadastrada ou digite no campo abaixo.');
+      } catch (_error) {
+        if (current === sequence) setHelp('Não foi possível carregar as apresentações agora. Digite a apresentação, se houver.');
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    }
+
+    return {load: load, clear: clear};
+  }
+
   // Lista própria em vez de <datalist>: navegadores de celular não exibem
   // opções preenchidas depois da digitação, e o resultado do catálogo sumia.
-  function setupMedicationSearch(form) {
+  function setupMedicationSearch(form, presentations) {
     const input = form.querySelector('[data-ih-medicamento]');
     if (!input) return;
     const list = document.getElementById(input.getAttribute('aria-controls'));
@@ -167,6 +289,7 @@
       const limit = input.maxLength > 0 ? input.maxLength : 200;
       input.value = option.dataset.value.slice(0, limit);
       close();
+      if (presentations) presentations.load(option.dataset);
       // Avisa o formulário (invalida a prévia) sem disparar nova busca.
       selecting = true;
       input.dispatchEvent(new Event('input', {bubbles: true}));
@@ -191,6 +314,9 @@
         option.setAttribute('role', 'option');
         option.setAttribute('aria-selected', 'false');
         option.dataset.value = name;
+        if (item.id) option.dataset.id = String(item.id);
+        option.dataset.nome = name;
+        if (item.tipo_item === 'comercial' && item.nome_comercial_filtro) option.dataset.comercial = item.nome_comercial_filtro;
         const title = document.createElement('span');
         title.className = 'ih-suggestions__name';
         title.textContent = name;
@@ -218,6 +344,7 @@
 
     input.addEventListener('input', function () {
       if (selecting) return;
+      if (presentations) presentations.clear();
       cancelSearch();
       const query = input.value.trim();
       const currentSequence = sequence;
@@ -282,7 +409,7 @@
   }
 
   document.querySelectorAll('[data-ih-prescricao]').forEach(function (form) {
-    setupMedicationSearch(form);
+    setupMedicationSearch(form, setupPresentations(form, setupDoseFields(form)));
     syncPrescriptionFields(form);
     form.addEventListener('input', function () {
       form.dataset.ihPreviewValid = 'false';
@@ -489,6 +616,18 @@
       if (!field) return;
       field.value = button.dataset.valor;
       field.dispatchEvent(new Event('input', {bubbles: true}));
+    });
+  });
+
+  document.querySelectorAll('[data-ih-intervalo]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      const group = button.closest('[data-ih-modes]');
+      const amount = group && group.querySelector('input');
+      const unit = group && group.querySelector('select');
+      if (!amount || !unit) return;
+      amount.value = button.dataset.ihIntervalo;
+      unit.value = 'horas';
+      amount.dispatchEvent(new Event('input', {bubbles: true}));
     });
   });
 
