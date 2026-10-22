@@ -13,9 +13,14 @@ from extensions import db
 from models import Animal, ClinicStaff, User
 from models.internacao import InternacaoOcorrencia, InternacaoRegistro
 from services import internacao as hospital
-from tests.test_internacao import (  # noqa: F401  (fixture reutilizada)
-    JSON_HEADERS, NOW, _admit, _doses, _login, _prescribe, _prescription_data, _utc, ward,
-)
+try:
+    from tests.test_internacao import (  # noqa: F401  (fixture reutilizada)
+        JSON_HEADERS, NOW, _admit, _doses, _login, _prescribe, _prescription_data, _utc, ward,
+    )
+except ImportError:
+    from test_internacao import (  # noqa: F401  (fixture reutilizada)
+        JSON_HEADERS, NOW, _admit, _doses, _login, _prescribe, _prescription_data, _utc, ward,
+    )
 
 
 def _count_queries(app, call):

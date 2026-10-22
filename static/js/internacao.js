@@ -378,7 +378,7 @@
     if (inner) inner.open = true;
     let parent = element.parentElement && element.parentElement.closest('details');
     while (parent) { parent.open = true; parent = parent.parentElement && parent.parentElement.closest('details'); }
-    if (scroll) element.scrollIntoView({block: 'center'});
+    if (scroll && typeof element.scrollIntoView === 'function') element.scrollIntoView({block: 'center'});
   }
 
   function openAnchor() {
@@ -394,8 +394,142 @@
     const message = element && element.querySelector('[data-ih-msg]:not([hidden])');
     if (message) { message.setAttribute('tabindex', '-1'); message.focus({preventScroll: true}); }
   }
-  openAnchor();
-  window.addEventListener('hashchange', openAnchor);
+
+  function setupInternacaoTabs() {
+    const nav = document.getElementById('internacaoTabs');
+    const container = document.getElementById('internacaoTabContent');
+    if (!nav || !container) return;
+
+    const STORAGE_KEY = 'abaAtivaInternacao';
+    const tabLinks = Array.from(nav.querySelectorAll('[data-bs-target], [href^="#"]'));
+    const panes = Array.from(container.querySelectorAll('.tab-pane'));
+
+    function getTargetId(link) {
+      if (!link) return '';
+      const target = link.getAttribute('data-bs-target') || link.getAttribute('href') || '';
+      return target.replace(/^#/, '');
+    }
+
+    function activateTab(targetId, updateHash, scrollTarget) {
+      if (!targetId) return false;
+      const cleanId = targetId.replace(/^#/, '');
+      const targetPane = document.getElementById(cleanId);
+      if (!targetPane || !panes.includes(targetPane)) return false;
+
+      tabLinks.forEach(function (link) {
+        const isCurrent = getTargetId(link) === cleanId;
+        link.classList.toggle('active', isCurrent);
+        link.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        link.setAttribute('tabindex', isCurrent ? '0' : '-1');
+      });
+
+      panes.forEach(function (pane) {
+        const isCurrent = pane === targetPane;
+        pane.classList.toggle('active', isCurrent);
+        pane.classList.toggle('show', isCurrent);
+      });
+
+      try {
+        window.localStorage.setItem(STORAGE_KEY, cleanId);
+      } catch (_e) {}
+
+      if (updateHash) {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#' + cleanId);
+        } else {
+          window.location.hash = '#' + cleanId;
+        }
+      }
+
+      if (scrollTarget) {
+        reveal(scrollTarget, true);
+      }
+
+      return true;
+    }
+
+    nav.addEventListener('click', function (event) {
+      const link = event.target.closest('[data-bs-target], [href^="#"]');
+      if (!link || !nav.contains(link)) return;
+      const targetId = getTargetId(link);
+      if (targetId) {
+        event.preventDefault();
+        activateTab(targetId, true);
+      }
+    });
+
+    function resolveLocationHash() {
+      const hash = window.location.hash ? window.location.hash.slice(1) : '';
+      if (!hash) return false;
+
+      if (activateTab(hash, false)) {
+        return true;
+      }
+
+      const element = document.getElementById(hash);
+      if (element) {
+        const parentPane = element.closest('.tab-pane');
+        if (parentPane && panes.includes(parentPane)) {
+          activateTab(parentPane.id, false, element);
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    let initialized = false;
+    if (focusTarget && focusTarget.dataset.ihFocus && focusTarget.dataset.ihFocus !== 'pagina') {
+      const el = document.getElementById(focusTarget.dataset.ihFocus);
+      if (el) {
+        const parentPane = el.closest('.tab-pane');
+        if (parentPane && panes.includes(parentPane)) {
+          activateTab(parentPane.id, false, el);
+          initialized = true;
+        }
+      }
+    }
+
+    if (!initialized) {
+      initialized = resolveLocationHash();
+    }
+    if (!initialized) {
+      let saved = null;
+      try {
+        saved = window.localStorage.getItem(STORAGE_KEY);
+      } catch (_e) {}
+      if (saved && activateTab(saved, false)) {
+        initialized = true;
+      }
+    }
+    if (!initialized && panes.length > 0) {
+      activateTab(panes[0].id, false);
+    }
+
+    window.addEventListener('hashchange', function () {
+      resolveLocationHash();
+    });
+
+    document.addEventListener('click', function (event) {
+      const anchor = event.target.closest('a[href^="#"]');
+      if (!anchor || nav.contains(anchor)) return;
+      const href = anchor.getAttribute('href');
+      if (!href || href === '#') return;
+      const hash = href.slice(1);
+      if (!hash) return;
+      const element = document.getElementById(hash);
+      if (!element) return;
+
+      const parentPane = element.closest('.tab-pane');
+      if (parentPane && panes.includes(parentPane)) {
+        event.preventDefault();
+        activateTab(parentPane.id, true, element);
+      }
+    });
+  }
+
+  setupInternacaoTabs();
+
   window.addEventListener('pageshow', function () {
     document.querySelectorAll('button[data-ih-original-label]').forEach(function (button) {
       button.disabled = false;
