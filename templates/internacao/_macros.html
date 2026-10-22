@@ -1,0 +1,18 @@
+{% macro csrf() -%}
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{%- endmacro %}
+
+{% macro horario(value, formato='%d/%m %H:%M') -%}
+{% if value %}<time datetime="{{ value.isoformat() }}">{{ value|internacao_datetime }}</time>{% else %}<span class="ih-muted">—</span>{% endif %}
+{%- endmacro %}
+
+{% macro estado(valor) -%}
+{% set labels = {'ativa': 'Internado', 'ativo': 'Ativa', 'alta': 'Alta', 'encerrada': 'Encerrada', 'suspensa': 'Suspensa', 'substituida': 'Revisada', 'pendente': 'Pendente', 'administrada': 'Administrada', 'realizada': 'Administrada', 'feita': 'Administrada', 'nao_administrada': 'Não administrada', 'omitida': 'Não administrada', 'pulada': 'Não administrada', 'cancelada': 'Cancelada', 'retificada': 'Retificada', 'obito': 'Óbito', 'transferencia': 'Transferência'} %}
+<span class="ih-status ih-status--{{ valor }}">{{ labels.get(valor, valor|replace('_', ' ')|capitalize) }}</span>
+{%- endmacro %}
+
+{% macro numero(valor) -%}{{ ('%g'|format(valor|float))|replace('.', ',') }}{%- endmacro %}
+
+{% macro campo_texto(label, nome, valor='', required=false, placeholder='', tipo='text') -%}
+<label class="ih-field"><span>{{ label }}{% if required %} <span aria-label="obrigatório">*</span>{% endif %}</span><input class="form-control" type="{{ tipo }}" name="{{ nome }}" value="{{ valor or '' }}" {% if required %}required{% endif %} {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}></label>
+{%- endmacro %}

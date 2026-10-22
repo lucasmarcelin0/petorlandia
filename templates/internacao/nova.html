@@ -1,0 +1,33 @@
+{% extends 'internacao/base.html' %}
+{% from 'internacao/_macros.html' import csrf, campo_texto with context %}
+{% block page_title %}Nova internação | PetOrlândia{% endblock %}
+{% block internacao_content %}
+{% set dados = valores|default({}) %}
+<a class="ih-back" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none) }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Voltar à internação</a>
+<header class="ih-heading"><div><p class="ih-eyebrow">Admissão do paciente</p><h1>Começar uma internação</h1><p>O cadastro do animal e o histórico continuam conectados ao novo prontuário.</p></div></header>
+{% if clinicas|length > 1 and not consulta_id %}
+<form method="get" action="{{ url_for('internacao.nova') }}" class="ih-filter"><label class="ih-field"><span>Preparar admissão na clínica</span><select class="form-select" name="clinica_id" required>{% for item in clinicas %}<option value="{{ item.id }}" {% if clinica and item.id == clinica.id %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}</select><small>Ao trocar de clínica, as opções de pacientes e profissionais serão atualizadas.</small></label><button class="ih-btn ih-btn--ghost" type="submit">Atualizar seleção</button></form>
+{% endif %}
+<div class="ih-grid">
+  <section class="ih-card"><div class="ih-card__head"><div><h2>Dados da admissão</h2><p>Campos com * são obrigatórios.</p></div></div><div class="ih-card__body">
+    <form method="post" action="{{ url_for('internacao.nova') }}" data-ih-submit>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if consulta_id %}<input type="hidden" name="consulta_id" value="{{ consulta_id }}">{% endif %}
+      <fieldset class="ih-fieldset"><legend>Paciente e equipe</legend><div class="ih-form-grid">
+        <label class="ih-field"><span>Clínica *</span><input type="hidden" name="clinica_id" value="{{ clinica.id }}"><input class="form-control" value="{{ clinica.nome }}" readonly><small>O prontuário será acessível à equipe autorizada desta clínica.</small></label>
+        <label class="ih-field"><span>Animal *</span>{% if animal %}<input type="hidden" name="animal_id" value="{{ animal.id }}"><input class="form-control" value="{{ animal.name }} — {{ animal.owner.name if animal.owner else 'Tutor não informado' }}" readonly>{% else %}<select class="form-select" name="animal_id" required><option value="">Selecione o paciente</option>{% for item in animais %}<option value="{{ item.id }}" {% if dados.get('animal_id')|string == item.id|string %}selected{% endif %}>{{ item.name }} — {{ item.owner.name if item.owner else 'Tutor não informado' }}</option>{% endfor %}</select>{% endif %}</label>
+        <label class="ih-field"><span>Veterinário responsável *</span><select class="form-select" name="responsavel_id" required><option value="">Selecione o responsável</option>{% for item in profissionais %}<option value="{{ item.id }}" {% if dados.get('responsavel_id')|string == item.id|string %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
+        {{ campo_texto('Leito / identificação', 'leito', dados.get('leito'), placeholder='Ex.: Canil 03') }}
+        <label class="ih-field"><span>Peso na admissão (kg)</span><input class="form-control" type="number" name="peso_kg" min="0.001" step="0.001" value="{{ dados.get('peso_kg', '') }}" inputmode="decimal" placeholder="Ex.: 8,5"><small>Informe uma pesagem atual para referência da equipe.</small></label>
+        {{ campo_texto('Alergias / alertas', 'alergias', dados.get('alergias'), placeholder='Ex.: alergia conhecida, isolamento') }}
+      </div></fieldset>
+      <fieldset class="ih-fieldset"><legend>Contexto clínico</legend><div class="ih-form-grid">
+        <label class="ih-field ih-field--wide"><span>Motivo da internação *</span><textarea class="form-control" name="motivo" rows="3" required placeholder="Quadro atual e motivo para acompanhamento hospitalar">{{ dados.get('motivo', '') }}</textarea></label>
+        <label class="ih-field ih-field--wide"><span>Orientações iniciais</span><textarea class="form-control" name="observacoes" rows="3" placeholder="Cuidados gerais, restrições e informações para o primeiro plantão">{{ dados.get('observacoes', '') }}</textarea></label>
+      </div></fieldset>
+      <div class="ih-form-footer"><p>A admissão é registrada com o horário do sistema e seu usuário. Depois, você poderá incluir a prescrição e as evoluções.</p><div class="ih-actions"><a class="ih-btn ih-btn--ghost" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none) }}">Cancelar</a><button class="ih-btn" type="submit">Iniciar internação <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></div></div>
+    </form>
+  </div></section>
+  <aside class="ih-sticky"><div class="ih-card"><div class="ih-card__body"><div class="ih-avatar mb-3"><i class="fa-solid fa-notes-medical" aria-hidden="true"></i></div><h2>Um prontuário para todo o plantão</h2><p class="ih-side-note">Na próxima tela, a equipe poderá consultar as prescrições, registrar cada administração e acompanhar a evolução do paciente.</p><p class="ih-side-note mb-0">Os horários previstos e os horários de administração ficam separados. Cada registro identifica o profissional que o realizou.</p></div></div><div class="ih-notice">O sistema evita duas internações ativas do mesmo animal na mesma clínica. Use “Internação do paciente” na consulta para abrir um prontuário existente.</div></aside>
+</div>
+{% endblock %}

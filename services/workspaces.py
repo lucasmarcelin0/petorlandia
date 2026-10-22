@@ -120,6 +120,11 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         capabilities.add('documents')
     if can_start_consulta(user):
         capabilities.add('start_consultation')
+    from services.internacao_access import pode_acessar_internacao
+    if pode_acessar_internacao(user):
+        area('hospitalization', 'Internação', 'fa-bed-pulse',
+             action('Pacientes e medicações do plantão', 'internacao.painel', 'fa-bed-pulse'),
+             action('Nova internação', 'internacao.nova', 'fa-plus'))
     return Experience(tuple(areas), frozenset(capabilities))
 
 
