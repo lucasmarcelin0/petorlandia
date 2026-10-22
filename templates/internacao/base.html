@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-4') }}">
 {% endblock %}
 {% block main %}
-<div class="ih-shell">
+<div class="ih-shell" data-keep-alerts{% block shell_attrs %}{% endblock %}>
   {% block internacao_content %}{% endblock %}
 </div>
 {% endblock %}

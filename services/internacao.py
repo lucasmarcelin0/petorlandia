@@ -22,6 +22,20 @@ from time_utils import BR_TZ, normalize_to_utc, utcnow
 
 MAX_DIAS_AGENDA = 31
 MAX_OCORRENCIAS = 1000
+# Janela de checagem sem justificativa, simétrica em torno do horário previsto
+# (referência usual para medicação não crítica: até 1 hora antes ou depois).
+# Ajustável por ``INTERNACAO_TOLERANCIA_MINUTOS`` na configuração do app.
+TOLERANCIA_PADRAO_MINUTOS = 60
+
+
+def tolerancia_checagem():
+    """Minutos de tolerância; valores inválidos voltam ao padrão seguro."""
+    try:
+        from flask import current_app
+        value = int(current_app.config.get('INTERNACAO_TOLERANCIA_MINUTOS', TOLERANCIA_PADRAO_MINUTOS))
+    except (RuntimeError, TypeError, ValueError):
+        value = TOLERANCIA_PADRAO_MINUTOS
+    return timedelta(minutes=min(max(value, 0), 240))
 
 
 class InternacaoError(ValueError):
@@ -384,8 +398,14 @@ def _registrar_ocorrencia(ocorrencia, actor, data, *, omitida=False):
     executada, motivo = _momento_execucao(internacao, data, agora, omitida=omitida)
     _autorizar_historico(internacao, actor_id)
     _vigencia(prescricao, executada, explicit=bool(data.get('executada_em')))
-    if executada < _utc(obj.prevista_para) and not motivo:
-        raise InternacaoError('Administração antecipada exige justificativa.')
+    tolerancia = tolerancia_checagem()
+    minutos = int(tolerancia.total_seconds() // 60)
+    if executada < _utc(obj.prevista_para) - tolerancia and not motivo:
+        raise InternacaoError(
+            f'Administração mais de {minutos} min antes do horário previsto exige justificativa.')
+    if executada > _utc(obj.prevista_para) + tolerancia and not motivo:
+        raise InternacaoError(
+            f'Dose checada mais de {minutos} min após o horário previsto: informe a justificativa do atraso.')
     if obj.status not in ('pendente', 'cancelada'):
         raise InternacaoConflict('Esta dose já foi registrada. Atualize a página para consultar o responsável.')
     if obj.status == 'cancelada':

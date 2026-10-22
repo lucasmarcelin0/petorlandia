@@ -1,0 +1,33 @@
+{#- Formulário de checagem de uma dose, usado no prontuário e na ronda do painel.
+    Envia em segundo plano quando há JavaScript (data-ih-ajax); sem ele, o envio
+    tradicional volta para a própria dose (prontuário) ou para o painel. -#}
+{% set ep = dose.internacao %}
+{% set alvo = 'dose-' ~ dose.id %}
+{% set erro = erro_formulario if erro_formulario is defined and erro_formulario and erro_formulario.alvo == alvo else none %}
+{% set vals = valores_dose if erro and valores_dose is defined and valores_dose else {} %}
+{% set janela = (janelas|default({})).get(dose.id, 'no_horario') %}
+{% set tol = tolerancia_minutos|default(60) %}
+{% set historico = dose.status == 'cancelada' or ep.status == 'alta' %}
+{% set exige_motivo = historico or janela != 'no_horario' or vals.get('resultado') == 'omitida' %}
+{% set no_painel = contexto_dose is defined and contexto_dose == 'painel' %}
+<details class="ih-details ih-dose-check mt-2" data-ih-dose-details {% if erro %}open{% endif %}>
+  <summary>{{ 'Lançamento histórico' if dose.status == 'cancelada' else ('Checar dose' if no_painel else 'Registrar esta dose') }}</summary>
+  <div class="ih-details__body">
+    <form method="post" action="{{ url_for('internacao.registrar', dose_id=dose.id) }}" data-ih-submit data-ih-ajax="dose"
+          data-ih-dose="{{ dose.id }}" data-prevista="{{ dose.prevista_para|internacao_iso }}" data-tolerancia="{{ tol }}"
+          {% if historico %}data-ih-historico{% endif %}>
+      <div class="ih-notice mb-3"><strong>{{ ep.animal.name }}</strong> · Leito {{ ep.leito or 'não informado' }}<br>{{ dose.prescricao.medicamento }} · <b>{{ dose.prescricao.dose }}</b> · {{ dose.prescricao.via }}<br><span class="ih-small">Previsto: {{ dose.prevista_para|internacao_datetime }}</span>{% if no_painel and ep.alergias %}<br><span class="ih-small"><strong>Alergias / alertas:</strong> {{ ep.alergias }}</span>{% endif %}</div>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="idempotency_key" value="{{ vals.get('idempotency_key') or idempotency_key() }}">
+      {% if no_painel %}<input type="hidden" name="voltar" value="painel">{% if filtro_doses is defined and filtro_doses == 'atrasadas' %}<input type="hidden" name="doses" value="atrasadas">{% endif %}{% endif %}
+      <label class="ih-field mb-2"><span>O que aconteceu? *</span><select class="form-select" name="resultado" required data-ih-resultado><option value="administrada">Medicação administrada</option><option value="omitida" {% if vals.get('resultado') == 'omitida' %}selected{% endif %}>Não administrada</option></select></label>
+      <label class="ih-field mb-2"><span>Motivo / justificativa<span data-ih-motivo-marca>{% if exige_motivo %} *{% endif %}</span></span><textarea class="form-control" name="motivo" rows="2" placeholder="Obrigatório se não administrada, fora da janela de ±{{ tol }} min ou registrada depois" {% if exige_motivo %}required{% endif %} data-ih-motivo>{{ vals.get('motivo', '') }}</textarea>
+        <small data-ih-janela>{% if janela == 'atrasada' %}Checagem com mais de {{ tol }} min de atraso: informe a justificativa.{% elif janela == 'antecipada' %}Checagem com mais de {{ tol }} min de antecedência: informe a justificativa.{% else %}Dentro da janela de ±{{ tol }} min do horário previsto, a justificativa é opcional.{% endif %}</small></label>
+      <details class="ih-details" {% if historico or vals.get('executada_em') %}open{% endif %}><summary>Registrar um horário anterior</summary><div class="ih-details__body"><label class="ih-field"><span>Horário real da administração</span><input class="form-control" type="datetime-local" name="executada_em" value="{{ vals.get('executada_em', '') }}" {% if historico %}required{% endif %} data-ih-retrospectivo><small>Preencha somente se a administração já ocorreu. Informe uma justificativa acima.</small></label></div></details>
+      <label class="ih-field my-2"><span>Observação</span><input class="form-control" name="observacoes" value="{{ vals.get('observacoes', '') }}" placeholder="Intercorrência ou observação da aplicação"></label>
+      <p class="ih-form-msg {% if erro %}ih-form-msg--erro{% endif %}" data-ih-msg {% if erro %}role="alert"{% else %}role="status"{% endif %} aria-live="polite" {% if not erro %}hidden{% endif %}>{{ erro.mensagem if erro else '' }}</p>
+      <p class="ih-small ih-muted">Sem horário anterior, o sistema registra o horário atual e seu usuário ao confirmar.</p>
+      <button class="ih-btn ih-btn--small" type="submit">Confirmar registro</button>
+    </form>
+  </div>
+</details>

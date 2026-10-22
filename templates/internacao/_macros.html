@@ -16,3 +16,16 @@
 {% macro campo_texto(label, nome, valor='', required=false, placeholder='', tipo='text') -%}
 <label class="ih-field"><span>{{ label }}{% if required %} <span aria-label="obrigatório">*</span>{% endif %}</span><input class="form-control" type="{{ tipo }}" name="{{ nome }}" value="{{ valor or '' }}" {% if required %}required{% endif %} {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}></label>
 {%- endmacro %}
+
+{#- Erro devolvido pelo servidor a um formulário específico (alvo = id do bloco). -#}
+{% macro erro_do(alvo) -%}{% if erro_formulario is defined and erro_formulario and erro_formulario.alvo == alvo %}{{ erro_formulario.mensagem }}{% endif %}{%- endmacro %}
+
+{% macro abrir(alvo) -%}{% if erro_formulario is defined and erro_formulario and erro_formulario.alvo == alvo %}open{% endif %}{%- endmacro %}
+
+{% macro msg_formulario(alvo) -%}
+{% set mensagem = erro_do(alvo) %}
+<p class="ih-form-msg{% if mensagem %} ih-form-msg--erro{% endif %}" data-ih-msg {% if mensagem %}role="alert"{% else %}role="status" hidden{% endif %} aria-live="polite">{{ mensagem }}</p>
+{%- endmacro %}
+
+{#- Valor digitado que volta ao formulário que falhou (nunca a outro formulário). -#}
+{% macro valor_erro(alvo, campo) -%}{% if erro_formulario is defined and erro_formulario and erro_formulario.alvo == alvo and valores_dose is defined %}{{ valores_dose.get(campo, '') }}{% endif %}{%- endmacro %}
