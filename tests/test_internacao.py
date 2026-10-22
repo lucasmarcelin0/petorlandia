@@ -722,12 +722,13 @@ def test_erro_html_de_prescricao_preserva_campos_preenchidos(client, ward, monke
             else f"/internacao/prescricoes/{original.id}/revisar")
     _login(client, ward.vet)
     data = _prescription_data(
-        medicamento="Medicamento com dados preservados", dose="0,75 mL", via="Via conferida",
-        inicio_em="2026-10-22T12:01", fim_em="2026-10-23T12:01",
-        intervalo_horas="0", motivo="Revisão de homologação",
+        medicamento="Medicamento com dados preservados", dose_valor="0,75", dose_unidade="mL",
+        via="Via conferida", inicio_em="2026-10-22T12:01", fim_em="2026-10-23T12:01",
+        intervalo_valor="0", intervalo_unidade="horas", motivo="Revisão de homologação",
     )
+    del data["dose"], data["intervalo_horas"]
     if status == 409:
-        data["intervalo_horas"] = "8"
+        data["intervalo_valor"] = "8"
 
         def concurrent_change(*_args, **_kwargs):
             raise hospital.InternacaoConflict("Registro alterado durante a revisão")
@@ -736,7 +737,7 @@ def test_erro_html_de_prescricao_preserva_campos_preenchidos(client, ward, monke
     response = client.post(path, data=data)
     assert response.status_code == status
     values = _form_inputs(response.get_data(as_text=True), path)
-    for name in ["medicamento", "dose", "via", "inicio_em", "fim_em", "intervalo_horas"]:
+    for name in ["medicamento", "dose_valor", "via", "inicio_em", "fim_em", "intervalo_valor"]:
         assert values[name] == data[name], name
     assert InternacaoPrescricao.query.count() == 1
     assert original.dose == "1 mL"
