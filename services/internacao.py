@@ -217,7 +217,7 @@ def criar_internacao(clinica_id, animal, actor, data):
         status='ativa', motivo=_texto(data, 'motivo', required=True),
         leito=_texto(data, 'leito', maximum=100), alergias=_texto(data, 'alergias'),
         observacoes=_texto(data, 'observacoes'), iniciada_em=iniciada,
-        peso_kg=_numero(data['peso_kg'], 'peso_kg') if data.get('peso_kg') else None,
+        peso_kg=_numero(str(data['peso_kg']).strip().replace(',', '.'), 'peso_kg') if data.get('peso_kg') else None,
     )
     db.session.add(internacao)
     db.session.flush()

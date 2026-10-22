@@ -406,7 +406,7 @@ def test_dose_gravada_volta_separada_para_o_formulario(texto, partes):
 
 @pytest.mark.parametrize("horas, partes, exibido", [
     ("8.000", ("8", "horas"), "8 h"), ("0.5", ("30", "minutos"), "30 min"),
-    ("48", ("2", "dias"), "2 dias"), ("24", ("1", "dias"), "1 dia"), ("1.5", ("1,5", "horas"), "1,5 h"),
+    ("48", ("2", "dias"), "2 dias"), ("24", ("24", "horas"), "24 h"), ("1.5", ("1,5", "horas"), "1,5 h"),
 ])
 def test_intervalo_gravado_volta_na_unidade_natural(horas, partes, exibido):
     from blueprints.internacao import format_interval, split_interval
@@ -462,6 +462,25 @@ def test_intervalo_em_minutos_inexato_explica_e_nao_grava(client, ward):
     assert response.status_code == 400
     assert "múltiplos de 3" in response.get_json()["erro"]
     assert InternacaoPrescricao.query.count() == 0
+
+
+def test_peso_da_admissao_com_virgula_nao_vira_dezenas(client, ward):
+    from models.internacao import Internacao
+
+    # type="number" no Chrome descartava a vírgula: "8,2" chegava como 82.
+    paciente = Animal(name="Bob", owner=ward.tutor, clinica=ward.clinic)
+    db.session.add(paciente)
+    db.session.commit()
+    _login(client, ward.vet)
+    html = client.get(f"/internacao/nova?clinica_id={ward.clinic.id}").get_data(as_text=True)
+    campo = re.search(r'<input[^>]*name="peso_kg"[^>]*>', html).group(0)
+    assert 'type="number"' not in campo and 'inputmode="decimal"' in campo
+    response = client.post("/internacao/nova", data={
+        "clinica_id": ward.clinic.id, "animal_id": paciente.id, "responsavel_id": ward.vet.id,
+        "motivo": "Observação clínica", "peso_kg": "8,2",
+    })
+    assert response.status_code == 303, response.get_data(as_text=True)
+    assert float(Internacao.query.filter_by(animal_id=paciente.id).one().peso_kg) == 8.2
 
 
 def test_dose_mostra_apresentacao_no_painel_e_na_checagem(client, ward):
