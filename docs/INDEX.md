@@ -15,6 +15,7 @@ Bem-vindo à documentação centralizada do projeto PetOrlândia!
 - [multi_clinic_guide.md](multi_clinic_guide.md) - Guia de múltiplas clínicas
 
 ### 💼 Funcionalidades
+- [internacao.md](internacao.md) - Internação, prescrições, medicações, plantão e impressão
 - [accounting_backfill.md](accounting_backfill.md) - Recomposição de histórico contábil
 - [form_feedback_checklist.md](form_feedback_checklist.md) - Checklist de feedback de formulários
 - [gestao_produto.md](gestao_produto.md) - Gestão de produtos

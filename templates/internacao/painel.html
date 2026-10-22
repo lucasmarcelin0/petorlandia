@@ -1,0 +1,44 @@
+{% extends 'internacao/base.html' %}
+{% from 'internacao/_macros.html' import horario, estado with context %}
+{% block internacao_content %}
+<header class="ih-heading">
+  <div><p class="ih-eyebrow">Cuidado que continua entre os plantões</p><h1>Internação</h1><p>Pacientes, prescrições e próximos cuidados em uma visão da clínica.</p></div>
+  <div class="ih-actions"><a class="ih-btn" href="{{ url_for('internacao.nova', clinica_id=clinica.id if clinica else none) }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Nova internação</a></div>
+</header>
+<div class="ih-stats" aria-label="Resumo da internação">
+  <div class="ih-stat"><span class="ih-stat__value">{{ resumo.ativos|default(0) }}</span><span class="ih-stat__label">Pacientes internados</span></div>
+  <div class="ih-stat"><span class="ih-stat__value">{{ resumo.pendentes|default(0) }}</span><span class="ih-stat__label">Doses pendentes</span></div>
+  <div class="ih-stat ih-stat--attention"><span class="ih-stat__value">{{ resumo.atrasadas|default(0) }}</span><span class="ih-stat__label">Doses com horário vencido</span></div>
+</div>
+<form method="get" class="ih-filter" role="search" aria-label="Filtrar internações">
+  <label class="ih-field"><span>Clínica</span><select class="form-select" name="clinica_id" required>{% for item in clinicas %}<option value="{{ item.id }}" {% if clinica and item.id == clinica.id %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}</select></label>
+  <label class="ih-field"><span>Buscar paciente ou tutor</span><input class="form-control" type="search" name="q" value="{{ request.args.get('q', '') }}" placeholder="Nome do animal ou responsável"></label>
+  <label class="ih-field"><span>Situação</span><select class="form-select" name="status"><option value="ativa" {% if request.args.get('status', 'ativa') == 'ativa' %}selected{% endif %}>Internados</option><option value="alta" {% if request.args.get('status') == 'alta' %}selected{% endif %}>Com alta</option><option value="todas" {% if request.args.get('status') == 'todas' %}selected{% endif %}>Todas</option></select></label>
+  <button class="ih-btn ih-btn--ghost" type="submit"><i class="fa-solid fa-filter" aria-hidden="true"></i> Filtrar</button>
+</form>
+<section class="ih-section mb-4" aria-labelledby="pacientes-title">
+  <div class="ih-heading mb-3"><div><h2 id="pacientes-title">Pacientes da clínica</h2><p>{{ clinica.nome if clinica else 'Selecione uma clínica para começar.' }}</p></div><span class="ih-small ih-muted">{{ internacoes|length }} resultado(s)</span></div>
+  {% if internacoes %}
+  <div class="ih-patient-grid">
+    {% for item in internacoes %}
+    <article class="ih-patient">
+      <div class="ih-patient__top"><div class="ih-patient__identity"><div class="ih-avatar"><i class="fa-solid fa-paw" aria-hidden="true"></i></div><div><a class="ih-patient__name" href="{{ url_for('internacao.detalhe', internacao_id=item.id) }}">{{ item.animal.name }}</a><div class="ih-patient__meta">{{ item.animal.owner.name if item.animal.owner else 'Tutor não informado' }}</div></div></div>{{ estado(item.status) }}</div>
+      <dl class="ih-kv"><dt>Leito</dt><dd>{{ item.leito or 'Não definido' }}</dd><dt>Responsável</dt><dd>{{ item.responsavel.name if item.responsavel else 'Não definido' }}</dd><dt>Admissão</dt><dd>{{ horario(item.iniciada_em) }}</dd></dl>
+      {% if item.alergias %}<div class="ih-notice ih-notice--warning mb-0"><strong>Alergias / alertas:</strong> {{ item.alergias }}</div>{% endif %}
+      <div class="ih-patient__footer"><span class="ih-small ih-muted">Internação #{{ item.id }}</span><a class="ih-btn ih-btn--ghost ih-btn--small" href="{{ url_for('internacao.detalhe', internacao_id=item.id) }}">Abrir prontuário <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ih-card ih-empty"><i class="fa-solid fa-bed-pulse" aria-hidden="true"></i><h3>Nenhum paciente nesta seleção</h3><p>Inicie uma internação pela consulta do animal ou pelo botão abaixo. O prontuário acompanhará o paciente durante todo o cuidado.</p><a class="ih-btn ih-btn--ghost" href="{{ url_for('internacao.nova', clinica_id=clinica.id if clinica else none) }}">Nova internação</a></div>
+  {% endif %}
+</section>
+<section class="ih-card" aria-labelledby="plantao-title">
+  <div class="ih-card__head"><div><h2 id="plantao-title">Medicações do plantão</h2><p>Confira os horários previstos. A administração é registrada no prontuário de cada paciente.</p></div><a class="ih-btn ih-btn--ghost ih-btn--small" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none) }}" aria-label="Atualizar painel de internação"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Atualizar</a></div>
+  {% if doses_plantao %}<p class="ih-scroll-hint">Deslize a tabela para consultar a situação e abrir cada dose.</p><div class="ih-table-wrap" role="region" tabindex="0" aria-label="Medicações do plantão; deslize para consultar todas as colunas"><table class="ih-table"><thead><tr><th scope="col">Horário previsto</th><th scope="col">Paciente / leito</th><th scope="col">Medicação</th><th scope="col">Situação</th><th scope="col"><span class="visually-hidden">Ação</span></th></tr></thead><tbody>
+  {% for dose in doses_plantao %}
+  <tr {% if dose.id in atrasadas_ids|default([]) %}class="ih-dose--late"{% endif %}><td class="ih-dose__time">{{ horario(dose.prevista_para) }}{% if dose.id in atrasadas_ids|default([]) %}<small>Horário vencido</small>{% endif %}</td><td><strong>{{ dose.internacao.animal.name }}</strong><small>{{ dose.internacao.leito or 'Sem leito definido' }}</small></td><td><strong>{{ dose.prescricao.medicamento }}</strong><small>{{ dose.prescricao.dose }} · {{ dose.prescricao.via }}</small></td><td>{{ estado(dose.status) }}</td><td><a class="ih-btn ih-btn--ghost ih-btn--small" href="{{ url_for('internacao.detalhe', internacao_id=dose.internacao_id) }}#dose-{{ dose.id }}">Conferir dose</a></td></tr>
+  {% endfor %}</tbody></table></div>{% else %}<div class="ih-empty"><i class="fa-regular fa-circle-check" aria-hidden="true"></i><h3>Nenhuma dose pendente no período</h3><p>As próximas administrações aparecerão aqui quando houver prescrições ativas.</p></div>{% endif %}
+  <div class="ih-card__body pt-0 ih-small ih-muted">Painel atualizado em {{ horario(agora) }} · Horários de Brasília. Atualize a tela para acompanhar novos registros.</div>
+</section>
+{% endblock %}

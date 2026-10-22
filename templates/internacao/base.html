@@ -1,0 +1,16 @@
+{% extends 'layout.html' %}
+{% block page_title %}Internação | PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-3') }}">
+{% endblock %}
+{% block main %}
+<div class="ih-shell">
+  {% block internacao_content %}{% endblock %}
+</div>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/internacao.js', v='20261022-1') }}" defer></script>
+{% endblock %}

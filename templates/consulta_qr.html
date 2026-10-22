@@ -20,6 +20,13 @@
           <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name }}
         </h2>
         <small class="consultation-subtitle">Tutor: {{ tutor.name if tutor else 'não informado' }}</small>
+        {% if pode_acessar_internacao is defined and pode_acessar_internacao(current_user) %}
+        <div class="mt-3">
+          <a class="btn btn-outline-primary rounded-pill px-3" href="{{ url_for('internacao.paciente', animal_id=animal.id, consulta_id=consulta.id if consulta is defined and consulta else none) }}">
+            <i class="fa-solid fa-bed-pulse me-2" aria-hidden="true"></i> Internação do paciente
+          </a>
+        </div>
+        {% endif %}
       {% elif tutor %}
         <p class="consultation-eyebrow mb-2">Atendimento</p>
         <h2 class="consultation-title mb-1">

@@ -51,6 +51,7 @@ def register_domain_blueprints(app):
         casa_de_racao,
         clinica,
         financeiro,
+        internacao,
         fiscal,
         loja,
         mensagens,
@@ -158,3 +159,7 @@ def register_domain_blueprints(app):
     sim_bp = sim.get_blueprint()
     if not _is_blueprint_registered(app, sim_bp):
         app.register_blueprint(sim_bp)
+
+    internacao_bp = internacao.get_blueprint()
+    if not _is_blueprint_registered(app, internacao_bp):
+        app.register_blueprint(internacao_bp)

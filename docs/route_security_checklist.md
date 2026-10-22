@@ -182,3 +182,27 @@
 - Realizar um treinamento curto recorrente para o time com foco em OWASP Top 10.
 - Dar ênfase em **Broken Access Control** (incluindo IDOR), com exemplos reais das rotas da aplicação e checklist de prevenção para PR.
 - Novos integrantes devem concluir o treinamento na integração inicial e reciclar trimestralmente.
+
+## Internação veterinária
+
+As rotas de `blueprints/internacao.py` usam `login_required`, CSRF global nos
+POSTs, respostas sem cache e os helpers de `services/internacao_access.py`.
+O vínculo de tutor, o animal compartilhado e o link de tratamento domiciliar
+não concedem acesso ao prontuário hospitalar.
+
+|Rota|Autorização e escopo|Evidência|
+|---|---|---|
+|GET `/internacao`|Clínicas operacionais autorizadas; listagem e contagens filtradas por clínica|`tests/test_internacao.py`, `tests/test_internacao_access.py`|
+|GET `/internacao/animal/<id>`|Clínica autorizada, animal vinculado por cadastro ou consulta local; consulta de origem validada|mesmos testes|
+|GET/POST `/internacao/nova`|Clínica operacional, associação animal/consulta/clínica validada e veterinário responsável habilitado localmente|mesmos testes|
+|GET `/internacao/<id>`|`ensure_internacao`: escopo da clínica do episódio, sem acesso pelo tutor|mesmos testes|
+|POST `/internacao/<id>/prescricoes/previa`|Veterinário com CRMV, acesso ativo e vínculo na clínica do episódio|mesmos testes|
+|POST `/internacao/<id>/prescricoes`|Veterinário habilitado; associação ao episódio obtida no servidor|mesmos testes|
+|POST `/internacao/prescricoes/<id>/revisar`|Clínica do item e veterinário habilitado; versões e vigência auditadas|mesmos testes|
+|POST `/internacao/prescricoes/<id>/suspender`|Clínica do item e veterinário habilitado; motivo obrigatório|mesmos testes|
+|POST `/internacao/doses/<id>/registrar`|Equipe operacional, escopo da ocorrência e transação com trava; pós-alta exige veterinário e lançamento histórico|mesmos testes|
+|POST `/internacao/prescricoes/<id>/registrar`|Equipe operacional, escopo do item PRN e limites transacionais; pós-alta exige veterinário|mesmos testes|
+|POST `/internacao/registros/<id>/retificar`|Veterinário habilitado na clínica do registro; histórico imutável e motivo obrigatório|mesmos testes|
+|POST `/internacao/<id>/evolucoes`|Equipe operacional na clínica do episódio; autoria obtida da sessão|mesmos testes|
+|POST `/internacao/<id>/alta`|Veterinário habilitado na clínica; transação encerra programação pendente|mesmos testes|
+|GET `/internacao/<id>/imprimir`|Mesmo escopo hospitalar do episódio; período validado e resposta `private, no-store`|mesmos testes|

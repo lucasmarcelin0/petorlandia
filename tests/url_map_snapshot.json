@@ -3925,6 +3925,76 @@
   "methods": "POST"
  },
  {
+  "endpoint": "internacao.alta",
+  "rule": "/internacao/<int:internacao_id>/alta",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.detalhe",
+  "rule": "/internacao/<int:internacao_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "internacao.evolucao",
+  "rule": "/internacao/<int:internacao_id>/evolucoes",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.imprimir",
+  "rule": "/internacao/<int:internacao_id>/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "internacao.nova",
+  "rule": "/internacao/nova",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "internacao.paciente",
+  "rule": "/internacao/animal/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "internacao.painel",
+  "rule": "/internacao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "internacao.prescrever",
+  "rule": "/internacao/<int:internacao_id>/prescricoes",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.previa",
+  "rule": "/internacao/<int:internacao_id>/prescricoes/previa",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.registrar",
+  "rule": "/internacao/doses/<int:dose_id>/registrar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.registrar_prn",
+  "rule": "/internacao/prescricoes/<int:prescricao_id>/registrar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.retificar",
+  "rule": "/internacao/registros/<int:registro_id>/retificar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.revisar",
+  "rule": "/internacao/prescricoes/<int:prescricao_id>/revisar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "internacao.suspender",
+  "rule": "/internacao/prescricoes/<int:prescricao_id>/suspender",
+  "methods": "POST"
+ },
+ {
   "endpoint": "jwks",
   "rule": "/.well-known/jwks.json",
   "methods": "GET"
