@@ -134,6 +134,41 @@ def is_veterinarian(*args, **kwargs):
     return app_module.is_veterinarian(*args, **kwargs)
 
 
+def can_act_as_veterinarian(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.can_act_as_veterinarian.
+    import app as app_module
+    return app_module.can_act_as_veterinarian(*args, **kwargs)
+
+
+def pessoa_no_documento(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.pessoa_no_documento.
+    import app as app_module
+    return app_module.pessoa_no_documento(*args, **kwargs)
+
+
+def veterinarian_denial_message(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.veterinarian_denial_message.
+    import app as app_module
+    return app_module.veterinarian_denial_message(*args, **kwargs)
+
+
+def can_edit_animal_record(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.can_edit_animal_record.
+    import app as app_module
+    return app_module.can_edit_animal_record(*args, **kwargs)
+
+
+def is_supervised_intern(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.is_supervised_intern.
+    import app as app_module
+    return app_module.is_supervised_intern(*args, **kwargs)
+
+
+def acting_clinic_id(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.acting_clinic_id.
+    import app as app_module
+    return app_module.acting_clinic_id(*args, **kwargs)
+
 def get_responsible_veterinarian(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.get_responsible_veterinarian.
     import app as app_module
@@ -446,7 +481,7 @@ def list_animals():
         query = query.filter_by(modo=modo)
     else:
         # Admins can see all animals without filtering
-        vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
+        vet_authorized = current_user.is_authenticated and can_act_as_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
             and getattr(current_user, 'worker', None) == 'colaborador'
@@ -946,7 +981,10 @@ def termo_transferencia(animal_id, user_id):
 def termo_animal(animal_id, tipo):
     animal = get_animal_or_404(animal_id)
     tutor = animal.owner
-    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    # Estagiário emite o termo no nome do supervisor.
+    emissor = pessoa_no_documento(current_user)
+    veterinario = getattr(emissor, 'veterinario', None)
+    clinica = veterinario.clinica if veterinario else None
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
     templates = {
         'internacao': 'termos/termo_internacao.html',
@@ -962,9 +1000,8 @@ def termo_animal(animal_id, tipo):
     template = templates.get(tipo)
     if not template:
         abort(404)
-    veterinario = current_user.veterinario if current_user.veterinario else None
     return render_template(template, animal=animal, tutor=tutor, clinica=clinica,
-                           data_atual=data_atual, veterinario=veterinario, printing_user=current_user)
+                           data_atual=data_atual, veterinario=veterinario, printing_user=emissor)
 
 
 @bp.route('/termo/<int:animal_id>/<tipo>')
@@ -973,7 +1010,7 @@ def gerar_termo(animal_id, tipo):
     """Gera um termo específico para um animal."""
     animal = get_animal_or_404(animal_id)
     tutor = animal.owner
-    veterinario = current_user.veterinario
+    veterinario = getattr(pessoa_no_documento(current_user), 'veterinario', None)
     template_name = f'termos/{tipo}.html'
     try:
         return render_template(
@@ -1135,8 +1172,8 @@ def ficha_animal(animal_id):
 @login_required
 def upload_document(animal_id):
     animal = get_animal_or_404(animal_id)
-    if not is_veterinarian(current_user):
-        flash('Apenas veterinários podem enviar documentos.', 'danger')
+    if not can_edit_animal_record(current_user, animal):
+        flash(veterinarian_denial_message('Apenas veterinários podem enviar documentos.'), 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     files = [file for file in request.files.getlist('documento') if file and file.filename]
@@ -1192,7 +1229,7 @@ def delete_document(animal_id, doc_id):
     if not (
         current_user.role == 'admin'
         or (
-            is_veterinarian(current_user)
+            can_act_as_veterinarian(current_user)
             and current_user.id == documento.veterinario_id
         )
     ):
@@ -1278,7 +1315,7 @@ def consulta_qr():
     # Aqui você já deve ter carregado o animal
     animal = get_animal_or_404(animal_id)
     clinica_id = current_user_clinic_id()
-    is_active_vet = is_veterinarian(current_user)
+    is_active_vet = can_act_as_veterinarian(current_user)
     worker_role = 'veterinario' if is_active_vet else getattr(current_user, 'worker', None)
 
     # Idade e unidade (anos/meses)
@@ -1878,8 +1915,8 @@ def tutor_sharing_dashboard():
 def deletar_tutor(tutor_id):
     tutor = get_user_or_404(tutor_id)
 
-    if not is_veterinarian(current_user):
-        flash('Apenas veterinários podem excluir tutores.', 'danger')
+    if not can_act_as_veterinarian(current_user):
+        flash(veterinarian_denial_message('Apenas veterinários podem excluir tutores.'), 'danger')
         return redirect(url_for('index'))
 
     if current_user.role != 'admin' and tutor.added_by_id != current_user.id:
@@ -2213,8 +2250,8 @@ def update_animal(animal_id):
         else:
             flash(text, category)
 
-    if not is_veterinarian(current_user):
-        message = 'Apenas veterinários podem editar dados do animal.'
+    if not can_edit_animal_record(current_user, animal):
+        message = veterinarian_denial_message('Apenas veterinários podem editar dados do animal.')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
         flash(message, 'danger')
@@ -2340,8 +2377,8 @@ def salvar_racao(animal_id):
     animal = get_animal_or_404(animal_id)
 
     # Verifica se o usuário pode editar esse animal
-    if not is_veterinarian(current_user):
-        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+    if not can_edit_animal_record(current_user, animal):
+        return jsonify({'success': False, 'error': veterinarian_denial_message('Permissão negada.')}), 403
 
     data = request.get_json(silent=True) or {}
 
@@ -2435,8 +2472,8 @@ def api_tipos_racao():
 @bp.route('/tipo_racao', methods=['POST'])
 @login_required
 def criar_tipo_racao():
-    if not is_veterinarian(current_user):
-        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+    if not can_edit_animal_record(current_user):
+        return jsonify({'success': False, 'error': veterinarian_denial_message('Permissão negada.')}), 403
 
     data = request.get_json(silent=True) or {}
     marca = _canonicalize_racao_brand(data.get('marca', ''))
@@ -2564,11 +2601,11 @@ def buscar_racoes():
 def alterar_racao(racao_id):
     racao = Racao.query.get_or_404(racao_id)
 
-    if not is_veterinarian(current_user):
-        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+    if not can_edit_animal_record(current_user, racao.animal):
+        return jsonify({'success': False, 'error': veterinarian_denial_message('Permissão negada.')}), 403
 
     if racao.created_by and racao.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
-        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+        return jsonify({'success': False, 'error': veterinarian_denial_message('Permissão negada.')}), 403
 
     if request.method == 'GET':
         return jsonify({
@@ -2835,7 +2872,7 @@ def imprimir_vacinas(animal_id):
     consulta = animal.consultas[-1] if animal.consultas else None
     veterinario = get_responsible_veterinarian(
         consulta.veterinario if consulta else None,
-        fallback=current_user if is_veterinarian(current_user) else None,
+        fallback=pessoa_no_documento(current_user) if can_act_as_veterinarian(current_user) else None,
     )
     clinica = consulta.clinica if consulta and consulta.clinica else None
     if not clinica and veterinario and getattr(veterinario, "veterinario", None):
@@ -2878,6 +2915,7 @@ def alterar_vacina(vacina_id):
     if not (
         is_veterinarian(current_user, require_membership=False)
         or getattr(current_user, 'worker', None) == 'veterinario'
+        or can_act_as_veterinarian(current_user)
     ):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
@@ -3320,8 +3358,8 @@ def novo_animal():
 def marcar_como_falecido(animal_id):
     animal = get_animal_or_404(animal_id)
 
-    if not is_veterinarian(current_user):
-        flash('Apenas veterinários podem realizar essa ação.', 'danger')
+    if not can_act_as_veterinarian(current_user):
+        flash(veterinarian_denial_message('Apenas veterinários podem realizar essa ação.'), 'danger')
         return redirect(url_for('ficha_animal', animal_id=animal.id))
 
     data = request.form.get('falecimento_em')
@@ -3350,7 +3388,7 @@ def marcar_como_falecido(animal_id):
 @bp.route('/animal/<int:animal_id>/reverter_falecimento', methods=['POST'])
 @login_required
 def reverter_falecimento(animal_id):
-    if not is_veterinarian(current_user):
+    if not can_act_as_veterinarian(current_user):
         abort(403)
 
     animal = get_animal_or_404(animal_id)
@@ -3372,8 +3410,8 @@ def reverter_falecimento(animal_id):
 def arquivar_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
-    if not is_veterinarian(current_user):
-        flash('Apenas veterinários podem excluir animais definitivamente.', 'danger')
+    if not can_act_as_veterinarian(current_user):
+        flash(veterinarian_denial_message('Apenas veterinários podem excluir animais definitivamente.'), 'danger')
         return redirect(request.referrer or url_for('index'))
 
     try:
@@ -3405,7 +3443,7 @@ def api_atualizar_peso_animal(animal_id):
     # Permite ao veterinário da clínica ou ao dono do animal alterar o peso.
     from flask_login import current_user as cu
     is_owner  = (animal.user_id == cu.id)
-    is_clinic = bool(getattr(animal, "clinica_id", None) and cu.clinica_id == animal.clinica_id)
+    is_clinic = bool(getattr(animal, "clinica_id", None) and acting_clinic_id(cu) == animal.clinica_id)
     if not is_owner and not is_clinic:
         return jsonify({"ok": False, "erro": "Sem permissão."}), 403
 

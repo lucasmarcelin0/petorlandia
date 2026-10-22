@@ -2,7 +2,7 @@
 {% from 'components/whatsapp.html' import phone_with_whatsapp %}
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
   {% for animal in animals %}
-    {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] and animal.owner != current_user %}
+    {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] and not can_act_as_veterinarian(current_user) and animal.owner != current_user %}
       {# pula esse animal #}
     {% else %}
       {% set pmo_date_info = pmo_dates.get(animal.id) if pmo_dates is defined else none %}
@@ -116,7 +116,7 @@
                 class="btn btn-outline-success btn-sm rounded-pill">
                 📋 Ver Ficha
               </a>
-              {% elif current_user.worker in ['veterinario', 'colaborador'] or animal.owner != current_user %}
+              {% elif (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) or animal.owner != current_user %}
               <button class="btn btn-outline-success btn-sm rounded-pill" data-bs-toggle="modal"
                 data-bs-target="#modalFicha{{ animal.id }}">
                 📋 Ver Ficha
@@ -170,7 +170,7 @@
                 {% endif %}
                 <p><strong>Descrição:</strong><br>{{ animal.description }}</p>
 
-                {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                {% if (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
                 <hr>
                 <p class="mb-1"><strong>Tutor:</strong> {{ animal.owner.name }}</p>
                 <p class="mb-1"><strong>Email:</strong> {{ animal.owner.email }}</p>

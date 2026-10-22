@@ -128,13 +128,20 @@
   </div>
 
   <div class="animal-form-actions mt-4">
+    {% if can_edit_animal_record(current_user, animal) %}
     <button type="submit" class="btn btn-success animal-save-btn">
       <i class="bi bi-save me-1"></i> Salvar
     </button>
+    {% else %}
+    <p class="text-muted small mb-0"><i class="bi bi-lock me-1"></i>Somente leitura: o seu perfil não edita o cadastro do animal. Peça ao responsável pela clínica para liberar a permissão "Animais".</p>
+    {% endif %}
   </div>
 </form>
 
 <!-- Acoes sensiveis do animal -->
+{% set pode_remover_animal = current_user.role == 'admin' or animal.user_id == current_user.id or animal.added_by_id == current_user.id %}
+{% set pode_obito = can_act_as_veterinarian(current_user) %}
+{% if pode_remover_animal or pode_obito %}
 <div class="animal-sensitive-actions mt-3">
   <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-sensitive-actions"
           aria-expanded="false" aria-controls="animal-sensitive-actions-panel">
@@ -143,6 +150,7 @@
 
   <div id="animal-sensitive-actions-panel" class="d-none mt-2">
     <div class="d-flex flex-wrap gap-2 align-items-start">
+      {% if pode_remover_animal %}
       <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
             onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta acao nao pode ser desfeita.');"
             class="animal-delete-form mb-0">
@@ -151,6 +159,8 @@
           <i class="bi bi-trash me-1"></i> Remover Animal
         </button>
       </form>
+      {% endif %}
+      {% if pode_obito %}
 
       <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}"
             onsubmit="return confirm('Deseja marcar este animal como falecido?');"
@@ -161,9 +171,11 @@
           <i class="bi bi-x-octagon me-1"></i> Marcar como falecido
         </button>
       </form>
+      {% endif %}
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Scripts -->
 {% block scripts %}

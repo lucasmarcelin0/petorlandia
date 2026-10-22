@@ -21,8 +21,11 @@
 </div>
 <hr>
 <p class="small text-muted mb-2">Modo estágio supervisionado</p>
+<p class="small text-muted mb-2">Com supervisor definido, o estagiário faz tudo o que o veterinário faz; os documentos saem no nome e CRMV do supervisor.</p>
 <div class="form-check">{{ form.is_intern(class="form-check-input") }} {{ form.is_intern.label(class="form-check-label") }}</div>
 <div class="form-check">{{ form.can_view_all_patients(class="form-check-input") }} {{ form.can_view_all_patients.label(class="form-check-label") }}</div>
-<div class="form-check">{{ form.can_draft_clinical_notes(class="form-check-input") }} {{ form.can_draft_clinical_notes.label(class="form-check-label") }}</div>
-<div class="form-check">{{ form.can_print_signed_documents(class="form-check-input") }} {{ form.can_print_signed_documents.label(class="form-check-label") }}</div>
+{# "Rascunhos" e "imprimir documentos assinados" deixaram de restringir: o
+   estagiário supervisionado atua como veterinário. Os campos seguem no
+   formulário (ocultos) para não apagar o que já foi salvo. #}
+<div class="d-none">{{ form.can_draft_clinical_notes(class="form-check-input") }} {{ form.can_print_signed_documents(class="form-check-input") }}</div>
 {{ form.submit(class="btn btn-primary mt-3") }}

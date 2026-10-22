@@ -19,7 +19,7 @@
       Ficha de {{ animal.name }}
     </h2>
     <div class="d-flex gap-2">
-      {% if current_user.worker == 'veterinario' %}
+      {% if can_start_consulta(current_user) %}
       <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-outline-primary">
         🩺 Iniciar Nova Consulta
       </a>
@@ -160,7 +160,7 @@
       </div>
 
     </div>
-    {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+    {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
       <!-- DOCUMENTOS -->
       <div class="mt-4">
         {% include 'partials/documentos.html' %}
@@ -234,7 +234,7 @@
             </span>
           </div>
           <h4 class="mb-1">
-            {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+            {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
               <a class="tutor-card__name" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
             {% else %}
               <span class="tutor-card__name">{{ tutor.name }}</span>
@@ -258,7 +258,7 @@
             {% endif %}
           </div>
         </div>
-        {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+        {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
           <div class="d-flex flex-column gap-3 w-100 w-md-auto">
             <div class="d-flex flex-column gap-2">
               <div class="text-muted small text-uppercase fw-semibold">Acesso ao tutor</div>
@@ -270,7 +270,7 @@
         {% endif %}
       </div>
 
-      {% if current_user.worker == 'veterinario' %}
+      {% if can_act_as_veterinarian(current_user) %}
         <div class="tutor-card__danger-zone mt-3">
           <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
             <span class="text-muted small text-uppercase fw-semibold">Status do animal</span>
@@ -295,7 +295,7 @@
                 {% endif %}
               </div>
             </div>
-            {% if current_user.worker == 'veterinario' %}
+            {% if can_act_as_veterinarian(current_user) %}
               <div class="d-flex flex-wrap gap-2">
                 <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
