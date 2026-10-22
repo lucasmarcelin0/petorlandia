@@ -1,4 +1,4 @@
-{% set tutor_history = current_user.id == animal.user_id and current_user.role != 'admin' and current_user.worker not in ['veterinario', 'colaborador'] %}
+{% set tutor_history = current_user.id == animal.user_id and current_user.role != 'admin' and current_user.worker not in ['veterinario', 'colaborador'] and not can_act_as_veterinarian(current_user) %}
 <div>
   <div class="accordion" id="historicoAccordion" data-history-accordion>
     <div class="accordion-item">
@@ -17,7 +17,7 @@
                     {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} {{ 'medicamento' if bloco.prescricoes | length == 1 else 'medicamentos' }}
                   </span>
                   <span class="d-flex gap-1">
-                    {% if current_user.worker == 'veterinario' %}
+                    {% if can_act_as_veterinarian(current_user) %}
                       <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
                     {% endif %}
                   </span>
@@ -102,7 +102,7 @@
                   <span class="text-dark">
                     {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.exames | length }} {{ 'exame' if bloco.exames | length == 1 else 'exames' }}
                   </span>
-                  {% if current_user.worker == 'veterinario' %}
+                  {% if can_act_as_veterinarian(current_user) %}
                     <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
                   {% endif %}
                 </div>

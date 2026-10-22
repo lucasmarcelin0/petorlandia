@@ -19,7 +19,7 @@
   data-url-delete-appointment="{{ url_for('delete_appointment', appointment_id=0) }}"
   data-url-print-consulta="{{ url_for('imprimir_consulta', consulta_id=0) }}"
   data-can-start-consulta="{{ 'true' if can_start_consulta() else 'false' }}"
-  data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador']) or current_user.role == 'admin' else 'false' }}"
+  data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) or current_user.role == 'admin' else 'false' }}"
 >
   <div class="row g-4 align-items-start">
     <div class="col-12">

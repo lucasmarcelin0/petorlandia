@@ -153,7 +153,7 @@
                   component_id='vet-calendar-inline-' ~ veterinario.id,
                   events_url=vet_calendar_events_url,
                   pets_url=vet_calendar_pets_url,
-                  new_pet_url=url_for('novo_animal') if current_user.is_authenticated and (current_user.worker in ['colaborador', 'veterinario'] or current_user.role == 'admin') else None
+                  new_pet_url=url_for('novo_animal') if current_user.is_authenticated and ((current_user.worker in ['colaborador', 'veterinario'] or can_act_as_veterinarian(current_user)) or current_user.role == 'admin') else None
                 %}
                   {% include 'partials/tutor_calendar.html' %}
                 {% endwith %}

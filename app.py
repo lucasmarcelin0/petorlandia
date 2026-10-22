@@ -1986,6 +1986,13 @@ from helpers import (
     internship_clinic_id,
     is_active_intern,
     can_start_consulta,
+    can_act_as_veterinarian,
+    can_edit_animal_record,
+    internship_supervisor,
+    is_supervised_intern,
+    pessoa_no_documento,
+    acting_clinic_id,
+    veterinarian_denial_message,
     is_parceiro,
     parceiro_required,
     group_appointments_by_day,
@@ -3065,6 +3072,26 @@ def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]
     return avatar_map
 
 
+import helpers as _helpers_permissoes  # noqa: E402
+
+
+def can_act_as_veterinarian(user=None):
+    """Veterinário ativo ou estagiário supervisionado (ver helpers).
+
+    Consulta ``is_veterinarian`` deste módulo em tempo de chamada, como o
+    restante das regras de permissão, para respeitar a mesma fonte usada
+    pelas rotas (e pelos testes que a substituem).
+    """
+    alvo = user if user is not None else (current_user if current_user.is_authenticated else None)
+    return bool(is_veterinarian(alvo)) or _helpers_permissoes.can_act_as_veterinarian(alvo)
+
+
+def can_edit_animal_record(user=None, animal=None):
+    """Cadastro do animal: atos clínicos ou colaborador com "Animais"."""
+    alvo = user if user is not None else (current_user if current_user.is_authenticated else None)
+    return can_act_as_veterinarian(alvo) or _helpers_permissoes.can_edit_animal_record(alvo, animal)
+
+
 def assinatura_de(alvo):
     """Atribuição legal de um profissional, para uso nos documentos impressos.
 
@@ -3077,6 +3104,12 @@ def assinatura_de(alvo):
     """
     if alvo is None:
         return None
+    # Estagiário emite no nome do supervisor: o documento traz nome e CRMV de
+    # quem responde tecnicamente. A autoria real fica nos registros do sistema.
+    usuario = alvo if hasattr(alvo, 'clinic_roles') else getattr(alvo, 'user', None)
+    supervisor = internship_supervisor(usuario) if usuario is not None else None
+    if supervisor is not None and getattr(supervisor, 'veterinario', None) is not None:
+        return supervisor.veterinario.assinatura
     vet = getattr(alvo, 'veterinario', None) or (
         alvo if hasattr(alvo, 'habilitacao') else None
     )
@@ -3090,6 +3123,10 @@ app.jinja_env.globals['assinatura_de'] = assinatura_de
 # ``worker`` diretamente e deixava de fora estagiario e veterinario legado.
 app.jinja_env.globals['can_start_consulta'] = can_start_consulta
 app.jinja_env.globals['is_active_intern'] = is_active_intern
+app.jinja_env.globals['can_act_as_veterinarian'] = can_act_as_veterinarian
+app.jinja_env.globals['can_edit_animal_record'] = can_edit_animal_record
+app.jinja_env.globals['is_supervised_intern'] = is_supervised_intern
+app.jinja_env.globals['pessoa_no_documento'] = pessoa_no_documento
 app.jinja_env.globals['get_responsible_veterinarian'] = get_responsible_veterinarian
 
 

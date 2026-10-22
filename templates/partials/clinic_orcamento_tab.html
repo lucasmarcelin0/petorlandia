@@ -724,7 +724,7 @@
 
               <div class="budget-record__actions">
                 {% if consulta %}
-                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                  {% if (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
                     <a href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary budget-action-button">
                       <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
                       Abrir na consulta

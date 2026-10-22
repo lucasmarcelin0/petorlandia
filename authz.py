@@ -40,15 +40,15 @@ ROLE_PERMISSION_MATRIX = {
         "fiscal_documents": {"view": False, "manage": False},
         "personal_data": {"view": True, "manage": False},
     },
-    # Estagiario nao e tutor nem staff pleno: opera o prontuario dos pacientes
-    # da clinica onde estagia, mas nao enxerga financeiro nem documento fiscal
-    # e nao gerencia orcamento. Assinatura continua sendo do supervisor --
-    # ver ``Veterinario.assinatura`` e ``ClinicStaff.can_print_signed_documents``.
+    # Estagiario supervisionado atua como o veterinario da clinica (mesmas
+    # permissoes); os documentos saem no nome e CRMV do supervisor -- ver
+    # ``helpers.pessoa_no_documento``. Documento fiscal segue fora, como para
+    # o veterinario.
     "intern": {
         "clinic": {"view": True, "manage": False},
-        "budget": {"view": True, "manage": False},
+        "budget": {"view": True, "manage": True},
         "consultation": {"view": True, "manage": True},
-        "financial": {"view": False, "manage": False},
+        "financial": {"view": True, "manage": False},
         "fiscal_documents": {"view": False, "manage": False},
         "personal_data": {"view": True, "manage": False},
     },

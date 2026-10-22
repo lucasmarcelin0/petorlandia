@@ -18,7 +18,7 @@ from models.internacao import (
 from services import internacao as hospital
 from services.internacao_access import (
     clinicas_internacao, pode_acessar_internacao, pode_operar_internacao,
-    pode_prescrever_internacao,
+    pode_prescrever_internacao, pode_ser_responsavel_internacao,
 )
 from time_utils import BR_TZ, normalize_to_utc, utcnow
 
@@ -246,7 +246,7 @@ def _professionals(clinic_id):
     )).options(joinedload(Veterinario.user)).all()
     return sorted(
         [profile.user for profile in profiles
-         if profile.user and pode_prescrever_internacao(profile.user, clinic_id)],
+         if profile.user and pode_ser_responsavel_internacao(profile.user, clinic_id)],
         key=lambda user: (user.name or '').casefold(),
     )
 
@@ -464,7 +464,7 @@ def nova():
                 raise hospital.InternacaoError('Selecione o animal que será internado.')
             responsible_id = _integer(data.get('responsavel_id'), 'Veterinário responsável')
             responsible = db.session.get(User, responsible_id) if responsible_id else None
-            if not responsible or not pode_prescrever_internacao(responsible, clinic.id):
+            if not responsible or not pode_ser_responsavel_internacao(responsible, clinic.id):
                 raise hospital.InternacaoError('Selecione um veterinário responsável habilitado nesta clínica.')
             data['responsavel_id'] = responsible.id
             data['consulta_id'] = consultation_id

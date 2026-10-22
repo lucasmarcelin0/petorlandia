@@ -471,7 +471,164 @@ def can_start_consulta(user=None) -> bool:
     if is_veterinarian(user):
         return True
 
-    return is_active_intern(user)
+    # Estagiário do cadastro da clínica (habilitação) também atende; o
+    # vínculo de estágio continua valendo mesmo sem supervisor definido.
+    return is_active_intern(user) or can_act_as_veterinarian(user)
+
+
+def _resolve_user(user):
+    if user is None:
+        user = current_user if getattr(current_user, 'is_authenticated', False) else None
+    if user is not None and hasattr(user, '_get_current_object'):
+        user = user._get_current_object()
+    return user
+
+
+def internship_supervisor(user=None):
+    """``User`` do supervisor com CRMV de um estagiário, ou ``None``.
+
+    Reconhece os dois cadastros de estágio que convivem no sistema:
+    ``Veterinario`` com habilitação "estagiário" (tela da clínica) e
+    ``ClinicStaff`` com estágio ativo (convite de estudante). O supervisor só
+    conta quando ele próprio pode assinar (tem CRMV).
+    """
+
+    user = _resolve_user(user)
+    if not user:
+        return None
+    vet = getattr(user, 'veterinario', None)
+    if vet is not None and getattr(vet, 'is_estagiario', False):
+        supervisor = getattr(vet, 'supervisor', None)
+        if supervisor is not None and getattr(supervisor, 'pode_assinar', False):
+            return getattr(supervisor, 'user', None)
+    staff = active_internship_staff(user)
+    if staff is not None:
+        sup_user = getattr(staff, 'internship_supervisor', None)
+        if sup_user and getattr(getattr(sup_user, 'veterinario', None), 'pode_assinar', False):
+            return sup_user
+    return None
+
+
+def is_supervised_intern(user=None) -> bool:
+    """Estagiário (qualquer dos dois cadastros) com supervisor habilitado."""
+
+    return internship_supervisor(user) is not None
+
+
+def can_act_as_veterinarian(user=None) -> bool:
+    """Quem pode praticar os atos clínicos do sistema.
+
+    Veterinário com assinatura ativa, ou estagiário supervisionado cujo
+    supervisor esteja ativo. O estagiário faz tudo o que o veterinário faz;
+    os documentos saem no nome do supervisor (``pessoa_no_documento``) e a
+    autoria real continua registrada nos próprios registros.
+    """
+
+    user = _resolve_user(user)
+    if not user:
+        return False
+    if is_veterinarian(user):
+        return True
+    supervisor = internship_supervisor(user)
+    return bool(supervisor is not None and is_veterinarian(supervisor))
+
+
+def pessoa_no_documento(user=None):
+    """Quem aparece num documento emitido por ``user``.
+
+    Estagiário supervisionado emite no nome do supervisor; qualquer outra
+    pessoa aparece com o próprio nome. Use apenas no que vai para o papel ou
+    PDF: telas e históricos continuam mostrando o autor real.
+    """
+
+    user = _resolve_user(user)
+    if not user:
+        return user
+    supervisor = internship_supervisor(user)
+    return supervisor if supervisor is not None else user
+
+
+def acting_clinic_id(user=None):
+    """Clínica de atuação: cadastro do usuário, do perfil ou do estágio."""
+
+    user = _resolve_user(user)
+    if not user:
+        return None
+    return (
+        getattr(user, 'clinica_id', None)
+        or getattr(getattr(user, 'veterinario', None), 'clinica_id', None)
+        or internship_clinic_id(user)
+    )
+
+
+def _membership_expired(user) -> bool:
+    vet = getattr(user, 'veterinario', None) if user else None
+    if vet is None or getattr(vet, 'is_estagiario', False):
+        return False
+    membership = getattr(vet, 'membership', None)
+    return bool(membership is not None and not membership.is_active())
+
+
+def veterinarian_denial_message(default, user=None) -> str:
+    """Mensagem de recusa que diz o motivo real do bloqueio.
+
+    ``default`` é a mensagem original da rota ("Apenas veterinários podem…");
+    ela é mantida para quem de fato não é da área clínica, mas trocada quando
+    o motivo é assinatura vencida ou estágio sem supervisor habilitado.
+    """
+
+    user = _resolve_user(user)
+    if not user:
+        return default
+    if _membership_expired(user):
+        return ('Sua assinatura do PetOrlândia venceu. Renove em "Minha assinatura" '
+                'para voltar a editar e emitir documentos.')
+    vet = getattr(user, 'veterinario', None)
+    intern = (vet is not None and getattr(vet, 'is_estagiario', False)) or active_internship_staff(user) is not None
+    if intern:
+        supervisor = internship_supervisor(user)
+        if supervisor is None:
+            return ('Seu cadastro de estagiário está sem supervisor com CRMV. Peça ao '
+                    'responsável pela clínica para indicar o supervisor.')
+        if _membership_expired(supervisor):
+            return (f'A assinatura do seu supervisor ({supervisor.name}) venceu. Assim que '
+                    'ele renovar, você volta a editar e emitir documentos.')
+    text = str(default or '')
+    if text.startswith('Apenas veterinários'):
+        return text.replace('Apenas veterinários', 'Apenas veterinários e estagiários supervisionados', 1)
+    return text
+
+
+def staff_can_manage_animals(user=None, clinic_id=None) -> bool:
+    """Colaborador com a permissão "Animais" marcada na clínica do animal."""
+
+    user = _resolve_user(user)
+    if not user:
+        return False
+    for staff in getattr(user, 'clinic_roles', None) or []:
+        if getattr(staff, 'is_intern', False):
+            continue
+        if clinic_id is not None and getattr(staff, 'clinic_id', None) != clinic_id:
+            continue
+        if getattr(staff, 'can_manage_animals', False):
+            return True
+    return False
+
+
+def can_edit_animal_record(user=None, animal=None) -> bool:
+    """Editar cadastro, documentos e ração do animal.
+
+    Atos clínicos ficam com veterinário e estagiário; o colaborador só edita
+    quando o dono marcou "Animais" nas permissões dele.
+    """
+
+    user = _resolve_user(user)
+    if not user:
+        return False
+    if can_act_as_veterinarian(user):
+        return True
+    clinic_id = getattr(animal, 'clinica_id', None) if animal is not None else None
+    return staff_can_manage_animals(user, clinic_id)
 
 
 def is_parceiro(user=None) -> bool:

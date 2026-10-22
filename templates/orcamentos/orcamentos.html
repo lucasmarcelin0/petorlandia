@@ -21,7 +21,7 @@
         <td>{{ '%.2f'|format(o.total) }}</td>
         <td>
           {% if o.consulta %}
-            {% if current_user.worker in ['veterinario', 'colaborador'] %}
+            {% if (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
             <a href="{{ url_for('consulta_direct', animal_id=o.consulta.animal_id, c=o.consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
             {% else %}
             <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>

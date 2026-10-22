@@ -110,6 +110,18 @@ def is_veterinarian(*args, **kwargs):
     return app_module.is_veterinarian(*args, **kwargs)
 
 
+def is_supervised_intern(*args, **kwargs):
+    import app as app_module
+
+    return app_module.is_supervised_intern(*args, **kwargs)
+
+
+def acting_clinic_id(*args, **kwargs):
+    import app as app_module
+
+    return app_module.acting_clinic_id(*args, **kwargs)
+
+
 def _safe_referrer(fallback_endpoint="appointments"):
     return _sanitize_login_next_url(
         request.referrer,
@@ -2209,7 +2221,8 @@ def pending_appointments():
 @login_required
 def manage_appointments():
     is_vet = is_veterinarian(current_user)
-    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    # Estagiário supervisionado opera a agenda como a equipe da clínica.
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador' or is_supervised_intern(current_user)
     if current_user.role != 'admin' and not (is_vet or is_collaborator):
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
@@ -2225,7 +2238,7 @@ def manage_appointments():
         if is_vet:
             clinic_id = current_user.veterinario.clinica_id
         elif is_collaborator:
-            clinic_id = current_user.clinica_id
+            clinic_id = acting_clinic_id(current_user)
 
     pagination = appointment_repo.paginate_for_management(
         is_admin=current_user.role == 'admin',
@@ -2266,12 +2279,13 @@ def manage_appointments():
 def edit_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
     is_vet = is_veterinarian(current_user)
-    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    # Estagiário supervisionado opera a agenda como a equipe da clínica.
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador' or is_supervised_intern(current_user)
     if is_vet or is_collaborator:
         if is_vet:
             user_clinic = current_user.veterinario.clinica_id
         else:
-            user_clinic = current_user.clinica_id
+            user_clinic = acting_clinic_id(current_user)
 
         # Some legacy appointments might not have `clinica_id` stored.
         # In that case, fall back to the clinic of the assigned veterinarian
@@ -2372,7 +2386,8 @@ def update_appointment_status(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
     is_vet = is_veterinarian(current_user)
-    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    # Estagiário supervisionado opera a agenda como a equipe da clínica.
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador' or is_supervised_intern(current_user)
 
     if current_user.role == 'admin':
         pass
@@ -2401,7 +2416,7 @@ def update_appointment_status(appointment_id):
                 if appointment_clinic not in clinic_ids:
                     abort(403)
         else:
-            user_clinic = getattr(current_user, 'clinica_id', None)
+            user_clinic = acting_clinic_id(current_user)
             if appointment_clinic != user_clinic:
                 abort(403)
     elif appointment.tutor_id != current_user.id:
@@ -2516,7 +2531,8 @@ def delete_appointment(appointment_id):
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
     is_vet = is_veterinarian(current_user)
-    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    # Estagiário supervisionado opera a agenda como a equipe da clínica.
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador' or is_supervised_intern(current_user)
 
     if current_user.role == 'admin':
         pass
@@ -2525,7 +2541,7 @@ def delete_appointment(appointment_id):
             veterinario = getattr(current_user, 'veterinario', None)
             user_clinic = getattr(veterinario, 'clinica_id', None)
         else:
-            user_clinic = getattr(current_user, 'clinica_id', None)
+            user_clinic = acting_clinic_id(current_user)
 
         appointment_clinic = appointment.clinica_id
         if appointment_clinic is None and appointment.veterinario:

@@ -39,11 +39,16 @@
           <div class="card-body">
             <h3 class="h6">{{ case.animal.name }}</h3>
             <p class="small text-muted mb-3">Paciente autorizado para acompanhamento supervisionado.</p>
+            {% if is_supervised_intern(current_user) %}
+            <span class="badge text-bg-light">Atua como veterinário</span>
+            <p class="small mt-3 mb-0">Os documentos que você emitir saem no nome do seu supervisor.</p>
+            {% else %}
             <span class="badge text-bg-light">Somente leitura</span>
             {% if staff.can_draft_clinical_notes %}
             <span class="badge text-bg-light">Rascunhos permitidos</span>
             {% endif %}
             <p class="small mt-3 mb-0">Solicite ao supervisor a revisão de qualquer anotação ou documento.</p>
+            {% endif %}
           </div>
         </div>
       </article>

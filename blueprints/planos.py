@@ -46,6 +46,42 @@ def is_veterinarian(*args, **kwargs):
     return app_module.is_veterinarian(*args, **kwargs)
 
 
+def can_act_as_veterinarian(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.can_act_as_veterinarian.
+    import app as app_module
+    return app_module.can_act_as_veterinarian(*args, **kwargs)
+
+
+def pessoa_no_documento(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.pessoa_no_documento.
+    import app as app_module
+    return app_module.pessoa_no_documento(*args, **kwargs)
+
+
+def veterinarian_denial_message(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.veterinarian_denial_message.
+    import app as app_module
+    return app_module.veterinarian_denial_message(*args, **kwargs)
+
+
+def can_edit_animal_record(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.can_edit_animal_record.
+    import app as app_module
+    return app_module.can_edit_animal_record(*args, **kwargs)
+
+
+def is_supervised_intern(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.is_supervised_intern.
+    import app as app_module
+    return app_module.is_supervised_intern(*args, **kwargs)
+
+
+def acting_clinic_id(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.acting_clinic_id.
+    import app as app_module
+    return app_module.acting_clinic_id(*args, **kwargs)
+
+
 def mp_sdk(*args, **kwargs):
     import app as app_module
 
@@ -192,7 +228,7 @@ def planosaude_animal(animal_id):
         animal_microchip=animal.microchip_number,
         tutor_document_value=form.tutor_document.data,
         animal_document_value=form.animal_document.data,
-        show_schedule_button=_is_admin() or is_veterinarian(current_user),
+        show_schedule_button=_is_admin() or can_act_as_veterinarian(current_user),
     )
 
 
@@ -286,7 +322,7 @@ def contratar_plano(animal_id):
 @login_required
 def validar_plano_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if not is_veterinarian(current_user):
+    if not can_act_as_veterinarian(current_user):
         abort(403)
     form = ConsultaPlanAuthorizationForm()
     from models import HealthSubscription

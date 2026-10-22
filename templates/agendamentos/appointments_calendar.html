@@ -12,7 +12,7 @@
   </div>
 
   {% set calendar_pets_endpoint = url_for('api_my_pets') %}
-  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+  {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
     {% set calendar_pets_endpoint = url_for(
       'api_clinic_pets',
       view_as=request.args.get('view_as'),

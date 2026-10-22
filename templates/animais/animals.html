@@ -91,7 +91,7 @@
           <option value="doação" {% if modo == 'doação' %}selected{% endif %}>Adoção</option>
           <option value="venda" {% if modo == 'venda' %}selected{% endif %}>Venda</option>
           <option value="perdido" {% if modo == 'perdido' %}selected{% endif %}>Perdido</option>
-          {% if is_admin or current_user.worker in ['veterinario', 'colaborador'] %}
+          {% if is_admin or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
           <option value="adotado" {% if modo == 'adotado' %}selected{% endif %}>Adotados/Com Tutor</option>
           {% endif %}
         </select>

@@ -53,6 +53,9 @@ def nome_arquivo_receita(bloco) -> str:
 
 def _assinatura(user):
     """Mesma resolução de ``assinatura_de`` (app.py) para um ``User``."""
+    from helpers import pessoa_no_documento
+
+    user = pessoa_no_documento(user) if user else user
     vet = getattr(user, 'veterinario', None) if user else None
     return vet.assinatura if vet else None
 
