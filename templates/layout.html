@@ -493,6 +493,9 @@
   <!-- Script para desaparecer com transição suave -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
+      // Telas que pedem leitura atenta (ex.: internação) mantêm o aviso até o
+      // usuário fechá-lo; as demais seguem com o desaparecimento automático.
+      if (document.querySelector('[data-keep-alerts]')) return;
       const alertContainers = document.querySelectorAll('.alert-container');
 
       setTimeout(() => {

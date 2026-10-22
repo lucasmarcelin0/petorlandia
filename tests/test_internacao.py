@@ -680,7 +680,9 @@ def test_formulario_sugere_inicio_valido_apos_admissao_com_segundos(client, ward
     values = _form_inputs(response.get_data(as_text=True), f"/internacao/{admission.id}/prescricoes")
     suggested = normalize_to_utc(values["inicio_em"])
     assert suggested >= _utc(admission.iniciada_em)
-    assert suggested - _utc(admission.iniciada_em) <= timedelta(minutes=1)
+    # A sugestão é a próxima hora cheia de Brasília (horários redondos para a rotina).
+    assert suggested - _utc(admission.iniciada_em) <= timedelta(hours=1)
+    assert values["inicio_em"].endswith(":00")
     prescribed = client.post(f"/internacao/{admission.id}/prescricoes", json=_prescription_data(
         inicio_em=values["inicio_em"], fim_em=(suggested + timedelta(hours=24)).isoformat(),
     ), headers=JSON_HEADERS)
