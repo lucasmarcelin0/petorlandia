@@ -810,3 +810,29 @@ def test_parametros_basicos_do_formulario_persistem_e_aparecem_no_impresso(clien
     for label, value in expected.items():
         assert label in html
         assert value in html
+
+
+def test_detalhe_internacao_renderiza_abas_mutuamente_exclusivas(client, ward):
+    admission, _ = _prescribe(ward)
+    _login(client, ward.vet)
+    response = client.get(f"/internacao/{admission.id}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    # Barra de abas com suporte a tabs e acessibilidade
+    assert 'id="internacaoTabs"' in html
+    assert 'id="internacaoTabContent"' in html
+    assert 'data-bs-toggle="tab"' in html
+
+    # Todas as cinco abas presentes nos links
+    expected_tabs = ["#medicacoes", "#prescricoes", "#evolucoes", "#historico", "#documentos"]
+    for tab_id in expected_tabs:
+        assert f'href="{tab_id}"' in html
+        assert f'data-bs-target="{tab_id}"' in html
+
+    # Todas as cinco seções estruturadas como tab-pane e tabpanel
+    for pane_id in ["medicacoes", "prescricoes", "evolucoes", "historico", "documentos"]:
+        assert f'id="{pane_id}"' in html
+        assert f'class="tab-pane fade' in html or f'class="tab-pane fade show active' in html
+        assert f'role="tabpanel"' in html
+
