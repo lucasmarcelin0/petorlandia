@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>{{ {'prescricao': 'Prescrição', 'mapa': 'Mapa de medicações', 'prontuario': 'Prontuário de internação'}.get(tipo) }} · {{ internacao.animal.name }} | PetOrlândia</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-5') }}">
-  <script src="{{ url_for('static', filename='js/internacao.js', v='20261022-2') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-6') }}">
+  <script src="{{ url_for('static', filename='js/internacao.js', v='20261022-3') }}" defer></script>
 </head>
 <body>
   <div class="ih-print-toolbar ih-no-print"><a class="ih-btn ih-btn--ghost" href="{{ url_for('internacao.detalhe', internacao_id=internacao.id) }}">Voltar ao prontuário</a><span class="ih-small ih-muted">Formato A4 · Imprima ou escolha “Salvar como PDF”.</span><button class="ih-btn" type="button" data-ih-print>Imprimir documento</button></div>

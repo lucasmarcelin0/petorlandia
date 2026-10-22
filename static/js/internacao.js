@@ -93,49 +93,191 @@
     }
   }
 
+  function medicationMeta(item, name) {
+    const parts = [];
+    const active = typeof item.principio_ativo === 'string' ? item.principio_ativo.trim() : '';
+    if (active && active.toLocaleLowerCase('pt-BR') !== name.toLocaleLowerCase('pt-BR')) parts.push(active);
+    if (item.tipo_item === 'comercial') {
+      parts.push(item.fabricante ? 'Marca comercial · ' + item.fabricante : 'Marca comercial');
+    } else if (item.classificacao) {
+      parts.push(item.classificacao);
+    }
+    if (item.via_administracao) parts.push('Via: ' + item.via_administracao);
+    return parts.filter(function (part) { return typeof part === 'string' && part.trim(); }).join(' · ');
+  }
+
+  // Lista própria em vez de <datalist>: navegadores de celular não exibem
+  // opções preenchidas depois da digitação, e o resultado do catálogo sumia.
   function setupMedicationSearch(form) {
     const input = form.querySelector('[data-ih-medicamento]');
     if (!input) return;
-    const suggestions = document.getElementById(input.getAttribute('list'));
-    if (!suggestions) return;
+    const list = document.getElementById(input.getAttribute('aria-controls'));
+    if (!list) return;
     let debounceTimer;
+    let blurTimer;
     let controller;
     let sequence = 0;
+    let activeIndex = -1;
+    let selecting = false;
 
-    input.addEventListener('input', function () {
+    function options() {
+      return Array.from(list.querySelectorAll('[role="option"]'));
+    }
+
+    function close() {
+      list.hidden = true;
+      list.replaceChildren();
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      activeIndex = -1;
+    }
+
+    function cancelSearch() {
+      sequence += 1;
       window.clearTimeout(debounceTimer);
       if (controller) controller.abort();
+    }
+
+    function showStatus(text) {
+      list.replaceChildren();
+      const status = document.createElement('li');
+      status.className = 'ih-suggestions__status';
+      status.setAttribute('role', 'presentation');
+      status.textContent = text;
+      list.appendChild(status);
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      activeIndex = -1;
+    }
+
+    function highlight(index) {
+      const items = options();
+      if (!items.length) return;
+      activeIndex = (index + items.length) % items.length;
+      items.forEach(function (option, position) {
+        option.setAttribute('aria-selected', position === activeIndex ? 'true' : 'false');
+      });
+      input.setAttribute('aria-activedescendant', items[activeIndex].id);
+      items[activeIndex].scrollIntoView({block: 'nearest'});
+    }
+
+    function choose(option) {
+      cancelSearch();
+      const limit = input.maxLength > 0 ? input.maxLength : 200;
+      input.value = option.dataset.value.slice(0, limit);
+      close();
+      // Avisa o formulário (invalida a prévia) sem disparar nova busca.
+      selecting = true;
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+      selecting = false;
+    }
+
+    function render(items) {
+      list.replaceChildren();
+      const seen = new Set();
+      items.slice(0, 12).forEach(function (item) {
+        if (!item || typeof item !== 'object') return;
+        const rawName = item.nome_exibicao || item.nome_exibicao_busca || item.nome;
+        if (typeof rawName !== 'string' || !rawName.trim()) return;
+        const name = rawName.trim();
+        const meta = medicationMeta(item, name);
+        const key = (name + '|' + meta).toLocaleLowerCase('pt-BR');
+        if (seen.has(key)) return;
+        seen.add(key);
+        const option = document.createElement('li');
+        option.id = list.id + '-opcao-' + seen.size;
+        option.className = 'ih-suggestions__option';
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', 'false');
+        option.dataset.value = name;
+        const title = document.createElement('span');
+        title.className = 'ih-suggestions__name';
+        title.textContent = name;
+        option.appendChild(title);
+        if (meta) {
+          const detail = document.createElement('span');
+          detail.className = 'ih-suggestions__meta';
+          detail.textContent = meta;
+          option.appendChild(detail);
+        }
+        option.addEventListener('click', function () { choose(option); });
+        list.appendChild(option);
+      });
+      if (!seen.size) {
+        showStatus('Nenhum medicamento encontrado no catálogo. Você pode manter o nome digitado.');
+        return;
+      }
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      activeIndex = -1;
+    }
+
+    // Mantém o foco no campo ao tocar numa sugestão, para o clique ser aplicado.
+    list.addEventListener('mousedown', function (event) { event.preventDefault(); });
+
+    input.addEventListener('input', function () {
+      if (selecting) return;
+      cancelSearch();
       const query = input.value.trim();
-      const currentSequence = ++sequence;
-      suggestions.replaceChildren();
-      if (query.length < 2) return;
+      const currentSequence = sequence;
+      if (query.length < 2) {
+        close();
+        return;
+      }
       debounceTimer = window.setTimeout(async function () {
         controller = new AbortController();
         const searchController = controller;
         const timeout = window.setTimeout(function () { searchController.abort(); }, 8000);
+        showStatus('Buscando no catálogo…');
         try {
           const url = new URL(input.dataset.searchUrl, window.location.origin);
           url.searchParams.set('q', query);
           const response = await fetch(url, {
             headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: searchController.signal
           });
-          if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return;
+          if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+            throw new Error('Resposta inválida do catálogo');
+          }
           const items = await response.json();
-          if (currentSequence !== sequence || !Array.isArray(items)) return;
-          suggestions.replaceChildren();
-          items.slice(0, 12).forEach(function (item) {
-            const name = item.nome_exibicao || item.nome_exibicao_busca || item.nome;
-            if (typeof name !== 'string' || !name.trim()) return;
-            const option = document.createElement('option');
-            option.value = name;
-            suggestions.appendChild(option);
-          });
+          if (currentSequence !== sequence) return;
+          render(Array.isArray(items) ? items : []);
         } catch (_error) {
-          // A busca é auxiliar: o nome digitado continua disponível sem conexão.
+          // A busca é auxiliar: o nome digitado continua valendo sem conexão.
+          if (currentSequence !== sequence) return;
+          showStatus('Não foi possível consultar o catálogo agora. Você pode manter o nome digitado.');
         } finally {
           window.clearTimeout(timeout);
         }
       }, 250);
+    });
+
+    input.addEventListener('keydown', function (event) {
+      if (list.hidden) return;
+      const items = options();
+      if (event.key === 'ArrowDown' && items.length) {
+        event.preventDefault();
+        highlight(activeIndex + 1);
+      } else if (event.key === 'ArrowUp' && items.length) {
+        event.preventDefault();
+        highlight(activeIndex <= 0 ? items.length - 1 : activeIndex - 1);
+      } else if (event.key === 'Enter' && items[activeIndex]) {
+        event.preventDefault();
+        choose(items[activeIndex]);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelSearch();
+        close();
+      }
+    });
+
+    input.addEventListener('focus', function () { window.clearTimeout(blurTimer); });
+    input.addEventListener('blur', function () {
+      window.clearTimeout(blurTimer);
+      blurTimer = window.setTimeout(function () {
+        cancelSearch();
+        close();
+      }, 200);
     });
   }
 

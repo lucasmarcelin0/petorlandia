@@ -272,6 +272,26 @@ def test_formulario_de_prescricao_oferece_atalhos(client, ward):
     assert ">Agora</button>" in html and ">Próxima hora cheia</button>" in html
 
 
+def test_busca_de_medicamento_da_prescricao_consulta_o_catalogo(client, ward):
+    from models import Medicamento
+
+    db.session.add(Medicamento(nome="Dipirona sódica", principio_ativo="Dipirona",
+                               classificacao="Analgésico", created_by=ward.vet.id))
+    db.session.commit()
+    admission = _admit(ward)
+    _login(client, ward.vet)
+    html = client.get(f"/internacao/{admission.id}").get_data(as_text=True)
+    # Lista própria: <datalist> não aparece em navegadores de celular.
+    assert "<datalist" not in html
+    field = re.search(r"<input[^>]*data-ih-medicamento[^>]*>", html).group(0)
+    assert 'role="combobox"' in field and 'aria-controls="ih-medicamentos-nova"' in field
+    assert 'id="ih-medicamentos-nova" role="listbox"' in html
+    url = re.search(r'data-search-url="([^"]+)"', field).group(1).replace("&amp;", "&")
+    assert f"animal_id={admission.animal_id}" in url
+    results = client.get(f"{url}&q=dipir", headers=JSON_HEADERS).get_json()
+    assert any(item["nome"] == "Dipirona sódica" for item in results)
+
+
 # Gargalo 10 — busca na admissão --------------------------------------------
 
 def test_admissao_busca_por_animal_ou_tutor_alem_da_lista(client, ward):
