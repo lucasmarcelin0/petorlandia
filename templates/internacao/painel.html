@@ -6,9 +6,9 @@
   <div class="ih-actions"><a class="ih-btn" href="{{ url_for('internacao.nova', clinica_id=clinica.id if clinica else none) }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Nova internação</a></div>
 </header>
 <div class="ih-stats" aria-label="Resumo da internação">
-  <div class="ih-stat"><span class="ih-stat__value">{{ resumo.ativos|default(0) }}</span><span class="ih-stat__label">Pacientes internados</span></div>
-  <div class="ih-stat"><span class="ih-stat__value" data-ih-contador="pendentes">{{ resumo.pendentes|default(0) }}</span><span class="ih-stat__label">Doses pendentes</span></div>
-  <a class="ih-stat ih-stat--attention ih-stat--link" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, doses='atrasadas', _anchor='plantao-title') }}"><span class="ih-stat__value" data-ih-contador="atrasadas">{{ resumo.atrasadas|default(0) }}</span><span class="ih-stat__label">Doses com horário vencido · ver</span></a>
+  <div class="ih-stat"><span class="ih-ico ih-stat__ico ih-ico--pac" aria-hidden="true"><i class="fa-solid fa-bed-pulse"></i></span><span class="ih-stat__value">{{ resumo.ativos|default(0) }}</span><span class="ih-stat__label">Pacientes internados</span></div>
+  <div class="ih-stat"><span class="ih-ico ih-stat__ico ih-ico--dose" aria-hidden="true"><i class="fa-solid fa-syringe"></i></span><span class="ih-stat__value" data-ih-contador="pendentes">{{ resumo.pendentes|default(0) }}</span><span class="ih-stat__label">Doses pendentes</span></div>
+  <a class="ih-stat ih-stat--attention ih-stat--link" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, doses='atrasadas', _anchor='plantao-title') }}"><span class="ih-ico ih-stat__ico ih-ico--alerta" aria-hidden="true"><i class="fa-regular fa-clock"></i></span><span class="ih-stat__value" data-ih-contador="atrasadas">{{ resumo.atrasadas|default(0) }}</span><span class="ih-stat__label">Doses com horário vencido · ver</span></a>
 </div>
 <form method="get" class="ih-filter" role="search" aria-label="Filtrar internações">
   <label class="ih-field"><span>Clínica</span><select class="form-select" name="clinica_id" required>{% for item in clinicas %}<option value="{{ item.id }}" {% if clinica and item.id == clinica.id %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}</select></label>
@@ -18,7 +18,7 @@
 </form>
 
 <section class="ih-card ih-section" aria-labelledby="plantao-title">
-  <div class="ih-card__head"><div><h2 id="plantao-title">Medicações do plantão</h2><p>Ronda das próximas 24 horas e das doses vencidas. Confira paciente, leito e dose antes de confirmar; o registro guarda seu nome e o horário.</p></div><a class="ih-btn ih-btn--ghost ih-btn--small" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, doses='atrasadas' if filtro_doses == 'atrasadas' else none) }}" aria-label="Atualizar painel de internação"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Atualizar</a></div>
+  <div class="ih-card__head"><div><h2 id="plantao-title"><span class="ih-ico ih-ico--dose" aria-hidden="true"><i class="fa-solid fa-syringe"></i></span>Medicações do plantão</h2><p>Ronda das próximas 24 horas e das doses vencidas. Confira paciente, leito e dose antes de confirmar; o registro guarda seu nome e o horário.</p></div><a class="ih-btn ih-btn--ghost ih-btn--small" href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, doses='atrasadas' if filtro_doses == 'atrasadas' else none) }}" aria-label="Atualizar painel de internação"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Atualizar</a></div>
   <nav class="ih-segmented" aria-label="Filtrar doses">
     <a href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, _anchor='plantao-title') }}" {% if filtro_doses != 'atrasadas' %}aria-current="true"{% endif %}>Todas ({{ resumo.pendentes|default(0) }})</a>
     <a href="{{ url_for('internacao.painel', clinica_id=clinica.id if clinica else none, doses='atrasadas', _anchor='plantao-title') }}" {% if filtro_doses == 'atrasadas' %}aria-current="true"{% endif %}>Horário vencido ({{ resumo.atrasadas|default(0) }})</a>
@@ -44,7 +44,7 @@
 </section>
 
 <section class="ih-section mb-4" aria-labelledby="pacientes-title">
-  <div class="ih-heading mb-3"><div><h2 id="pacientes-title">Pacientes e passagem de plantão</h2><p>{{ clinica.nome if clinica else 'Selecione uma clínica para começar.' }}</p></div><span class="ih-small ih-muted">{{ internacoes|length }} resultado(s)</span></div>
+  <div class="ih-heading mb-3"><div><h2 id="pacientes-title"><span class="ih-ico ih-ico--pac" aria-hidden="true"><i class="fa-solid fa-bed-pulse"></i></span>Pacientes e passagem de plantão</h2><p>{{ clinica.nome if clinica else 'Selecione uma clínica para começar.' }}</p></div><span class="ih-small ih-muted">{{ internacoes|length }} resultado(s)</span></div>
   {% if internacoes %}
   <div class="ih-patient-grid">
     {% for item in internacoes %}

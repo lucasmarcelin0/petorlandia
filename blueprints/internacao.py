@@ -285,7 +285,7 @@ def split_interval(hours):
         return str(hours), 'horas'
     if value is None or not value.is_finite() or value <= 0:
         return ('' if value is None else str(hours)), 'horas'
-    if value >= 24 and value % 24 == 0:
+    if value >= 48 and value % 24 == 0:
         return _decimal_text(value / 24), 'dias'
     if value < 1 and (value * 60) == (value * 60).to_integral_value():
         return _decimal_text(value * 60), 'minutos'
@@ -294,14 +294,14 @@ def split_interval(hours):
 
 @bp.app_template_filter('internacao_intervalo')
 def format_interval(hours):
-    """Intervalo legível: 30 min · 8 h · 1,5 h · 2 dias."""
+    """Intervalo legível: 30 min · 8 h · 24 h · 2 dias."""
     amount, unit = split_interval(hours)
     if not amount:
         return '—'
     if unit == 'minutos':
         return f'{amount} min'
     if unit == 'dias':
-        return f'{amount} dia' if amount == '1' else f'{amount} dias'
+        return f'{amount} dias'
     return f'{amount} h'
 
 
