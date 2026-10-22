@@ -43,7 +43,9 @@ def _internship_clinic_ids(user):
         ids.add(clinic_id)
     vet = getattr(user, 'veterinario', None)
     if vet is not None and getattr(vet, 'is_estagiario', False):
-        if clinic_id := _clinic_id(getattr(vet, 'clinica_id', None)):
+        # Só a clínica em que ele também é da equipe: o perfil sozinho não basta.
+        clinic_id = _clinic_id(getattr(vet, 'clinica_id', None))
+        if clinic_id and clinic_id in _regular_staff_ids(user):
             ids.add(clinic_id)
     return ids
 

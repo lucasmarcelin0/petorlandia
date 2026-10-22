@@ -258,3 +258,41 @@ def test_internacao_estagiario_prescreve_e_impressao_mostra_supervisor(client, c
     assert "CRMV 65152" in html
     nova = client.get(f"/internacao/nova?clinica_id={clinica.clinic.id}", headers=HTML).get_data(as_text=True)
     assert "Laiane Estagiária</option>" not in nova, "responsável técnico continua sendo quem tem CRMV"
+
+
+def _clinica_onde_e_cliente(clinica):
+    from models.agenda import Appointment
+
+    outra = Clinica(nome="Clínica Vizinha")
+    db.session.add(outra)
+    db.session.flush()
+    vet_u = User(name="Vet Vizinho", email="vizinho@estagio.local", worker="veterinario")
+    vet_u.set_password("x")
+    db.session.add(vet_u)
+    db.session.flush()
+    vet = Veterinario(user=vet_u, crmv="999", clinica_id=outra.id)
+    animal = Animal(name="Pipoca", owner=clinica.tutor, clinica=outra)
+    db.session.add_all([vet, animal])
+    db.session.flush()
+    appointment = Appointment(animal_id=animal.id, tutor_id=clinica.tutor.id, veterinario_id=vet.id,
+                              clinica_id=outra.id, scheduled_at=utcnow() + timedelta(days=1))
+    db.session.add(appointment)
+    db.session.commit()
+    return outra, appointment
+
+
+@pytest.mark.parametrize("perfil", ["est", "conta"])
+def test_estagiario_cliente_de_outra_clinica_nao_opera_a_agenda_dela(client, clinica, perfil):
+    """User.clinica_id também marca clientes: não pode dar acesso operacional."""
+    from helpers import acting_clinic_id
+    from models.agenda import Appointment
+
+    outra, appointment = _clinica_onde_e_cliente(clinica)
+    user = getattr(clinica, perfil)
+    user.clinica_id = outra.id  # cliente da clínica vizinha
+    db.session.commit()
+    assert acting_clinic_id(user) == clinica.clinic.id
+    _login(client, user)
+    response = client.post(f"/appointments/{appointment.id}/delete", headers=HTML)
+    assert response.status_code in (403, 404)
+    assert db.session.get(Appointment, appointment.id) is not None
