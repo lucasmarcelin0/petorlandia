@@ -6,12 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>{{ {'prescricao': 'Prescrição', 'mapa': 'Mapa de medicações', 'prontuario': 'Prontuário de internação'}.get(tipo) }} · {{ internacao.animal.name }} | PetOrlândia</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261022-3') }}">
   <script src="{{ url_for('static', filename='js/internacao.js', v='20261022-1') }}" defer></script>
 </head>
 <body>
   <div class="ih-print-toolbar ih-no-print"><a class="ih-btn ih-btn--ghost" href="{{ url_for('internacao.detalhe', internacao_id=internacao.id) }}">Voltar ao prontuário</a><span class="ih-small ih-muted">Formato A4 · Imprima ou escolha “Salvar como PDF”.</span><button class="ih-btn" type="button" data-ih-print>Imprimir documento</button></div>
   <main class="ih-print-page">
+    <table class="ih-print-document" role="presentation">
+      <thead><tr><td><div class="ih-print-running-head"><strong>{{ clinica.nome }} · {{ internacao.animal.name }}</strong><span>Cadastro #{{ internacao.animal_id }} · Internação #{{ internacao.id }} · {{ {'prescricao': 'Prescrição', 'mapa': 'Mapa de medicações', 'prontuario': 'Prontuário de internação'}.get(tipo) }}</span><span>Emitido em {{ horario(emitido_em) }} · Horários de Brasília</span></div></td></tr></thead>
+      <tbody><tr><td>
     <header class="ih-print-head">
       {% include 'components/cabecalho_impressao.html' %}
       <h1>{{ {'prescricao': 'Prescrição da internação', 'mapa': 'Mapa de medicações', 'prontuario': 'Prontuário de internação'}.get(tipo) }}</h1>
@@ -37,6 +40,8 @@
     {% if tipo == 'prontuario' %}<section class="ih-print-section"><h2>Contexto e evolução clínica</h2><p class="ih-preline"><strong>Motivo da internação:</strong> {{ internacao.motivo }}</p>{% if internacao.observacoes %}<p class="ih-preline"><strong>Orientações iniciais:</strong> {{ internacao.observacoes }}</p>{% endif %}{% for item in evolucoes %}<article class="ih-print-evolution"><p><strong>{{ 'Passagem de plantão' if item.tipo == 'plantao' else 'Evolução clínica' }}</strong> · {{ horario(item.criada_em) }} · {{ item.autor.name if item.autor else 'Não informado' }}</p><p>{{ item.texto }}</p>{% if item.parametros %}<p>{% for label, valor in item.parametros.items() %}<strong>{{ label }}:</strong> {{ valor }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}{% if item.pendencias %}<p><strong>Pendências:</strong> {{ item.pendencias }}</p>{% endif %}</article>{% else %}<p>Sem evoluções registradas neste período.</p>{% endfor %}</section>{% endif %}
     {% if internacao.status == 'alta' and tipo == 'prontuario' %}<section class="ih-print-section"><h2>Alta da internação</h2><p>{{ horario(internacao.encerrada_em) }} · {{ internacao.alta_por.name if internacao.alta_por else 'Não informado' }}</p><p class="ih-preline">{{ internacao.resumo_alta }}</p></section>{% endif %}
     <footer class="ih-print-footer">{{ clinica.nome }} · {{ internacao.animal.name }} · Cadastro #{{ internacao.animal_id }} · Internação #{{ internacao.id }} · Emitido em {{ horario(emitido_em) }}</footer>
+      </td></tr></tbody>
+    </table>
   </main>
 </body>
 </html>
