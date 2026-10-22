@@ -60,7 +60,7 @@
       const result = await response.json();
       panel.replaceChildren();
       if (!response.ok || !result.ok) {
-        throw new Error(result.erro || 'Não foi possível conferir a programação. Revise os dados.');
+        throw new Error(result.erro || result.message || 'Não foi possível conferir a programação. Revise os dados.');
       }
       const times = result.horarios || [];
       const mode = form.querySelector('[data-ih-modo]').value;
@@ -560,7 +560,7 @@
     const result = await response.json().catch(function () { return {}; });
     if (!response.ok || !result.ok) {
       setBusy(form, false);
-      const message = result.erro || 'Não foi possível salvar. Revise os dados.';
+      const message = result.erro || result.message || 'Não foi possível salvar. Revise os dados.';
       showMessage(form, message, 'erro');
       const reason = form.querySelector('[data-ih-motivo], [name="motivo"]');
       if (reason && /justificativa|motivo/i.test(message)) {

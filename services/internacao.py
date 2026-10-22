@@ -358,8 +358,19 @@ def _momento_execucao(internacao, data, agora, *, omitida=False):
     return executada, motivo
 
 
-def _vigencia(prescricao, executada, *, explicit):
-    if executada < _utc(prescricao.inicio_em):
+def _vigencia(prescricao, executada, *, explicit, antecipacao=None):
+    """``antecipacao``: (horário previsto, tolerância) de uma dose programada.
+
+    A primeira dose pode ser antecipada dentro da janela de checagem, como as
+    demais; fora dela continua valendo o início da prescrição.
+    """
+    inicio = _utc(prescricao.inicio_em)
+    if antecipacao:
+        inicio = min(inicio, _utc(antecipacao[0]) - antecipacao[1])
+    if executada < inicio:
+        if antecipacao:
+            liberado = inicio.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+            raise InternacaoError(f'A prescrição ainda não começou: esta dose pode ser registrada a partir de {liberado}.')
         raise InternacaoError('Administração anterior ao início da prescrição.')
     if executada >= _utc(prescricao.fim_em):
         raise InternacaoConflict('Horário realizado fora da vigência da prescrição (fim exclusivo).')
@@ -397,8 +408,9 @@ def _registrar_ocorrencia(ocorrencia, actor, data, *, omitida=False):
     agora = utcnow()
     executada, motivo = _momento_execucao(internacao, data, agora, omitida=omitida)
     _autorizar_historico(internacao, actor_id)
-    _vigencia(prescricao, executada, explicit=bool(data.get('executada_em')))
     tolerancia = tolerancia_checagem()
+    _vigencia(prescricao, executada, explicit=bool(data.get('executada_em')),
+              antecipacao=(obj.prevista_para, tolerancia))
     minutos = int(tolerancia.total_seconds() // 60)
     if executada < _utc(obj.prevista_para) - tolerancia and not motivo:
         raise InternacaoError(
@@ -518,7 +530,9 @@ def retificar_registro(registro, actor, data):
     if executada > agora or executada < _utc(internacao.iniciada_em):
         raise InternacaoError('Horário da retificação fora do período permitido.')
     if resultado == 'administrada':
-        _vigencia(prescricao, executada, explicit=True)
+        dose = db.session.get(InternacaoOcorrencia, registro.ocorrencia_id) if registro.ocorrencia_id else None
+        _vigencia(prescricao, executada, explicit=True,
+                  antecipacao=(dose.prevista_para, tolerancia_checagem()) if dose else None)
         if prescricao.modo == 'prn':
             if executada >= _utc(prescricao.fim_em):
                 raise InternacaoError('Horário da retificação fora da vigência da prescrição.')
