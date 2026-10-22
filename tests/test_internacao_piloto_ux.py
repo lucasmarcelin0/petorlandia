@@ -60,6 +60,43 @@ def test_antecipacao_alem_da_janela_continua_exigindo_justificativa(ward, monkey
         hospital.registrar_administracao(dose, ward.worker, {})
 
 
+def test_primeira_dose_pode_ser_antecipada_dentro_da_janela(client, ward):
+    # Caso da equipe: prescrição começa às 18:00 e a dose é dada às 17:10.
+    _, prescription = _prescribe(ward, inicio_em=NOW + timedelta(minutes=50))
+    dose = _doses(prescription)[0]
+    _login(client, ward.worker)
+    response = client.post(f"/internacao/doses/{dose.id}/registrar", data={
+        "resultado": "administrada", "motivo": "Tudo ok", "observacoes": "Tudo ok.",
+    }, headers=JSON_HEADERS)
+    assert response.status_code == 200, response.get_data(as_text=True)
+    record = InternacaoRegistro.query.one()
+    assert _utc(record.executada_em) == NOW and record.ocorrencia_id == dose.id
+    # O registro antecipado continua retificável.
+    hospital.retificar_registro(record, ward.vet, {"motivo": "Complemento da observação"})
+
+
+def test_primeira_dose_antecipada_com_horario_real_informado(ward, monkeypatch):
+    _, prescription = _prescribe(ward, inicio_em=NOW + timedelta(minutes=50))
+    dose = _doses(prescription)[0]
+    _at(monkeypatch, NOW + timedelta(minutes=5))
+    record = hospital.registrar_administracao(dose, ward.worker, {
+        "executada_em": NOW, "motivo": "Lançado logo após a administração",
+    })
+    assert _utc(record.executada_em) == NOW
+
+
+def test_primeira_dose_alem_da_janela_continua_bloqueada_antes_do_inicio(ward):
+    _, prescription = _prescribe(ward, inicio_em=NOW + timedelta(minutes=90))
+    first, second = _doses(prescription)[:2]
+    # 90 min antes do início: libera 60 min antes da primeira dose (13:30 em Brasília).
+    with pytest.raises(hospital.InternacaoError, match="a partir de 22/10/2026 12:30"):
+        hospital.registrar_administracao(first, ward.worker, {"motivo": "Antes do horário"})
+    # Doses seguintes não abrem antes do início da prescrição.
+    with pytest.raises(hospital.InternacaoError, match="a partir de 22/10/2026 13:30"):
+        hospital.omitir_ocorrencia(second, ward.worker, {"motivo": "Jejum"})
+    assert InternacaoRegistro.query.count() == 0
+
+
 def test_atraso_alem_da_janela_exige_justificativa(ward, monkeypatch):
     _, prescription = _prescribe(ward)
     dose = _doses(prescription)[0]  # prevista para NOW - 1 h
