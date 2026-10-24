@@ -1,5 +1,5 @@
 {% extends 'internacao/base.html' %}
-{% from 'internacao/_macros.html' import horario, estado with context %}
+{% from 'internacao/_macros.html' import horario, estado, foto_animal with context %}
 {% block internacao_content %}
 <header class="ih-heading">
   <div><p class="ih-eyebrow">Cuidado que continua entre os plantões</p><h1>Internação</h1><p>Pacientes, prescrições e próximos cuidados em uma visão da clínica.</p></div>
@@ -51,7 +51,7 @@
     {% set nota = (passagens|default({})).get(item.id) %}
     {% set contagem = (doses_por_paciente|default({})).get(item.id) %}
     <article class="ih-patient">
-      <div class="ih-patient__top"><div class="ih-patient__identity"><div class="ih-avatar"><i class="fa-solid fa-paw" aria-hidden="true"></i></div><div><a class="ih-patient__name" href="{{ url_for('internacao.detalhe', internacao_id=item.id) }}">{{ item.animal.name }}</a><div class="ih-patient__meta">{{ item.animal.owner.name if item.animal.owner else 'Tutor não informado' }}</div></div></div>{{ estado(item.status) }}</div>
+      <div class="ih-patient__top"><div class="ih-patient__identity">{{ foto_animal(item.animal) }}<div><a class="ih-patient__name" href="{{ url_for('internacao.detalhe', internacao_id=item.id) }}">{{ item.animal.name }}</a><div class="ih-patient__meta">{{ item.animal.owner.name if item.animal.owner else 'Tutor não informado' }}</div></div></div>{{ estado(item.status) }}</div>
       <dl class="ih-kv"><dt>Leito</dt><dd>{{ item.leito or 'Não definido' }}</dd><dt>Responsável</dt><dd>{{ item.responsavel.name if item.responsavel else 'Não definido' }}</dd><dt>Admissão</dt><dd>{{ horario(item.iniciada_em) }}</dd>{% if item.status == 'ativa' %}<dt>Doses (24 h)</dt><dd>{{ contagem.pendentes if contagem else 0 }} pendente(s){% if contagem and contagem.atrasadas %} · <strong class="ih-text-late">{{ contagem.atrasadas }} vencida(s)</strong>{% endif %}</dd>{% endif %}</dl>
       {% if item.alergias %}<div class="ih-notice ih-notice--warning mb-0"><strong>Alergias / alertas:</strong> {{ item.alergias }}</div>{% endif %}
       {% if item.status == 'ativa' %}
