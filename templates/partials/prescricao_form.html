@@ -176,9 +176,9 @@
             Apresentação <span class="text-danger" aria-hidden="true">*</span>
             <span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— obrigatória para prescrever</span>
           </label>
-          <button type="button" class="btn btn-xs btn-outline-success py-0 px-2 fw-semibold"
-                  id="btn-toggle-quick-apres"
-                  style="font-size:.75rem; border-radius:20px;"
+          <button type="button" class="btn btn-sm btn-outline-success fw-semibold"
+                  id="btn-toggle-quick-apres" aria-expanded="false" aria-controls="quick-add-apresentacao-form"
+                  style="min-height:40px; border-radius:10px;"
                   onclick="toggleFormNovaApresentacao()">
             <i class="bi bi-plus-lg me-1"></i>Nova apresentação
           </button>
@@ -190,22 +190,25 @@
             <option value="">— escolha a apresentação dispensada —</option>
           </select>
           <small class="text-muted d-block mt-1" id="presc-apresentacao-hint" style="font-size:.72rem;">
-            Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).
+            Escolha do catálogo. Se não encontrar a embalagem, clique em “Nova apresentação”.
           </small>
         </div>
 
+        <p id="quick-apres-feedback" class="small mt-2 mb-0 d-none" role="status" aria-live="polite"></p>
+
         <!-- Formulário rápido para incluir nova apresentação inline -->
-        <div id="quick-add-apresentacao-form" class="mt-2 p-2 border rounded bg-white shadow-sm d-none" style="border-color:#b9e2c6 !important;">
+        <div id="quick-add-apresentacao-form" onkeydown="if (event.key === 'Enter' &amp;&amp; event.target.matches('input')) { event.preventDefault(); salvarNovaApresentacaoQuick(); }" class="mt-2 p-2 border rounded bg-white shadow-sm d-none" style="border-color:#b9e2c6 !important;">
           <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
             <span class="small fw-bold text-success" style="font-size:.8rem;">
               <i class="bi bi-plus-circle-fill me-1"></i>Cadastrar Nova Apresentação
             </span>
             <button type="button" class="btn-close btn-close-sm" style="font-size:.65rem;" aria-label="Fechar" onclick="toggleFormNovaApresentacao(false)"></button>
           </div>
+          <p class="small mb-2">Para <strong id="quick-apres-medicamento"></strong>. A apresentação ficará no catálogo e será selecionada nesta receita.</p>
           <div class="row g-2">
             <div class="col-sm-4">
-              <label for="quick-apres-forma" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Forma <span class="text-danger">*</span></label>
-              <input type="text" id="quick-apres-forma" class="form-control form-control-sm" list="quick-apres-forma-list" placeholder="Ex: comprimido, cápsula...">
+              <label for="quick-apres-forma" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Forma farmacêutica <span class="text-danger">*</span></label>
+              <input type="text" id="quick-apres-forma" maxlength="50" class="form-control form-control-sm" list="quick-apres-forma-list" placeholder="Ex: comprimido, cápsula...">
               <datalist id="quick-apres-forma-list">
                 <option value="comprimido">
                 <option value="cápsula">
@@ -219,11 +222,11 @@
             </div>
             <div class="col-sm-4">
               <label for="quick-apres-conc" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Concentração <span class="text-danger">*</span></label>
-              <input type="text" id="quick-apres-conc" class="form-control form-control-sm" placeholder="Ex: 500 mg, 50 mg/mL...">
+              <input type="text" id="quick-apres-conc" maxlength="100" class="form-control form-control-sm" placeholder="Ex: 500 mg, 50 mg/mL...">
             </div>
             <div class="col-sm-4">
-              <label for="quick-apres-fab" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Fabricante / Marca <span class="text-muted fw-normal">(opcional)</span></label>
-              <input type="text" id="quick-apres-fab" class="form-control form-control-sm" placeholder="Ex: Medicamento Genérico...">
+              <label for="quick-apres-fab" class="form-label small fw-semibold mb-1" style="font-size:.72rem;">Fabricante <span class="text-muted fw-normal">(opcional)</span></label>
+              <input type="text" id="quick-apres-fab" maxlength="150" class="form-control form-control-sm" placeholder="Ex: Medicamento Genérico...">
             </div>
             <div class="col-12 d-flex justify-content-end gap-2 mt-2 pt-1 border-top">
               <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:.78rem;" onclick="toggleFormNovaApresentacao(false)">Cancelar</button>
@@ -2705,18 +2708,38 @@
     return fallbackLabel || (ap.descricao || 'Apresentação');
   }
 
+  function feedbackApresentacao(texto, erro = false) {
+    const feedback = document.getElementById('quick-apres-feedback');
+    if (!feedback) return;
+    feedback.textContent = texto;
+    feedback.classList.toggle('d-none', !texto);
+    feedback.classList.toggle('text-danger', erro);
+    feedback.classList.toggle('text-success', !erro);
+    feedback.setAttribute('role', erro ? 'alert' : 'status');
+  }
+
   function toggleFormNovaApresentacao(forceState) {
     const form = document.getElementById('quick-add-apresentacao-form');
     if (!form) return;
     const shouldShow = typeof forceState === 'boolean' ? forceState : form.classList.contains('d-none');
     form.classList.toggle('d-none', !shouldShow);
+    document.getElementById('btn-toggle-quick-apres')?.setAttribute('aria-expanded', String(shouldShow));
     if (shouldShow) {
+      const medId = String(medicamentoSelecionado?.id || '');
+      if (form.dataset.medicationId !== medId) {
+        form.querySelectorAll('input').forEach(input => { input.value = ''; });
+        form.dataset.medicationId = medId;
+      }
+      document.getElementById('quick-apres-medicamento').textContent = medicamentoSelecionado?.nome_exibicao_busca || medicamentoSelecionado?.nome || '';
+      feedbackApresentacao('');
       setTimeout(() => document.getElementById('quick-apres-forma')?.focus(), 50);
     }
   }
 
   async function salvarNovaApresentacaoQuick() {
     const medId = medicamentoSelecionado?.id;
+    const medContext = medicamentoSelecionado;
+    if (document.getElementById('btn-salvar-quick-apres')?.disabled) return;
     if (!medId) {
       mostrarFeedback('Selecione um medicamento antes de adicionar uma apresentação.', 'warning');
       return;
@@ -2726,7 +2749,8 @@
     const fab = document.getElementById('quick-apres-fab')?.value?.trim();
 
     if (!forma || !conc) {
-      mostrarFeedback('Informe a forma e a concentração da apresentação.', 'warning');
+      feedbackApresentacao('Informe a forma farmacêutica e a concentração.', true);
+      document.getElementById(!forma ? 'quick-apres-forma' : 'quick-apres-conc')?.focus();
       return;
     }
 
@@ -2736,26 +2760,37 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando...';
     }
+    feedbackApresentacao('Salvando no catálogo…');
+    const saveController = new AbortController();
+    const saveTimeout = setTimeout(() => saveController.abort(), 15000);
 
     try {
       const payload = {
         medicamento_id: medId,
         forma: forma,
         concentracao: conc,
-        fabricante: fab || null
+        fabricante: fab || null,
+        nome_comercial: medContext?.nome_comercial_filtro || null
       };
 
       const { resp, data } = await fetchMedicamentoComCsrf('/apresentacao_medicamento', {
+        signal: saveController.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (!resp.ok || data.success === false) {
-        throw new Error(data.message || 'Erro ao cadastrar apresentação.');
+      if (!resp.ok || !data.success || !data.id) {
+        throw new Error(data.message || 'Não foi possível salvar. Confira sua conexão e se continua conectado à conta.');
       }
 
-      mostrarFeedback(data.message || 'Apresentação adicionada com sucesso!', 'success');
+      if (medicamentoSelecionado !== medContext) {
+        _medicationSearchCache.clear();
+        _medicationDetailCache.clear();
+        feedbackApresentacao('Apresentação salva no catálogo. A seleção atual da receita foi mantida.');
+        return;
+      }
+      feedbackApresentacao('Apresentação salva no catálogo e selecionada nesta receita.');
 
       // Limpa campos do formulário rápido
       const inputForma = document.getElementById('quick-apres-forma');
@@ -2795,11 +2830,13 @@
       if (select && data.id) {
         select.value = String(data.id);
         onApresentacaoPrescricaoChange();
+        select.focus();
       }
     } catch (e) {
       console.error('Erro ao salvar apresentação rápida:', e);
-      mostrarFeedback(e.message || 'Erro ao salvar apresentação.', 'danger');
+      feedbackApresentacao(e.name === 'AbortError' ? 'A conexão demorou a responder. Confira o catálogo antes de tentar salvar novamente.' : (e.message || 'Erro ao salvar apresentação.'), true);
     } finally {
+      clearTimeout(saveTimeout);
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -2815,6 +2852,11 @@
     const hint   = document.getElementById('presc-apresentacao-hint');
     if (!wrap || !select) return;
 
+    const quickForm = document.getElementById('quick-add-apresentacao-form');
+    if (quickForm?.dataset.medicationId && quickForm.dataset.medicationId !== String(medicamentoSelecionado?.id || '')) {
+      toggleFormNovaApresentacao(false);
+      feedbackApresentacao('');
+    }
     if (!medicamentoSelecionado && !_apresentacoesDisponiveis.length) {
       wrap.classList.add('d-none');
       select.innerHTML = '<option value="">— sem apresentação cadastrada —</option>';
