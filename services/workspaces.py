@@ -1,5 +1,5 @@
 """Request-scoped navigation derived from the same helpers used by routes."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from flask import g, url_for
 from flask_login import current_user
@@ -122,9 +122,14 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         capabilities.add('start_consultation')
     from services.internacao_access import pode_acessar_internacao
     if pode_acessar_internacao(user):
-        area('hospitalization', 'Internação', 'fa-bed-pulse',
-             action('Pacientes e medicações do plantão', 'internacao.painel', 'fa-bed-pulse'),
-             action('Nova internação', 'internacao.nova', 'fa-plus'))
+        hospital_action = action('Internação', 'internacao.painel', 'fa-bed-pulse')
+        capabilities.add('hospitalization')
+        for index, workspace in enumerate(areas):
+            if workspace.key in {'professional', 'clinic'}:
+                areas[index] = replace(workspace, actions=(*workspace.actions, hospital_action))
+                break
+        else:
+            area('hospitalization', 'Internação', 'fa-bed-pulse', hospital_action)
     return Experience(tuple(areas), frozenset(capabilities))
 
 
