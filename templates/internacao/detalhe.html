@@ -1,11 +1,11 @@
 {% extends 'internacao/base.html' %}
-{% from 'internacao/_macros.html' import csrf, horario, estado, numero, msg_formulario, abrir, valor_erro, erro_do with context %}
+{% from 'internacao/_macros.html' import csrf, horario, estado, numero, foto_animal, msg_formulario, abrir, valor_erro, erro_do with context %}
 {% block page_title %}{{ internacao.animal.name }} · Internação | PetOrlândia{% endblock %}
 {% block shell_attrs %}{% if erro_formulario %} data-ih-focus="{{ erro_formulario.alvo }}"{% endif %}{% endblock %}
 {% block internacao_content %}
 <a class="ih-back" href="{{ url_for('internacao.painel', clinica_id=internacao.clinica_id) }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Todos os internados</a>
 <header class="ih-heading">
-  <div><p class="ih-eyebrow">Prontuário de internação #{{ internacao.id }}</p><h1>{{ internacao.animal.name }} {{ estado(internacao.status) }}</h1><p>Tutor: {{ internacao.animal.owner.name if internacao.animal.owner else 'não informado' }}</p></div>
+  <div class="ih-patient-heading">{{ foto_animal(internacao.animal, 'header') }}<div><p class="ih-eyebrow">Prontuário de internação #{{ internacao.id }}</p><h1>{{ internacao.animal.name }} {{ estado(internacao.status) }}</h1><p>Tutor: {{ internacao.animal.owner.name if internacao.animal.owner else 'não informado' }}</p></div></div>
   <div class="ih-actions"><a class="ih-btn ih-btn--ghost" href="{{ url_for('internacao.imprimir', internacao_id=internacao.id, tipo='prontuario') }}" target="_blank" rel="noopener"><i class="fa-solid fa-print" aria-hidden="true"></i> Imprimir</a>{% if pode_prescrever and internacao.status == 'ativa' %}<a class="ih-btn" href="#nova-prescricao"><i class="fa-solid fa-plus" aria-hidden="true"></i> Prescrever</a>{% endif %}</div>
 </header>
 {% if erro_formulario and erro_formulario.alvo == 'pagina' %}<div class="ih-notice ih-notice--danger" role="alert">{{ erro_formulario.mensagem }}</div>{% endif %}

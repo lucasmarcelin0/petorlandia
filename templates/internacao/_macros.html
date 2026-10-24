@@ -13,6 +13,18 @@
 
 {% macro numero(valor) -%}{{ ('%g'|format(valor|float))|replace('.', ',') }}{%- endmacro %}
 
+{% macro foto_animal(animal, tamanho='card') -%}
+{% set foto = animal.image %}
+{% if not foto and animal.photos %}{% set foto = animal.photos[0].image_url %}{% endif %}
+<div class="animal-photo consultation-hero__avatar ih-patient-photo ih-patient-photo--{{ tamanho }}">
+  {% if foto %}
+  <img src="{{ foto }}" alt="Foto de {{ animal.name }}" loading="lazy" style="--photo-offset-x: {{ animal.photo_offset_x or 0 }}px; --photo-offset-y: {{ animal.photo_offset_y or 0 }}px; --photo-rotation: {{ animal.photo_rotation or 0 }}deg; --photo-zoom: {{ animal.photo_zoom or 1 }};">
+  {% else %}
+  <img src="{{ url_for('static', filename='default_animal.png') }}" alt="Foto ainda não cadastrada de {{ animal.name }}" class="consultation-hero__avatar-fallback" loading="lazy" data-photo-placeholder="true">
+  {% endif %}
+</div>
+{%- endmacro %}
+
 {% macro campo_texto(label, nome, valor='', required=false, placeholder='', tipo='text') -%}
 <label class="ih-field"><span>{{ label }}{% if required %} <span aria-label="obrigatório">*</span>{% endif %}</span><input class="form-control" type="{{ tipo }}" name="{{ nome }}" value="{{ valor or '' }}" {% if required %}required{% endif %} {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}></label>
 {%- endmacro %}

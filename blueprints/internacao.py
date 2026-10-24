@@ -506,6 +506,7 @@ def painel():
             ))
         episodes = query.options(
             joinedload(Internacao.animal).joinedload(Animal.owner),
+            joinedload(Internacao.animal).selectinload(Animal.photos),
             joinedload(Internacao.responsavel),
         ).order_by(Internacao.iniciada_em.desc(), Internacao.id.desc()).limit(200).all()
         dose_query = InternacaoOcorrencia.query.join(Internacao).filter(
