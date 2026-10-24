@@ -643,7 +643,9 @@
 </style>
 <script src="{{ url_for('static', filename='js/unified-history-sync.js') }}"></script>
 <script src="{{ url_for('static', filename='js/numero_extenso.js') }}"></script>
+<script src="{{ url_for('static', filename='js/posologia_estruturada.js', v='20261024-1') }}"></script>
 <script>
+    let _posologiaEstruturada = null;
     let medicamentoSelecionado = null;
     let prescricoes = [];
     let prescricaoArrastando = null;
@@ -973,6 +975,7 @@
   }
 
   function atualizarPreviewPrescricao() {
+    _posologiaEstruturada?.sync();
     _moverApresentacaoParaPainel();
     _atualizarEstadoPainelApresentacao();
 
@@ -996,7 +999,7 @@
     if (modoPersonalizado && textoLivre) {
       texto = textoLivre;
     } else if (dose || frequencia || duracao) {
-      const duracaoNormalizada = duracao && !duracao.toLowerCase().startsWith('por ') ? `por ${duracao}` : duracao;
+      const duracaoNormalizada = duracao && !/^(por |uso contínuo$)/i.test(duracao) ? `por ${duracao}` : duracao;
       texto = [dose, frequencia, duracaoNormalizada].filter(Boolean).join(', ');
     }
 
@@ -3937,6 +3940,7 @@
 
   // Validar campos antes de adicionar
   function validarCampos() {
+    if (!document.getElementById('modo-personalizado').checked && _posologiaEstruturada && !_posologiaEstruturada.validate()) return false;
     const nome = document.getElementById('nome-medicamento').value.trim();
     if (!nome) {
       mostrarFeedback('Informe o nome do medicamento.', 'danger');
@@ -4008,7 +4012,7 @@
       frequencia = document.getElementById('frequencia').value.trim();
       dose = document.getElementById('dose').value.trim();
       duracao = document.getElementById('duracao').value.trim();
-      const duracaoNormalizada = duracao.toLowerCase().startsWith('por ') ? duracao : `por ${duracao}`;
+      const duracaoNormalizada = /^(por |uso contínuo$)/i.test(duracao) ? duracao : `por ${duracao}`;
       texto = `${dose}, ${frequencia}, ${duracaoNormalizada}`;
     }
 
@@ -4140,6 +4144,7 @@
 
   // Event Listeners
     document.addEventListener('DOMContentLoaded', function() {
+      _posologiaEstruturada = window.PosologiaEstruturada?.mount(document);
       const input = document.getElementById('nome-medicamento');
       const sugestoes = document.getElementById('sugestoes-medicamentos');
       const buscarNova = document.getElementById('buscar-medicamento-nova');
@@ -4402,6 +4407,11 @@
   .consultation-workspace .tab-pane#medicamentos > .card > .card-body {
     overflow: visible !important;
   }
+
+  .posologia-selectors__row { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(120px, 1.2fr); gap: .5rem; }
+  .posologia-selectors [hidden], #modo-detalhado input[hidden] { display: none !important; }
+  .posologia-selectors > input { margin-top: .5rem; }
+  .posologia-selectors .form-select { min-height: 44px; padding-left: .65rem; }
 
   /* Melhorias visuais */
   #sugestoes-medicamentos,
