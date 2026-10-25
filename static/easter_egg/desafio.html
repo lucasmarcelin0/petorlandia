@@ -99,19 +99,35 @@
       box-shadow: inset 0 0 0 1px rgba(148,163,184,.35); transition: box-shadow .18s ease, transform .18s ease;
     }
     .name-input:focus { outline: none; box-shadow: inset 0 0 0 2px rgba(96,165,250,.8); transform: translateY(-1px); }
-    .stick-board { display: flex; flex-direction: column; gap: 22px; width: 100%; align-items: center; }
-    .stick-row { display: flex; justify-content: center; gap: 18px; transition: opacity .3s ease; }
+    .stick-board {
+      display: flex; flex-direction: column; gap: 22px; width: 100%; align-items: center;
+      /* Deslize de lado corta os palitos; o vertical continua rolando a página. */
+      touch-action: pan-y pinch-zoom;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    }
+    .stick-row { display: flex; justify-content: center; gap: 36px; transition: opacity .3s ease; }
     .stick-row--disabled { opacity: .35; }
     .stick-row--locked .stick { box-shadow: 0 0 0 3px rgba(248,250,252,.28); }
     .stick {
       width: 16px; height: 78px; border-radius: 999px;
       background: var(--stick-color,#f97316); box-shadow: 0 10px 24px rgba(15,23,42,.45);
       cursor: pointer; transition: transform .18s ease, filter .18s ease, opacity .18s ease;
+      -webkit-tap-highlight-color: transparent;
     }
-    .stick:hover { transform: translateY(-4px) scale(1.05); filter: brightness(1.08); }
+    @media (hover: hover) {
+      .stick:hover { transform: translateY(-4px) scale(1.05); filter: brightness(1.08); }
+    }
     .stick:active { transform: scale(.94); }
     .stick--hidden { opacity: .25; background: rgba(241,245,249,.5) !important; cursor: default; box-shadow: none; transform: none; filter: none; }
-    .rule-message { margin: -6px 0 12px; padding: 10px 16px; border-radius: 12px; background: rgba(248,250,252,.12); color: #f8fafc; font-size: .95rem; box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); }
+    .rule-message { margin: -8px 0 0; padding: 10px 16px; border-radius: 12px; background: rgba(248,250,252,.12); color: #f8fafc; font-size: .95rem; box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); }
+    .board-hint { margin: -8px 0 0; font-size: .85rem; color: rgba(226,232,240,.75); }
+    /* Rastro da lâmina e metades do palito cortado (fora do #root). */
+    .slice-trail, .slice-fx {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 1000;
+    }
+    .slice-fx { overflow: hidden; }
+    .stick-piece { position: absolute; border-radius: 999px; will-change: transform, opacity; }
     .controls { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
     .button { border: none; border-radius: 999px; padding: 12px 30px; font-size: 1rem; font-weight: 600; cursor: pointer; color: #fff; transition: transform .18s ease, filter .18s ease; }
     .button:disabled { cursor: not-allowed; background: rgba(148,163,184,.4); transform: none; filter: none; }
@@ -123,6 +139,7 @@
       .game-container { padding: 40px 22px; border-radius: 24px; }
       .name-field { min-width: 100%; }
       .stick { width: 14px; height: 68px; }
+      .stick-row { gap: 30px; }
       .controls { gap: 10px; }
       .button { width: 100%; }
     }
@@ -131,7 +148,7 @@
        'self', jsdelivr e cdnjs. Vindo do CDN do Socket.IO ele era bloqueado,
        `io` ficava indefinido e o modo online aparecia como indisponivel. -->
   <script src="/surpresa/socket.io.min.js"></script>
-  <script defer src="/surpresa/main.js?v=20260926a"></script>
+  <script defer src="/surpresa/main.js?v=20261025a"></script>
 </head>
 <body class="game-body">
   <a class="back-btn" href="/surpresa">← Arcade</a>

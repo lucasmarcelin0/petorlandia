@@ -224,6 +224,454 @@
     });
   };
 
+  // ── Corte dos palitos: toque ou deslize (estilo Fruit Ninja) ─────────────
+
+  const SWIPE_ACTIVATION_PX = 10;
+  const STICK_HIT_SLOP_PX = 6;
+  const TRAIL_LIFETIME_MS = 200;
+
+  // Deslize em andamento. Os cortes feitos durante o gesto só vão para o
+  // servidor quando o dedo sai da tela: com um envio por palito, a resposta do
+  // primeiro chegava no meio do deslize, devolvia ao tabuleiro o palito recém
+  // cortado e o servidor recusava o resto do corte como "restauração".
+  let swipe = null;
+  let suppressClickUntil = 0;
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const prefersReducedMotion = () =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const showRuleMessage = (message) => {
+    if (state.ruleMessage === message) {
+      return;
+    }
+    state.ruleMessage = message;
+    render();
+  };
+
+  // Camadas fixas fora do #root: o render() recria o tabuleiro a cada corte e
+  // apagaria a animação no meio.
+  let fxLayer = null;
+  const ensureFxLayer = () => {
+    if (!fxLayer || !fxLayer.isConnected) {
+      fxLayer = document.createElement("div");
+      fxLayer.className = "slice-fx";
+      fxLayer.setAttribute("aria-hidden", "true");
+      document.body.appendChild(fxLayer);
+    }
+    return fxLayer;
+  };
+
+  // Parte o palito em duas metades na linha do corte e as deixa cair.
+  const playSliceEffect = (slice) => {
+    if (!slice || !slice.rect || prefersReducedMotion()) {
+      return;
+    }
+    const { rect } = slice;
+    const width = rect.width;
+    const height = rect.height;
+    if (!width || !height) {
+      return;
+    }
+
+    const localX = clamp(slice.x - rect.left, 0, width);
+    const localY = clamp(slice.y - rect.top, height * 0.2, height * 0.8);
+    const slope = Math.abs(slice.dx) > 0.01 ? clamp(slice.dy / slice.dx, -1.2, 1.2) : 0;
+    const leftY = clamp(localY - localX * slope, 0, height);
+    const rightY = clamp(localY + (width - localX) * slope, 0, height);
+    const midY = (leftY + rightY) / 2;
+    const side = slice.dx < 0 ? -1 : 1;
+
+    const pieces = [
+      {
+        clip: `polygon(0 0, ${width}px 0, ${width}px ${rightY}px, 0 ${leftY}px)`,
+        origin: `50% ${midY / 2}px`,
+        frames: [
+          { transform: "translate(0, 0) rotate(0deg)", opacity: 1, easing: "ease-out" },
+          {
+            transform: `translate(${side * 10}px, -16px) rotate(${-side * 16}deg)`,
+            opacity: 1,
+            offset: 0.3,
+            easing: "ease-in",
+          },
+          { transform: `translate(${side * 24}px, 48px) rotate(${-side * 40}deg)`, opacity: 0 },
+        ],
+      },
+      {
+        clip: `polygon(0 ${leftY}px, ${width}px ${rightY}px, ${width}px ${height}px, 0 ${height}px)`,
+        origin: `50% ${(midY + height) / 2}px`,
+        frames: [
+          { transform: "translate(0, 0) rotate(0deg)", opacity: 1, easing: "ease-out" },
+          {
+            transform: `translate(${-side * 6}px, 6px) rotate(${side * 12}deg)`,
+            opacity: 1,
+            offset: 0.3,
+            easing: "ease-in",
+          },
+          { transform: `translate(${-side * 14}px, 66px) rotate(${side * 32}deg)`, opacity: 0 },
+        ],
+      },
+    ];
+
+    const layer = ensureFxLayer();
+    pieces.forEach((piece) => {
+      const pieceEl = document.createElement("div");
+      if (typeof pieceEl.animate !== "function") {
+        return;
+      }
+      pieceEl.className = "stick-piece";
+      pieceEl.style.left = `${rect.left}px`;
+      pieceEl.style.top = `${rect.top}px`;
+      pieceEl.style.width = `${width}px`;
+      pieceEl.style.height = `${height}px`;
+      pieceEl.style.background = state.stickColor;
+      pieceEl.style.clipPath = piece.clip;
+      pieceEl.style.webkitClipPath = piece.clip;
+      pieceEl.style.transformOrigin = piece.origin;
+      layer.appendChild(pieceEl);
+      const animation = pieceEl.animate(piece.frames, { duration: 650, fill: "forwards" });
+      animation.onfinish = () => pieceEl.remove();
+    });
+  };
+
+  const vibrateCut = () => {
+    try {
+      // Sem um toque anterior o Chrome bloqueia e reclama no console.
+      const activation = navigator.userActivation;
+      if (activation && !activation.hasBeenActive) {
+        return;
+      }
+      if (typeof navigator.vibrate === "function") {
+        navigator.vibrate(12);
+      }
+    } catch (error) {
+      // Aparelho sem vibração: o corte segue normalmente.
+    }
+  };
+
+  // Rastro da "lâmina" desenhado num canvas por cima da página.
+  const trail = { canvas: null, ctx: null, points: [], frame: 0, width: 0, height: 0, ratio: 0 };
+
+  const prepareTrailCanvas = () => {
+    if (!trail.canvas || !trail.canvas.isConnected) {
+      const canvas = document.createElement("canvas");
+      const ctx = typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+      if (!ctx) {
+        return null;
+      }
+      canvas.className = "slice-trail";
+      canvas.setAttribute("aria-hidden", "true");
+      document.body.appendChild(canvas);
+      trail.canvas = canvas;
+      trail.ctx = ctx;
+      trail.width = 0;
+    }
+    const ratio = window.devicePixelRatio || 1;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (trail.width !== width || trail.height !== height || trail.ratio !== ratio) {
+      trail.canvas.width = Math.round(width * ratio);
+      trail.canvas.height = Math.round(height * ratio);
+      trail.width = width;
+      trail.height = height;
+      trail.ratio = ratio;
+      trail.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+    return trail.ctx;
+  };
+
+  const drawTrail = () => {
+    trail.frame = 0;
+    const ctx = prepareTrailCanvas();
+    if (!ctx) {
+      trail.points = [];
+      return;
+    }
+    const now = performance.now();
+    trail.points = trail.points.filter((point) => now - point.time < TRAIL_LIFETIME_MS);
+    ctx.clearRect(0, 0, trail.width, trail.height);
+
+    const points = trail.points;
+    if (points.length > 1) {
+      ctx.lineCap = "round";
+      ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
+      ctx.shadowBlur = 14;
+      for (let i = 1; i < points.length; i += 1) {
+        const from = points[i - 1];
+        const to = points[i];
+        const life = 1 - (now - to.time) / TRAIL_LIFETIME_MS;
+        const tip = i / (points.length - 1);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.35 + 0.6 * tip) * life})`;
+        ctx.lineWidth = 1.5 + 6 * tip * life;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+      }
+    }
+
+    if (points.length) {
+      trail.frame = requestAnimationFrame(drawTrail);
+    }
+  };
+
+  const addTrailPoint = (x, y) => {
+    trail.points.push({ x, y, time: performance.now() });
+    if (trail.points.length > 48) {
+      trail.points.splice(0, trail.points.length - 48);
+    }
+    if (!trail.frame) {
+      trail.frame = requestAnimationFrame(drawTrail);
+    }
+  };
+
+  // Aplica as regras da casa ao corte de um palito. Devolve true se cortou.
+  const cutStick = (rowIndex, stickIndex, slice, { deferEmit = false } = {}) => {
+    if (state.winner) return false;
+    if (!state.rows[rowIndex]?.[stickIndex]) return false;
+    if (waitingForOpponent()) {
+      showRuleMessage(`Aguarde sua vez: agora é a vez de ${currentTurnName()}.`);
+      return false;
+    }
+    if (state.activeRow !== null && state.activeRow !== rowIndex) {
+      showRuleMessage("Conclua esta linha antes de cortar outra.");
+      return false;
+    }
+
+    ensureBaseline();
+    recalcTurnProgress();
+
+    if (state.turnRemovalCount >= 3) {
+      showRuleMessage("Você já removeu três palitos neste turno.");
+      return false;
+    }
+
+    const rowRemovalCount = state.turnRowRemovalCounts[rowIndex] || 0;
+    const originRow = Array.isArray(state.turnOriginRows[rowIndex])
+      ? state.turnOriginRows[rowIndex]
+      : [];
+    const startedAsSplitRow =
+      originRow.length === 3 &&
+      Boolean(originRow[0]) &&
+      Boolean(originRow[2]) &&
+      !originRow[1];
+    const shouldEnforceAlternateRule = startedAsSplitRow;
+    if (shouldEnforceAlternateRule && rowRemovalCount >= 1) {
+      showRuleMessage(
+        "Nesta linha, apenas um palito pode ser cortado por turno após retirar o do meio."
+      );
+      return false;
+    }
+
+    if (state.activeRow === null) {
+      state.activeRow = rowIndex;
+      state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
+    } else if (state.selectionRange) {
+      if (state.selectionRange.row !== rowIndex) {
+        return false;
+      }
+
+      const isAdjacentToMin = stickIndex === state.selectionRange.min - 1;
+      const isAdjacentToMax = stickIndex === state.selectionRange.max + 1;
+
+      if (!isAdjacentToMin && !isAdjacentToMax) {
+        return false;
+      }
+
+      state.selectionRange = {
+        row: rowIndex,
+        min: isAdjacentToMin ? stickIndex : state.selectionRange.min,
+        max: isAdjacentToMax ? stickIndex : state.selectionRange.max,
+      };
+    }
+
+    const updated = cloneRows(state.rows);
+    if (!updated[rowIndex] || updated[rowIndex][stickIndex] === false) {
+      return false;
+    }
+
+    updated[rowIndex][stickIndex] = false;
+    state.rows = updated;
+    if (!state.selectionRange) {
+      state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
+    }
+
+    state.ruleMessage = null;
+
+    recalcTurnProgress();
+    state.hasPlayed = state.turnRemovalCount > 0;
+
+    const nextRow = updated[rowIndex] || [];
+    const remaining = nextRow.filter(Boolean).length;
+    const baselineRow = Array.isArray(state.turnOriginRows[rowIndex])
+      ? state.turnOriginRows[rowIndex]
+      : [];
+    const baselineWasSplit = isSplitRow(baselineRow);
+    const nextIsSplit = isSplitRow(nextRow);
+
+    if (baselineWasSplit) {
+      if (!nextIsSplit || remaining <= 1) {
+        state.alternateRows[rowIndex] = false;
+      }
+    } else if (remaining <= 1) {
+      state.alternateRows[rowIndex] = false;
+    }
+
+    playSliceEffect(slice);
+    vibrateCut();
+    if (!deferEmit) {
+      emitState();
+    }
+    render();
+    return true;
+  };
+
+  // Fração do segmento (x0,y0)→(x1,y1) em que ele entra no retângulo
+  // (Liang–Barsky), ou null se não o atravessa.
+  const segmentEntry = (x0, y0, x1, y1, box) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    let enter = 0;
+    let leave = 1;
+    const edges = [
+      [-dx, x0 - box.left],
+      [dx, box.right - x0],
+      [-dy, y0 - box.top],
+      [dy, box.bottom - y0],
+    ];
+    for (const [p, q] of edges) {
+      if (p === 0) {
+        if (q < 0) return null;
+        continue;
+      }
+      const t = q / p;
+      if (p < 0) {
+        enter = Math.max(enter, t);
+      } else {
+        leave = Math.min(leave, t);
+      }
+      if (enter > leave) return null;
+    }
+    return enter;
+  };
+
+  // Corta, na ordem em que o dedo passou, os palitos cruzados pelo trecho.
+  const sliceAlong = (x0, y0, x1, y1) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const hits = [];
+    container.querySelectorAll(".stick[data-row]:not(.stick--hidden)").forEach((stickEl) => {
+      const rect = stickEl.getBoundingClientRect();
+      const entry = segmentEntry(x0, y0, x1, y1, {
+        left: rect.left - STICK_HIT_SLOP_PX,
+        right: rect.right + STICK_HIT_SLOP_PX,
+        top: rect.top - STICK_HIT_SLOP_PX,
+        bottom: rect.bottom + STICK_HIT_SLOP_PX,
+      });
+      if (entry !== null) {
+        hits.push({
+          entry,
+          rect,
+          row: Number(stickEl.dataset.row),
+          stick: Number(stickEl.dataset.stick),
+        });
+      }
+    });
+
+    hits.sort((a, b) => a.entry - b.entry);
+    hits.forEach((hit) => {
+      const centerX = hit.rect.left + hit.rect.width / 2;
+      const along = Math.abs(dx) > 0.01 ? clamp((centerX - x0) / dx, 0, 1) : 0.5;
+      const slice = { rect: hit.rect, x: x0 + along * dx, y: y0 + along * dy, dx, dy };
+      if (cutStick(hit.row, hit.stick, slice, { deferEmit: true }) && swipe) {
+        swipe.pendingEmit = true;
+      }
+    });
+  };
+
+  const endSwipe = () => {
+    if (!swipe) {
+      return;
+    }
+    const finished = swipe;
+    swipe = null;
+    if (finished.active) {
+      suppressClickUntil = performance.now() + 400;
+    }
+    if (finished.pendingEmit) {
+      emitState();
+    }
+  };
+
+  const handleSwipePoint = (x, y) => {
+    if (!swipe.active) {
+      const dx = x - swipe.startX;
+      const dy = y - swipe.startY;
+      if (Math.hypot(dx, dy) < SWIPE_ACTIVATION_PX) {
+        return;
+      }
+      // No toque, gesto vertical continua rolando a página (touch-action:
+      // pan-y no tabuleiro): só o deslize de lado corta.
+      if (swipe.pointerType !== "mouse" && Math.abs(dy) > Math.abs(dx)) {
+        swipe = null;
+        return;
+      }
+      swipe.active = true;
+      addTrailPoint(swipe.startX, swipe.startY);
+    }
+    addTrailPoint(x, y);
+    sliceAlong(swipe.lastX, swipe.lastY, x, y);
+    if (swipe) {
+      swipe.lastX = x;
+      swipe.lastY = y;
+    }
+  };
+
+  // Ouvintes no #root e na janela, que sobrevivem ao render().
+  container.addEventListener("pointerdown", (event) => {
+    if (swipe || !event.isPrimary) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest(".stick-board")) return;
+    swipe = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      active: false,
+      pendingEmit: false,
+    };
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      // Botão solto fora da janela: o pointerup não chegou.
+      endSwipe();
+      return;
+    }
+    const coalesced =
+      typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
+    const samples = coalesced.length ? coalesced : [event];
+    for (const sample of samples) {
+      if (!swipe) break;
+      handleSwipePoint(sample.clientX, sample.clientY);
+    }
+  });
+
+  const finishSwipeFor = (event) => {
+    if (swipe && event.pointerId === swipe.pointerId) {
+      endSwipe();
+    }
+  };
+  window.addEventListener("pointerup", finishSwipeFor);
+  window.addEventListener("pointercancel", finishSwipeFor);
+  window.addEventListener("blur", endSwipe);
+
   const render = () => {
     document.body.style.background = state.bgGradient;
     document.body.style.backgroundAttachment = "fixed";
@@ -348,13 +796,6 @@
       wrapper.appendChild(seatText);
     }
 
-    if (typeof state.ruleMessage === "string" && state.ruleMessage.trim()) {
-      const ruleNotice = document.createElement("p");
-      ruleNotice.className = "rule-message";
-      ruleNotice.textContent = state.ruleMessage;
-      wrapper.appendChild(ruleNotice);
-    }
-
     if (
       state.lastTurn &&
       typeof state.lastTurn === "object" &&
@@ -469,102 +910,21 @@
           stickEl.classList.add("stick--hidden");
         }
 
-        stickEl.addEventListener("click", () => {
-          if (state.winner) return;
-          if (!state.rows[rowIndex]?.[stickIndex]) return;
-          if (waitingForOpponent()) {
-            state.ruleMessage = `Aguarde sua vez: agora é a vez de ${currentTurnName()}.`;
-            render();
-            return;
-          }
-          if (state.activeRow !== null && state.activeRow !== rowIndex) {
-            state.ruleMessage = "Conclua esta linha antes de cortar outra.";
-            render();
-            return;
-          }
+        stickEl.dataset.row = String(rowIndex);
+        stickEl.dataset.stick = String(stickIndex);
 
-          ensureBaseline();
-          recalcTurnProgress();
-
-          if (state.turnRemovalCount >= 3) {
-            state.ruleMessage = "Você já removeu três palitos neste turno.";
-            render();
-            return;
-          }
-
-          const rowRemovalCount = state.turnRowRemovalCounts[rowIndex] || 0;
-          const originRow = Array.isArray(state.turnOriginRows[rowIndex])
-            ? state.turnOriginRows[rowIndex]
-            : [];
-          const startedAsSplitRow =
-            originRow.length === 3 &&
-            Boolean(originRow[0]) &&
-            Boolean(originRow[2]) &&
-            !originRow[1];
-          const shouldEnforceAlternateRule = startedAsSplitRow;
-          if (shouldEnforceAlternateRule && rowRemovalCount >= 1) {
-            state.ruleMessage =
-              "Nesta linha, apenas um palito pode ser cortado por turno após retirar o do meio.";
-            render();
-            return;
-          }
-
-          if (state.activeRow === null) {
-            state.activeRow = rowIndex;
-            state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
-          } else if (state.selectionRange) {
-            if (state.selectionRange.row !== rowIndex) {
-              return;
-            }
-
-            const isAdjacentToMin = stickIndex === state.selectionRange.min - 1;
-            const isAdjacentToMax = stickIndex === state.selectionRange.max + 1;
-
-            if (!isAdjacentToMin && !isAdjacentToMax) {
-              return;
-            }
-
-            state.selectionRange = {
-              row: rowIndex,
-              min: isAdjacentToMin ? stickIndex : state.selectionRange.min,
-              max: isAdjacentToMax ? stickIndex : state.selectionRange.max,
-            };
-          }
-
-          const updated = cloneRows(state.rows);
-          if (!updated[rowIndex] || updated[rowIndex][stickIndex] === false) {
-            return;
-          }
-
-          updated[rowIndex][stickIndex] = false;
-          state.rows = updated;
-          if (!state.selectionRange) {
-            state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
-          }
-
-          state.ruleMessage = null;
-
-          recalcTurnProgress();
-          state.hasPlayed = state.turnRemovalCount > 0;
-
-          const nextRow = updated[rowIndex] || [];
-          const remaining = nextRow.filter(Boolean).length;
-          const baselineRow = Array.isArray(state.turnOriginRows[rowIndex])
-            ? state.turnOriginRows[rowIndex]
-            : [];
-          const baselineWasSplit = isSplitRow(baselineRow);
-          const nextIsSplit = isSplitRow(nextRow);
-
-          if (baselineWasSplit) {
-            if (!nextIsSplit || remaining <= 1) {
-              state.alternateRows[rowIndex] = false;
-            }
-          } else if (remaining <= 1) {
-            state.alternateRows[rowIndex] = false;
-          }
-
-          emitState();
-          render();
+        stickEl.addEventListener("click", (event) => {
+          // O clique que encerra um deslize não deve cortar de novo.
+          if (performance.now() < suppressClickUntil) return;
+          const rect = stickEl.getBoundingClientRect();
+          const hasPoint = Boolean(event.clientX || event.clientY);
+          cutStick(rowIndex, stickIndex, {
+            rect,
+            x: hasPoint ? event.clientX : rect.left + rect.width / 2,
+            y: hasPoint ? event.clientY : rect.top + rect.height / 2,
+            dx: 1,
+            dy: 0,
+          });
         });
 
         rowEl.appendChild(stickEl);
@@ -574,6 +934,20 @@
     });
 
     wrapper.appendChild(board);
+
+    // Abaixo do tabuleiro: acima dele o aviso empurrava os palitos no meio de
+    // um deslize e, no celular, ficava fora da tela de quem está jogando.
+    if (typeof state.ruleMessage === "string" && state.ruleMessage.trim()) {
+      const ruleNotice = document.createElement("p");
+      ruleNotice.className = "rule-message";
+      ruleNotice.textContent = state.ruleMessage;
+      wrapper.appendChild(ruleNotice);
+    } else if (!state.winner) {
+      const hint = document.createElement("p");
+      hint.className = "board-hint";
+      hint.textContent = "✂️ Deslize o dedo sobre os palitos para cortar — ou toque em um.";
+      wrapper.appendChild(hint);
+    }
 
     const controls = document.createElement("div");
     controls.className = "controls";
@@ -661,6 +1035,11 @@
         return;
       }
       if (!data) {
+        return;
+      }
+      // Cortes deste deslize ainda não enviados: aplicar agora devolveria os
+      // palitos ao tabuleiro. O envio no fim do gesto traz o estado completo.
+      if (swipe && swipe.pendingEmit) {
         return;
       }
 

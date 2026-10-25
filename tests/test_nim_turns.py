@@ -232,3 +232,21 @@ def test_desafio_page_loads_socket_client_allowed_by_csp(app):
     game_js = game_script.get_data(as_text=True)
     assert 'socket.on("connect_error"' in game_js
     assert 'socket.on("seat"' in game_js
+
+
+def test_desafio_cuts_sticks_by_swiping(app):
+    """Os palitos podem ser cortados deslizando o dedo, sem perder o toque.
+
+    O tabuleiro precisa deixar o gesto horizontal para a pagina (pan-y) e o
+    script corta pelo trajeto do ponteiro; o clique por palito continua.
+    """
+    client = app.test_client()
+
+    html = client.get("/surpresa/desafio.html").get_data(as_text=True)
+    game_js = client.get("/surpresa/main.js").get_data(as_text=True)
+
+    assert "touch-action: pan-y pinch-zoom" in html
+    assert 'window.addEventListener("pointermove"' in game_js
+    assert 'stickEl.addEventListener("click"' in game_js
+    # Cortes do deslize vao ao servidor uma vez, no fim do gesto.
+    assert "deferEmit: true" in game_js
