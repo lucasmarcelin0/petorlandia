@@ -250,3 +250,23 @@ def test_desafio_cuts_sticks_by_swiping(app):
     assert 'stickEl.addEventListener("click"' in game_js
     # Cortes do deslize vao ao servidor uma vez, no fim do gesto.
     assert "deferEmit: true" in game_js
+
+
+def test_desafio_fits_one_screen_and_guards_restart(app):
+    """O jogo cabe na tela sem rolar e Reiniciar fica longe de Finalizar Turno.
+
+    O cartao ocupa a altura da tela (o tabuleiro encolhe para caber); Reiniciar
+    pede um segundo toque no meio da partida; nomes (que no online vem do
+    adversario) nao sao montados como HTML.
+    """
+    client = app.test_client()
+
+    html = client.get("/surpresa/desafio.html").get_data(as_text=True)
+    game_js = client.get("/surpresa/main.js").get_data(as_text=True)
+
+    assert "height: calc(100dvh - 32px)" in html
+    assert ".stick-board {\n      flex: 1 1 0;" in html
+    assert "RESET_CONFIRM_MS" in game_js
+    assert 'className = "button button--reset"' in game_js
+    assert "controls.append(resetButton, endTurnButton)" in game_js
+    assert "status.innerHTML" not in game_js

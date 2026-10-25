@@ -106,6 +106,16 @@
 
   document.body.classList.add("game-body");
 
+  // "← Arcade" é estático no HTML; o render() o encaixa no cabeçalho do jogo.
+  const backLink = document.querySelector(".back-btn");
+
+  // Reiniciar no meio da partida pede um segundo toque dentro deste prazo.
+  const RESET_CONFIRM_MS = 3000;
+  const RESET_LABEL = "↺ Reiniciar";
+  const RESET_CONFIRM_LABEL = "Confirmar reinício";
+  let resetArmedUntil = 0;
+  let resetDisarmTimer = 0;
+
   const isOnlineMode = () => state.mode === "online" && supportsSocket;
 
   // No online o servidor só aceita jogadas de quem está na vez. Sem este aviso
@@ -675,6 +685,11 @@
   const render = () => {
     document.body.style.background = state.bgGradient;
     document.body.style.backgroundAttachment = "fixed";
+    // O link de volta mora no cabeçalho do jogo; devolve-o ao body antes de
+    // limpar o #root para não perdê-lo (a tela de erro usa a posição fixa).
+    if (backLink && backLink.parentNode !== document.body) {
+      document.body.prepend(backLink);
+    }
     container.innerHTML = "";
 
     if (state.mode === "online" && state.roomError) {
@@ -699,10 +714,19 @@
     wrapper.className = "game-container";
     wrapper.style.setProperty("--stick-color", state.stickColor);
 
+    const header = document.createElement("div");
+    header.className = "game-header";
+    if (backLink) {
+      header.appendChild(backLink);
+    }
+
     const title = document.createElement("h1");
     title.className = "game-title";
-    title.textContent = "🎮 Desafio Secreto";
-    wrapper.appendChild(title);
+    const titleIcon = document.createElement("span");
+    titleIcon.className = "game-title__icon";
+    titleIcon.textContent = "🎮 ";
+    title.append(titleIcon, "Desafio Secreto");
+    header.appendChild(title);
 
     const modeSwitch = document.createElement("div");
     modeSwitch.className = "mode-switch";
@@ -741,13 +765,46 @@
     modeOptions.appendChild(localOption);
 
     modeSwitch.appendChild(modeOptions);
-    wrapper.appendChild(modeSwitch);
+    header.appendChild(modeSwitch);
+    wrapper.appendChild(header);
 
     const shareBox = document.createElement("div");
     shareBox.className = "share-box";
     if (isOnlineMode()) {
       const shareLink = `${window.location.origin}${window.location.pathname}?sala=${roomCode}`;
-      shareBox.innerHTML = `Convide alguém com este link:<br><code>${shareLink}</code>`;
+      const shareLabel = document.createElement("span");
+      shareLabel.className = "share-box__label";
+      shareLabel.textContent = "Convide:";
+      shareBox.appendChild(shareLabel);
+
+      const shareCode = document.createElement("code");
+      shareCode.textContent = shareLink;
+      shareCode.title = shareLink;
+      shareBox.appendChild(shareCode);
+
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "share-box__copy";
+      copyButton.textContent = "Copiar";
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          copyButton.textContent = "Copiado!";
+        } catch (error) {
+          // Sem acesso à área de transferência: seleciona o link para copiar.
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(shareCode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          copyButton.textContent = "Selecionado";
+        }
+        setTimeout(() => {
+          copyButton.textContent = "Copiar";
+        }, 1600);
+      });
+      shareBox.appendChild(copyButton);
+
       if (state.connection !== "connected") {
         const connectionNotice = document.createElement("p");
         connectionNotice.className = "share-box__status";
@@ -761,7 +818,7 @@
       shareBox.textContent =
         "Modo online indisponível. Continue jogando no modo local com seus amigos.";
     } else {
-      shareBox.textContent = "Modo local: alternem os turnos jogando na mesma tela.";
+      shareBox.textContent = "Modo local: alternem a vez na mesma tela.";
     }
     wrapper.appendChild(shareBox);
 
@@ -774,27 +831,21 @@
 
     state.playerNames = currentNames;
 
+    // Nomes vêm do adversário no online: sempre como texto, nunca como HTML.
+    const statusEmoji = document.createElement("span");
+    statusEmoji.className = "emoji";
     if (state.winner) {
       const emoji = state.playerEmojis[state.winner - 1] || "🐾";
       const winnerName = currentNames[state.winner - 1] || `Jogador ${state.winner}`;
-      status.innerHTML = `<span class="emoji">🏆</span>${emoji} ${winnerName} venceu!`;
+      statusEmoji.textContent = "🏆";
+      status.append(statusEmoji, `${emoji} ${winnerName} venceu!`);
     } else {
       const emoji = state.playerEmojis[state.turn - 1] || "🐾";
       const activeName = currentNames[state.turn - 1] || `Jogador ${state.turn}`;
-      status.innerHTML = `Vez de ${activeName} <span class="emoji">${emoji}</span>`;
+      statusEmoji.textContent = emoji;
+      status.append(`Vez de ${activeName} `, statusEmoji);
     }
     wrapper.appendChild(status);
-
-    if (isOnlineMode() && (state.mySeat === 1 || state.mySeat === 2)) {
-      const seatText = document.createElement("p");
-      seatText.className = "seat-text";
-      const myName = currentNames[state.mySeat - 1] || `Jogador ${state.mySeat}`;
-      seatText.textContent =
-        myName === `Jogador ${state.mySeat}`
-          ? `Você é o Jogador ${state.mySeat}`
-          : `Você é o Jogador ${state.mySeat} (${myName})`;
-      wrapper.appendChild(seatText);
-    }
 
     if (
       state.lastTurn &&
@@ -809,9 +860,9 @@
         summaryText.className = "turn-summary__text";
         summaryText.textContent = state.lastTurn.message;
         summaryBox.appendChild(summaryText);
-      }
-
-      if (Array.isArray(state.lastTurn.removed) && state.lastTurn.removed.length) {
+      } else if (Array.isArray(state.lastTurn.removed) && state.lastTurn.removed.length) {
+        // A mensagem do servidor já descreve os palitos removidos; a lista só
+        // aparece quando ela falta, para economizar altura.
         const detailList = document.createElement("ul");
         detailList.className = "turn-summary__list";
 
@@ -843,10 +894,14 @@
     currentNames.forEach((name, index) => {
       const field = document.createElement("div");
       field.className = "name-field";
+      if (!state.winner && state.turn === index + 1) {
+        field.classList.add("name-field--active");
+      }
 
       const label = document.createElement("label");
       label.className = "name-label";
-      label.textContent = `Jogador ${index + 1}`;
+      const isMySeat = isOnlineMode() && state.mySeat === index + 1;
+      label.textContent = isMySeat ? `Jogador ${index + 1} · você` : `Jogador ${index + 1}`;
       label.setAttribute("for", `player-name-${index}`);
       field.appendChild(label);
 
@@ -945,7 +1000,7 @@
     } else if (!state.winner) {
       const hint = document.createElement("p");
       hint.className = "board-hint";
-      hint.textContent = "✂️ Deslize o dedo sobre os palitos para cortar — ou toque em um.";
+      hint.textContent = "✂️ Deslize sobre os palitos para cortar (ou toque).";
       wrapper.appendChild(hint);
     }
 
@@ -953,6 +1008,7 @@
     controls.className = "controls";
 
     const endTurnButton = document.createElement("button");
+    endTurnButton.type = "button";
     endTurnButton.className = "button button--primary";
     endTurnButton.textContent = "Finalizar Turno";
     endTurnButton.disabled = !state.hasPlayed || Boolean(state.winner);
@@ -976,21 +1032,49 @@
       state.turnRemovalCount = 0;
       state.turnRowRemovalCounts = createZeroArray(state.rows.length);
       state.ruleMessage = null;
+      resetArmedUntil = 0;
 
       emitState();
       render();
     });
-    controls.appendChild(endTurnButton);
+
+    const isGameInProgress = () =>
+      !state.winner && state.rows.some((row) => row.some((stick) => !stick));
+    const resetArmed = isGameInProgress() && performance.now() < resetArmedUntil;
 
     const resetButton = document.createElement("button");
-    resetButton.className = "button button--secondary";
-    resetButton.textContent = "Reiniciar";
+    resetButton.type = "button";
+    resetButton.className = "button button--reset";
+    if (resetArmed) {
+      resetButton.classList.add("button--armed");
+    }
+    resetButton.textContent = resetArmed ? RESET_CONFIRM_LABEL : RESET_LABEL;
     resetButton.addEventListener("click", () => {
       if (waitingForOpponent()) {
         state.ruleMessage = `Na partida online, só quem está na vez (${currentTurnName()}) pode reiniciar.`;
         render();
         return;
       }
+      // Com a partida em andamento, o primeiro toque só pede confirmação: um
+      // toque errado perto de "Finalizar Turno" não apaga mais o jogo.
+      if (isGameInProgress() && performance.now() >= resetArmedUntil) {
+        resetArmedUntil = performance.now() + RESET_CONFIRM_MS;
+        resetButton.classList.add("button--armed");
+        resetButton.textContent = RESET_CONFIRM_LABEL;
+        clearTimeout(resetDisarmTimer);
+        resetDisarmTimer = setTimeout(() => {
+          resetArmedUntil = 0;
+          // Sem render(): não apaga o nome de quem estiver digitando.
+          const current = container.querySelector(".button--reset");
+          if (current) {
+            current.classList.remove("button--armed");
+            current.textContent = RESET_LABEL;
+          }
+        }, RESET_CONFIRM_MS);
+        return;
+      }
+      resetArmedUntil = 0;
+      clearTimeout(resetDisarmTimer);
       const currentNames = [
         sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
         sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
@@ -1023,7 +1107,9 @@
       emitState();
       render();
     });
-    controls.appendChild(resetButton);
+
+    // Reiniciar à esquerda, pequeno e discreto; Finalizar Turno à direita.
+    controls.append(resetButton, endTurnButton);
 
     wrapper.appendChild(controls);
     container.appendChild(wrapper);
