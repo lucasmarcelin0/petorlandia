@@ -14,10 +14,10 @@
       font-family: 'Poppins', sans-serif; color: #fff; background: #0f172a;
     }
     body.game-body {
-      min-height: 100vh; display: flex; align-items: center;
+      min-height: 100vh; min-height: 100dvh; display: flex; align-items: center;
       justify-content: center; transition: background 0.7s ease;
     }
-    #root { width: 100%; padding: 24px; }
+    #root { width: 100%; padding: 16px; }
 
     /* ── BOTÃO VOLTAR ── */
     .back-btn {
@@ -30,29 +30,38 @@
       transition: background .18s, transform .18s;
     }
     .back-btn:hover { background: rgba(51,65,85,.95); transform: translateY(-1px); color: #fff; }
+    /* O main.js encaixa o botão no cabeçalho do jogo: ali ele não flutua sobre o conteúdo. */
+    .game-header .back-btn { position: static; flex: 0 0 auto; padding: 6px 12px; backdrop-filter: none; }
 
+    /* O jogo inteiro cabe na tela, sem rolar: só o tabuleiro encolhe para caber. */
     .game-container {
-      width: min(720px, 100%); margin: 0 auto; padding: 48px 32px;
+      width: min(720px, 100%); margin: 0 auto; padding: 22px 28px;
+      height: calc(100vh - 32px); height: calc(100dvh - 32px); max-height: 940px;
+      overflow-y: auto; overscroll-behavior: contain;
       border-radius: 28px; background: rgba(15,23,42,.7);
       backdrop-filter: blur(12px); box-shadow: 0 25px 70px rgba(15,23,42,.45);
-      display: flex; flex-direction: column; align-items: center; gap: 28px; text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
     }
-    .share-box {
-      background: rgba(15,23,42,.45); border-radius: 18px; padding: 12px 18px;
-      font-size: .95rem; line-height: 1.5;
-      box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); word-break: break-word;
+    .game-container > * { flex-shrink: 0; }
+    .game-header {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px 10px; flex-wrap: wrap;
+    }
+    .game-title {
+      margin: 0; flex: 1 1 auto; text-align: left; white-space: nowrap;
+      font-size: clamp(1.1rem,3.2vw,1.7rem); font-weight: 600;
+      letter-spacing: .02em; text-shadow: 0 4px 16px rgba(15,23,42,.6);
     }
     .mode-switch {
-      display: flex; align-items: center; gap: 12px;
-      background: rgba(15,23,42,.45); padding: 8px 16px; border-radius: 999px;
-      box-shadow: inset 0 0 0 1px rgba(148,163,184,.25);
-      font-size: .95rem; flex-wrap: wrap; justify-content: center;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(15,23,42,.45); padding: 4px; border-radius: 999px;
+      box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); font-size: .85rem;
     }
-    .mode-switch__label { font-weight: 500; color: rgba(226,232,240,.92); }
-    .mode-switch__options { display: flex; gap: 8px; }
+    .mode-switch__label { font-weight: 500; color: rgba(226,232,240,.92); padding-left: 8px; }
+    .mode-switch__options { display: flex; gap: 4px; }
     .mode-switch__option {
-      border: none; border-radius: 999px; padding: 6px 16px;
-      font-size: .9rem; font-weight: 600; cursor: pointer; color: #f8fafc;
+      border: none; border-radius: 999px; padding: 5px 12px;
+      font-size: .82rem; font-weight: 600; cursor: pointer; color: #f8fafc;
       background: rgba(30,41,59,.75); box-shadow: inset 0 0 0 1px rgba(148,163,184,.35);
       transition: transform .18s ease, filter .18s ease;
     }
@@ -60,13 +69,27 @@
     .mode-switch__option:disabled { cursor: not-allowed; opacity: .55; filter: none; transform: none; }
     .mode-switch__option--active {
       background: linear-gradient(135deg,#f97316,#ef4444);
-      box-shadow: 0 12px 28px rgba(249,115,22,.32); transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(249,115,22,.32);
     }
+    .share-box {
+      width: 100%; display: flex; align-items: center; justify-content: center;
+      flex-wrap: wrap; gap: 6px 8px;
+      background: rgba(15,23,42,.45); border-radius: 14px; padding: 6px 12px;
+      font-size: .85rem; line-height: 1.4;
+      box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); word-break: break-word;
+    }
+    .share-box__label { color: rgba(226,232,240,.85); }
     .share-box code {
-      display: inline-block; margin-top: 4px; padding: 4px 8px;
-      background: rgba(30,41,59,.7); border-radius: 8px; font-size: .9rem; color: #e2e8f0;
+      flex: 1 1 120px; min-width: 0; padding: 3px 8px; text-align: left;
+      background: rgba(30,41,59,.7); border-radius: 8px; font-size: .8rem; color: #e2e8f0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .share-box__status { margin: 8px 0 0; font-size: .88rem; color: #fde68a; }
+    .share-box__copy {
+      border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+      font: inherit; font-size: .8rem; font-weight: 600; color: #f8fafc;
+      background: rgba(30,41,59,.85); box-shadow: inset 0 0 0 1px rgba(148,163,184,.4);
+    }
+    .share-box__status { width: 100%; margin: 0; font-size: .8rem; color: #fde68a; }
     .game-error {
       width: min(560px,100%); margin: 0 auto; padding: 40px 28px; border-radius: 24px;
       background: rgba(15,23,42,.78); box-shadow: 0 25px 70px rgba(15,23,42,.45);
@@ -74,42 +97,48 @@
     }
     .game-error__title { margin: 0 0 12px; font-size: clamp(1.3rem,3vw,1.6rem); font-weight: 600; }
     .game-error__text { margin: 0; color: rgba(226,232,240,.88); font-size: 1rem; }
-    .game-title {
-      font-size: clamp(2rem,4vw,2.6rem); font-weight: 600;
-      letter-spacing: .02em; text-shadow: 0 4px 16px rgba(15,23,42,.6);
-    }
     .status-text {
-      font-size: clamp(1.1rem,2.5vw,1.35rem); font-weight: 500;
+      font-size: clamp(1rem,2.4vw,1.25rem); font-weight: 500; line-height: 1.3;
       margin: 0; text-shadow: 0 2px 10px rgba(15,23,42,.45);
     }
-    .emoji { font-size: 1.6rem; margin-right: .25rem; }
-    .seat-text { margin: -18px 0 0; font-size: .9rem; color: rgba(226,232,240,.85); }
+    .emoji { font-size: 1.3rem; margin-right: .25rem; }
     .turn-summary {
-      width: 100%; margin: -12px 0 8px; padding: 14px 18px; border-radius: 16px;
-      background: rgba(15,23,42,.55); box-shadow: inset 0 0 0 1px rgba(148,163,184,.22); text-align: left;
+      width: 100%; padding: 6px 12px; border-radius: 12px;
+      background: rgba(15,23,42,.55); box-shadow: inset 0 0 0 1px rgba(148,163,184,.22);
     }
-    .turn-summary__text { margin: 0 0 8px; font-size: .95rem; line-height: 1.5; color: #e2e8f0; }
-    .turn-summary__list { margin: 0; padding-left: 18px; color: rgba(226,232,240,.9); font-size: .9rem; line-height: 1.4; }
-    .names-section { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; width: 100%; }
-    .name-field { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: min(220px,100%); }
-    .name-label { font-size: .9rem; font-weight: 500; color: rgba(226,232,240,.9); }
+    .turn-summary__text { margin: 0; font-size: .82rem; line-height: 1.4; color: #e2e8f0; }
+    .turn-summary__list { margin: 0; padding: 0; list-style: none; color: rgba(226,232,240,.9); font-size: .82rem; line-height: 1.4; }
+    .turn-summary__list li { display: inline; }
+    .turn-summary__list li + li::before { content: " · "; }
+    .names-section { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+    .name-field { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+    .name-label { font-size: .75rem; font-weight: 500; color: rgba(226,232,240,.8); }
     .name-input {
-      width: 100%; padding: 10px 14px; border-radius: 12px; border: none;
-      background: rgba(30,41,59,.8); color: #f8fafc; font-size: .95rem;
+      width: 100%; padding: 7px 12px; border-radius: 12px; border: none;
+      background: rgba(30,41,59,.8); color: #f8fafc; font-size: 1rem;
       box-shadow: inset 0 0 0 1px rgba(148,163,184,.35); transition: box-shadow .18s ease, transform .18s ease;
     }
+    /* Destaca quem está na vez. */
+    .name-field--active .name-label { color: #fff; font-weight: 600; }
+    .name-field--active .name-input { box-shadow: inset 0 0 0 2px var(--stick-color,#f97316); }
     .name-input:focus { outline: none; box-shadow: inset 0 0 0 2px rgba(96,165,250,.8); transform: translateY(-1px); }
     .stick-board {
-      display: flex; flex-direction: column; gap: 22px; width: 100%; align-items: center;
+      flex: 1 1 0; width: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      gap: clamp(8px,2.2vh,22px);
       /* Deslize de lado corta os palitos; o vertical continua rolando a página. */
       touch-action: pan-y pinch-zoom;
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-    .stick-row { display: flex; justify-content: center; gap: 36px; transition: opacity .3s ease; }
+    /* As linhas dividem a altura que sobra; os palitos acompanham. */
+    .stick-row {
+      display: flex; justify-content: center; gap: 36px;
+      flex: 1 1 0; min-height: 26px; max-height: 78px; transition: opacity .3s ease;
+    }
     .stick-row--disabled { opacity: .35; }
     .stick-row--locked .stick { box-shadow: 0 0 0 3px rgba(248,250,252,.28); }
     .stick {
-      width: 16px; height: 78px; border-radius: 999px;
+      width: 16px; border-radius: 999px;
       background: var(--stick-color,#f97316); box-shadow: 0 10px 24px rgba(15,23,42,.45);
       cursor: pointer; transition: transform .18s ease, filter .18s ease, opacity .18s ease;
       -webkit-tap-highlight-color: transparent;
@@ -119,8 +148,8 @@
     }
     .stick:active { transform: scale(.94); }
     .stick--hidden { opacity: .25; background: rgba(241,245,249,.5) !important; cursor: default; box-shadow: none; transform: none; filter: none; }
-    .rule-message { margin: -8px 0 0; padding: 10px 16px; border-radius: 12px; background: rgba(248,250,252,.12); color: #f8fafc; font-size: .95rem; box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); }
-    .board-hint { margin: -8px 0 0; font-size: .85rem; color: rgba(226,232,240,.75); }
+    .rule-message { margin: 0; padding: 6px 12px; border-radius: 12px; background: rgba(248,250,252,.12); color: #f8fafc; font-size: .85rem; line-height: 1.35; box-shadow: inset 0 0 0 1px rgba(148,163,184,.25); }
+    .board-hint { margin: 0; font-size: .8rem; color: rgba(226,232,240,.7); }
     /* Rastro da lâmina e metades do palito cortado (fora do #root). */
     .slice-trail, .slice-fx {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -128,30 +157,56 @@
     }
     .slice-fx { overflow: hidden; }
     .stick-piece { position: absolute; border-radius: 999px; will-change: transform, opacity; }
-    .controls { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
-    .button { border: none; border-radius: 999px; padding: 12px 30px; font-size: 1rem; font-weight: 600; cursor: pointer; color: #fff; transition: transform .18s ease, filter .18s ease; }
-    .button:disabled { cursor: not-allowed; background: rgba(148,163,184,.4); transform: none; filter: none; }
-    .button--primary { background: linear-gradient(135deg,#22c55e,#16a34a); box-shadow: 0 15px 35px rgba(34,197,94,.35); }
+    /* Reiniciar (pequeno, à esquerda) bem afastado de Finalizar Turno. */
+    .controls { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .button { border: none; border-radius: 999px; padding: 12px 24px; font-size: 1rem; font-weight: 600; cursor: pointer; color: #fff; transition: transform .18s ease, filter .18s ease, background .18s ease; }
+    .button:disabled { cursor: not-allowed; background: rgba(148,163,184,.4); box-shadow: none; transform: none; filter: none; }
+    .button--primary { flex: 1 1 auto; max-width: 320px; background: linear-gradient(135deg,#22c55e,#16a34a); box-shadow: 0 10px 26px rgba(34,197,94,.35); }
     .button--primary:not(:disabled):hover { filter: brightness(1.05); transform: translateY(-2px); }
-    .button--secondary { background: linear-gradient(135deg,#3b82f6,#2563eb); box-shadow: 0 15px 35px rgba(59,130,246,.35); }
-    .button--secondary:hover { filter: brightness(1.05); transform: translateY(-2px); }
+    .button--reset {
+      flex: 0 0 auto; padding: 9px 16px; font-size: .88rem;
+      background: transparent; color: rgba(226,232,240,.92);
+      box-shadow: inset 0 0 0 1px rgba(148,163,184,.55);
+    }
+    .button--reset:hover { background: rgba(148,163,184,.15); }
+    .button--reset.button--armed {
+      background: linear-gradient(135deg,#ef4444,#dc2626); color: #fff;
+      box-shadow: 0 8px 22px rgba(239,68,68,.4);
+    }
     @media (max-width: 540px) {
-      .game-container { padding: 40px 22px; border-radius: 24px; }
-      .name-field { min-width: 100%; }
-      .stick { width: 14px; height: 68px; }
-      .stick-row { gap: 30px; }
-      .controls { gap: 10px; }
-      .button { width: 100%; }
+      #root { padding: 8px; }
+      .game-container {
+        padding: 12px 12px 14px; border-radius: 22px; gap: 10px;
+        height: calc(100vh - 16px); height: calc(100dvh - 16px);
+      }
+      .game-header .back-btn { padding: 6px 11px; }
+      .back-btn__label { display: none; }
+      .mode-switch__label { display: none; }
+      .stick { width: 14px; }
+      .stick-row { gap: 30px; max-height: 72px; }
+      .controls { gap: 18px; }
+      .button { padding: 12px 18px; }
+    }
+    @media (max-width: 400px) {
+      .game-title__icon { display: none; }
+      .game-title { font-size: 1rem; letter-spacing: 0; }
+      .mode-switch__option { padding: 5px 10px; }
+    }
+    /* Tela muito baixa (celular deitado): volta a rolar a página. */
+    @media (max-height: 520px) {
+      .game-container { height: auto; max-height: none; overflow: visible; }
+      .stick-board { flex: 0 0 auto; }
+      .stick-row { flex: 0 0 auto; height: 52px; }
     }
   </style>
   <!-- Cliente Socket.IO servido pelo proprio site: a CSP so libera scripts de
        'self', jsdelivr e cdnjs. Vindo do CDN do Socket.IO ele era bloqueado,
        `io` ficava indefinido e o modo online aparecia como indisponivel. -->
   <script src="/surpresa/socket.io.min.js"></script>
-  <script defer src="/surpresa/main.js?v=20261025a"></script>
+  <script defer src="/surpresa/main.js?v=20261025b"></script>
 </head>
 <body class="game-body">
-  <a class="back-btn" href="/surpresa">← Arcade</a>
+  <a class="back-btn" href="/surpresa" aria-label="Voltar ao Arcade">←<span class="back-btn__label">Arcade</span></a>
   <div id="root"></div>
 </body>
 </html>
