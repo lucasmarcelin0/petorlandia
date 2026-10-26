@@ -405,6 +405,10 @@
         });
       }
       if (!isSuccess) {
+        if (json && json.merge_offer) {
+          // E-mail já usado por outro cadastro: js/tutor_merge.js oferece unificar.
+          document.dispatchEvent(new CustomEvent('tutor-merge-offer', {detail: {form, offer: json.merge_offer, message: mainMessage}}));
+        }
         return { success: false, message: mainMessage, level: category, offlineQueued: false };
       }
       const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: true}, cancelable: true});

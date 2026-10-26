@@ -1606,6 +1606,52 @@ def _cadastro_em_conflito(existing: User) -> str:
     return f'{existing.name} (cadastro nº {existing.id})'
 
 
+_PAPEIS_SEM_UNIFICACAO = {'admin', 'veterinario'}
+
+
+def _pode_unificar_tutores(origem: User, destino: User) -> bool:
+    """Quem pode juntar ``origem`` (que deixa de existir) em ``destino``.
+
+    Mesma regra de excluir tutor, porque o cadastro de origem é apagado ao
+    final: veterinário, e só o admin ou quem cadastrou a origem. O destino
+    precisa estar visível para quem pede. Contas de equipe (admin,
+    veterinário, colaborador) e a própria conta de quem pede ficam de fora:
+    a unificação é para o mesmo tutor cadastrado duas vezes.
+    """
+    if origem is None or destino is None or origem.id == destino.id:
+        return False
+    if not can_act_as_veterinarian(current_user):
+        return False
+    if current_user.role != 'admin' and origem.added_by_id != current_user.id:
+        return False
+    for conta in (origem, destino):
+        if conta.id == current_user.id:
+            return False
+        if (conta.role or '') in _PAPEIS_SEM_UNIFICACAO:
+            return False
+        if conta.worker or conta.veterinario is not None:
+            return False
+    try:
+        get_user_or_404(destino.id)
+    except Exception:
+        return False
+    return True
+
+
+def _oferta_unificacao(origem: User, destino: User):
+    """Dados para a tela oferecer a unificação no lugar do simples erro."""
+    if not _pode_unificar_tutores(origem, destino):
+        return None
+    return {
+        'source_id': origem.id,
+        'target_id': destino.id,
+        'target_name': destino.name,
+        'source_animals': Animal.query.filter_by(user_id=origem.id).count(),
+        'target_animals': Animal.query.filter_by(user_id=destino.id).count(),
+        'url': url_for('unificar_tutor', source_id=origem.id),
+    }
+
+
 @bp.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
@@ -1949,6 +1995,63 @@ def deletar_tutor(tutor_id):
     return redirect(url_for('tutores'))
 
 
+@bp.route('/tutor/<int:source_id>/unificar', methods=['POST'])
+@login_required
+def unificar_tutor(source_id):
+    """Junta o cadastro ``source_id`` no cadastro informado em ``target_id``.
+
+    Tudo o que aponta para a origem (animais, consultas, vacinas, mensagens...)
+    passa para o destino, que mantém e-mail, senha e dados próprios e herda o
+    que estiver em branco. A origem, já sem vínculos, é apagada; a ficha do
+    destino registra de onde vieram os dados.
+    """
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
+    def _responder(message, status, category, **extra):
+        if wants_json:
+            return jsonify(success=status < 400, message=message, category=category, **extra), status
+        flash(message, category)
+        if status < 400 and extra.get('redirect'):
+            return redirect(extra['redirect'])
+        return redirect(request.referrer or url_for('tutores'))
+
+    origem = get_user_or_404(source_id)
+    target_id = request.form.get('target_id', type=int)
+    destino = db.session.get(User, target_id) if target_id else None
+    if destino is None:
+        return _responder('Cadastro de destino não encontrado.', 404, 'danger')
+    if not _pode_unificar_tutores(origem, destino):
+        return _responder('Você não tem permissão para unificar estes cadastros.', 403, 'danger')
+
+    from services.tutor_merge import merge_accounts
+
+    origem_nome = origem.name
+    destino_id, destino_nome = destino.id, destino.name
+    animais = Animal.query.filter_by(user_id=origem.id).count()
+    try:
+        resultado = merge_accounts(
+            source_id=origem.id,
+            target_id=destino_id,
+            delete_source=True,
+            extra_inherit_fields=('clinica_id', 'added_by_id'),
+        )
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao unificar tutor %s em %s', source_id, target_id)
+        return _responder('Não foi possível unificar os cadastros. Nada foi alterado.', 500, 'danger')
+    if resultado != 0:
+        db.session.rollback()
+        return _responder('Não foi possível unificar os cadastros. Nada foi alterado.', 400, 'danger')
+
+    destino_url = url_for('ficha_tutor', tutor_id=destino_id)
+    plural = 'animal' if animais == 1 else 'animais'
+    message = (
+        f'Cadastros unificados: {animais} {plural} e o histórico de {origem_nome} '
+        f'agora estão no cadastro de {destino_nome} (nº {destino_id}).'
+    )
+    return _responder(message, 200, 'success', redirect=destino_url, target_id=destino_id)
+
+
 @bp.route('/buscar_animais')
 @login_required
 def buscar_animais():
@@ -2020,6 +2123,15 @@ def update_tutor(user_id):
                 if quem else
                 'Este e-mail já está em uso por outro cadastro.'
             )
+            oferta = _oferta_unificacao(user, existing) if wants_json else None
+            if oferta:
+                # Caso típico: a clínica cadastrou com e-mail errado e a pessoa
+                # criou a própria conta com o certo. Em vez de só barrar, a
+                # tela oferece juntar os dois cadastros (ver unificar_tutor).
+                return jsonify(
+                    success=False, message=message, category='warning',
+                    merge_offer=oferta,
+                ), 409
             return _recusar(message, 409)
 
     phone = (request.form.get('phone') or '').strip()
