@@ -1,7 +1,16 @@
 from pathlib import Path
 
+import pytest
+
 from extensions import db
 from models import ApresentacaoMedicamento, DoseMedicamento, Medicamento, User
+
+
+@pytest.fixture(autouse=True)
+def clear_search_cache():
+    # Os testes recriam o catálogo; não reutilizar respostas de outro banco.
+    from app import _clear_medication_search_cache
+    _clear_medication_search_cache()
 
 
 def test_buscar_medicamentos_encontra_composto_por_tokens_fora_de_ordem(client, app):
@@ -219,3 +228,80 @@ def test_frontend_configuracao_busca_instantanea():
     assert "_armazenarNoPoolMedicamentos(lista)" in template
 
 
+def test_busca_shampoo_clorexidina_nao_perde_resultado_no_limite_alfabetico(client, app):
+    with app.app_context():
+        vet = User(name="Vet Shampoo", email="shampoo-search@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.flush()
+        # Estes resultados ocupavam o limite antes da avaliação de relevância.
+        db.session.add_all([
+            Medicamento(nome=f"A Shampoo Neutro {i:03d}", created_by=vet.id)
+            for i in range(75)
+        ])
+        shampoo = Medicamento(
+            nome="Shampoo de Clorexidina 2%", principio_ativo="Clorexidina",
+            created_by=vet.id,
+        )
+        db.session.add(shampoo)
+        db.session.commit()
+        med_id = shampoo.id
+
+    for query in ["shampoo de clorexidina", "clorexidina shampoo", "shampoo clorexid"]:
+        response = client.get("/buscar_medicamentos", query_string={"q": query})
+        assert response.status_code == 200
+        assert [item["id"] for item in response.get_json()] == [med_id]
+
+
+def test_busca_shampoo_comercial_combina_nome_e_principio_sem_produtos_alheios(client, app):
+    with app.app_context():
+        vet = User(name="Vet Catálogo", email="shampoo-catalog@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.flush()
+        db.session.add(Medicamento(
+            nome="Catálogo de higiene dermatológica",
+            conteudo_estruturado={"produtos_vetsmart": [
+                {"nome": "Shampoo Antisséptico", "principio_ativo": "Clorexidina", "fabricante": "Lab X"},
+                {"nome": "Shampoo Neutro", "principio_ativo": "Aloe vera"},
+                {"nome": "Solução de Clorexidina", "principio_ativo": "Clorexidina"},
+            ]},
+            created_by=vet.id,
+        ))
+        db.session.commit()
+
+    for query in ["shampoo de clorexidina", "clorexidina shampoo"]:
+        response = client.get("/buscar_medicamentos", query_string={"q": query})
+        assert response.status_code == 200
+        assert [item["nome_exibicao_busca"] for item in response.get_json()] == ["Shampoo Antisséptico"]
+
+
+def test_busca_multiplos_termos_mantem_correcao_de_digitacao(client, app):
+    with app.app_context():
+        vet = User(name="Vet Busca", email="search-typo-compound@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.flush()
+        db.session.add(Medicamento(
+            nome="Shampoo de Neomicina", principio_ativo="Neomicina",
+            conteudo_estruturado={"indicacoes": "Uso tópico"}, created_by=vet.id,
+        ))
+        db.session.commit()
+    response = client.get("/buscar_medicamentos", query_string={"q": "shampoo neomcicina"})
+    assert response.status_code == 200
+    assert [item["nome_exibicao_busca"] for item in response.get_json()] == ["Shampoo de Neomicina"]
+
+
+def test_busca_medicamentos_frontend_runtime():
+    import shutil
+    import subprocess
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js necessário para testar as respostas assíncronas da busca")
+    result = subprocess.run(
+        [node, "--test", str(Path(__file__).with_suffix(".js"))],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

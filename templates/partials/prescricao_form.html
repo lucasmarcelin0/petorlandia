@@ -672,7 +672,8 @@
     function _filtrarMedicamentosDoPool(termo) {
       if (!termo || termo.length < 2) return [];
       const t = termo.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim();
-      const tokens = t.split(/\s+/).filter(tok => tok.length >= 2);
+      const ignorados = new Set(['com', 'para', 'por', 'uso', 'mg', 'ml']);
+      const tokens = (t.match(/[a-z0-9]{3,}/g) || []).filter(tok => !ignorados.has(tok));
       const resultados = [];
       for (const item of _medicationCatalogPool.values()) {
         const nome = (item.nome_exibicao_busca || item.nome || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
@@ -680,6 +681,7 @@
         const fab = (item.fabricante || item.produto_match_fabricante || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
         const marca = (item.nome_comercial_filtro || item.produto_match_nome || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
         const full = `${nome} ${pa} ${marca} ${fab}`;
+        if (tokens.length && !tokens.every(tok => full.includes(tok))) continue;
 
         let score = 0;
         if (nome === t || marca === t) score += 1000;
@@ -4252,7 +4254,7 @@
         const locais = _filtrarMedicamentosDoPool(q);
         if (locais.length > 0) {
           _renderizarSugestoesPrescricao(locais, input, sugestoes);
-        } else if (sugestoes.style.display === 'none' || !sugestoes.children.length) {
+        } else {
           sugestoes.innerHTML = '<li class="list-group-item text-muted py-2"><i class="fa-solid fa-spinner fa-spin me-2 text-primary"></i>Buscando...</li>';
           sugestoes.style.display = 'block';
         }
@@ -4371,7 +4373,7 @@
         const locais = _filtrarMedicamentosDoPool(q);
         if (locais.length > 0) {
           _renderizarSugestoesNova(locais, buscarNova, sugestoesNova);
-        } else if (sugestoesNova.style.display === 'none' || !sugestoesNova.children.length) {
+        } else {
           sugestoesNova.innerHTML = '<li class="list-group-item text-muted py-2"><i class="fa-solid fa-spinner fa-spin me-2 text-primary"></i>Buscando...</li>';
           sugestoesNova.style.display = 'block';
         }

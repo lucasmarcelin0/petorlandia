@@ -48,7 +48,7 @@ from services.appointments import ReturnAppointmentDTO, finalize_consulta_flow, 
 from services.billing.close_appointment import close_appointment
 from services.clinical_suggestions import build_followup_prefill, log_suggestion_event, recommend_protocols
 from services.payments import PaymentItemDTO, PaymentPreferenceDTO, apply_payment_to_bloco, apply_payment_to_orcamento, create_payment_preference
-from sqlalchemy import Text, cast, func, or_, text
+from sqlalchemy import Text, and_, cast, func, or_, text
 from sqlalchemy.orm import load_only, selectinload
 from template_filters import PAYER_TYPE_LABELS, default_payer_type_for_consulta, payer_type_label
 from time_utils import BR_TZ, coerce_to_brazil_tz, now_in_brazil, utcnow
@@ -1987,7 +1987,7 @@ def buscar_medicamentos():
         for token in _RE_TOKENS_BUSCA.findall(q_corrigido)
         if token not in {"com", "para", "por", "uso", "mg", "ml"}
     ]
-    tokens_busca = list(dict.fromkeys(tokens_raw + tokens_corrigidos))
+    tokens_busca = list(dict.fromkeys(tokens_corrigidos or tokens_raw))
 
     from services.species_ranking import (
         resolver_species_scope_do_animal,
@@ -2007,12 +2007,16 @@ def buscar_medicamentos():
             Medicamento.nome.ilike(like),
             Medicamento.principio_ativo.ilike(like),
         ])
-    for token in tokens_busca:
-        token_like = f"%{token}%"
-        filtros_fast.extend([
-            Medicamento.nome.ilike(token_like),
-            Medicamento.principio_ativo.ilike(token_like),
-        ])
+    # Combinar as palavras antes do limite evita perder o medicamento entre
+    # dezenas de resultados que correspondem apenas a "shampoo", por exemplo.
+    if tokens_busca:
+        filtros_fast.append(and_(*[
+            or_(
+                Medicamento.nome.ilike(f"%{token}%"),
+                Medicamento.principio_ativo.ilike(f"%{token}%"),
+            )
+            for token in tokens_busca
+        ]))
 
     med_options = (
         load_only(
@@ -2053,8 +2057,15 @@ def buscar_medicamentos():
         filtros_extra = []
         for termo in termos_busca:
             filtros_extra.append(cast(Medicamento.conteudo_estruturado, Text).ilike(f"%{termo}%"))
-        for token in tokens_busca:
-            filtros_extra.append(cast(Medicamento.conteudo_estruturado, Text).ilike(f"%{token}%"))
+        if tokens_busca:
+            filtros_extra.append(and_(*[
+                or_(
+                    Medicamento.nome.ilike(f"%{token}%"),
+                    Medicamento.principio_ativo.ilike(f"%{token}%"),
+                    cast(Medicamento.conteudo_estruturado, Text).ilike(f"%{token}%"),
+                )
+                for token in tokens_busca
+            ]))
 
         try:
             bind = db.session.get_bind() if hasattr(db.session, "get_bind") else db.session.bind
@@ -2145,7 +2156,7 @@ def buscar_medicamentos():
                 prod_direto_match = (
                     any(t in p_nome_norm for t in termos_busca)
                     or (prod_fab and any(t in p_fab_norm for t in termos_busca))
-                    or bool(tokens_busca and any(t in f"{p_nome_norm} {p_fab_norm}" for t in tokens_busca))
+                    or bool(tokens_busca and all(t in f"{p_nome_norm} {p_fab_norm} {p_pa_norm}" for t in tokens_busca))
                 )
 
                 if match_canonico or prod_direto_match:
@@ -2242,6 +2253,21 @@ def buscar_medicamentos():
                 score += 60
 
         return score
+
+    # Cada opção deve corresponder à consulta inteira. Um produto dentro de um
+    # catálogo misto não herda palavras presentes apenas em outros produtos.
+    if len(tokens_busca) > 1:
+        candidatos = [
+            entry for entry in candidatos
+            if all(
+                token in _normalizar_termo_farmaceutico(" ".join([
+                    entry[0].get("nome_exibicao_busca") or entry[0].get("nome") or "",
+                    entry[0].get("principio_ativo") or "",
+                    entry[0].get("fabricante") or entry[0].get("produto_match_fabricante") or "",
+                ]))
+                for token in tokens_busca
+            )
+        ]
 
     candidatos.sort(key=_score_candidato, reverse=True)
 
