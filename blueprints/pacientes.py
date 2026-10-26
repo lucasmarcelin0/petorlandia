@@ -2369,8 +2369,35 @@ def update_animal(animal_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
+    # Corpo incompleto nunca pode sobrescrever o cadastro. Quando o upload da
+    # foto cai no meio (rede do celular), o Werkzeug descarta o multipart em
+    # silêncio e ``request.form`` chega vazio; o token CSRF vem no cabeçalho
+    # (csrf_fetch.js), então a requisição passava e gravava nome, sexo, peso e
+    # o resto como vazio — o prontuário passava a mostrar "None". Todas as
+    # telas de edição enviam o campo ``name``: sem ele, nada é alterado.
+    nome_enviado = request.form.get('name')
+    if nome_enviado is None:
+        current_app.logger.warning(
+            "update_animal %s recebido sem o campo name (corpo incompleto ou ilegível; content_length=%s); nada foi alterado",
+            animal.id,
+            request.content_length,
+        )
+        message = ('Os dados do animal chegaram incompletos (a conexão pode ter caído durante o envio). '
+                   'Nada foi alterado. Tente salvar de novo.')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 400
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('index'))
+    nome_enviado = nome_enviado.strip()
+    if not nome_enviado:
+        message = 'Informe o nome do animal.'
+        if wants_json:
+            return jsonify(success=False, message=message, category='warning'), 400
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('index'))
+
     # Campos básicos
-    animal.name = request.form.get('name')
+    animal.name = nome_enviado
     animal.sex = request.form.get('sex')
     animal.description = request.form.get('description') or ''
     animal.microchip_number = request.form.get('microchip_number')

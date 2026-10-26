@@ -17,7 +17,7 @@
       {% if animal %}
         <p class="consultation-eyebrow mb-2">Prontuário veterinário</p>
         <h2 class="consultation-title mb-1" id="animal-name">
-          <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name }}
+          <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name or 'Sem nome' }}
         </h2>
         <small class="consultation-subtitle">Tutor: {{ tutor.name if tutor else 'não informado' }}</small>
         {% if pode_acessar_internacao is defined and pode_acessar_internacao(current_user) %}
