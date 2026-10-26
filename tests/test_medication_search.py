@@ -276,6 +276,31 @@ def test_busca_shampoo_comercial_combina_nome_e_principio_sem_produtos_alheios(c
         assert [item["nome_exibicao_busca"] for item in response.get_json()] == ["Shampoo Antisséptico"]
 
 
+def test_busca_composta_inclui_produto_estruturado_com_varios_resultados_diretos(client, app):
+    with app.app_context():
+        vet = User(name="Vet Catálogo Cheio", email="shampoo-full@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.flush()
+        db.session.add_all([
+            Medicamento(nome=f"Shampoo Clorexidina {i:02d}", created_by=vet.id)
+            for i in range(16)
+        ])
+        db.session.add(Medicamento(
+            nome="Clorexidina", principio_ativo="Clorexidina",
+            conteudo_estruturado={"produtos_vetsmart": [
+                {"nome": "Clorexidina Animalia Farma Shampoo", "fabricante": "Animalia Farma"},
+                {"nome": "Clorexidina Ligvet", "fabricante": "Ligvet"},
+            ]}, created_by=vet.id,
+        ))
+        db.session.commit()
+    response = client.get("/buscar_medicamentos", query_string={"q": "shampoo de clorexidina"})
+    assert response.status_code == 200
+    names = [item["nome_exibicao_busca"] for item in response.get_json()]
+    assert "Clorexidina Animalia Farma Shampoo" in names
+    assert "Clorexidina Ligvet" not in names
+
+
 def test_busca_multiplos_termos_mantem_correcao_de_digitacao(client, app):
     with app.app_context():
         vet = User(name="Vet Busca", email="search-typo-compound@example.com", worker="veterinario")

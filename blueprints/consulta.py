@@ -2050,9 +2050,10 @@ def buscar_medicamentos():
         .all()
     )
 
-    # 2. Se a busca rápida trouxer poucos resultados (< 15), executar busca complementar
-    # em marcas comerciais no conteudo_estruturado ou similaridade pg_trgm (%)
-    if len(resultados) < 15:
+    # 2. Consultas compostas também verificam marcas estruturadas, mesmo quando
+    # já há vários registros diretos; o shampoo pode existir só como produto.
+    # A aproximação pg_trgm continua disponível quando não houver resultado.
+    if len(resultados) < 15 or len(tokens_busca) > 1:
         ids_vistos = {m.id for m in resultados}
         filtros_extra = []
         for termo in termos_busca:
