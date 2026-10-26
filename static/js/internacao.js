@@ -155,6 +155,7 @@
     const defaultHelp = help ? help.textContent : '';
     let sequence = 0;
     let options = [];
+    let selectedMedication = null;
 
     function setHelp(text) {
       if (help) help.textContent = text || defaultHelp;
@@ -162,13 +163,68 @@
 
     function clear() {
       sequence += 1;
+      selectedMedication = null;
       options = [];
       select.replaceChildren();
       select.hidden = true;
+      const editor = form.querySelector('[data-ih-presentation-editor]');
+      const toggle = form.querySelector('[data-ih-open-presentation]');
+      if (editor) {
+        editor.hidden = true;
+        editor.querySelectorAll('input').forEach(function (field) { field.disabled = true; field.value = ''; field.setCustomValidity(''); });
+      }
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      const feedback = form.querySelector('[data-ih-catalog-feedback]');
+      if (feedback) feedback.textContent = '';
       setHelp('');
     }
 
+    function render(items, selectedId) {
+      const seen = new Set();
+      options = (Array.isArray(items) ? items : []).filter(function (item) {
+        const label = item && typeof item.descricao === 'string' ? item.descricao.trim() : '';
+        if (!label || seen.has(label.toLowerCase())) return false;
+        seen.add(label.toLowerCase());
+        item.descricao = label.slice(0, input.maxLength > 0 ? input.maxLength : 200);
+        return true;
+      });
+      if (selectedId && !options.some(function (item) { return Number(item.id) === Number(selectedId); })) {
+        const created = (items || []).find(function (item) { return Number(item.id) === Number(selectedId); });
+        if (created) {
+          created.descricao = created.descricao.slice(0, input.maxLength > 0 ? input.maxLength : 200);
+          options = options.filter(function (item) { return item.descricao !== created.descricao; });
+          options.push(created);
+        }
+      }
+      select.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Escolher do catálogo (' + options.length + ')';
+      select.appendChild(placeholder);
+      options.forEach(function (item, index) {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = item.descricao;
+        select.appendChild(option);
+      });
+      select.hidden = !options.length;
+      setHelp(options.length ? 'Escolha do catálogo ou cadastre uma nova apresentação abaixo.' :
+        'Nenhuma apresentação cadastrada. Clique em “Nova apresentação” para adicionar a primeira.');
+      if (selectedId) {
+        const index = options.findIndex(function (item) { return Number(item.id) === Number(selectedId); });
+        if (index >= 0) {
+          select.value = String(index);
+          select.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+      }
+    }
+
     select.addEventListener('change', function () {
+      if (select.value === '') {
+        input.value = '';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        return;
+      }
       const chosen = options[Number(select.value)];
       if (!chosen) return;
       input.value = chosen.descricao;
@@ -180,6 +236,7 @@
       clear();
       const id = Number(detail.id);
       if (!id) return;
+      selectedMedication = Object.assign({}, detail, {id: id});
       const current = sequence;
       setHelp('Buscando apresentações no catálogo…');
       const url = new URL(medication.dataset.detailUrl.replace(/\/0\/detalhe$/, '/' + id + '/detalhe'), window.location.origin);
@@ -194,30 +251,7 @@
         if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error();
         const result = await response.json();
         if (current !== sequence) return;
-        const seen = new Set();
-        options = (Array.isArray(result.apresentacoes) ? result.apresentacoes : []).filter(function (item) {
-          const label = item && typeof item.descricao === 'string' ? item.descricao.trim() : '';
-          if (!label || seen.has(label.toLowerCase())) return false;
-          seen.add(label.toLowerCase());
-          item.descricao = label.slice(0, input.maxLength > 0 ? input.maxLength : 200);
-          return true;
-        });
-        if (!options.length) {
-          setHelp('Este medicamento não tem apresentações cadastradas. Digite a apresentação, se houver.');
-          return;
-        }
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Escolher do catálogo (' + options.length + ')';
-        select.appendChild(placeholder);
-        options.forEach(function (item, index) {
-          const option = document.createElement('option');
-          option.value = String(index);
-          option.textContent = item.descricao;
-          select.appendChild(option);
-        });
-        select.hidden = false;
-        setHelp('Escolha uma apresentação cadastrada ou digite no campo abaixo.');
+        render(result.apresentacoes);
       } catch (_error) {
         if (current === sequence) setHelp('Não foi possível carregar as apresentações agora. Digite a apresentação, se houver.');
       } finally {
@@ -225,7 +259,8 @@
       }
     }
 
-    return {load: load, clear: clear};
+    return {load: load, clear: clear, selected: function () { return selectedMedication; },
+      apply: function (items, id) { sequence += 1; render(items, id); }};
   }
 
   // Lista própria em vez de <datalist>: navegadores de celular não exibem
@@ -241,6 +276,7 @@
     let sequence = 0;
     let activeIndex = -1;
     let selecting = false;
+    let selectedName = input.value.trim();
 
     function options() {
       return Array.from(list.querySelectorAll('[role="option"]'));
@@ -287,7 +323,15 @@
     function choose(option) {
       cancelSearch();
       const limit = input.maxLength > 0 ? input.maxLength : 200;
-      input.value = option.dataset.value.slice(0, limit);
+      input.value = (option.dataset.value || option.dataset.nome).slice(0, limit);
+      if (plainText(selectedName) !== plainText(input.value)) {
+        const presentation = form.querySelector('[data-ih-apresentacao]');
+        if (presentation) {
+          presentation.value = '';
+          presentation.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+      }
+      selectedName = input.value;
       close();
       if (presentations) presentations.load(option.dataset);
       // Avisa o formulário (invalida a prévia) sem disparar nova busca.
@@ -406,10 +450,157 @@
         close();
       }, 200);
     });
+    return {choose: function (detail) { choose({dataset: detail}); }};
+  }
+
+  function setupCatalogEditors(form, presentations, search) {
+    if (!presentations || !search) return;
+    const medication = form.querySelector('[data-ih-medicamento]');
+    const feedback = form.querySelector('[data-ih-catalog-feedback]');
+    const medEditor = form.querySelector('[data-ih-medication-editor]');
+    const apEditor = form.querySelector('[data-ih-presentation-editor]');
+    if (!medEditor || !apEditor) return;
+
+    function message(target, text, error) {
+      target.textContent = text;
+      target.classList.toggle('ih-catalog-message--error', Boolean(error));
+      target.setAttribute('role', error ? 'alert' : 'status');
+    }
+    function toggle(editor, show) {
+      editor.hidden = !show;
+      editor.querySelectorAll('input').forEach(function (input) { input.disabled = !show; input.setCustomValidity(''); });
+      form.querySelector(editor === medEditor ? '[data-ih-open-medication]' : '[data-ih-open-presentation]')
+        .setAttribute('aria-expanded', String(show));
+      if (show) {
+        message(editor.querySelector('[data-ih-editor-message]'), '');
+        editor.querySelector('input').focus();
+      }
+    }
+    function validate(editor, selectors) {
+      for (const selector of selectors) {
+        const input = editor.querySelector(selector);
+        input.setCustomValidity(input.value.trim() ? '' : 'Preencha este campo.');
+        if (!input.reportValidity()) return false;
+      }
+      return true;
+    }
+    async function post(url, payload) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(function () { controller.abort(); }, 15000);
+      try {
+        const response = await fetch(url, {method: 'POST', credentials: 'same-origin', signal: controller.signal,
+          headers: {'Content-Type': 'application/json', Accept: 'application/json',
+            'X-CSRFToken': form.querySelector('[name="csrf_token"]').value}, body: JSON.stringify(payload)});
+        if (!response.headers.get('content-type')?.includes('application/json')) {
+          throw new Error('Não foi possível salvar. Verifique sua conexão e se continua conectado à conta.');
+        }
+        const result = await response.json();
+        if (!response.ok || !result.success || !result.id) throw new Error(result.message || 'Não foi possível salvar o cadastro.');
+        return result;
+      } finally { window.clearTimeout(timer); }
+    }
+    async function save(editor, button, action) {
+      if (editor.dataset.saving === 'true') return;
+      const label = button.textContent;
+      const status = editor.querySelector('[data-ih-editor-message]');
+      editor.dataset.saving = 'true';
+      editor.querySelectorAll('input').forEach(function (input) { input.disabled = true; });
+      editor.querySelectorAll('button').forEach(function (item) { item.disabled = true; });
+      button.textContent = 'Salvando…';
+      message(status, 'Salvando no catálogo…');
+      try { await action(); } catch (error) {
+        message(status, error.name === 'AbortError' ?
+          'A conexão demorou a responder. Confira o catálogo antes de tentar salvar novamente.' : error.message, true);
+      } finally {
+        editor.dataset.saving = 'false';
+        editor.querySelectorAll('input').forEach(function (input) { input.disabled = editor.hidden; });
+        editor.querySelectorAll('button').forEach(function (item) { item.disabled = false; });
+        button.textContent = label;
+      }
+    }
+    [medEditor, apEditor].forEach(function (editor) {
+      editor.querySelectorAll('input').forEach(function (input) { input.disabled = true; });
+      editor.querySelector('[data-ih-cancel-editor]').addEventListener('click', function () { toggle(editor, false); });
+      editor.addEventListener('input', function (event) { event.target.setCustomValidity?.(''); });
+      editor.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && event.target.matches('input')) {
+          event.preventDefault();
+          editor.querySelector('[data-ih-save-medication], [data-ih-save-presentation]').click();
+        }
+      });
+    });
+    form.querySelector('[data-ih-open-medication]').addEventListener('click', function () {
+      if (medEditor.dataset.saving === 'true') return;
+      if (medEditor.hidden) medEditor.querySelector('[data-ih-new-name]').value = medication.value.trim();
+      toggle(medEditor, medEditor.hidden);
+    });
+    form.querySelector('[data-ih-open-presentation]').addEventListener('click', function () {
+      const selected = presentations.selected();
+      if (!selected) {
+        message(feedback, 'Escolha um medicamento na busca primeiro. Se não encontrar, use “Cadastrar medicamento”.', true);
+        medication.focus();
+        return;
+      }
+      if (apEditor.dataset.saving === 'true') return;
+      if (apEditor.dataset.medicationId !== String(selected.id)) {
+        apEditor.querySelectorAll('input').forEach(function (input) { input.value = ''; input.setCustomValidity(''); });
+        apEditor.dataset.medicationId = String(selected.id);
+      }
+      form.querySelector('[data-ih-presentation-name]').textContent = selected.nome || medication.value;
+      toggle(apEditor, apEditor.hidden);
+    });
+    form.querySelector('[data-ih-save-medication]').addEventListener('click', function (event) {
+      if (!validate(medEditor, ['[data-ih-new-name]'])) return;
+      const name = medEditor.querySelector('[data-ih-new-name]').value.trim();
+      const originalName = medication.value;
+      save(medEditor, event.currentTarget, async function () {
+        const result = await post(form.dataset.createMedicationUrl, {nome: name,
+          principio_ativo: medEditor.querySelector('[data-ih-new-active]').value.trim() || null});
+        if (medication.value !== originalName) {
+          toggle(medEditor, false);
+          message(feedback, 'Medicamento salvo no catálogo. A seleção atual da prescrição foi mantida.');
+          return;
+        }
+        search.choose({id: result.id, nome: result.nome, value: result.nome});
+        toggle(medEditor, false);
+        medEditor.querySelectorAll('input').forEach(function (input) { input.value = ''; });
+        message(feedback, 'Medicamento cadastrado e selecionado. Agora você pode adicionar uma apresentação.');
+        form.querySelector('[data-ih-open-presentation]').focus();
+      });
+    });
+    form.querySelector('[data-ih-save-presentation]').addEventListener('click', function (event) {
+      if (!validate(apEditor, ['[data-ih-new-form]', '[data-ih-new-strength]'])) return;
+      const selected = presentations.selected();
+      if (!selected || String(selected.id) !== apEditor.dataset.medicationId) return;
+      save(apEditor, event.currentTarget, async function () {
+        const result = await post(form.dataset.createPresentationUrl, {medicamento_id: selected.id,
+          forma: apEditor.querySelector('[data-ih-new-form]').value.trim(),
+          concentracao: apEditor.querySelector('[data-ih-new-strength]').value.trim(),
+          fabricante: apEditor.querySelector('[data-ih-new-maker]').value.trim() || null,
+          nome_comercial: selected.comercial || null});
+        if (presentations.selected() === selected) {
+          presentations.apply(result.apresentacoes, result.id);
+          message(feedback, 'Apresentação salva no catálogo e selecionada nesta prescrição.');
+        } else {
+          message(feedback, 'Apresentação salva no catálogo. A seleção atual da prescrição foi mantida.');
+        }
+        toggle(apEditor, false);
+      });
+    });
+    form.addEventListener('submit', function (event) {
+      const editor = [medEditor, apEditor].find(function (item) { return !item.hidden || item.dataset.saving === 'true'; });
+      if (!editor) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      message(feedback, 'Salve ou cancele o cadastro aberto antes de ativar a prescrição.', true);
+      editor.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
   }
 
   document.querySelectorAll('[data-ih-prescricao]').forEach(function (form) {
-    setupMedicationSearch(form, setupPresentations(form, setupDoseFields(form)));
+    const presentations = setupPresentations(form, setupDoseFields(form));
+    const search = setupMedicationSearch(form, presentations);
+    setupCatalogEditors(form, presentations, search);
     syncPrescriptionFields(form);
     form.addEventListener('input', function () {
       form.dataset.ihPreviewValid = 'false';

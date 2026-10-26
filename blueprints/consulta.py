@@ -1914,7 +1914,21 @@ def criar_apresentacao_medicamento():
         _clear_medication_search_cache()
 
         from services.bulario import listar_apresentacoes_medicamento
-        apresentacoes_atualizadas = listar_apresentacoes_medicamento(med)
+        apresentacoes_atualizadas = listar_apresentacoes_medicamento(
+            med, nome_comercial_filtro=nome_comercial, preservar_variantes_comerciais=True,
+        )
+        # O catálogo agrupa apresentações equivalentes. A recém-cadastrada
+        # precisa continuar selecionável no retorno de "Salvar e usar".
+        if not any(item['id'] == apresentacao.id for item in apresentacoes_atualizadas):
+            apresentacoes_atualizadas.append({
+                'id': apresentacao.id,
+                'descricao': f"{forma} · {concentracao}" + (f" — {fabricante}" if fabricante else ''),
+                'forma': forma, 'concentracao_texto': concentracao,
+                'fabricante': fabricante or '', 'nome_comercial': nome_comercial or '',
+                'concentracao_valor': float(concentracao_valor) if concentracao_valor is not None else None,
+                'concentracao_unidade': concentracao_unidade or '',
+                'categoria_label': 'Outras apresentações',
+            })
 
         return jsonify({
             "success": True,
