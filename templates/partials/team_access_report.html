@@ -1,0 +1,17 @@
+{# Quadro de acessos de um membro da equipe (services.team_access). #}
+{% set report = team_access_reports.get(member_id) if team_access_reports is defined and team_access_reports else None %}
+{% if report %}
+<div class="border rounded p-2 mb-3 small" data-team-access="{{ member_id }}">
+  <div class="fw-semibold mb-1">O que consegue fazer hoje</div>
+  <ul class="list-unstyled mb-0">
+    {% for item in report %}
+    <li class="mb-1">
+      {% if item.allowed %}<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i><span class="visually-hidden">Liberado:</span>
+      {% else %}<i class="bi bi-x-circle text-danger" aria-hidden="true"></i><span class="visually-hidden">Bloqueado:</span>{% endif %}
+      {{ item.label }}
+      {% if item.detail %}<div class="text-muted ms-3">{{ item.detail }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

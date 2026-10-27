@@ -813,6 +813,20 @@ def clinic_detail(clinica_id):
             form.appointments_view.data = v.user.worker or ''
         vet_permission_forms[v.user.id] = form
 
+    # Quadro "o que esta pessoa consegue fazer hoje" nas permissões: o dono
+    # vê o que falta sem precisar testar com a conta de cada um.
+    team_access_reports = {}
+    if pode_editar or _is_admin():
+        from services.team_access import access_report
+
+        for member_user in [s.user for s in staff_members] + [v.user for v in vets_for_forms]:
+            if member_user is None or member_user.id in team_access_reports:
+                continue
+            try:
+                team_access_reports[member_user.id] = access_report(member_user, clinica)
+            except Exception:  # noqa: BLE001 -- o quadro é auxiliar; nunca derruba a página
+                current_app.logger.exception('Falha ao montar acessos do usuário %s', member_user.id)
+
     all_specialties = Specialty.query.order_by(Specialty.nome).all()
     vet_profile_forms = {}
     for v in vets_for_forms:
@@ -1316,6 +1330,7 @@ def clinic_detail(clinica_id):
         specialist_form=specialist_form,
         staff_permission_forms=staff_permission_forms,
         vet_permission_forms=vet_permission_forms,
+        team_access_reports=team_access_reports,
         vet_profile_forms=vet_profile_forms,
         all_specialties=all_specialties,
         appointments=appointments,
