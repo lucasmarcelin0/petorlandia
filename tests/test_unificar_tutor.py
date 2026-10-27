@@ -184,3 +184,92 @@ def test_conta_de_equipe_nunca_e_unificada(app, client, vet_id):
     assert resposta.status_code == 403
     with app.app_context():
         assert db.session.get(User, origem_id) is not None
+
+
+def _conta_criada_pela_pessoa(app, vet_id, **extra):
+    """O caso real: a pessoa se cadastrou sozinha, sem clínica nem added_by."""
+    with app.app_context():
+        conta = User(name="Rosilda Própria", email="rosilda.propria@example.com", **extra)
+        conta.set_password("senha-da-tutora")
+        errado = User(name="Rosilda M.", email="rosilda@exmple.com", added_by_id=vet_id)
+        errado.set_password("x")
+        db.session.add_all([conta, errado])
+        db.session.flush()
+        db.session.add_all([Animal(name="Thor", user_id=errado.id), Animal(name="Bidu", user_id=conta.id)])
+        db.session.commit()
+        return errado.id, conta.id, conta.password_hash
+
+
+def test_conta_criada_pela_pessoa_recebe_oferta_sem_expor_dados(app, client, vet_id):
+    origem_id, destino_id, _ = _conta_criada_pela_pessoa(app, vet_id)
+
+    resposta = client.post(
+        f"/update_tutor/{origem_id}", data={**ENDERECO, "email": "rosilda.propria@example.com"}, headers=JSON
+    )
+
+    assert resposta.status_code == 409
+    corpo = resposta.get_json()
+    # Sem visibilidade, o aviso continua genérico e nada da conta vaza.
+    assert corpo["message"] == "Este e-mail já está em uso por outro cadastro."
+    oferta = corpo["merge_offer"]
+    assert oferta["target_id"] == destino_id
+    assert oferta["target_name"] is None
+    assert oferta["target_animals"] is None
+    assert oferta["source_animals"] == 1
+    assert "Rosilda Própria" not in resposta.get_data(as_text=True)
+
+
+def test_unifica_com_conta_criada_pela_pessoa_quando_informa_o_email(app, client, vet_id):
+    origem_id, destino_id, senha_hash = _conta_criada_pela_pessoa(app, vet_id)
+
+    resposta = client.post(
+        f"/tutor/{origem_id}/unificar",
+        data={"target_id": destino_id, "email": "Rosilda.Propria@example.com"},
+        headers=JSON,
+    )
+
+    assert resposta.status_code == 200, resposta.get_json()
+    with app.app_context():
+        assert db.session.get(User, origem_id) is None
+        destino = db.session.get(User, destino_id)
+        assert {a.name for a in Animal.query.filter_by(user_id=destino_id)} == {"Thor", "Bidu"}
+        assert destino.password_hash == senha_hash
+        # A clínica passa a acompanhar o tutor e a ficha abre após unificar.
+        assert destino.added_by_id == vet_id
+    assert client.get(f"/ficha_tutor/{destino_id}").status_code == 200
+
+
+def test_conta_invisivel_exige_o_email_digitado(app, client, vet_id):
+    origem_id, destino_id, _ = _conta_criada_pela_pessoa(app, vet_id)
+
+    for dados in ({"target_id": destino_id}, {"target_id": destino_id, "email": "outro@example.com"}):
+        resposta = client.post(f"/tutor/{origem_id}/unificar", data=dados, headers=JSON)
+        assert resposta.status_code == 403
+
+    with app.app_context():
+        assert db.session.get(User, origem_id) is not None
+        assert Animal.query.filter_by(user_id=origem_id).count() == 1
+
+
+def test_conta_de_outra_clinica_nao_e_oferecida(app, client, vet_id):
+    with app.app_context():
+        from models import Clinica
+
+        outra = Clinica(nome="Outra Clínica")
+        db.session.add(outra)
+        db.session.commit()
+        outra_id = outra.id
+    origem_id, destino_id, _ = _conta_criada_pela_pessoa(app, vet_id, clinica_id=outra_id)
+
+    resposta = client.post(
+        f"/update_tutor/{origem_id}", data={**ENDERECO, "email": "rosilda.propria@example.com"}, headers=JSON
+    )
+    assert resposta.status_code == 409
+    assert "merge_offer" not in resposta.get_json()
+
+    resposta = client.post(
+        f"/tutor/{origem_id}/unificar",
+        data={"target_id": destino_id, "email": "rosilda.propria@example.com"},
+        headers=JSON,
+    )
+    assert resposta.status_code == 403

@@ -46,12 +46,20 @@
     }
   }
 
+  // Conta que a própria pessoa criou e a clínica ainda não enxerga: o
+  // servidor não manda nome nem animais dela, só o e-mail digitado.
+  function targetLabel(offer) {
+    return offer.target_name
+      ? `o cadastro de ${offer.target_name} (nº ${offer.target_id})`
+      : `a conta que a pessoa criou com ${offer.email || 'este e-mail'}`;
+  }
+
   async function merge(form, offer, panel, button) {
     const animais = plural(offer.source_animals || 0, 'animal', 'animais');
     const ok = window.confirm(
-      `Unificar com o cadastro de ${offer.target_name} (nº ${offer.target_id})?\n\n` +
+      `Unificar com ${targetLabel(offer)}?\n\n` +
       `${animais} e todo o histórico deste cadastro passam para lá. ` +
-      `O e-mail e a senha de ${offer.target_name} continuam valendo, e este cadastro deixa de existir.`
+      'O e-mail e a senha dessa conta continuam valendo, e este cadastro deixa de existir.'
     );
     if (!ok) return;
 
@@ -60,6 +68,7 @@
 
     const body = new FormData();
     body.append('target_id', offer.target_id);
+    if (offer.email) body.append('email', offer.email);
     const token = csrfToken(form);
     if (token) body.append('csrf_token', token);
 
@@ -107,11 +116,13 @@
     const text = document.createElement('p');
     text.className = 'mb-2 small';
     const origem = plural(offer.source_animals || 0, 'animal', 'animais');
-    const destino = plural(offer.target_animals || 0, 'animal', 'animais');
+    const onde = offer.target_name
+      ? `o de ${offer.target_name} (nº ${offer.target_id}, hoje com ` +
+        `${plural(offer.target_animals || 0, 'animal', 'animais')})`
+      : 'a conta que a própria pessoa criou com esse e-mail';
     text.textContent =
       `Você pode unificar os cadastros: ${origem} e o histórico deste cadastro ` +
-      `passam para o de ${offer.target_name} (nº ${offer.target_id}, hoje com ${destino}), ` +
-      'que é onde a pessoa entra com esse e-mail.';
+      `passam para ${onde}, que é onde a pessoa entra com esse e-mail.`;
 
     const actions = document.createElement('div');
     actions.className = 'd-flex flex-wrap gap-2';
