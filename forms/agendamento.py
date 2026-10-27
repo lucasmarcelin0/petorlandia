@@ -264,6 +264,9 @@ class AppointmentForm(FlaskForm):
         self._restricted_tutor_id = getattr(tutor, 'id', None)
         self._clinic_scope_ids = []
         require_clinic_scope = kwargs.pop('require_clinic_scope', None)
+        # Animal já autorizado por quem chama (ex.: retorno da própria
+        # consulta): só ele é aceito, mesmo sem ``clinica_id`` no cadastro.
+        self._fixed_animal_id = getattr(kwargs.pop('fixed_animal', None), 'id', None)
         if clinic_ids is not None:
             if isinstance(clinic_ids, (list, tuple, set)):
                 candidates = clinic_ids
@@ -361,6 +364,8 @@ class AppointmentForm(FlaskForm):
         from models import Animal
 
         query = Animal.query.filter(Animal.removido_em.is_(None))
+        if self._fixed_animal_id is not None:
+            return query.filter(Animal.id == self._fixed_animal_id)
         if self._clinic_scope_required and not self._clinic_scope_ids:
             return query.filter(false())
         if self._clinic_scope_ids:

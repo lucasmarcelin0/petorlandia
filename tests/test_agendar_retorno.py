@@ -337,3 +337,48 @@ def test_finalizar_consulta_sem_confirmacao_quando_retorno_existente(client, mon
     with flask_app.app_context():
         assert Consulta.query.get(consulta_id).status == 'finalizada'
         assert Appointment.query.count() == 1
+
+
+def _consulta_com_animal_sem_clinica():
+    """Caso real: animal sem ``clinica_id`` (tutor e consulta são da clínica)."""
+    clinic = Clinica(id=1, nome='Clinica')
+    tutor = User(id=1, name='Tutor', email='tutor@test', clinica_id=1)
+    tutor.set_password('x')
+    outro_tutor = User(id=3, name='Outro', email='outro@test')
+    outro_tutor.set_password('x')
+    vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
+    vet_user.set_password('x')
+    vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+    animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=None)
+    outro = Animal(id=2, name='Outro', user_id=outro_tutor.id, clinica_id=None)
+    consulta = Consulta(id=1, animal_id=animal.id, created_by=vet_user.id, clinica_id=clinic.id, status='finalizada')
+    db.session.add_all([clinic, tutor, outro_tutor, vet_user, vet, animal, outro, consulta])
+    db.session.commit()
+    return vet_user.id
+
+
+def test_agendar_retorno_de_animal_sem_clinica_no_cadastro(client, monkeypatch):
+    with flask_app.app_context():
+        vet_user_id = _consulta_com_animal_sem_clinica()
+    monkeypatch.setattr(login_utils, '_get_user', lambda: db.session.get(User, vet_user_id))
+    resp = client.post('/agendar_retorno/1', data={
+        'animal_id': 1, 'veterinario_id': 1, 'date': '2026-10-28', 'time': '11:00', 'kind': 'consulta',
+    })
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        appt = Appointment.query.one()
+        assert appt.animal_id == 1
+        assert appt.clinica_id == 1
+
+
+def test_agendar_retorno_recusa_animal_que_nao_e_da_consulta(client, monkeypatch):
+    with flask_app.app_context():
+        vet_user_id = _consulta_com_animal_sem_clinica()
+    monkeypatch.setattr(login_utils, '_get_user', lambda: db.session.get(User, vet_user_id))
+    resp = client.post('/agendar_retorno/1', data={
+        'animal_id': 2, 'veterinario_id': 1, 'date': '2026-10-28', 'time': '11:00',
+    }, headers={'Accept': 'application/json'})
+    assert resp.status_code == 400
+    assert 'animal_id' in resp.get_json()['errors']
+    with flask_app.app_context():
+        assert Appointment.query.count() == 0
