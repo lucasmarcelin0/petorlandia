@@ -566,6 +566,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
   </div>
   <div class="offcanvas-body">
+    {% with member_id = s.user.id %}{% include 'partials/team_access_report.html' %}{% endwith %}
     <form method="post">
       {{ staff_permission_forms[s.user.id].hidden_tag() }}
       <div class="form-check">
@@ -633,6 +634,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
   </div>
   <div class="offcanvas-body">
+    {% with member_id = vet.user.id %}{% include 'partials/team_access_report.html' %}{% endwith %}
     <form method="post">
       {{ vet_permission_forms[vet.user.id].hidden_tag() }}
       <div class="form-check">
