@@ -38,6 +38,19 @@ Não contorne testes reprovados nem publique alterações alheias ao pedido.
 PRs antigos sem marcador não ficam autorizados automaticamente: avalie o
 contexto do pedido atual. A label `publicar` continua como alternativa explícita.
 
+## Dúvidas de acesso da equipe ("fulano consegue fazer X?")
+
+Resolva sem pedir nada ao dono. O quadro "O que consegue fazer hoje" fica nas
+permissões de cada membro, na aba de equipe da clínica. Pelo agente, rode o
+diagnóstico só de leitura e leia os logs do dyno (o banco não é acessível
+direto da nuvem, só HTTPS):
+
+    heroku run:detached --app petorlandia -- python scripts/auditar_acessos_equipe.py --clinica 1 --estagiarios
+    heroku logs --app petorlandia --dyno run.NNNN --num 300 | grep 'ACESSO|'
+
+Use `--nome "trecho"` para uma pessoa. Se faltar permissão, diga ao dono qual
+caixa marcar; não altere permissões em produção sem pedido explícito.
+
 ## Autenticação e alternativas
 
 - Para o caminho normal, o agente precisa apenas acessar o repositório no
