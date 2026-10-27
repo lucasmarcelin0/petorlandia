@@ -1042,7 +1042,7 @@ def ficha_animal(animal_id):
     wants_json = 'application/json' in request.headers.get('Accept', '')
     section = request.args.get('section')
 
-    def _load_consultas():
+    def _consultas_query():
         consultas_query = Consulta.query.filter_by(
             animal_id=animal.id,
             status='finalizada',
@@ -1054,7 +1054,10 @@ def ficha_animal(animal_id):
             consultas_query = consultas_query.filter_by(
                 clinica_id=current_user_clinic_id()
             )
-        return consultas_query.order_by(Consulta.created_at.desc()).all()
+        return consultas_query.order_by(Consulta.created_at.desc())
+
+    def _load_consultas():
+        return _consultas_query().all()
 
     def _load_history_data():
         consultas = _load_consultas()
@@ -1174,7 +1177,47 @@ def ficha_animal(animal_id):
         health_card_whatsapp_url=health_card_whatsapp_url,
         selo_prefeitura=selo_prefeitura,
         hoje=date.today(),
+        resumo=_resumo_ficha_animal(animal, _consultas_query()),
+        contatos_tutor=_contatos_do_tutor(tutor) if tutor else None,
+        idade_animal=_idade_exibicao(animal),
+        peso_animal=_peso_exibicao(animal.peso),
     )
+
+
+def _resumo_ficha_animal(animal, consultas_query):
+    """Quadro do topo da ficha: última consulta, vacinas e próximo retorno.
+
+    Só consultas leves (``first``/``count``); as listas completas continuam
+    nas abas, carregadas por AJAX. A consulta de consultas vem pronta da rota
+    para respeitar o mesmo recorte por clínica do histórico.
+    """
+    hoje = date.today()
+    pendentes = Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+    proxima_vacina = (
+        pendentes.filter(Vacina.aplicada_em.isnot(None))
+        .filter(Vacina.aplicada_em >= hoje)
+        .order_by(Vacina.aplicada_em)
+        .first()
+    )
+    vacinas_atrasadas = pendentes.filter(Vacina.aplicada_em < hoje).count()
+    tem_vacina_aplicada = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=True).first() is not None
+    )
+    proximo_retorno = (
+        Appointment.query.filter_by(animal_id=animal.id)
+        .filter(Appointment.scheduled_at >= utcnow())
+        .filter(Appointment.status.in_(["scheduled", "accepted"]))
+        .filter(Appointment.consulta_id.isnot(None))
+        .order_by(Appointment.scheduled_at)
+        .first()
+    )
+    return {
+        'ultima_consulta': consultas_query.first(),
+        'proxima_vacina': proxima_vacina,
+        'vacinas_atrasadas': vacinas_atrasadas,
+        'tem_vacina_aplicada': tem_vacina_aplicada,
+        'proximo_retorno': proximo_retorno,
+    }
 
 
 @bp.route('/animal/<int:animal_id>/documentos', methods=['POST'])

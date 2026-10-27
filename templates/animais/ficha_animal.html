@@ -1,330 +1,513 @@
 {% extends "layout.html" %}
-{% block main %}
 
-<div class="container py-4"
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ficha_animal.css', v='20261027') }}">
+{% endblock %}
+
+{% block main %}
+{%- set nome = (animal.name or '')|trim -%}
+{%- set especie = animal.species.name if animal.species else '' -%}
+{%- set raca = animal.breed.name if animal.breed else '' -%}
+{%- set e_gato = 'gat' in especie|lower -%}
+{%- set e_femea = animal.sex == 'Fêmea' -%}
+{%- set eh_tutor = animal.user_id == current_user.id -%}
+{%- set eh_profissional = current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) -%}
+{%- set pode_consultar = can_start_consulta(current_user) -%}
+{%- set pode_editar_cadastro = can_edit_animal_record(current_user, animal) -%}
+{%- set nome_tutor = (tutor.name or '')|trim if tutor else '' -%}
+
+<div class="container py-3 py-md-4 ficha-page"
      data-animal-record
      data-events-url="{{ events_url }}"
      data-history-url="{{ history_url }}">
 
+  {% if eh_profissional and tutor %}
+    <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="ficha-voltar ficha-sem-impressao">
+      <i class="fas fa-arrow-left" aria-hidden="true"></i> {{ nome_tutor or 'Ficha do tutor' }}
+    </a>
+  {% endif %}
+
   {% if animal.removido_em %}
-    <div class="alert alert-warning">
-      Este animal foi removido do sistema em {{ animal.removido_em|format_datetime_brazil('%d/%m/%Y') }}. Histórico preservado.
+    <div class="ficha-aviso ficha-aviso--removido" role="status">
+      <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+      <div class="ficha-aviso__texto">
+        <strong>Animal removido da lista em {{ animal.removido_em|format_datetime_brazil('%d/%m/%Y') }}.</strong>
+        <span>O histórico está preservado.</span>
+      </div>
+      {% if current_user.role == 'admin' or eh_tutor or animal.added_by_id == current_user.id %}
+        <form method="POST" action="{{ url_for('restaurar_animal', animal_id=animal.id) }}" class="ficha-sem-impressao">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ficha-botao ficha-botao--suave">
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Restaurar
+          </button>
+        </form>
+      {% endif %}
     </div>
   {% endif %}
 
-  <!-- CABEÇALHO -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">
-      <i class="bi bi-clipboard-heart text-primary me-2"></i>
-      Ficha de {{ animal.name }}
-    </h2>
-    <div class="d-flex gap-2">
-      {% if can_start_consulta(current_user) %}
-      <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-outline-primary">
-        🩺 Iniciar Nova Consulta
-      </a>
-      <a href="{{ url_for('editar_ficha_animal', animal_id=animal.id) }}" class="btn btn-outline-secondary">
-        ✏️ Editar ficha
-      </a>
-      {% endif %}
-      {% if animal.user_id == current_user.id %}
-      <a href="{{ url_for('editar_animal', animal_id=animal.id) }}" class="btn btn-outline-secondary">
-        ✏️ Editar dados
-      </a>
-      {% endif %}
-      <a href="#" onclick="window.print()" class="btn btn-outline-secondary">🖨️ Imprimir</a>
-    </div>
-  </div>
-
-
-
-
-  <!-- DADOS DO ANIMAL -->
-  <div class="card shadow-sm p-4 mb-4">
-    <div class="row g-3 align-items-center">
-      {% if animal.image %}
-      <div class="col-md-3 text-center">
-        <img src="{{ animal.image }}" class="img-fluid rounded shadow-sm card-img" height="200" loading="lazy" alt="Foto de {{ animal.name }}">
-      </div>
-      {% endif %}
-      <div class="col-md">
-        <div class="row g-3">
-          {% if animal.species %}<div class="col-md-4"><strong>Espécie:</strong> {{ animal.species }}</div>{% endif %}
-          {% if animal.breed %}<div class="col-md-4"><strong>Raça:</strong> {{ animal.breed }}</div>{% endif %}
-          {% if animal.sex %}<div class="col-md-4"><strong>Sexo:</strong> {{ animal.sex }}</div>{% endif %}
-          {% if animal.date_of_birth %}<div class="col-md-4"><strong>Nascimento:</strong> {{ animal.date_of_birth.strftime('%d/%m/%Y') }}</div>{% endif %}
-          {% if animal.age_display %}<div class="col-md-4"><strong>Idade:</strong> {{ animal.age_display }}</div>{% endif %}
-        </div>
-        {% if selo_prefeitura %}
-        <div class="mt-3" data-selo-prefeitura>
-          {% if selo_prefeitura.futuro %}
-          <span class="badge rounded-pill text-bg-info fs-6 fw-semibold">
-            <i class="bi bi-hourglass-split me-1"></i>Registro na Prefeitura a partir de {{ selo_prefeitura.inicio.strftime('%d/%m/%Y') }} · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}
+  {# ===================== Cabeçalho ===================== #}
+  <section class="ficha-hero{% if not animal.is_alive %} ficha-hero--falecido{% endif %}" aria-labelledby="ficha-nome">
+    <div class="ficha-hero__identidade">
+      <div class="ficha-hero__foto">
+        {% if animal.image %}
+          <img src="{{ animal.image }}"
+               alt="Foto de {{ nome or 'animal sem nome' }}"
+               class="avatar"
+               style="--avatar-size:96px;"
+               data-offset-x="{{ animal.photo_offset_x or 0 }}"
+               data-offset-y="{{ animal.photo_offset_y or 0 }}"
+               data-rotation="{{ animal.photo_rotation or 0 }}"
+               data-zoom="{{ animal.photo_zoom or 1 }}">
+        {% else %}
+          <span class="ficha-hero__sem-foto" aria-hidden="true">
+            <i class="fa-solid {{ 'fa-cat' if e_gato else 'fa-dog' }}"></i>
           </span>
-          {% elif selo_prefeitura.valido %}
-          <span class="badge rounded-pill {{ 'text-bg-warning' if selo_prefeitura.vence_em_breve else 'text-bg-success' }} fs-6 fw-semibold">
-            <i class="bi bi-patch-check-fill me-1"></i>Registrado na Prefeitura · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}
-          </span>
-          {% else %}
-          <span class="badge rounded-pill text-bg-secondary fs-6 fw-semibold">
-            <i class="bi bi-patch-exclamation me-1"></i>Registro na Prefeitura vencido em {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}
-          </span>
-          {% endif %}
-        </div>
         {% endif %}
       </div>
+      <div class="ficha-hero__texto">
+        <p class="ficha-eyebrow"><i class="bi bi-clipboard-heart" aria-hidden="true"></i> Ficha do animal</p>
+        <h1 class="ficha-hero__nome" id="ficha-nome">Ficha de {{ nome or 'animal sem nome' }}</h1>
+        <p class="ficha-hero__meta">
+          {%- if especie or raca -%}
+            {{ especie or 'Espécie não informada' }}{% if raca %} · {{ raca }}{% endif %}
+          {%- else -%}
+            Espécie não informada
+          {%- endif -%}
+        </p>
+        <div class="ficha-tags">
+          {% if not animal.is_alive %}
+            <span class="ficha-tag ficha-tag--falecido"><i class="bi bi-heartbreak" aria-hidden="true"></i> Falecid{{ 'a' if e_femea else 'o' }}</span>
+          {% endif %}
+          {% if e_femea %}
+            <span class="ficha-tag ficha-tag--femea"><i class="fa-solid fa-venus" aria-hidden="true"></i> Fêmea</span>
+          {% elif animal.sex == 'Macho' %}
+            <span class="ficha-tag ficha-tag--macho"><i class="fa-solid fa-mars" aria-hidden="true"></i> Macho</span>
+          {% elif animal.sex %}
+            <span class="ficha-tag">{{ animal.sex }}</span>
+          {% endif %}
+          {% if idade_animal %}<span class="ficha-tag"><i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ idade_animal }}</span>{% endif %}
+          {% if peso_animal %}<span class="ficha-tag"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> {{ peso_animal }}</span>{% endif %}
+          {% if animal.neutered %}<span class="ficha-tag"><i class="fa-solid fa-scissors" aria-hidden="true"></i> {{ 'Castrada' if e_femea else 'Castrado' }}</span>{% endif %}
+        </div>
+      </div>
     </div>
-  </div>
 
+    {% if not nome %}
+      <p class="ficha-hero__aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Cadastro sem nome. Use “Editar” para corrigir.</p>
+    {% endif %}
+
+    {% if selo_prefeitura %}
+    <div class="ficha-selo" data-selo-prefeitura>
+      {% if selo_prefeitura.futuro %}
+      <span class="ficha-selo__badge ficha-selo__badge--futuro">
+        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+        <span>Registro na Prefeitura a partir de {{ selo_prefeitura.inicio.strftime('%d/%m/%Y') }} · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}</span>
+      </span>
+      {% elif selo_prefeitura.valido %}
+      <span class="ficha-selo__badge {{ 'ficha-selo__badge--vencendo' if selo_prefeitura.vence_em_breve else 'ficha-selo__badge--valido' }}">
+        <i class="bi bi-patch-check-fill" aria-hidden="true"></i>
+        <span>Registrado na Prefeitura · válido até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}</span>
+      </span>
+      {% else %}
+      <span class="ficha-selo__badge ficha-selo__badge--vencido">
+        <i class="bi bi-patch-exclamation" aria-hidden="true"></i>
+        <span>Registro na Prefeitura vencido em {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }}</span>
+      </span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Ações principais: grade de atalhos que cabe no celular sem quebrar palavras. #}
+    <div class="ficha-atalhos ficha-sem-impressao" role="group" aria-label="Ações da ficha">
+      {% if pode_consultar %}
+        <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="ficha-atalho ficha-atalho--consulta">
+          <span class="ficha-atalho__icone"><i class="fas fa-stethoscope" aria-hidden="true"></i></span>
+          <span class="ficha-atalho__rotulo">Nova consulta</span>
+        </a>
+      {% endif %}
+      {% if eh_tutor %}
+        <a href="{{ url_for('editar_animal', animal_id=animal.id) }}" class="ficha-atalho ficha-atalho--editar">
+          <span class="ficha-atalho__icone"><i class="fas fa-pen" aria-hidden="true"></i></span>
+          <span class="ficha-atalho__rotulo">Editar dados</span>
+        </a>
+      {% elif pode_editar_cadastro %}
+        <a href="{{ url_for('ficha_tutor', tutor_id=animal.user_id, editar=animal.id) }}#animais" class="ficha-atalho ficha-atalho--editar{% if not nome %} ficha-atalho--destaque{% endif %}">
+          <span class="ficha-atalho__icone"><i class="fas fa-pen" aria-hidden="true"></i></span>
+          <span class="ficha-atalho__rotulo">Editar</span>
+        </a>
+      {% endif %}
+      {% if contatos_tutor and eh_profissional and not eh_tutor %}
+        {% if contatos_tutor.whatsapp_url %}
+          <a href="{{ contatos_tutor.whatsapp_url }}" target="_blank" rel="noopener" class="ficha-atalho ficha-atalho--whatsapp">
+            <span class="ficha-atalho__icone"><i class="fa-brands fa-whatsapp" aria-hidden="true"></i></span>
+            <span class="ficha-atalho__rotulo">WhatsApp</span>
+          </a>
+        {% elif contatos_tutor.ligar_url %}
+          <a href="{{ contatos_tutor.ligar_url }}" class="ficha-atalho ficha-atalho--ligar">
+            <span class="ficha-atalho__icone"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+            <span class="ficha-atalho__rotulo">Ligar</span>
+          </a>
+        {% endif %}
+      {% endif %}
+      <button type="button" class="ficha-atalho ficha-atalho--imprimir" onclick="window.print()">
+        <span class="ficha-atalho__icone"><i class="fas fa-print" aria-hidden="true"></i></span>
+        <span class="ficha-atalho__rotulo">Imprimir</span>
+      </button>
+    </div>
+  </section>
+
+  {# ===================== Resumo de saúde ===================== #}
+  <section class="ficha-resumo" aria-label="Resumo de saúde">
+    <button type="button" class="ficha-resumo__item" data-abrir-aba="historico-tab">
+      <span class="ficha-resumo__icone ficha-resumo__icone--consulta"><i class="fas fa-stethoscope" aria-hidden="true"></i></span>
+      <span class="ficha-resumo__texto">
+        <small>Última consulta</small>
+        {% if resumo.ultima_consulta %}
+          <strong>{{ resumo.ultima_consulta.created_at|format_datetime_brazil('%d/%m/%Y') }}</strong>
+        {% else %}
+          <strong class="ficha-resumo__vazio">Nenhuma</strong>
+        {% endif %}
+      </span>
+    </button>
+    <button type="button" class="ficha-resumo__item{% if resumo.vacinas_atrasadas %} ficha-resumo__item--alerta{% endif %}" data-abrir-aba="historico-tab">
+      <span class="ficha-resumo__icone ficha-resumo__icone--vacina"><i class="fas fa-syringe" aria-hidden="true"></i></span>
+      <span class="ficha-resumo__texto">
+        <small>Vacinas</small>
+        {% if resumo.vacinas_atrasadas %}
+          <strong>{{ resumo.vacinas_atrasadas }} atrasada{{ 's' if resumo.vacinas_atrasadas > 1 }}</strong>
+        {% elif resumo.tem_vacina_aplicada or resumo.proxima_vacina %}
+          <strong>Em dia</strong>
+        {% else %}
+          <strong class="ficha-resumo__vazio">Sem registro</strong>
+        {% endif %}
+      </span>
+    </button>
+    <button type="button" class="ficha-resumo__item" data-abrir-aba="eventos-tab">
+      <span class="ficha-resumo__icone ficha-resumo__icone--agenda"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i></span>
+      <span class="ficha-resumo__texto">
+        <small>Próxima vacina</small>
+        {% if resumo.proxima_vacina %}
+          <strong>{{ resumo.proxima_vacina.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}</strong>
+          <em>{{ resumo.proxima_vacina.nome }}</em>
+        {% else %}
+          <strong class="ficha-resumo__vazio">Nenhuma agendada</strong>
+        {% endif %}
+      </span>
+    </button>
+    <button type="button" class="ficha-resumo__item" data-abrir-aba="eventos-tab">
+      <span class="ficha-resumo__icone ficha-resumo__icone--retorno"><i class="fas fa-rotate" aria-hidden="true"></i></span>
+      <span class="ficha-resumo__texto">
+        <small>Próximo retorno</small>
+        {% if resumo.proximo_retorno %}
+          <strong>{{ resumo.proximo_retorno.scheduled_at|format_datetime_brazil('%d/%m/%Y') }}</strong>
+          <em>{{ resumo.proximo_retorno.scheduled_at|format_datetime_brazil('%H:%M') }}</em>
+        {% else %}
+          <strong class="ficha-resumo__vazio">Nenhum</strong>
+        {% endif %}
+      </span>
+    </button>
+  </section>
+
+  {# ===================== Selo da Prefeitura (somente admin) ===================== #}
   {% if current_user.role == 'admin' %}
-  <!-- SELO DA PREFEITURA (somente admin) -->
-  <div class="card shadow-sm border-0 mb-4" data-selo-prefeitura-admin>
-    <div class="card-body">
-      <h5 class="mb-1"><i class="bi bi-patch-check text-success me-2"></i>Selo da Prefeitura</h5>
-      <p class="text-muted small mb-3">
+  <details class="ficha-card ficha-recolhivel ficha-sem-impressao" data-selo-prefeitura-admin>
+    <summary>
+      <span class="ficha-recolhivel__icone ficha-recolhivel__icone--selo"><i class="bi bi-patch-check" aria-hidden="true"></i></span>
+      <span class="ficha-recolhivel__texto">
+        <strong>Selo da Prefeitura</strong>
+        <small>
+          {% if selo_prefeitura %}
+            {{ 'Válido' if selo_prefeitura.valido else ('Agendado' if selo_prefeitura.futuro else 'Vencido') }} até {{ selo_prefeitura.validade.strftime('%d/%m/%Y') }} · renovar ou retirar
+          {% else %}
+            Sem selo · conceder registro por 12 meses
+          {% endif %}
+        </small>
+      </span>
+    </summary>
+    <div class="ficha-recolhivel__corpo">
+      <p class="ficha-nota mt-0">
         Marca o animal como registrado na Prefeitura por 12 meses a partir da data escolhida.
         {% if selo_prefeitura %}Registro atual desde {{ selo_prefeitura.inicio.strftime('%d/%m/%Y') if selo_prefeitura.inicio }}{% if selo_prefeitura.registro.notes %} — {{ selo_prefeitura.registro.notes }}{% endif %}.{% endif %}
       </p>
-      <div class="d-flex flex-wrap align-items-end gap-2">
-        <form method="POST" action="{{ url_for('selo_prefeitura_conceder', animal_id=animal.id) }}" class="d-flex flex-wrap align-items-end gap-2">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div>
-            <label for="selo-inicio" class="form-label small mb-1">Início do registro</label>
-            <input type="date" id="selo-inicio" name="inicio" class="form-control form-control-sm" required value="{{ hoje.isoformat() }}">
-          </div>
-          <div>
-            <label for="selo-obs" class="form-label small mb-1">Observação (opcional)</label>
-            <input type="text" id="selo-obs" name="observacao" class="form-control form-control-sm" maxlength="200" placeholder="Ex.: AIE e Mormo negativos">
-          </div>
-          <button type="submit" class="btn btn-sm btn-success">
-            {{ 'Renovar selo' if selo_prefeitura else 'Conceder selo' }}
-          </button>
-        </form>
-        {% if selo_prefeitura %}
-        <form method="POST" action="{{ url_for('selo_prefeitura_remover', animal_id=animal.id) }}" onsubmit="return confirm('Retirar o selo da Prefeitura deste animal?');">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm btn-outline-danger">Retirar selo</button>
-        </form>
-        {% endif %}
-      </div>
+      <form method="POST" action="{{ url_for('selo_prefeitura_conceder', animal_id=animal.id) }}" class="ficha-selo-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label for="selo-inicio" class="form-label small mb-1">Início do registro</label>
+          <input type="date" id="selo-inicio" name="inicio" class="form-control" required value="{{ hoje.isoformat() }}">
+        </div>
+        <div>
+          <label for="selo-obs" class="form-label small mb-1">Observação (opcional)</label>
+          <input type="text" id="selo-obs" name="observacao" class="form-control" maxlength="200" placeholder="Ex.: AIE e Mormo negativos">
+        </div>
+        <button type="submit" class="ficha-botao ficha-botao--sucesso">
+          {{ 'Renovar selo' if selo_prefeitura else 'Conceder selo' }}
+        </button>
+      </form>
+      {% if selo_prefeitura %}
+      <form method="POST" action="{{ url_for('selo_prefeitura_remover', animal_id=animal.id) }}" class="mt-2" onsubmit="return confirm('Retirar o selo da Prefeitura deste animal?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ficha-botao ficha-botao--perigo">Retirar selo</button>
+      </form>
+      {% endif %}
     </div>
-  </div>
+  </details>
   {% endif %}
 
-
-  {% if animal.user_id == current_user.id %}
+  {% if eh_tutor %}
     {% include 'partials/_pet_opportunities.html' %}
   {% endif %}
 
-
-
-    <!-- TABS -->
-    <ul class="nav nav-tabs" id="animalTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="eventos-tab" data-bs-toggle="tab" data-bs-target="#eventos" type="button" role="tab" aria-controls="eventos" aria-selected="true">Próximos eventos</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="historico-tab" data-bs-toggle="tab" data-bs-target="#historico" type="button" role="tab" aria-controls="historico" aria-selected="false">Histórico Médico</button>
-      </li>
-    </ul>
-    <div class="tab-content" id="animalTabsContent">
-      <div class="tab-pane fade show active" id="eventos" role="tabpanel" aria-labelledby="eventos-tab">
-        <!-- PRÓXIMOS EVENTOS -->
-        <div class="card shadow-sm p-4 mb-4" data-events-card>
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0"><i class="bi bi-calendar-event text-primary me-2"></i>Próximos eventos</h4>
-            <div class="spinner-border text-primary d-none" role="status" aria-hidden="true" data-events-loading></div>
-          </div>
-          <div data-events-container>
-            <p class="text-muted mb-0">Carregando próximos eventos...</p>
-          </div>
+  {# ===================== Abas ===================== #}
+  <ul class="nav nav-tabs ficha-abas ficha-sem-impressao" id="animalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="eventos-tab" data-bs-toggle="tab" data-bs-target="#eventos" type="button" role="tab" aria-controls="eventos" aria-selected="true">
+        <i class="bi bi-calendar-event" aria-hidden="true"></i><span class="ficha-abas__longo">Próximos eventos</span><span class="ficha-abas__curto">Eventos</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="historico-tab" data-bs-toggle="tab" data-bs-target="#historico" type="button" role="tab" aria-controls="historico" aria-selected="false">
+        <i class="bi bi-journal-medical" aria-hidden="true"></i><span class="ficha-abas__longo">Histórico Médico</span><span class="ficha-abas__curto">Histórico</span>
+      </button>
+    </li>
+    {% if eh_profissional %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos" type="button" role="tab" aria-controls="documentos" aria-selected="false">
+        <i class="bi bi-folder2-open" aria-hidden="true"></i><span class="ficha-abas__longo">Documentos</span><span class="ficha-abas__curto">Docs</span>
+        {% if animal.documentos %}<span class="ficha-abas__contador">{{ animal.documentos|length }}</span>{% endif %}
+      </button>
+    </li>
+    {% endif %}
+  </ul>
+  <div class="tab-content" id="animalTabsContent">
+    <div class="tab-pane fade show active" id="eventos" role="tabpanel" aria-labelledby="eventos-tab">
+      <div class="ficha-card" data-events-card>
+        <div class="ficha-card__header">
+          <h2 class="ficha-card__titulo"><i class="bi bi-calendar-event text-primary" aria-hidden="true"></i> Próximos eventos</h2>
+          <div class="spinner-border spinner-border-sm text-primary d-none" role="status" aria-hidden="true" data-events-loading></div>
         </div>
-        <noscript>
-          <div class="alert alert-warning">Ative o JavaScript para visualizar os eventos mais recentes.</div>
-        </noscript>
-      </div>
-      <div class="tab-pane fade" id="historico" role="tabpanel" aria-labelledby="historico-tab">
-        <!-- HISTÓRICO MÉDICO -->
-        <div class="card shadow-sm p-4 mb-4" data-history-card>
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
-            <div class="spinner-border text-success d-none" role="status" aria-hidden="true" data-history-loading></div>
-          </div>
-          <div data-history-container>
-            <p class="text-muted mb-0">Selecione a aba para carregar o histórico completo.</p>
-          </div>
+        <div data-events-container>
+          <p class="text-muted mb-0">Carregando próximos eventos...</p>
         </div>
-        <noscript>
-          <div class="alert alert-warning">Ative o JavaScript para acessar o histórico médico.</div>
-        </noscript>
       </div>
-
+      <noscript>
+        <div class="alert alert-warning">Ative o JavaScript para visualizar os eventos mais recentes.</div>
+      </noscript>
     </div>
-    {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
-      <!-- DOCUMENTOS -->
-      <div class="mt-4">
+    <div class="tab-pane fade" id="historico" role="tabpanel" aria-labelledby="historico-tab">
+      <div class="ficha-card" data-history-card>
+        <div class="ficha-card__header">
+          <h2 class="ficha-card__titulo"><i class="bi bi-journal-medical text-success" aria-hidden="true"></i> Histórico Médico</h2>
+          <div class="spinner-border spinner-border-sm text-success d-none" role="status" aria-hidden="true" data-history-loading></div>
+        </div>
+        <div data-history-container>
+          <p class="text-muted mb-0">Selecione a aba para carregar o histórico completo.</p>
+        </div>
+      </div>
+      <noscript>
+        <div class="alert alert-warning">Ative o JavaScript para acessar o histórico médico.</div>
+      </noscript>
+    </div>
+    {% if eh_profissional %}
+    <div class="tab-pane fade" id="documentos" role="tabpanel" aria-labelledby="documentos-tab">
+      <div class="ficha-card ficha-card--documentos">
         {% include 'partials/documentos.html' %}
       </div>
-    {% endif %}
-
-    {% if current_user.id == animal.user_id or current_user.role == 'admin' %}
-    <!-- CARTEIRINHA DIGITAL -->
-    <div class="card shadow-sm border-0 mb-4 mt-4">
-      <div class="card-body">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div>
-            <h5 class="mb-1"><i class="bi bi-card-heading text-primary me-2"></i>Carteirinha digital</h5>
-            <p class="text-muted small mb-0">
-              Um link público com vacinas e dados básicos de {{ animal.name }} —
-              para mostrar no hotel, pet shop ou em viagens. Você pode desativar quando quiser.
-            </p>
-          </div>
-          {% if animal.public_token %}
-          <div class="d-flex flex-wrap gap-2 align-items-center">
-            <a class="btn btn-sm btn-primary" target="_blank"
-               href="{{ url_for('carteirinha_publica', token=animal.public_token) }}">
-              <i class="bi bi-box-arrow-up-right me-1"></i> Abrir carteirinha
-            </a>
-            <button type="button" class="btn btn-sm btn-outline-secondary"
-                    data-cta="health_card_copy"
-                    aria-label="Copiar link da carteirinha digital"
-                    aria-live="polite"
-                    onclick="navigator.clipboard.writeText('{{ url_for('carteirinha_publica', token=animal.public_token, _external=True) }}').then(() => { const b=this,o=b.innerText,l=b.getAttribute('aria-label'); b.innerText='Link copiado!'; b.setAttribute('aria-label', 'Link da carteirinha copiado!'); setTimeout(() => { b.innerText=o; b.setAttribute('aria-label', l); }, 2000); });">
-              Copiar link
-            </button>
-            {% if health_card_whatsapp_url %}
-            <a href="{{ health_card_whatsapp_url }}" target="_blank" rel="noopener"
-               class="btn btn-sm btn-outline-success" data-cta="health_card_share_whatsapp">
-              <i class="bi bi-whatsapp me-1"></i>WhatsApp
-            </a>
-            {% endif %}
-            <form method="POST" action="{{ url_for('carteirinha_desativar', animal_id=animal.id) }}" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-outline-danger">Desativar</button>
-            </form>
-          </div>
-          {% else %}
-          <form method="POST" action="{{ url_for('carteirinha_ativar', animal_id=animal.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-success">
-              <i class="bi bi-magic me-1"></i> Ativar carteirinha
-            </button>
-          </form>
-          {% endif %}
-        </div>
-        {% if animal.public_token %}
-        <p class="small text-muted mt-3 mb-0"><i class="bi bi-eye me-1"></i>Quem tiver o link poderá ver dados básicos, vacinas e vermifugações. Telefone, endereço e anotações clínicas não aparecem. Desative o link a qualquer momento.</p>
-        {% endif %}
-      </div>
     </div>
     {% endif %}
-  <!-- VOLTAR -->
-  <div class="card tutor-card shadow-sm border-0 mb-4">
-    <div class="card-body">
-      <div class="d-flex flex-column flex-md-row align-items-start gap-3">
-        <div class="tutor-card__avatar">
-          <i class="bi bi-people-fill"></i>
-        </div>
-        <div class="flex-fill">
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <span class="badge rounded-pill bg-primary-subtle text-primary fw-semibold">Tutor responsável</span>
-            <span class="badge rounded-pill bg-success-subtle text-success fw-semibold">
-              <i class="bi bi-heart-fill me-1"></i>
-              {{ tutor.animals|length if tutor.animals is not none else 0 }} animais vinculados
-            </span>
-          </div>
-          <h4 class="mb-1">
-            {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
-              <a class="tutor-card__name" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
-            {% else %}
-              <span class="tutor-card__name">{{ tutor.name }}</span>
-            {% endif %}
-          </h4>
-          <p class="text-muted mb-3">Acesse rapidamente os dados de contato e o histórico completo do tutor.</p>
-          <div class="d-flex flex-wrap gap-3 small text-muted">
-            <span class="d-inline-flex align-items-center gap-2">
-              <i class="bi bi-telephone"></i>
-              {{ tutor.phone or 'Telefone não informado' }}
-            </span>
-            <span class="d-inline-flex align-items-center gap-2">
-              <i class="bi bi-envelope"></i>
-              {{ tutor.email or 'E-mail não informado' }}
-            </span>
-            {% if tutor.endereco and tutor.endereco.logradouro %}
-              <span class="d-inline-flex align-items-center gap-2">
-                <i class="bi bi-geo-alt"></i>
-                {{ tutor.endereco.logradouro }}
-              </span>
-            {% endif %}
-          </div>
-        </div>
-        {% if current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) %}
-          <div class="d-flex flex-column gap-3 w-100 w-md-auto">
-            <div class="d-flex flex-column gap-2">
-              <div class="text-muted small text-uppercase fw-semibold">Acesso ao tutor</div>
-              <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-primary w-100">
-                <i class="bi bi-journal-richtext me-2"></i>Ver ficha do tutor
-              </a>
-            </div>
-          </div>
-        {% endif %}
-      </div>
-
-      {% if can_act_as_veterinarian(current_user) %}
-        <div class="tutor-card__danger-zone mt-3">
-          <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
-            <span class="text-muted small text-uppercase fw-semibold">Status do animal</span>
-            <span class="badge text-bg-light border border-danger-subtle text-danger fw-semibold">Ação sensível</span>
-          </div>
-          <p class="text-muted small mb-2">Use apenas para registrar o falecimento do animal.</p>
-          <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
-            <i class="bi bi-x-octagon me-2"></i>Marcar como falecido
-          </button>
-        </div>
-      {% endif %}
-
-      {% if not animal.is_alive %}
-        <div class="tutor-card__footer mt-3 pt-3">
-          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
-            <div class="d-flex align-items-center gap-3">
-              <span class="tutor-card__badge--muted">Animal falecido</span>
-              <div class="text-muted">
-                Este animal foi marcado como <strong>falecido</strong>.
-                {% if animal.falecido_em %}
-                  Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}
-                {% endif %}
-              </div>
-            </div>
-            {% if can_act_as_veterinarian(current_user) %}
-              <div class="d-flex flex-wrap gap-2">
-                <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reverter Falecimento
-                  </button>
-                </form>
-                <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Tem certeza que deseja excluir este animal permanentemente?">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-outline-danger btn-sm" type="submit">
-                    <i class="bi bi-trash3 me-1"></i>Deletar definitivamente
-                  </button>
-                </form>
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      {% endif %}
-    </div>
   </div>
 
+  {# ===================== Dados do cadastro ===================== #}
+  <section class="ficha-card ficha-dados" aria-labelledby="ficha-dados-titulo">
+    <div class="ficha-card__header">
+      <h2 class="ficha-card__titulo" id="ficha-dados-titulo"><i class="fa-solid fa-paw text-danger" aria-hidden="true"></i> Dados do animal</h2>
+    </div>
+    <dl class="ficha-dados__lista">
+      <div><dt>Espécie</dt><dd>{{ especie or '—' }}</dd></div>
+      <div><dt>Raça</dt><dd>{{ raca or '—' }}</dd></div>
+      <div><dt>Sexo</dt><dd>{{ animal.sex or '—' }}</dd></div>
+      <div><dt>Nascimento</dt><dd>{{ animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '—' }}</dd></div>
+      <div><dt>Idade</dt><dd>{{ idade_animal or animal.age_display or '—' }}</dd></div>
+      <div><dt>Peso</dt><dd>{{ peso_animal or '—' }}</dd></div>
+      <div><dt>Castrad{{ 'a' if e_femea else 'o' }}</dt><dd>{{ 'Sim' if animal.neutered else 'Não informado' }}</dd></div>
+      {% if animal.microchip_number %}<div><dt>Microchip</dt><dd>{{ animal.microchip_number }}</dd></div>{% endif %}
+      {% if animal.health_plan %}<div><dt>Plano de saúde</dt><dd>{{ animal.health_plan }}</dd></div>{% endif %}
+      {% if animal.clinica and eh_profissional %}<div><dt>Clínica</dt><dd>{{ animal.clinica.nome }}</dd></div>{% endif %}
+      {% if animal.date_added %}<div><dt>Cadastrado em</dt><dd>{{ animal.date_added|format_datetime_brazil('%d/%m/%Y') }}</dd></div>{% endif %}
+      {% if not animal.is_alive and animal.falecido_em %}<div><dt>Falecimento</dt><dd>{{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}</dd></div>{% endif %}
+    </dl>
+    {% if (animal.description or '')|trim %}
+      <div class="ficha-dados__obs">
+        <span>Observações</span>
+        <p>{{ animal.description }}</p>
+      </div>
+    {% endif %}
+  </section>
 
+  {# ===================== Tutor ===================== #}
+  {% if tutor %}
+  <section class="ficha-card ficha-tutor" aria-labelledby="ficha-tutor-titulo">
+    <div class="ficha-card__header">
+      <div>
+        <h2 class="ficha-card__titulo" id="ficha-tutor-titulo"><i class="bi bi-people-fill text-primary" aria-hidden="true"></i> Tutor responsável</h2>
+        <p class="ficha-card__subtitulo">
+          <i class="bi bi-heart-fill text-success" aria-hidden="true"></i>
+          {% set total_animais = tutor.animals|length if tutor.animals is not none else 0 %}
+          {{ total_animais }} {{ 'animal vinculado' if total_animais == 1 else 'animais vinculados' }}
+        </p>
+      </div>
+      {% if eh_profissional %}
+        <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="ficha-botao ficha-botao--primario ficha-sem-impressao">
+          <i class="bi bi-journal-richtext" aria-hidden="true"></i> Ver ficha do tutor
+        </a>
+      {% endif %}
+    </div>
+    <p class="ficha-tutor__nome">
+      {% if eh_profissional %}
+        <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ nome_tutor or 'Tutor sem nome' }}</a>
+      {% else %}
+        {{ nome_tutor or 'Tutor sem nome' }}
+      {% endif %}
+    </p>
+    <ul class="ficha-contatos" role="list">
+      <li>
+        {% if contatos_tutor.ligar_url %}<a class="ficha-contato" href="{{ contatos_tutor.ligar_url }}">{% else %}<div class="ficha-contato">{% endif %}
+          <span class="ficha-contato__icone ficha-contato__icone--telefone"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+          <span class="ficha-contato__texto">
+            <strong>{{ contatos_tutor.telefone or 'Telefone não informado' }}</strong>
+            <small>Telefone</small>
+          </span>
+        {% if contatos_tutor.ligar_url %}</a>{% else %}</div>{% endif %}
+      </li>
+      <li>
+        {% if contatos_tutor.email_url %}<a class="ficha-contato" href="{{ contatos_tutor.email_url }}">{% else %}<div class="ficha-contato">{% endif %}
+          <span class="ficha-contato__icone ficha-contato__icone--email"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span>
+          <span class="ficha-contato__texto">
+            <strong>{{ contatos_tutor.email or 'E-mail não informado' }}</strong>
+            <small>E-mail</small>
+          </span>
+        {% if contatos_tutor.email_url %}</a>{% else %}</div>{% endif %}
+      </li>
+      {% if contatos_tutor.endereco_linha1 %}
+      <li>
+        {% if contatos_tutor.mapa_url %}<a class="ficha-contato" href="{{ contatos_tutor.mapa_url }}" target="_blank" rel="noopener" aria-label="Abrir no mapa: {{ contatos_tutor.endereco_linha1 }} {{ contatos_tutor.endereco_linha2 }}">{% else %}<div class="ficha-contato">{% endif %}
+          <span class="ficha-contato__icone ficha-contato__icone--mapa"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+          <span class="ficha-contato__texto">
+            <strong>{{ contatos_tutor.endereco_linha1 }}</strong>
+            <small>{{ contatos_tutor.endereco_linha2 or 'Endereço' }}</small>
+          </span>
+          {% if contatos_tutor.mapa_url %}<i class="fa-solid fa-arrow-up-right-from-square ficha-contato__seta" aria-hidden="true"></i>{% endif %}
+        {% if contatos_tutor.mapa_url %}</a>{% else %}</div>{% endif %}
+      </li>
+      {% endif %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# ===================== Carteirinha digital ===================== #}
+  {% if eh_tutor or current_user.role == 'admin' %}
+  <section class="ficha-card ficha-sem-impressao" aria-labelledby="ficha-carteirinha-titulo">
+    <div class="ficha-card__header">
+      <div>
+        <h2 class="ficha-card__titulo" id="ficha-carteirinha-titulo"><i class="bi bi-card-heading text-primary" aria-hidden="true"></i> Carteirinha digital</h2>
+        <p class="ficha-card__subtitulo">
+          Um link público com vacinas e dados básicos de {{ nome or 'seu animal' }} —
+          para mostrar no hotel, pet shop ou em viagens. Você pode desativar quando quiser.
+        </p>
+      </div>
+    </div>
+    {% if animal.public_token %}
+    <div class="ficha-botoes">
+      <a class="ficha-botao ficha-botao--primario" target="_blank"
+         href="{{ url_for('carteirinha_publica', token=animal.public_token) }}">
+        <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Abrir carteirinha
+      </a>
+      <button type="button" class="ficha-botao"
+              data-cta="health_card_copy"
+              aria-label="Copiar link da carteirinha digital"
+              aria-live="polite"
+              onclick="navigator.clipboard.writeText('{{ url_for('carteirinha_publica', token=animal.public_token, _external=True) }}').then(() => { const b=this,o=b.innerText,l=b.getAttribute('aria-label'); b.innerText='Link copiado!'; b.setAttribute('aria-label', 'Link da carteirinha copiado!'); setTimeout(() => { b.innerText=o; b.setAttribute('aria-label', l); }, 2000); });">
+        Copiar link
+      </button>
+      {% if health_card_whatsapp_url %}
+      <a href="{{ health_card_whatsapp_url }}" target="_blank" rel="noopener"
+         class="ficha-botao ficha-botao--whatsapp" data-cta="health_card_share_whatsapp">
+        <i class="bi bi-whatsapp" aria-hidden="true"></i> WhatsApp
+      </a>
+      {% endif %}
+      <form method="POST" action="{{ url_for('carteirinha_desativar', animal_id=animal.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ficha-botao ficha-botao--perigo">Desativar</button>
+      </form>
+    </div>
+    <p class="ficha-nota"><i class="bi bi-eye" aria-hidden="true"></i> Quem tiver o link poderá ver dados básicos, vacinas e vermifugações. Telefone, endereço e anotações clínicas não aparecem. Desative o link a qualquer momento.</p>
+    {% else %}
+    <form method="POST" action="{{ url_for('carteirinha_ativar', animal_id=animal.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="ficha-botao ficha-botao--sucesso">
+        <i class="bi bi-magic" aria-hidden="true"></i> Ativar carteirinha
+      </button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ===================== Status do animal (ação sensível) ===================== #}
+  {% if can_act_as_veterinarian(current_user) %}
+  <details class="ficha-card ficha-recolhivel ficha-recolhivel--perigo ficha-sem-impressao"{% if not animal.is_alive %} open{% endif %}>
+    <summary>
+      <span class="ficha-recolhivel__icone ficha-recolhivel__icone--perigo"><i class="bi bi-x-octagon" aria-hidden="true"></i></span>
+      <span class="ficha-recolhivel__texto">
+        <strong>Status do animal</strong>
+        <small>{{ 'Marcado como falecido' if not animal.is_alive else 'Ação sensível · registrar falecimento' }}</small>
+      </span>
+    </summary>
+    <div class="ficha-recolhivel__corpo">
+      {% if animal.is_alive %}
+        <p class="ficha-nota mt-0">Use apenas para registrar o falecimento do animal.</p>
+        <button type="button" class="ficha-botao ficha-botao--perigo" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
+          <i class="bi bi-x-octagon" aria-hidden="true"></i> Marcar como falecido
+        </button>
+      {% else %}
+        <p class="ficha-nota mt-0">
+          Este animal foi marcado como <strong>falecido</strong>.
+          {% if animal.falecido_em %}Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% endif %}
+        </p>
+        <div class="ficha-botoes">
+          <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="ficha-botao ficha-botao--sucesso" type="submit">
+              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Reverter falecimento
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Tem certeza que deseja excluir este animal permanentemente?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="ficha-botao ficha-botao--perigo" type="submit">
+              <i class="bi bi-trash3" aria-hidden="true"></i> Deletar definitivamente
+            </button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </details>
+  {% elif not animal.is_alive %}
+  <div class="ficha-aviso ficha-aviso--falecido">
+    <i class="bi bi-heartbreak" aria-hidden="true"></i>
+    <div class="ficha-aviso__texto">
+      <strong>Este animal foi marcado como falecido.</strong>
+      {% if animal.falecido_em %}<span>Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>{% endif %}
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 
-{% include 'partials/falecimento_modal.html' %}
+{% if can_act_as_veterinarian(current_user) %}
+  {% include 'partials/falecimento_modal.html' %}
+{% endif %}
 
 {% endblock %}
 {% block scripts %}
   {{ super() }}
-  <script type="module" src="{{ url_for('static', filename='js/animal_record.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/animal_record.js', v='20261027') }}"></script>
 {% endblock %}
