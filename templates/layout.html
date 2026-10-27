@@ -97,7 +97,7 @@
   <link href="{{ url_for('static', filename='images.css', v='20260905-responsive') }}" rel="stylesheet">
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
-  <link href="{{ url_for('static', filename='styles.css', v='20261001docs1') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css', v='20261027fotos') }}" rel="stylesheet">
   {% if not current_user.is_authenticated %}
   <link href="{{ url_for('static', filename='css/public_nav_auth.css', v='20260905-brand-overlap') }}" rel="stylesheet">
   {% endif %}
@@ -649,6 +649,8 @@
   <script src="{{ url_for('static', filename='avatar_helper.js') }}" defer></script>
   {% endif %}
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+  {# Tocar numa foto abre ela grande, em qualquer página (ver o arquivo). #}
+  <script src="{{ url_for('static', filename='js/photo_lightbox.js', v='20261027') }}" defer></script>
   {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='js/search_filters.js') }}" defer></script>
   {% endif %}

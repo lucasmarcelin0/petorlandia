@@ -6548,3 +6548,7 @@ main.container {
 }
 .photo-lightbox__close:hover, .photo-lightbox__close:focus-visible { background: rgba(255, 255, 255, 0.3); outline: none; }
 @keyframes photo-lightbox-in { from { opacity: 0; } to { opacity: 1; } }
+/* Fotos que ampliam ao toque (js/photo_lightbox.js) */
+img.photo-zoomable { cursor: zoom-in; }
+img.photo-zoomable:focus-visible { outline: 3px solid rgba(15, 118, 110, 0.55); outline-offset: 2px; }
+html.photo-lightbox-aberto, html.photo-lightbox-aberto body { overflow: hidden; }
