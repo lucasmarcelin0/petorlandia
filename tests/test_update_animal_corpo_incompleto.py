@@ -56,7 +56,11 @@ def test_upload_interrompido_nao_apaga_o_cadastro(client, monkeypatch):
         )
 
         assert resp.status_code == 400
-        assert resp.get_json()['success'] is False
+        payload = resp.get_json()
+        assert payload['success'] is False
+        # Barrado antes da rota pela proteção global (security/form_body.py).
+        assert payload['error'] == 'incomplete_body'
+        assert 'incompleto' in payload['message']
         animal = _recarregar()
         assert animal.name == 'Rex'
         assert animal.sex == 'Macho'

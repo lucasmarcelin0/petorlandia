@@ -93,7 +93,11 @@
   function resolveLoadingTimeout(button, options = {}) {
     const fromOptions = parseTimeout(options.loadingTimeout);
     if (typeof fromOptions !== 'undefined') {
-      return limitLoadingTimeout(fromOptions);
+      // Envio com foto pela rede móvel leva mais que 10 s. Com o teto fixo, o
+      // botão voltava dizendo "Tempo excedido" enquanto o envio continuava,
+      // e a pessoa tentava de novo por cima. Só quem pede explicitamente
+      // (offline.js, quando há arquivo) passa do teto.
+      return options.allowLongTimeout ? fromOptions : limitLoadingTimeout(fromOptions);
     }
     if (button && typeof button.dataset !== 'undefined') {
       const fromButton = parseTimeout(button.dataset.loadingTimeout);
@@ -182,7 +186,9 @@
   function setSuccess(button, successTextOrOptions, delay) {
     if (!button) return;
 
-    let text = successTextOrOptions;
+    // Só texto vira rótulo: com um objeto de opções sem successText o botão
+    // mostrava "✅ [object Object]" depois de salvar.
+    let text = typeof successTextOrOptions === 'string' ? successTextOrOptions : undefined;
     let timeout = delay;
     let offlineQueued = false;
 
@@ -454,6 +460,9 @@
     }
     if (typeof options.loadingTimeout !== 'undefined') {
       loadingOptions.loadingTimeout = options.loadingTimeout;
+    }
+    if (options.allowLongTimeout) {
+      loadingOptions.allowLongTimeout = true;
     }
     if (Object.prototype.hasOwnProperty.call(options, 'timeoutMessage')) {
       loadingOptions.timeoutMessage = options.timeoutMessage;

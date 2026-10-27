@@ -231,6 +231,43 @@ def normalize_photo_upload(data: bytes) -> NormalizedPhoto:
     )
 
 
+def rotate_photo(photo: NormalizedPhoto, degrees_clockwise) -> NormalizedPhoto:
+    """Grava nos pixels o giro escolhido no editor de foto (sentido horário).
+
+    O editor aplica a rotação por CSS; com ``object-fit: cover`` em caixas de
+    formatos diferentes (editor quadrado, cards retangulares) a foto girada só
+    por CSS aparece deitada fora do editor. Girando os pixels a foto fica igual
+    em qualquer lugar e a rotação salva no cadastro volta a ser zero.
+    Ângulos fora de múltiplos de 90 são arredondados; zero devolve a própria
+    foto. Se o Pillow falhar, a foto segue sem giro em vez de se perder.
+    """
+    try:
+        degrees = int(round(float(degrees_clockwise or 0) / 90.0)) * 90 % 360
+    except (TypeError, ValueError):
+        degrees = 0
+    if not degrees:
+        return photo
+    try:
+        data = photo.stream.getvalue()
+        with Image.open(BytesIO(data)) as image:
+            image = ImageOps.exif_transpose(image)
+            image = _achatar_para_rgb(image)
+            # CSS gira no sentido horário; o Pillow, no anti-horário.
+            image = image.rotate(-degrees, expand=True)
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=CONVERSION_QUALITY, optimize=True)
+    except Exception:
+        logger.warning("Falha ao girar foto em %s graus; guardando sem giro", degrees)
+        return photo
+    return NormalizedPhoto(
+        stream=_UploadStream(buffer.getvalue(), "image/jpeg"),
+        content_type="image/jpeg",
+        extension=".jpg",
+        source_format=photo.source_format,
+        converted=True,
+    )
+
+
 def normalized_filename(original_name: str, photo: NormalizedPhoto) -> str:
     """Nome do arquivo com a extensao do formato realmente gravado."""
     return _swap_extension(original_name, photo.extension)

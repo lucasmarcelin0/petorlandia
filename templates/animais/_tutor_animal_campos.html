@@ -1,0 +1,118 @@
+{# Campos do cadastro de animal nos modais da ficha do tutor (novo e editar).
+   Espera, via {% with %}: animal (ou None), form_obj (AnimalForm), prefixo
+   (único na página), cropper_id; e do contexto: species_list, breed_map. #}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+{%- set a = animal -%}
+{%- set sufixo = ('-' ~ a.id) if a else '' -%}
+{%- set sexo_atual = a.sex if a and a.sex in ['Macho', 'Fêmea'] else '' -%}
+{%- if a and a.neutered -%}{%- set castrado_atual = '1' -%}
+{%- elif a and a.neutered == False -%}{%- set castrado_atual = '0' -%}
+{%- else -%}{%- set castrado_atual = '' -%}{%- endif -%}
+{%- set especie_atual = a.species_id if a else None -%}
+{%- set racas = breed_map.get(especie_atual|string, []) if especie_atual else [] -%}
+{%- set raca_na_lista = a and a.breed_id and (racas | selectattr('id', 'equalto', a.breed_id) | list) -%}
+
+<section class="tutor-form-section tutor-form-section--foto" aria-label="Foto do animal">
+  {{ photo_cropper(form_obj.image, form_obj.photo_rotation, form_obj.photo_zoom, form_obj.photo_offset_x, form_obj.photo_offset_y, (a.image if a and a.image else ''), 132, cropper_id, 'animal') }}
+</section>
+
+<section class="tutor-form-section">
+  <h3 class="tutor-form-section__title">Identificação</h3>
+  <div class="row g-3">
+    <div class="col-12">
+      <label class="form-label" for="{{ prefixo }}-name">Nome <span class="tutor-obrigatorio" title="Obrigatório">*</span></label>
+      <input id="{{ prefixo }}-name" name="name" class="form-control" required maxlength="100"
+             value="{{ ((a.name or '')|trim) if a else '' }}" placeholder="Ex.: Mel"
+             autocomplete="off" autocapitalize="words" enterkeyhint="next" data-campo="name">
+      <div class="invalid-feedback">Informe o nome do animal.</div>
+    </div>
+    <div class="col-12 col-sm-6">
+      <label class="form-label" for="species-select{{ sufixo }}">Espécie <span class="tutor-obrigatorio" title="Obrigatório">*</span></label>
+      <select name="species_id" id="species-select{{ sufixo }}" class="form-select" required
+              data-species-select data-breed-target="breed-select{{ sufixo }}" data-campo="species_id">
+        <option value="">Selecione</option>
+        {% for sp in species_list %}
+          <option value="{{ sp.id }}" {% if especie_atual == sp.id %}selected{% endif %}>{{ sp.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="invalid-feedback">Escolha a espécie.</div>
+    </div>
+    <div class="col-12 col-sm-6">
+      <label class="form-label" for="breed-select{{ sufixo }}">Raça</label>
+      <select name="breed_id" id="breed-select{{ sufixo }}" class="form-select" data-breed-select data-campo="breed_id"
+              {% if not especie_atual %}disabled{% endif %}>
+        <option value="">{{ 'Não informada' if especie_atual else 'Escolha a espécie primeiro' }}</option>
+        {% for b in racas %}
+          <option value="{{ b.id }}" {% if a and a.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+        {% if a and a.breed and not raca_na_lista %}
+          <option value="{{ a.breed.id }}" selected>{{ a.breed.name }}</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="col-12">
+      <span class="form-label d-block" id="{{ prefixo }}-sex-label">Sexo</span>
+      <div class="tutor-segmented" role="radiogroup" aria-labelledby="{{ prefixo }}-sex-label">
+        <input type="radio" class="btn-check" name="sex" id="{{ prefixo }}-sex-m" value="Macho" autocomplete="off" {% if sexo_atual == 'Macho' %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-sex-m"><i class="fa-solid fa-mars" aria-hidden="true"></i> Macho</label>
+        <input type="radio" class="btn-check" name="sex" id="{{ prefixo }}-sex-f" value="Fêmea" autocomplete="off" {% if sexo_atual == 'Fêmea' %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-sex-f"><i class="fa-solid fa-venus" aria-hidden="true"></i> Fêmea</label>
+        <input type="radio" class="btn-check" name="sex" id="{{ prefixo }}-sex-n" value="" autocomplete="off" {% if not sexo_atual %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-sex-n">Não sei</label>
+      </div>
+    </div>
+    <div class="col-12">
+      <span class="form-label d-block" id="{{ prefixo }}-neutered-label">Castrado?</span>
+      <div class="tutor-segmented" role="radiogroup" aria-labelledby="{{ prefixo }}-neutered-label">
+        <input type="radio" class="btn-check" name="neutered" id="{{ prefixo }}-neutered-1" value="1" autocomplete="off" {% if castrado_atual == '1' %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-neutered-1">Sim</label>
+        <input type="radio" class="btn-check" name="neutered" id="{{ prefixo }}-neutered-0" value="0" autocomplete="off" {% if castrado_atual == '0' %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-neutered-0">Não</label>
+        <input type="radio" class="btn-check" name="neutered" id="{{ prefixo }}-neutered-n" value="" autocomplete="off" {% if not castrado_atual %}checked{% endif %}>
+        <label class="tutor-segmented__opcao" for="{{ prefixo }}-neutered-n">Não sei</label>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="tutor-form-section">
+  <h3 class="tutor-form-section__title">Idade</h3>
+  {% set nome_data = 'date_of_birth' %}
+  {% set nome_idade = 'age' %}
+  {% set nome_unidade = 'age_unit' %}
+  {% set valor_data = form_obj.date_of_birth.data.strftime('%d/%m/%Y') if form_obj.date_of_birth.data else '' %}
+  {% set valor_data_iso = form_obj.date_of_birth.data.strftime('%Y-%m-%d') if form_obj.date_of_birth.data else '' %}
+  {% set valor_idade = form_obj.age.data %}
+  {% set valor_unidade = form_obj.age_unit.data %}
+  {% include 'components/campo_data_idade.html' %}
+  <p class="form-text mb-0">Preencha a data de nascimento ou só a idade aproximada.</p>
+</section>
+
+<section class="tutor-form-section">
+  <h3 class="tutor-form-section__title">Saúde e identificação</h3>
+  <div class="row g-3">
+    <div class="col-6">
+      <label class="form-label" for="{{ prefixo }}-peso">Peso (kg)</label>
+      {# Texto com teclado decimal: o type="number" do Android descartava "12,5". #}
+      <input id="{{ prefixo }}-peso" name="peso" type="text" inputmode="decimal" class="form-control"
+             value="{{ ('%g'|format(a.peso))|replace('.', ',') if a and a.peso is not none else '' }}"
+             placeholder="Ex.: 12,5" pattern="\s*[0-9]+([.,][0-9]+)?\s*" autocomplete="off" data-campo="peso">
+      <div class="invalid-feedback">Use só números, como 12,5.</div>
+    </div>
+    <div class="col-6">
+      <label class="form-label" for="{{ prefixo }}-microchip">Microchip</label>
+      <input id="{{ prefixo }}-microchip" name="microchip_number" class="form-control" inputmode="numeric"
+             maxlength="50" value="{{ (a.microchip_number or '') if a else '' }}" placeholder="15 dígitos" autocomplete="off">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="{{ prefixo }}-plano">Plano de saúde</label>
+      <input id="{{ prefixo }}-plano" name="health_plan" class="form-control" maxlength="100"
+             value="{{ (a.health_plan or '') if a else '' }}" placeholder="Se tiver" autocomplete="off">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="{{ prefixo }}-descricao">Observações</label>
+      <textarea id="{{ prefixo }}-descricao" name="description" class="form-control" rows="2" maxlength="2000"
+                placeholder="Temperamento, cor da pelagem, cuidados…" data-autogrow>{{ (a.description or '') if a else '' }}</textarea>
+    </div>
+  </div>
+</section>

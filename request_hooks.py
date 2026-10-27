@@ -28,6 +28,7 @@ from werkzeug.exceptions import HTTPException, NotFound
 
 from extensions import db
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
+from security.form_body import FormBodyAwareRequest, IncompleteFormBody
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -306,6 +307,40 @@ def handle_csrf_error(err):
     return redirect(_back_to_form_target(), code=303)
 
 
+def handle_incomplete_form_body(err):
+    """Envio cortado no meio: a rota não roda e quem enviou sabe o que houve.
+
+    Ver ``security/form_body.py``: sem isto o formulário chegava vazio e a
+    rota gravava campos em branco (animais com nome "None").
+    """
+    current_app.logger.warning(
+        "incomplete_form_body",
+        extra={
+            "path": request.path,
+            "status_code": 400,
+            "content_length": request.content_length,
+            "request_id": getattr(g, "request_id", None),
+        },
+    )
+    db.session.rollback()
+    message = err.description
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+    if wants_json:
+        return jsonify(
+            success=False,
+            error="incomplete_body",
+            message=message,
+            category="danger",
+            request_id=getattr(g, "request_id", None),
+        ), 400
+    flash(message, "danger")
+    return redirect(_back_to_form_target(), code=303)
+
+
 def _back_to_form_target():
     """Endereço do formulário de onde o envio partiu (mesma origem), ou "/"."""
     redirect_target = None
@@ -428,6 +463,8 @@ def handle_unhandled_exception(err):
 
 
 def register_request_hooks(app):
+    # Corpo de formulário cortado vira 400 em vez de formulário vazio.
+    app.request_class = FormBodyAwareRequest
     app.before_request(_redirect_insecure_request)
     app.before_request(_attach_request_id)
     app.before_request(_ver_como_somente_leitura)
@@ -444,4 +481,5 @@ def register_request_hooks(app):
     )
     app.register_error_handler(HTTPException, handle_http_exception)
     app.register_error_handler(CSRFError, handle_csrf_error)
+    app.register_error_handler(IncompleteFormBody, handle_incomplete_form_body)
     app.register_error_handler(Exception, handle_unhandled_exception)

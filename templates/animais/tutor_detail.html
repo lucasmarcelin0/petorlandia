@@ -3,463 +3,330 @@
 
 {% block head %}
   {{ super() }}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_detail.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/flatpickr/flatpickr.min.css', v='4.6.13') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_detail.css', v='20261027') }}">
 {% endblock %}
 
 {% block main %}
-{% set active_animals = animais | selectattr('removido_em', 'equalto', none) | list %}
-{% set removed_animals = animais | selectattr('removido_em') | list %}
+{%- set ativos = animais | selectattr('removido_em', 'equalto', none) | list -%}
+{%- set nome_tutor = (tutor.name or '')|trim -%}
+{%- set partes_nome = nome_tutor.split() -%}
+{%- set primeiro_nome = partes_nome[0] if partes_nome else 'tutor' -%}
+{%- set iniciais = ((partes_nome[0][:1] if partes_nome else '?') ~ (partes_nome[-1][:1] if partes_nome|length > 1 else ''))|upper -%}
 
-<div class="container py-4">
-  <div class="card tutor-hero shadow-sm border-0 mb-4 overflow-hidden">
-    <div class="tutor-hero__bg"></div>
-    <div class="card-body position-relative">
-      <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3">
-        <div class="d-flex align-items-center gap-3 flex-grow-1">
-          <a href="{{ url_for('tutores') }}" class="btn btn-link text-decoration-none px-0 text-primary fw-semibold d-flex align-items-center gap-2">
-            <i class="fas fa-arrow-left"></i> Voltar aos tutores
+<div class="container py-3 py-md-4 consultation-workspace tutor-page"
+     data-tutor-id="{{ tutor.id }}"
+     data-lista-url="{{ url_for('ficha_tutor_animais', tutor_id=tutor.id) }}"
+     data-editar-animal="{{ editar_animal_id or '' }}">
+
+  <a href="{{ url_for('tutores') }}" class="tutor-voltar">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i> Tutores
+  </a>
+
+  {# ===================== Cabeçalho com atalhos de contato ===================== #}
+  <section class="tutor-hero" id="tutor-hero" aria-labelledby="tutor-hero-nome">
+    <div class="tutor-hero__identidade">
+      <div class="tutor-hero__avatar">
+        <img id="preview-tutor"
+             src="{{ tutor.profile_photo or '' }}"
+             alt="Foto de {{ nome_tutor or 'tutor' }}"
+             class="avatar {% if not tutor.profile_photo %}d-none{% endif %}"
+             style="--avatar-size:76px;"
+             loading="lazy"
+             data-offset-x="{{ tutor.photo_offset_x or 0 }}"
+             data-offset-y="{{ tutor.photo_offset_y or 0 }}"
+             data-rotation="{{ tutor.photo_rotation or 0 }}"
+             data-zoom="{{ tutor.photo_zoom or 1 }}">
+        {% if not tutor.profile_photo %}
+          <span class="tutor-hero__iniciais" aria-hidden="true">{{ iniciais }}</span>
+        {% endif %}
+      </div>
+      <div class="tutor-hero__texto">
+        <p class="consultation-eyebrow mb-1">Ficha do tutor</p>
+        <h1 class="tutor-hero__nome" id="tutor-hero-nome" data-tutor-nome>{{ nome_tutor or 'Tutor sem nome' }}</h1>
+        <p class="tutor-hero__meta">
+          <span data-hero-contagem>{{ ativos|length }} {{ 'animal' if ativos|length == 1 else 'animais' }}</span>
+          {% if tutor.created_at %}<span aria-hidden="true">·</span> desde {{ tutor.created_at.strftime('%d/%m/%Y') }}{% endif %}
+        </p>
+        {% if tutor.worker|lower == 'veterinario' %}
+          <span class="tutor-tag mt-1">CRMV {{ tutor.veterinario.crmv if tutor.veterinario and tutor.veterinario.crmv else '—' }}</span>
+        {% elif tutor.worker %}
+          <span class="tutor-tag mt-1">{{ tutor.worker|title }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="tutor-atalhos" role="group" aria-label="Falar com {{ primeiro_nome }}">
+      {% if contatos.whatsapp_url %}
+        <a class="tutor-atalho tutor-atalho--whatsapp" href="{{ contatos.whatsapp_url }}" target="_blank" rel="noopener">
+          <span class="tutor-atalho__icone"><i class="fa-brands fa-whatsapp" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">WhatsApp</span>
+        </a>
+      {% else %}
+        <button type="button" class="tutor-atalho tutor-atalho--vazio" data-ir-para-campo="tutor-phone">
+          <span class="tutor-atalho__icone"><i class="fa-brands fa-whatsapp" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">WhatsApp</span>
+          <span class="tutor-atalho__dica">sem celular</span>
+        </button>
+      {% endif %}
+
+      {% if contatos.ligar_url %}
+        <a class="tutor-atalho tutor-atalho--ligar" href="{{ contatos.ligar_url }}">
+          <span class="tutor-atalho__icone"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">Ligar</span>
+        </a>
+      {% else %}
+        <button type="button" class="tutor-atalho tutor-atalho--vazio" data-ir-para-campo="tutor-phone">
+          <span class="tutor-atalho__icone"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">Ligar</span>
+          <span class="tutor-atalho__dica">sem telefone</span>
+        </button>
+      {% endif %}
+
+      {% if contatos.mapa_url %}
+        <a class="tutor-atalho tutor-atalho--mapa" href="{{ contatos.mapa_url }}" target="_blank" rel="noopener">
+          <span class="tutor-atalho__icone"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">Mapa</span>
+        </a>
+      {% else %}
+        <button type="button" class="tutor-atalho tutor-atalho--vazio" data-ir-para-campo="cep">
+          <span class="tutor-atalho__icone"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+          <span class="tutor-atalho__rotulo">Mapa</span>
+          <span class="tutor-atalho__dica">sem endereço</span>
+        </button>
+      {% endif %}
+    </div>
+
+    <ul class="tutor-contatos" role="list">
+      {% if contatos.telefone %}
+        <li>
+          {% if contatos.ligar_url %}<a class="tutor-contato" href="{{ contatos.ligar_url }}">{% else %}<div class="tutor-contato">{% endif %}
+            <span class="tutor-contato__icone tutor-contato__icone--telefone"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+            <span class="tutor-contato__texto"><strong>{{ contatos.telefone }}</strong><small>Telefone</small></span>
+          {% if contatos.ligar_url %}</a>{% else %}</div>{% endif %}
+        </li>
+      {% endif %}
+      {% if contatos.endereco_linha1 %}
+        <li>
+          {% if contatos.mapa_url %}<a class="tutor-contato" href="{{ contatos.mapa_url }}" target="_blank" rel="noopener" aria-label="Abrir no mapa: {{ contatos.endereco_linha1 }} {{ contatos.endereco_linha2 }}">{% else %}<div class="tutor-contato">{% endif %}
+            <span class="tutor-contato__icone tutor-contato__icone--mapa"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+            <span class="tutor-contato__texto">
+              <strong>{{ contatos.endereco_linha1 }}</strong>
+              {% if contatos.endereco_linha2 %}<small>{{ contatos.endereco_linha2 }}</small>{% endif %}
+            </span>
+            {% if contatos.mapa_url %}<i class="fa-solid fa-arrow-up-right-from-square tutor-contato__seta" aria-hidden="true"></i>{% endif %}
+          {% if contatos.mapa_url %}</a>{% else %}</div>{% endif %}
+        </li>
+      {% endif %}
+      {% if contatos.email %}
+        <li>
+          <a class="tutor-contato" href="{{ contatos.email_url }}">
+            <span class="tutor-contato__icone tutor-contato__icone--email"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span>
+            <span class="tutor-contato__texto"><strong>{{ contatos.email }}</strong><small>E-mail</small></span>
           </a>
-        </div>
-        <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
-              onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
-              class="ms-lg-auto">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 d-flex align-items-center gap-2">
-            <i class="fas fa-trash"></i> Excluir tutor
-          </button>
-        </form>
-      </div>
+        </li>
+      {% endif %}
+      {% if tutor.cpf %}
+        <li>
+          <div class="tutor-contato">
+            <span class="tutor-contato__icone"><i class="fa-solid fa-id-card" aria-hidden="true"></i></span>
+            <span class="tutor-contato__texto"><strong>{{ tutor.cpf|cpf_br }}</strong><small>CPF</small></span>
+          </div>
+        </li>
+      {% endif %}
+    </ul>
+  </section>
 
-      <div class="tutor-hero__content mt-3">
-        <div class="tutor-avatar">
-          <img
-            id="preview-tutor"
-            src="{{ tutor.profile_photo or '' }}"
-            alt="Foto do Tutor"
-            class="avatar {% if not tutor.profile_photo %}d-none{% endif %}"
-            style="--avatar-size:140px;"
-            loading="lazy"
-            data-offset-x="{{ tutor.photo_offset_x or 0 }}"
-            data-offset-y="{{ tutor.photo_offset_y or 0 }}"
-            data-rotation="{{ tutor.photo_rotation or 0 }}"
-            data-zoom="{{ tutor.photo_zoom or 1 }}">
-          <div class="avatar-ring"></div>
+  {# ===================== Abas ===================== #}
+  <ul class="nav nav-tabs consultation-tabs tutor-tabs" id="tutorTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active d-flex align-items-center gap-2" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais"
+              type="button" role="tab" aria-controls="animais" aria-selected="true">
+        <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw" aria-hidden="true"></i></span>
+        <span class="fw-semibold">Animais</span>
+        <span class="tutor-tabs__contador" data-contador-animais>{{ ativos|length }}</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="dados-tab" data-bs-toggle="tab" data-bs-target="#dados"
+              type="button" role="tab" aria-controls="dados" aria-selected="false">
+        <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-user-pen" aria-hidden="true"></i></span>
+        <span class="fw-semibold">Dados do tutor</span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    {# ===================== Aba: Animais ===================== #}
+    <div class="tab-pane fade show active" id="animais" role="tabpanel" aria-labelledby="animais-tab">
+      <div class="tutor-card">
+        <div class="tutor-card__header">
+          <div>
+            <h2 class="tutor-card__title">Animais de {{ primeiro_nome }}</h2>
+            <p class="tutor-card__subtitle">Consulta, ficha e edição de cada animal.</p>
+          </div>
+          <button type="button" class="btn btn-primary rounded-pill px-3 tutor-novo-btn" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
+            <i class="fa-solid fa-plus me-1" aria-hidden="true"></i> Novo animal
+          </button>
         </div>
-        <div class="tutor-hero__main">
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <h2 class="mb-0">{{ tutor.name }}</h2>
-            {% if tutor.worker %}
-              <span class="badge bg-light text-primary border">{{ tutor.worker|title }}</span>
-            {% endif %}
-            {% if tutor.worker|lower == 'veterinario' %}
-              <span class="badge bg-secondary text-white">CRM: {{ tutor.veterinario.crm if tutor.veterinario else '—' }}</span>
-            {% endif %}
-          </div>
-          <p class="text-muted mb-3">Dados completos, contatos e histórico de animais deste tutor.</p>
-          <div class="d-flex flex-wrap gap-2 mb-3 tutor-chips">
-            {% if tutor.email_informado %}
-              <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email_informado }}</span>
-            {% else %}
-              <span class="chip text-muted"><i class="fas fa-envelope-open"></i> Sem e-mail informado</span>
-            {% endif %}
-            {% if tutor.phone %}
-              <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone|telefone_br }}</span>
-            {% endif %}
-            {% if tutor.cpf %}
-              <span class="chip"><i class="fas fa-id-card"></i> CPF {{ tutor.cpf|cpf_br }}</span>
-            {% endif %}
-          </div>
-          <div class="d-flex flex-wrap gap-3">
-            <div class="stat-card">
-              <span class="label">Animais ativos</span>
-              <strong>{{ active_animals|length }}</strong>
-            </div>
-            <div class="stat-card">
-              <span class="label">Animais removidos</span>
-              <strong>{{ removed_animals|length }}</strong>
-            </div>
-            <div class="stat-card">
-              <span class="label">Cadastro</span>
-              <strong>{{ tutor.created_at.strftime('%d/%m/%Y') if tutor.created_at else '—' }}</strong>
-            </div>
-          </div>
+
+        <div class="tutor-busca{% if ativos|length <= 4 %} d-none{% endif %}" data-busca-animais>
+          <i class="fas fa-search" aria-hidden="true"></i>
+          <input id="animal-search" type="search" class="form-control" placeholder="Buscar animal pelo nome" aria-label="Buscar animal por nome" autocomplete="off">
         </div>
+
+        {% include 'animais/_tutor_animais_lista.html' %}
       </div>
     </div>
-  </div>
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body pb-0">
-      <ul class="nav nav-tabs custom-tabs" id="tutorTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="dados-tab" data-bs-toggle="tab" data-bs-target="#dados" type="button" role="tab" aria-controls="dados" aria-selected="true">
-            <i class="fas fa-user"></i> Dados do Tutor
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais" type="button" role="tab" aria-controls="animais" aria-selected="false">
-            <i class="fas fa-paw"></i> Lista de Animais
-          </button>
-        </li>
-      </ul>
-    </div>
-    <div class="tab-content p-3">
+    {# ===================== Aba: Dados do tutor ===================== #}
+    <div class="tab-pane fade" id="dados" role="tabpanel" aria-labelledby="dados-tab">
+      <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" data-sync data-fetch-timeout="45000" data-loading-timeout="15000" class="tutor-card">
+        {{ tutor_form.hidden_tag() }}
+        <div class="tutor-card__header">
+          <div>
+            <h2 class="tutor-card__title">Informações do tutor</h2>
+            <p class="tutor-card__subtitle">Contatos, documentos, endereço e foto.</p>
+          </div>
+        </div>
 
-      <div class="tab-pane fade show active" id="dados" role="tabpanel" aria-labelledby="dados-tab">
-        <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" data-sync data-fetch-timeout="45000" data-loading-timeout="15000" class="section-card">
-          {{ tutor_form.hidden_tag() }}
-          <div class="section-card__header">
-            <div>
-              <p class="section-eyebrow">Perfil</p>
-              <h5 class="mb-1">Informações do tutor</h5>
-              <p class="text-muted mb-0">Atualize contatos, documentos e a foto do tutor.</p>
+        <div class="row g-3">
+          <div class="col-md-4 tutor-photo-field">
+            <label class="form-label">Foto do tutor</label>
+            <div class="photo-uploader">
+              {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
+            </div>
+          </div>
+          <div class="col-md-8">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label" for="tutor-name">Nome</label>
+                <input id="tutor-name" name="name" class="form-control" value="{{ tutor.name or '' }}" required autocomplete="off">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="tutor-phone">Telefone (WhatsApp)</label>
+                {# Sem pattern nem data-mask: o banco guarda telefone, CPF e RG
+                   com e sem máscara. Quem formata e valida é
+                   static/js/campos_br.js, que aceita as duas formas. #}
+                <input id="tutor-phone" name="phone" type="tel" class="form-control"
+                       value="{{ (tutor.phone|telefone_br) if tutor.phone else '' }}"
+                       placeholder="(00) 00000-0000" data-campo-br="telefone">
+                <div class="invalid-feedback">Informe o telefone com DDD (10 ou 11 dígitos)</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="tutor-email">E-mail</label>
+                <input id="tutor-email" name="email" type="email" class="form-control" value="{{ tutor.email_informado }}" autocomplete="off">
+                <div class="invalid-feedback">Informe um e-mail válido</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="tutor-cpf">CPF</label>
+                <input id="tutor-cpf" name="cpf" class="form-control" inputmode="numeric"
+                       value="{{ (tutor.cpf|cpf_br) if tutor.cpf else '' }}"
+                       placeholder="000.000.000-00" data-campo-br="cpf">
+                <div class="invalid-feedback">Informe o CPF com 11 dígitos</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="tutor-rg">RG</label>
+                <input id="tutor-rg" name="rg" class="form-control" value="{{ tutor.rg or '' }}"
+                       data-campo-br="rg">
+                <div class="invalid-feedback">Informe o RG com letras e números (3 a 20 caracteres)</div>
+              </div>
+              <div class="col-7 col-md-6">
+                <label class="form-label" for="tutor_dob">Data de nascimento</label>
+                <input id="tutor_dob" name="date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '' }}">
+              </div>
+              <div class="col-5 col-md-6">
+                <label class="form-label" for="tutor_age">Idade</label>
+                <input id="tutor_age" type="number" class="form-control" min="0" inputmode="numeric">
+              </div>
             </div>
           </div>
 
-          <div class="row g-3">
-            <div class="col-md-4 tutor-photo-field">
-              <label class="form-label">Foto do Tutor</label>
-              <div class="photo-uploader">
-                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
-              </div>
+          {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
+          <div class="col-12">
+            <label class="form-label">Especialidades</label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for esp in tutor.veterinario.specialties %}
+                <span class="badge bg-secondary">{{ esp.nome }}</span>
+              {% else %}
+                <span class="text-muted">Nenhuma</span>
+              {% endfor %}
             </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor-name">Nome</label>
-              <input id="tutor-name" name="name" class="form-control" value="{{ tutor.name or '' }}" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor-email">E‑mail</label>
-              <input id="tutor-email" name="email" type="email" class="form-control" value="{{ tutor.email_informado }}">
-              <div class="invalid-feedback">Informe um e-mail válido</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor-phone">Telefone</label>
-              {# Sem pattern nem data-mask: o banco guarda telefone, CPF e RG
-                 com e sem máscara. Quem formata e valida é
-                 static/js/campos_br.js, que aceita as duas formas. #}
-              <input id="tutor-phone" name="phone" type="tel" class="form-control"
-                     value="{{ (tutor.phone|telefone_br) if tutor.phone else '' }}"
-                     placeholder="(00) 00000-0000" data-campo-br="telefone">
-              <div class="invalid-feedback">Informe o telefone com DDD (10 ou 11 dígitos)</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor-cpf">CPF</label>
-              <input id="tutor-cpf" name="cpf" class="form-control"
-                     value="{{ (tutor.cpf|cpf_br) if tutor.cpf else '' }}"
-                     placeholder="000.000.000-00" data-campo-br="cpf">
-              <div class="invalid-feedback">Informe o CPF com 11 dígitos</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor-rg">RG</label>
-              <input id="tutor-rg" name="rg" class="form-control" value="{{ tutor.rg or '' }}"
-                     data-campo-br="rg">
-              <div class="invalid-feedback">Informe o RG com letras e números (3 a 20 caracteres)</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor_dob">Data de Nascimento</label>
-              <input id="tutor_dob" name="date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label" for="tutor_age">Idade</label>
-              <input id="tutor_age" type="number" class="form-control" min="0">
-            </div>
-            {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
-            <div class="col-12">
-              <label class="form-label">Especialidades</label>
-              <div class="d-flex flex-wrap gap-2">
-                {% for esp in tutor.veterinario.specialties %}
-                  <span class="badge bg-secondary">{{ esp.nome }}</span>
-                {% else %}
-                  <span class="text-muted">Nenhuma</span>
-                {% endfor %}
-              </div>
-              <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary mt-2">Editar Especialidades</a>
-            </div>
-            {% endif %}
-
-            <div class="col-12">
-              <div class="section-divider"></div>
-              <p class="section-eyebrow">Endereço</p>
-            </div>
-
-            {% include "partials/endereco_form.html" with context %}
-
-            <div class="col-12">
-              <div class="section-divider"></div>
-              <p class="section-eyebrow">Observações</p>
-              <label for="observacoes" class="form-label small text-muted mb-1">
-                Anotações da clínica sobre este tutor
-              </label>
-              <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
-                        placeholder="Ex.: endereços anteriores, preferências de contato, observações da equipe."
-                        data-autogrow>{{ tutor.observacoes or '' }}</textarea>
-              <div class="form-text">
-                Quando o tutor tem mais de um endereço, o mais recente fica no campo acima
-                e os anteriores são registrados aqui automaticamente.
-              </div>
-            </div>
-
-            <div class="col-12">
-              <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
-                <button class="btn btn-primary px-4" data-loading-text="Salvando..." data-success-text="Alterações salvas!">
-                  <i class="fas fa-save me-2"></i>Salvar alterações
-                </button>
-              </div>
-              <div class="alert alert-success mt-3 d-none form-status-message" role="alert" aria-live="polite"></div>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <div class="tab-pane fade" id="animais" role="tabpanel" aria-labelledby="animais-tab">
-        <div class="section-card">
-          <div class="section-card__header align-items-center flex-wrap gap-3">
-            <div>
-              <p class="section-eyebrow">Animais</p>
-              <h5 class="mb-1" id="animais-heading">🐾 Animais de {{ tutor.name.split(' ')[0] }}</h5>
-              <p class="text-muted mb-0">Visualize rapidamente os pacientes deste tutor e acesse suas fichas.</p>
-            </div>
-            <div class="ms-auto d-flex gap-2 flex-wrap">
-              <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
-                <i class="fas fa-plus-circle me-2"></i>Novo Animal
-              </button>
-            </div>
-          </div>
-
-          <div class="search-box mb-3">
-            <i class="fas fa-search" aria-hidden="true"></i>
-            <input id="animal-search" type="search" class="form-control" placeholder="Busque por nome do animal" aria-label="Buscar animal por nome">
-          </div>
-
-          <div class="table-responsive">
-            <table id="animals-table" class="table table-hover align-middle animals-table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Espécie / Raça</th>
-                  <th>Sexo</th>
-                  <th class="text-end">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for a in active_animals %}
-                <tr id="animal-row-{{ a.id }}">
-                  <td>
-                    <div class="d-flex align-items-center gap-2">
-                      {% if a.image %}
-                        <img src="{{ a.image }}"
-                             alt="Foto de {{ a.name }}"
-                             class="avatar"
-                             data-offset-x="{{ a.photo_offset_x or 0 }}"
-                             data-offset-y="{{ a.photo_offset_y or 0 }}"
-                             data-rotation="{{ a.photo_rotation or 0 }}"
-                             data-zoom="{{ a.photo_zoom or 1 }}"
-                             style="--avatar-size:36px;">
-                      {% else %}
-                        <div class="avatar placeholder" style="--avatar-size:36px;">
-                          <i class="fas fa-paw"></i>
-                        </div>
-                      {% endif %}
-                      <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <span class="animal-name fw-semibold">{{ a.name }}</span>
-                        {% if a.falecido_em %}
-                          <span class="badge bg-secondary-subtle text-secondary border" title="Animal marcado como falecido">
-                            <i class="bi bi-heartbreak me-1"></i>Falecido
-                          </span>
-                        {% endif %}
-                      </div>
-                    </div>
-                  </td>
-                  <td class="animal-species">
-                    <span class="badge bg-light text-dark border me-2">{{ a.species }}</span>
-                    <span class="text-muted">{{ a.breed }}</span>
-                  </td>
-                  <td class="animal-sex">
-                    <span class="badge {% if a.sex == 'Fêmea' %}bg-pink{% elif a.sex == 'Macho' %}bg-info-subtle text-info{% else %}bg-light text-dark border{% endif %}">
-                      {{ a.sex or '—' }}
-                    </span>
-                  </td>
-                  <td class="text-end">
-                    <div class="d-flex gap-2 justify-content-end flex-wrap">
-                      {% if can_consult|default(False) %}
-                      <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="btn btn-outline-success btn-sm">
-                        <i class="fas fa-stethoscope me-1" aria-hidden="true"></i> Consulta
-                      </a>
-                      {% endif %}
-                      <a href="{{ url_for('ficha_animal', animal_id=a.id) }}" class="btn btn-outline-info btn-sm">
-                        <i class="fas fa-file-lines me-1" aria-hidden="true"></i> Ficha
-                      </a>
-                      <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
-                        <i class="fas fa-pen" aria-hidden="true"></i> Editar
-                      </button>
-                      <form action="{{ url_for('deletar_animal', animal_id=a.id) }}"
-                            method="POST"
-                            class="js-animal-delete-form d-inline"
-                            data-sync
-                            data-confirm="Tem certeza que deseja remover este animal?"
-                            data-animal-id="{{ a.id }}"
-                            data-animal-name="{{ a.name }}"
-                            data-animal-species="{{ a.species }}"
-                            data-animal-breed="{{ a.breed }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Excluir {{ a.name }}" title="Excluir {{ a.name }}">
-                          <i class="fas fa-trash" aria-hidden="true"></i>
-                        </button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-                {% endfor %}
-                {% if active_animals|length == 0 %}
-                <tr data-empty-state>
-                  <td colspan="4" class="text-muted text-center py-4">Nenhum animal cadastrado.</td>
-                </tr>
-                {% endif %}
-              </tbody>
-            </table>
-          </div>
-
-          {% if removed_animals %}
-          <div class="removed-animals mt-3">
-            <button class="btn btn-link text-muted p-0" onclick="document.getElementById('removidos-wrapper').classList.toggle('d-none')">
-              Mostrar/Esconder animais removidos
-            </button>
-            <div id="removidos-wrapper" class="d-none mt-2">
-              <div class="border rounded p-3 bg-light-subtle">
-                <h6 class="text-danger d-flex align-items-center gap-2 mb-3"><i class="fas fa-box-archive"></i> Animais Removidos</h6>
-                <ul class="list-group list-group-flush">
-                  {% for r in removed_animals %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center" data-animal-id="{{ r.id }}">
-                    <span>
-                      <strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}
-                      <span class="badge bg-danger-subtle text-danger ms-2 align-middle" title="Remoção concluída."><i class="fas fa-trash-alt me-1"></i>Excluído</span>
-                    </span>
-                    <form action="{{ url_for('deletar_animal', animal_id=r.id) }}"
-                          method="POST"
-                          class="js-animal-delete-form d-inline"
-                          data-sync
-                          data-confirm="Excluir permanentemente {{ r.name }}?"
-                          data-animal-id="{{ r.id }}"
-                          data-animal-name="{{ r.name }}"
-                          data-animal-species="{{ r.species }}"
-                          data-animal-breed="{{ r.breed }}"
-                          data-removed-item="true">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
-                    </form>
-                  </li>
-                  {% endfor %}
-                </ul>
-              </div>
-            </div>
+            <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary mt-2">Editar especialidades</a>
           </div>
           {% endif %}
+
+          {% include "partials/endereco_form.html" with context %}
+
+          <div class="col-12">
+            <h3 class="tutor-form-section__title mt-2">Observações</h3>
+            <label for="observacoes" class="form-label small text-muted mb-1">
+              Anotações da clínica sobre este tutor
+            </label>
+            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                      placeholder="Ex.: endereços anteriores, preferências de contato, observações da equipe."
+                      data-autogrow>{{ tutor.observacoes or '' }}</textarea>
+            <div class="form-text">
+              Quando o tutor tem mais de um endereço, o mais recente fica no campo acima
+              e os anteriores são registrados aqui automaticamente.
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
+              <button class="btn btn-primary px-4" data-loading-text="Salvando..." data-success-text="Alterações salvas!">
+                <i class="fas fa-save me-2" aria-hidden="true"></i>Salvar alterações
+              </button>
+            </div>
+            <div class="alert alert-success mt-3 d-none form-status-message" role="alert" aria-live="polite"></div>
+          </div>
         </div>
+      </form>
+
+      <div class="tutor-perigo">
+        <div>
+          <h3 class="tutor-perigo__titulo">Excluir tutor</h3>
+          <p class="tutor-perigo__texto">Apaga o cadastro de {{ primeiro_nome }} e todos os dados ligados a ele. Não dá para desfazer.</p>
+        </div>
+        <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
+              onsubmit="return confirm('Excluir este tutor e todos os dados dele permanentemente? Não dá para desfazer.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger rounded-pill px-3">
+            <i class="fas fa-trash me-1" aria-hidden="true"></i> Excluir tutor
+          </button>
+        </form>
       </div>
     </div>
   </div>
 </div>
 
-  <!-- =========================  MODAIS DE EDIÇÃO  ========================= -->
-{% for a in animais %}
-<div class="modal fade" id="modalEditarAnimal{{ a.id }}" tabindex="-1" aria-hidden="true">
-<div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+{# ===================== Modais: editar animal ===================== #}
+{% for a in ativos %}
+<div class="modal fade tutor-modal" id="modalEditarAnimal{{ a.id }}" tabindex="-1" aria-labelledby="modalEditarAnimal{{ a.id }}-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
-      <form id="animal-form-{{ a.id }}" action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data" data-sync class="animal-update-form" data-animal-id="{{ a.id }}">
+      <form id="animal-form-{{ a.id }}" action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST"
+            enctype="multipart/form-data" class="tutor-animal-form" novalidate
+            data-animal-form="editar" data-animal-id="{{ a.id }}">
         {{ animal_forms[a.id].hidden_tag() }}
         <div class="modal-header">
-          <h5 class="modal-title">✏️ Editar {{ a.name }}</h5>
+          <div>
+            <p class="tutor-modal__eyebrow">Editar animal</p>
+            <h2 class="modal-title" id="modalEditarAnimal{{ a.id }}-titulo" data-modal-nome>{{ (a.name or '')|trim or 'Sem nome' }}</h2>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
-          <div class="row g-3">
-
-            <div class="col-12 text-center">
-              {{ photo_cropper(animal_forms[a.id].image, animal_forms[a.id].photo_rotation, animal_forms[a.id].photo_zoom, animal_forms[a.id].photo_offset_x, animal_forms[a.id].photo_offset_y, a.image, 150, 'animal-image-' ~ a.id, 'animal') }}
-            </div>
-
-            <div class="col-md-6">
-              <label class="form-label">Nome</label>
-              <input name="name" class="form-control" value="{{ a.name or '' }}" required>
-            </div>
-
-
-          <div class="col-md-3">
-            <label class="form-label">Espécie</label>
-            <select name="species_id" id="species-select-{{ a.id }}" class="form-select" required onchange="updateBreedOptions('{{ a.id }}')">
-              <option value="">Selecione</option>
-              {% for sp in species_list %}
-                <option value="{{ sp.id }}" {% if a.species and a.species.id == sp.id %}selected{% endif %}>{{ sp.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="col-md-3">
-            <label class="form-label">Raça</label>
-            <select name="breed_id" id="breed-select-{{ a.id }}" class="form-select">
-              <option value="">Selecione</option>
-              {% if a.breed %}
-                <option value="{{ a.breed.id }}" selected>{{ a.breed.name }}</option>
-              {% endif %}
-            </select>
-          </div>
-
-
-
-
-            <div class="col-md-3">
-              <label class="form-label">Sexo</label>
-              <select name="sex" class="form-select">
-                <option value="">—</option>
-                <option value="-" {% if a.sex == '-' %}selected{% endif %}>-</option>
-                <option value="Macho" {% if a.sex == 'Macho' %}selected{% endif %}>Macho</option>
-                <option value="Fêmea" {% if a.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
-              </select>
-            </div>
-            <div class="col-12">
-              {% set prefixo = 'animal_edit_' ~ a.id %}
-              {% set nome_data = 'date_of_birth' %}
-              {% set nome_idade = 'age' %}
-              {% set nome_unidade = 'age_unit' %}
-              {% set valor_data = animal_forms[a.id].date_of_birth.data.strftime('%d/%m/%Y') if animal_forms[a.id].date_of_birth.data else '' %}
-              {% set valor_data_iso = animal_forms[a.id].date_of_birth.data.strftime('%Y-%m-%d') if animal_forms[a.id].date_of_birth.data else '' %}
-              {% set valor_idade = animal_forms[a.id].age.data %}
-              {% set valor_unidade = animal_forms[a.id].age_unit.data %}
-              {% include 'components/campo_data_idade.html' %}
-            </div>
-
-            <div class="col-md-3">
-              <label class="form-label">Microchip</label>
-              <input name="microchip_number" class="form-control" value="{{ a.microchip_number or '' }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Peso (kg)</label>
-              <input name="peso" type="number" step="0.01" class="form-control" value="{{ '' if a.peso is none else a.peso }}">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Plano de Saúde</label>
-              <input name="health_plan" class="form-control" value="{{ a.health_plan or '' }}">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Descrição</label>
-              <textarea name="description" class="form-control">{{ a.description or '' }}</textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Castrado?</label>
-              <select name="neutered" class="form-select">
-                <option value="">—</option>
-                <option value="1" {% if a.neutered %}selected{% endif %}>Sim</option>
-                <option value="0" {% if a.neutered == False %}selected{% endif %}>Não</option>
-              </select>
-            </div>
-          </div>
+          <div class="tutor-form-alert d-none" role="alert" data-form-alert></div>
+          {% with animal=a, form_obj=animal_forms[a.id], prefixo='animal_edit_' ~ a.id, cropper_id='animal-image-' ~ a.id %}
+            {% include 'animais/_tutor_animal_campos.html' %}
+          {% endwith %}
         </div>
-        <div class="modal-footer d-flex justify-content-between">
-          <button type="button" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm" data-bs-dismiss="modal">
-            ❌ Cancelar
-          </button>
-          <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">
-            💾 Salvar Alterações
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal" data-cancelar>Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-save-button>
+            <i class="fa-solid fa-check me-1" aria-hidden="true"></i> Salvar alterações
           </button>
         </div>
       </form>
@@ -468,106 +335,50 @@
 </div>
 {% endfor %}
 
-
-
-
-
-
-
-<!-- =========================  MODAL: NOVO ANIMAL  ========================= -->
-<div class="modal fade" id="modalNovoAnimal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+{# ===================== Modal: novo animal ===================== #}
+<div class="modal fade tutor-modal" id="modalNovoAnimal" tabindex="-1" aria-labelledby="modalNovoAnimal-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">➕ Novo Animal para {{ tutor.name }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-      </div>
-      <form id="new-animal-form" action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data" data-sync>
+      <form id="new-animal-form" action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data"
+            class="tutor-animal-form" novalidate data-animal-form="novo">
         {{ new_animal_form.hidden_tag() }}
+        <input type="hidden" name="tutor_id" value="{{ tutor.id }}">
+        <input type="hidden" name="sem_lista" value="1">
+        <input type="hidden" name="confirmar_duplicado" value="" data-confirmar-duplicado>
+        {# Um id por animal: o mesmo envio repetido (a conexão caiu depois de
+           salvar) é reconhecido pelo servidor e não duplica o cadastro. #}
+        <input type="hidden" name="envio_id" value="" data-envio-id>
+        <div class="modal-header">
+          <div>
+            <p class="tutor-modal__eyebrow">Novo animal</p>
+            <h2 class="modal-title" id="modalNovoAnimal-titulo">Animal de {{ primeiro_nome }}</h2>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
         <div class="modal-body">
-          <input type="hidden" name="tutor_id" value="{{ tutor.id }}">
-
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label">Nome</label>
-              <input name="name" class="form-control" required>
-            </div>
-
-            <div class="col-md-3">
-              <label class="form-label">Espécie</label>
-              <select name="species_id" id="species-select" class="form-select" required onchange="updateBreedOptions()">
-                <option value="">Selecione</option>
-                {% for sp in species_list %}
-                  <option value="{{ sp.id }}">{{ sp.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="col-md-3">
-              <label class="form-label">Raça</label>
-              <select name="breed_id" id="breed-select" class="form-select">
-                <option value="">Selecione</option>
-              </select>
-            </div>
-
-
-
-            <div class="col-md-3">
-              <label class="form-label">Sexo</label>
-              <select name="sex" class="form-select">
-                <option value="">—</option>
-                <option value="-">-</option>
-                <option value="Macho">Macho</option>
-                <option value="Fêmea">Fêmea</option>
-              </select>
-            </div>
-            <div class="col-12">
-              {% set prefixo = 'novo_animal' %}
-              {% set nome_data = 'date_of_birth' %}
-              {% set nome_idade = 'age' %}
-              {% set nome_unidade = 'age_unit' %}
-              {% set valor_data = new_animal_form.date_of_birth.data.strftime('%d/%m/%Y') if new_animal_form.date_of_birth.data else '' %}
-              {% set valor_data_iso = new_animal_form.date_of_birth.data.strftime('%Y-%m-%d') if new_animal_form.date_of_birth.data else '' %}
-              {% set valor_idade = new_animal_form.age.data %}
-              {% set valor_unidade = new_animal_form.age_unit.data %}
-              {% include 'components/campo_data_idade.html' %}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Microchip</label>
-              <input name="microchip_number" class="form-control">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Peso (kg)</label>
-              <input name="peso" type="number" step="0.01" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Plano de Saúde</label>
-              <input name="health_plan" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Foto do Animal</label>
-              {{ photo_cropper(new_animal_form.image, new_animal_form.photo_rotation, new_animal_form.photo_zoom, new_animal_form.photo_offset_x, new_animal_form.photo_offset_y, '', 150, 'new-animal-image', 'animal') }}
-            </div>
-            <div class="col-12">
-              <label class="form-label">Descrição</label>
-              <textarea name="description" class="form-control" rows="2"></textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Castrado?</label>
-              <select name="neutered" class="form-select">
-                <option value="">—</option>
-                <option value="1">Sim</option>
-                <option value="0">Não</option>
-              </select>
+          <div class="tutor-novo-sucesso d-none" data-novo-sucesso tabindex="-1">
+            <span class="tutor-novo-sucesso__icone" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+            <p class="tutor-novo-sucesso__titulo" data-novo-sucesso-titulo>Animal cadastrado!</p>
+            <p class="tutor-novo-sucesso__texto">Já aparece na lista. Tem outro animal de {{ primeiro_nome }} para cadastrar?</p>
+            <ul class="tutor-novo-sucesso__lista" data-novo-sucesso-lista role="list"></ul>
+            <div class="tutor-novo-sucesso__acoes">
+              <button type="button" class="btn btn-primary rounded-pill" data-cadastrar-outro>
+                <i class="fa-solid fa-plus me-1" aria-hidden="true"></i> Cadastrar outro animal
+              </button>
+              <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Concluir</button>
             </div>
           </div>
+          <div data-novo-campos>
+            <div class="tutor-form-alert d-none" role="alert" data-form-alert></div>
+            {% with animal=None, form_obj=new_animal_form, prefixo='novo_animal', cropper_id='new-animal-image' %}
+              {% include 'animais/_tutor_animal_campos.html' %}
+            {% endwith %}
+          </div>
         </div>
-        <div class="modal-footer d-flex justify-content-between">
-          <button type="button" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm" data-bs-dismiss="modal">
-            ❌ Cancelar
-          </button>
-          <button type="submit" class="btn btn-success rounded-pill px-4 shadow-sm">
-            💾 Salvar Animal
+        <div class="modal-footer" data-novo-rodape>
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal" data-cancelar>Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-save-button>
+            <i class="fa-solid fa-check me-1" aria-hidden="true"></i> Salvar animal
           </button>
         </div>
       </form>
@@ -575,58 +386,65 @@
   </div>
 </div>
 
-<!-- Flatpickr CSS e JS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
+{# ===================== Modal: confirmar remoção ===================== #}
+<div class="modal fade tutor-modal tutor-modal--confirmar" id="modalRemoverAnimal" tabindex="-1" aria-labelledby="modalRemoverAnimal-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <span class="tutor-confirmar__icone" aria-hidden="true"><i class="fa-solid fa-trash"></i></span>
+        <h2 class="tutor-confirmar__titulo" id="modalRemoverAnimal-titulo">Remover <span data-remover-nome>este animal</span>?</h2>
+        <p class="tutor-confirmar__texto">O animal sai da lista, mas consultas, vacinas e exames ficam guardados. Dá para restaurar depois em “Removidos”.</p>
+        <div class="tutor-form-alert d-none text-start" role="alert" data-form-alert></div>
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-danger rounded-pill" data-confirmar-remocao>Remover</button>
+          <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Flatpickr local (sem depender de CDN) -->
+<script src="{{ url_for('static', filename='vendor/flatpickr/flatpickr.min.js', v='4.6.13') }}"></script>
+<script src="{{ url_for('static', filename='vendor/flatpickr/pt.js', v='4.6.13') }}"></script>
+<script src="{{ url_for('static', filename='vendor/inputmask/inputmask.min.js', v='5.0.8') }}"></script>
 <script src="{{ url_for('static', filename='js/date_mask.js') }}"></script>
 
-
-
-
 <script>
-  const breedMap = {{ breed_map | tojson }};
+  window.TUTOR_BREED_MAP = {{ breed_map | tojson }};
 
-  function updateBreedOptions(animalId = null) {
-    const speciesSelect = animalId
-      ? document.getElementById(`species-select-${animalId}`)
-      : document.getElementById("species-select");
+  // ========== TUTOR: Data de nascimento <-> idade ==========
+  (function () {
+    const tutorDob = document.getElementById("tutor_dob");
+    const tutorAge = document.getElementById("tutor_age");
+    if (!tutorDob || !tutorAge || typeof flatpickr !== 'function') return;
 
-    const breedSelect = animalId
-      ? document.getElementById(`breed-select-${animalId}`)
-      : document.getElementById("breed-select");
+    function updateAgeFromDob(targetInput, dob) {
+      if (!dob) {
+        targetInput.value = "";
+        return;
+      }
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      targetInput.value = Math.max(age, 0);
+    }
 
-    if (!speciesSelect || !breedSelect) return;
+    function getDobFromAge(age) {
+      const today = new Date();
+      return new Date(today.getFullYear() - age, today.getMonth(), today.getDate());
+    }
 
-    const selectedSpeciesId = speciesSelect.value.toString();
-    const breeds = breedMap[selectedSpeciesId] || [];
-
-    // Limpa opções anteriores
-    breedSelect.innerHTML = '<option value="">Selecione</option>';
-
-    // Adiciona raças da espécie
-    breeds.forEach(b => {
-      const option = document.createElement('option');
-      option.value = b.id;
-      option.textContent = b.name;
-      breedSelect.appendChild(option);
-    });
-  }
-
-
-
-  // ========== TUTOR: Date <-> Age ==========
-  const tutorDob = document.getElementById("tutor_dob");
-  const tutorAge = document.getElementById("tutor_age");
-
-  if (tutorDob && tutorAge) {
     const tutorPicker = flatpickr(tutorDob, {
       locale: "pt",
       dateFormat: "Y-m-d",
       altInput: true,
       altFormat: "d/m/Y",
       allowInput: true,
+      maxDate: "today",
       onReady(selectedDates, dateStr, instance) {
         if (window.DateMaskUtils) {
           window.DateMaskUtils.syncMaskedInput(instance, {
@@ -634,12 +452,7 @@
             onClear: () => updateAgeFromDob(tutorAge, null),
           });
         }
-
-        if (selectedDates.length) {
-          updateAgeFromDob(tutorAge, selectedDates[0]);
-        } else {
-          updateAgeFromDob(tutorAge, null);
-        }
+        updateAgeFromDob(tutorAge, selectedDates.length ? selectedDates[0] : null);
       },
       onChange(selectedDates) {
         updateAgeFromDob(tutorAge, selectedDates[0] || null);
@@ -655,130 +468,13 @@
         }
         return;
       }
-
-      const estimatedDOB = getDobFromAge(age);
-      tutorPicker.setDate(estimatedDOB, true);
+      tutorPicker.setDate(getDobFromAge(age), true);
     });
-  }
-
-  // ========== Auxiliares ==========
-  function updateAgeFromDob(targetInput, dob) {
-    if (!dob) {
-      targetInput.value = "";
-      return;
-    }
-
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-      age--;
-    }
-    targetInput.value = Math.max(age, 0);
-  }
-
-  function getDobFromAge(age) {
-    const today = new Date();
-    return new Date(today.getFullYear() - age, today.getMonth(), today.getDate());
-  }
-
-</script>
-
-<script>
-document.addEventListener('form-sync-success', function(ev) {
-  const {form, data, response} = ev.detail || {};
-  if (!form) return;
-
-  const hadError = (data && data.success === false) || (response && !response.ok);
-  if (hadError) {
-    return;
-  }
-
-  if (form.id === 'tutor-form') {
-    ev.preventDefault();
-    const successMessage = (data && data.message) || 'Dados do tutor atualizados com sucesso!';
-    if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
-      window.FormFeedback.showStatus(form, successMessage, 'success');
-    } else {
-      const statusEl = form.querySelector('.form-status-message');
-      if (statusEl) {
-        statusEl.textContent = successMessage;
-        statusEl.classList.remove('d-none');
-        statusEl.classList.add('alert', 'alert-success');
-      }
-    }
-
-    const tutorPayload = data && data.tutor;
-    if (tutorPayload) {
-      const preview = document.getElementById('preview-tutor');
-      if (preview) {
-        if (tutorPayload.profile_photo) {
-          preview.src = typeof cacheBust === 'function'
-            ? cacheBust(tutorPayload.profile_photo)
-            : tutorPayload.profile_photo;
-          preview.classList.remove('d-none');
-        }
-        if (typeof tutorPayload.photo_offset_x !== 'undefined') preview.dataset.offsetX = tutorPayload.photo_offset_x;
-        if (typeof tutorPayload.photo_offset_y !== 'undefined') preview.dataset.offsetY = tutorPayload.photo_offset_y;
-        if (typeof tutorPayload.photo_rotation !== 'undefined') preview.dataset.rotation = tutorPayload.photo_rotation;
-        if (typeof tutorPayload.photo_zoom !== 'undefined') preview.dataset.zoom = tutorPayload.photo_zoom;
-        if (typeof updateAvatarTransform === 'function') {
-          const offsetX = parseFloat(preview.dataset.offsetX) || 0;
-          const offsetY = parseFloat(preview.dataset.offsetY) || 0;
-          const rotation = parseFloat(preview.dataset.rotation) || 0;
-          const zoom = parseFloat(preview.dataset.zoom) || 1;
-          updateAvatarTransform(preview, offsetX, offsetY, rotation, zoom);
-        }
-      }
-
-      const cropperPreview = document.querySelector('#profile_photo-preview img');
-      if (cropperPreview && tutorPayload.profile_photo) {
-        cropperPreview.src = typeof cacheBust === 'function'
-          ? cacheBust(tutorPayload.profile_photo)
-          : tutorPayload.profile_photo;
-      }
-    }
-    if (data && data.tutor_name) {
-      const heading = document.getElementById('animais-heading');
-      if (heading) {
-        heading.textContent = `🐾 Animais de ${data.tutor_name.split(' ')[0]}`;
-      }
-    }
-  } else if (form.classList.contains('animal-update-form')) {
-    ev.preventDefault();
-    const id = form.dataset.animalId;
-    if (id) {
-      const row = document.getElementById(`animal-row-${id}`);
-      if (row) {
-        const nameCell = row.querySelector('.animal-name');
-        const speciesCell = row.querySelector('.animal-species');
-        const sexCell = row.querySelector('.animal-sex');
-        if (nameCell && data && data.animal_name) nameCell.textContent = data.animal_name;
-        if (speciesCell) {
-          const speciesSel = form.querySelector('select[name="species_id"]');
-          const breedSel = form.querySelector('select[name="breed_id"]');
-          const speciesText = speciesSel ? speciesSel.options[speciesSel.selectedIndex].textContent : '';
-          const breedText = breedSel ? breedSel.options[breedSel.selectedIndex].textContent : '';
-          speciesCell.textContent = `${speciesText} / ${breedText}`;
-        }
-        if (sexCell) {
-          const sexSel = form.querySelector('select[name="sex"]');
-          sexCell.textContent = sexSel ? (sexSel.value || '—') : '—';
-        }
-      }
-    }
-    if (typeof window.hideTutorDetailModal === 'function') {
-      window.hideTutorDetailModal(form.closest('.modal'));
-    } else {
-      const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
-      modal?.hide();
-    }
-  }
-});
+  })();
 </script>
 {% endblock %}
 
 {% block scripts %}
   {{ super() }}
-  <script src="{{ url_for('static', filename='js/tutor_detail.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/tutor_detail.js', v='20261027') }}"></script>
 {% endblock %}

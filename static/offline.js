@@ -1,6 +1,13 @@
 (function(){
   const KEY = 'offline-queue';
   const DEFAULT_FETCH_TIMEOUT = 10000;
+  // Formulário com foto: pela rede móvel do interior o upload passa fácil de
+  // 10 s. Abortar no meio fazia o servidor receber um corpo cortado (que
+  // chegava como formulário vazio e apagava o cadastro) e a tela dizer que
+  // falhou. A foto já sai reduzida (js/photo_prepare.js); este limite é a
+  // folga para conexões ruins.
+  const UPLOAD_FETCH_TIMEOUT = 120000;
+  const UPLOAD_TIMEOUT_MESSAGE = 'O envio da foto demorou demais e foi interrompido. Confira a internet e tente de novo.';
   const SENSITIVE_FIELD_RE = /(^|[_-])(csrf|password|token|prescricao|consulta|exame|diagnost|conduta|historico|prontuario|laudo|medic|health)([_-]|$)/i;
 
   function containsSensitiveData(bodyData){
@@ -62,10 +69,33 @@
     return Number.isFinite(numeric) ? numeric : undefined;
   }
 
+  function formHasFile(form){
+    if(window.PetPhoto && typeof window.PetPhoto.formHasFile === 'function'){
+      return window.PetPhoto.formHasFile(form);
+    }
+    if(!form || !form.querySelectorAll) return false;
+    return Array.prototype.some.call(form.querySelectorAll('input[type="file"]'), input =>
+      !input.disabled && input.files && input.files.length > 0 && input.files[0].size > 0);
+  }
+
+  function waitForPreparedPhotos(form){
+    if(window.PetPhoto && typeof window.PetPhoto.waitForm === 'function'){
+      return window.PetPhoto.waitForm(form, 8000).catch(() => {});
+    }
+    return Promise.resolve();
+  }
+
   function resolveFetchTimeout(form){
     if(!form) return DEFAULT_FETCH_TIMEOUT;
     const value = parseTimeout(form.dataset.fetchTimeout || form.dataset.requestTimeout || form.dataset.syncTimeout);
-    return typeof value !== 'undefined' ? value : DEFAULT_FETCH_TIMEOUT;
+    const hasFile = formHasFile(form);
+    if(typeof value !== 'undefined'){
+      // Um limite configurado no formulário nunca fica abaixo do de upload
+      // quando há foto para subir (0 = sem limite, continua valendo).
+      if(hasFile && value > 0 && value < UPLOAD_FETCH_TIMEOUT) return UPLOAD_FETCH_TIMEOUT;
+      return value;
+    }
+    return hasFile ? UPLOAD_FETCH_TIMEOUT : DEFAULT_FETCH_TIMEOUT;
   }
 
   function cacheBust(url){
@@ -337,7 +367,10 @@
 
     ev.preventDefault();
     form.dataset.syncPending = 'true';
+    const sendsFile = formHasFile(form);
     const performSync = async () => {
+      // A foto pode ainda estar sendo reduzida (js/photo_prepare.js).
+      await waitForPreparedPhotos(form);
       const data = new FormData(form);
       const fetchTimeout = resolveFetchTimeout(form);
       let resp = null;
@@ -350,7 +383,16 @@
         headers['X-CSRFToken'] = csrfTokenInput.value;
       }
 
-      const result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: headers, body: data, timeout: fetchTimeout});
+      let result;
+      try {
+        result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: headers, body: data, timeout: fetchTimeout});
+      } catch (error) {
+        if (sendsFile && error && error.name === 'FetchTimeoutError') {
+          showFormMessage(form, UPLOAD_TIMEOUT_MESSAGE, 'danger');
+          return { success: false, message: UPLOAD_TIMEOUT_MESSAGE, level: 'danger', offlineQueued: false };
+        }
+        throw error;
+      }
       resp = result ? result.response : null;
       offlineQueued = Boolean(result && result.queued);
 
@@ -426,7 +468,16 @@
     const errorMessage = 'Não foi possível enviar o formulário. Tente novamente.';
     try {
       if (feedback && typeof feedback.withSavingState === 'function' && submitButton) {
-        await feedback.withSavingState(submitButton, performSync, { form, errorMessage });
+        const savingOptions = { form, errorMessage };
+        if (sendsFile) {
+          // O botão acompanha o upload inteiro em vez de voltar aos 10 s com
+          // "Tempo excedido" enquanto o envio ainda está em andamento.
+          const uploadTimeout = resolveFetchTimeout(form);
+          savingOptions.loadingTimeout = uploadTimeout > 0 ? uploadTimeout + 5000 : 0;
+          savingOptions.allowLongTimeout = true;
+          if (!submitButton.dataset.loadingText) savingOptions.loadingText = 'Enviando foto…';
+        }
+        await feedback.withSavingState(submitButton, performSync, savingOptions);
       } else {
         setFeedbackLoading(submitButton, { form });
         const result = await performSync();
