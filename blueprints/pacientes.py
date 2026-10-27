@@ -1614,9 +1614,11 @@ def _pode_unificar_tutores(origem: User, destino: User) -> bool:
 
     Mesma regra de excluir tutor, porque o cadastro de origem é apagado ao
     final: veterinário, e só o admin ou quem cadastrou a origem. O destino
-    precisa estar visível para quem pede. Contas de equipe (admin,
-    veterinário, colaborador) e a própria conta de quem pede ficam de fora:
-    a unificação é para o mesmo tutor cadastrado duas vezes.
+    precisa estar visível para quem pede ou ser uma conta que a própria
+    pessoa criou e que nenhuma clínica acompanha (o caso real: ela se
+    cadastrou com o e-mail certo). Contas de equipe (admin, veterinário,
+    colaborador, dono de clínica) e a própria conta de quem pede ficam de
+    fora: a unificação é para o mesmo tutor cadastrado duas vezes.
     """
     if origem is None or destino is None or origem.id == destino.id:
         return False
@@ -1631,6 +1633,12 @@ def _pode_unificar_tutores(origem: User, destino: User) -> bool:
             return False
         if conta.worker or conta.veterinario is not None:
             return False
+        if getattr(conta, 'clinicas', None):
+            return False
+    return _destino_visivel(destino) or _conta_propria_sem_clinica(destino)
+
+
+def _destino_visivel(destino: User) -> bool:
     try:
         get_user_or_404(destino.id)
     except Exception:
@@ -1638,16 +1646,30 @@ def _pode_unificar_tutores(origem: User, destino: User) -> bool:
     return True
 
 
+def _conta_propria_sem_clinica(conta: User) -> bool:
+    """Conta criada pela própria pessoa, sem clínica nem quem a cadastrou.
+
+    Nenhuma clínica enxerga essa conta, por isso ela não passaria pela regra
+    de visibilidade; mas é justamente onde a pessoa entra com o e-mail certo.
+    """
+    return conta.clinica_id is None and conta.added_by_id is None
+
+
 def _oferta_unificacao(origem: User, destino: User):
     """Dados para a tela oferecer a unificação no lugar do simples erro."""
     if not _pode_unificar_tutores(origem, destino):
         return None
+    visivel = _destino_visivel(destino)
     return {
         'source_id': origem.id,
         'target_id': destino.id,
-        'target_name': destino.name,
+        # Conta que a clínica ainda não enxerga: nada dela é exposto antes da
+        # unificação, nem o nome nem quantos animais tem.
+        'target_name': destino.name if visivel else None,
+        'target_visible': visivel,
         'source_animals': Animal.query.filter_by(user_id=origem.id).count(),
-        'target_animals': Animal.query.filter_by(user_id=destino.id).count(),
+        'target_animals': Animal.query.filter_by(user_id=destino.id).count() if visivel else None,
+        'email': (destino.email or '').strip().lower(),
         'url': url_for('unificar_tutor', source_id=origem.id),
     }
 
@@ -2022,6 +2044,12 @@ def unificar_tutor(source_id):
         return _responder('Cadastro de destino não encontrado.', 404, 'danger')
     if not _pode_unificar_tutores(origem, destino):
         return _responder('Você não tem permissão para unificar estes cadastros.', 403, 'danger')
+    if not _destino_visivel(destino):
+        # Conta que a clínica não enxerga: só quem digitou o e-mail dela na
+        # ficha chega aqui; o número do cadastro sozinho não basta.
+        email = (request.form.get('email') or '').strip().lower()
+        if not email or email != (destino.email or '').strip().lower():
+            return _responder('Você não tem permissão para unificar estes cadastros.', 403, 'danger')
 
     from services.tutor_merge import merge_accounts
 
