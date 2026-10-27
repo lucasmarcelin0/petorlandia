@@ -56,6 +56,18 @@ function initAnimalRecord() {
     );
   }
 
+  // Quadro de resumo: cada item abre a aba que tem os detalhes.
+  root.querySelectorAll('[data-abrir-aba]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const aba = document.getElementById(botao.dataset.abrirAba);
+      if (!aba || !window.bootstrap || !window.bootstrap.Tab) {
+        return;
+      }
+      window.bootstrap.Tab.getOrCreateInstance(aba).show();
+      aba.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
   const historyTab = document.getElementById('historico-tab');
   if (historyTab && historyUrl) {
     historyTab.addEventListener('shown.bs.tab', () => {
