@@ -281,6 +281,11 @@ def test_montagem_do_indice_e_uma_so_mesmo_com_varias_requisicoes_ao_mesmo_tempo
         time.sleep(0.4)                       # tempo para as outras threads chegarem
         return {k: deepcopy(v) for k, v in layers.items() if allowed or not v['clinical']}
     monkeypatch.setattr(editor, 'layers', slow_layers)
+    # Assinatura fixa: o SQLite em memória dos testes divide UMA conexão entre
+    # as threads e, de vez em quando (~1%), a consulta de uma delas falha e
+    # devolve None. Isso abre o caminho "banco indisponível" ao lado do normal
+    # e conta duas montagens. O que se testa aqui é a trava, não o banco.
+    monkeypatch.setattr(fast, '_signature', lambda: ())
     fast.reset()
     results = []
 

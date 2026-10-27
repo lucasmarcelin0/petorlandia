@@ -204,12 +204,21 @@ def test_confirmacao_renova_o_anuncio_por_um_mes(app, outbox):
         assert outbox[1]['subject'].startswith('Pirata ainda está para adoção?')
 
 
+def _meio_dia():
+    """Hoje ao meio-dia de Brasília.
+
+    O SQLite dos testes grava a hora de Brasília sem fuso e a lê como UTC:
+    entre 0h e 3h a data voltava um dia e o prazo exibido saía errado.
+    """
+    return now_in_brazil().replace(hour=12, minute=0, second=0, microsecond=0)
+
+
 def test_sem_email_o_prazo_conta_de_quando_o_popup_passou_a_perguntar(app, client, outbox):
     """Conta da campanha não recebe e-mail, mas tem o mesmo prazo de todo mundo."""
     with app.app_context():
         campanha = _user('Campanha', email='pmo-16999990001@petorlandia.local')
         animal = _animal(campanha, 'Lupita', days=50)
-        hoje = now_in_brazil()
+        hoje = _meio_dia()
         prazo = (hoje + timedelta(days=adocao_lembretes.EXPIRY_GRACE_DAYS)).strftime('%d/%m')
         owner_id, animal_id = campanha.id, animal.id
 
@@ -536,7 +545,7 @@ def test_popup_mostra_o_prazo_depois_da_pergunta(app, client, outbox):
     with app.app_context():
         owner = _user(phone='(16) 99999-0001')
         _animal(owner, 'Pirata', days=31)
-        hoje = now_in_brazil()
+        hoje = _meio_dia()
         adocao_lembretes.enviar_lembretes_adocao(hoje)
         prazo = (hoje + timedelta(days=adocao_lembretes.EXPIRY_GRACE_DAYS)).strftime('%d/%m')
         owner_id = owner.id
