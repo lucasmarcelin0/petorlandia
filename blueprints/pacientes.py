@@ -1,13 +1,13 @@
 """Views do domínio pacientes_routes (migrado do app.py)."""
 import qrcode
 from flask import Blueprint
-import os, re, secrets, unicodedata, uuid
+import math, os, re, secrets, unicodedata, uuid
 from urllib.parse import quote
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from extensions import csrf, db
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 from forms import AnimalForm, ConsultaPlanAuthorizationForm, EditProfileForm
 from helpers import has_professional_access
@@ -42,15 +42,24 @@ from models import (
     Veterinario,
 )
 from document_utils import (
+    format_phone_br,
     is_valid_cpf_length,
     is_valid_phone,
     normalize_cpf,
     normalize_phone,
+    phone_national_digits,
     same_cpf,
     same_phone,
 )
 from models.usuarios import build_placeholder_email, is_placeholder_email
 from services.animal_search import search_animals
+from services.photo_intake import (
+    PhotoIntakeError,
+    normalize_photo_upload,
+    normalized_filename,
+    rotate_photo,
+)
+from services.photo_storage import MENSAGEM_GENERICA as MENSAGEM_FOTO_NAO_GUARDADA, PhotoStorageError, store_photo
 from services.pet_growth import build_pet_opportunities
 from services.product_analytics import track_event
 from sqlalchemy import and_, func, or_
@@ -2305,25 +2314,148 @@ def update_tutor(user_id):
     return redirect(request.referrer or url_for('index'))
 
 
+def _contatos_do_tutor(tutor):
+    """Atalhos de contato da ficha do tutor: WhatsApp, ligação, mapa e e-mail.
+
+    Tudo calculado aqui (e não no template) para a tela nunca montar um link
+    quebrado: sem telefone brasileiro válido não há botão de WhatsApp, sem rua
+    não há mapa (o mapa só da cidade não ajuda a chegar na casa).
+    """
+    from template_filters import whatsapp_chat_url
+
+    bruto = (tutor.phone or '').strip()
+    nacional = phone_national_digits(bruto)
+    telefone = format_phone_br(bruto) if bruto else ''
+    whatsapp_url = whatsapp_chat_url(nacional) if nacional else None
+    if nacional:
+        ligar_url = f'tel:+55{nacional}'
+    else:
+        discavel = re.sub(r'[^\d+]', '', bruto)
+        ligar_url = f'tel:{discavel}' if len(re.sub(r'\D', '', discavel)) >= 8 else None
+
+    linha1 = linha2 = busca = ''
+    endereco = tutor.endereco
+    if endereco is not None and (endereco.rua or '').strip():
+        def _t(valor):
+            return (valor or '').strip()
+
+        rua_numero = ', '.join(p for p in (_t(endereco.rua), _t(endereco.numero)) if p)
+        linha1 = rua_numero
+        if _t(endereco.complemento):
+            linha1 = f'{linha1} – {_t(endereco.complemento)}'
+        cidade_uf = '/'.join(p for p in (_t(endereco.cidade), _t(endereco.estado)) if p)
+        linha2 = ' · '.join(p for p in (_t(endereco.bairro), cidade_uf, _t(endereco.cep)) if p)
+        busca = ', '.join(
+            p for p in (
+                rua_numero,
+                _t(endereco.bairro),
+                ' - '.join(p for p in (_t(endereco.cidade), _t(endereco.estado)) if p),
+                _t(endereco.cep),
+            ) if p
+        )
+    elif (tutor.address or '').strip():
+        linha1 = busca = tutor.address.strip()
+
+    mapa_url = f'https://www.google.com/maps/search/?api=1&query={quote(busca)}' if busca else None
+
+    email = (getattr(tutor, 'email_informado', None) or '').strip()
+    return {
+        'telefone': telefone,
+        'whatsapp_url': whatsapp_url,
+        'ligar_url': ligar_url,
+        'endereco_linha1': linha1,
+        'endereco_linha2': linha2,
+        'mapa_url': mapa_url,
+        'email': email,
+        'email_url': f'mailto:{email}' if email else None,
+    }
+
+
+def _idade_exibicao(animal):
+    """Idade atual a partir do nascimento; senão, o texto salvo no cadastro."""
+    nascimento = animal.date_of_birth
+    if nascimento:
+        delta = relativedelta(date.today(), nascimento)
+        if delta.years >= 1:
+            return f"{delta.years} {'ano' if delta.years == 1 else 'anos'}"
+        if delta.months >= 1:
+            return f"{delta.months} {'mês' if delta.months == 1 else 'meses'}"
+        return 'menos de 1 mês'
+    texto = (animal.age or '').strip()
+    return texto or None
+
+
+def _peso_exibicao(peso):
+    try:
+        valor = float(peso)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(valor) or valor <= 0:
+        return None
+    texto = f'{valor:.2f}' if valor < 1 else f'{valor:.1f}'
+    texto = texto.rstrip('0').rstrip('.')
+    return f"{texto.replace('.', ',')} kg"
+
+
+def _animais_da_ficha(tutor):
+    """Animais do tutor para a ficha: com nome primeiro, em ordem alfabética.
+
+    O ``ORDER BY name`` simples punha o cadastro sem nome no topo (SQLite) ou
+    no fim (Postgres) conforme o banco; aqui a ordem é a mesma em qualquer um.
+    """
+    return (
+        Animal.query.options(joinedload(Animal.species), joinedload(Animal.breed))
+        .filter_by(user_id=tutor.id)
+        .order_by(Animal.name.is_(None), func.lower(Animal.name), Animal.id)
+        .all()
+    )
+
+
+def _contexto_lista_animais(animais):
+    """Variáveis que a lista de animais da ficha usa (página e parcial)."""
+    return {
+        'animais': animais,
+        'detalhes_animais': {
+            a.id: {'idade': _idade_exibicao(a), 'peso': _peso_exibicao(a.peso)}
+            for a in animais
+        },
+        'can_consult': has_professional_access(current_user),
+    }
+
+
+def check_ficha_tutor_access():
+    """Quem abre a ficha do tutor: profissionais clínicos ou donos de casa de ração."""
+    is_store_owner = CasaDeRacao.query.filter_by(owner_id=current_user.id).first() is not None
+    return has_professional_access(current_user) or is_store_owner
+
+
+def check_animal_removal_permission(animal):
+    """Mesma regra de deletar_animal: admin, o próprio tutor ou quem cadastrou."""
+    return bool(
+        current_user.role == 'admin'
+        or animal.user_id == current_user.id
+        or animal.added_by_id == current_user.id
+    )
+
+
+def _chave_ordenacao_raca(opcao):
+    nome = unicodedata.normalize('NFKD', (opcao.get('name') or '').strip()).encode('ascii', 'ignore').decode()
+    return (nome.upper() != 'SRD', nome.lower())
+
+
 @bp.route('/ficha_tutor/<int:tutor_id>')
 @login_required
 def ficha_tutor(tutor_id):
     # Restrição de acesso — profissionais clínicos OU donos de casa de ração
-    is_store_owner = CasaDeRacao.query.filter_by(owner_id=current_user.id).first() is not None
-    if not has_professional_access(current_user) and not is_store_owner:
+    if not check_ficha_tutor_access():
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
-
-    can_consult = has_professional_access(current_user)
 
     # Dados do tutor
     tutor = get_user_or_404(tutor_id)
 
     # Lista de animais do tutor (com species e breed carregados)
-    animais = Animal.query.options(
-        joinedload(Animal.species),
-        joinedload(Animal.breed)
-    ).filter_by(user_id=tutor.id).order_by(Animal.name).all()
+    animais = _animais_da_ficha(tutor)
 
     # Ano atual
     current_year = datetime.now(BR_TZ).year
@@ -2361,19 +2493,224 @@ def ficha_tutor(tutor_id):
             if not any(opt['id'] == srd.id for opt in options):
                 options.append({'id': srd.id, 'name': srd.name})
 
+    # SRD primeiro e o resto em ordem alfabética: é o que mais se escolhe.
+    for options in breed_map.values():
+        options.sort(key=_chave_ordenacao_raca)
+
+    editar_id = request.args.get('editar', type=int)
+
     return render_template(
         'animais/tutor_detail.html',
         tutor=tutor,
         endereco=tutor.endereco,
-        animais=animais,
+        contatos=_contatos_do_tutor(tutor),
         current_year=current_year,
         species_list=species_list,
         breed_map=breed_map,
         tutor_form=tutor_form,
         animal_forms=animal_forms,
         new_animal_form=new_animal_form,
-        can_consult=can_consult,
+        editar_animal_id=editar_id if editar_id in animal_forms else None,
+        **_contexto_lista_animais(animais),
     )
+
+
+@bp.route('/ficha_tutor/<int:tutor_id>/animais')
+@login_required
+def ficha_tutor_animais(tutor_id):
+    """Só a lista de animais da ficha, para a tela se atualizar sem recarregar."""
+    if not check_ficha_tutor_access():
+        return jsonify(success=False, message='Apenas veterinários ou colaboradores podem acessar esta página.'), 403
+    tutor = get_user_or_404(tutor_id)
+    animais = _animais_da_ficha(tutor)
+    contexto = _contexto_lista_animais(animais)
+    html = render_template('animais/_tutor_animais_lista.html', tutor=tutor, **contexto)
+    response = jsonify(
+        success=True,
+        html=html,
+        ativos=sum(1 for a in animais if not a.removido_em),
+        removidos=sum(1 for a in animais if a.removido_em),
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@bp.route('/animal/<int:animal_id>/restaurar', methods=['POST'])
+@login_required
+def restaurar_animal(animal_id):
+    """Desfaz a remoção (que só marca ``removido_em``; o histórico ficou)."""
+    animal = get_animal_or_404(animal_id)
+    wants_json = _cliente_quer_json()
+    # Mesma regra de quem pode remover (deletar_animal).
+    if not check_animal_removal_permission(animal):
+        message = 'Você não tem permissão para restaurar este animal.'
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 403
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
+
+    nome = animal.name or 'Animal'
+    if animal.removido_em is None:
+        message = f'{nome} já está na lista de animais.'
+    else:
+        animal.removido_em = None
+        db.session.commit()
+        message = f'{nome} voltou para a lista de animais.'
+    if wants_json:
+        return jsonify(success=True, message=message, category='success', animal=_animal_payload(animal))
+    flash(message, 'success')
+    return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
+
+
+# ── Cadastro de animal: entrada tolerante e foto padronizada ──────────────────
+#
+# Usado por update_animal e novo_animal. O celular manda peso com vírgula,
+# selects com opção "—" vazia e fotos HEIC de 12 MP; nada disso pode virar
+# erro 500 nem apagar o que já estava salvo.
+
+PESO_ANIMAL_MAXIMO_KG = 2000  # equinos registrados (selo da Prefeitura) passam de 500 kg
+
+
+def _cliente_quer_json():
+    return (
+        'application/json' in (request.headers.get('Accept') or '')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
+
+
+def _peso_do_formulario(valor):
+    """'12,5', '12.5' ou ' 12 ' -> 12.5; vazio -> None; inválido -> ValueError."""
+    texto = (valor or '').strip().replace(' ', '').replace(',', '.')
+    if not texto:
+        return None
+    peso = float(texto)
+    if not math.isfinite(peso) or peso <= 0 or peso > PESO_ANIMAL_MAXIMO_KG:
+        raise ValueError(texto)
+    return round(peso, 3)
+
+
+def _castrado_do_formulario(valor):
+    """'1' -> True, '0' -> False, '' (opção "—") -> None (não informado)."""
+    if valor == '1':
+        return True
+    if valor == '0':
+        return False
+    return None
+
+
+def _texto_opcional(valor):
+    texto = (valor or '').strip()
+    return texto or None
+
+
+def _guardar_foto_animal(arquivo, rotacao=0):
+    """Padroniza a foto (HEIC, tamanho), grava o giro nos pixels e guarda.
+
+    Devolve ``(url, giro_aplicado)``. Levanta ``PhotoIntakeError`` (foto
+    ilegível) ou ``PhotoStorageError`` (armazenamento indisponível), ambos com
+    mensagem pronta para a tela. Nunca devolve ``None``: antes, uma falha no S3
+    virava ``animal.image = None`` e a foto anterior sumia.
+    """
+    foto = normalize_photo_upload(arquivo.read())
+    girada = rotate_photo(foto, rotacao)
+    nome = f"{uuid.uuid4().hex}_{secure_filename(normalized_filename(arquivo.filename or 'foto', girada))}"
+    if not (current_app.config.get('ALLOW_LOCAL_UPLOAD_FALLBACK') or current_app.config.get('TESTING')):
+        url = store_photo(girada.stream, nome, folder='animals', uploader=upload_to_s3)
+        return url, girada is not foto
+    # Desenvolvimento/testes: o fallback local (static/uploads) continua
+    # valendo, como antes. Em produção store_photo recusa URL que não seja
+    # http (arquivo local some no próximo restart do Heroku).
+    try:
+        url = upload_to_s3(girada.stream, nome, folder='animals')
+    except Exception as exc:  # noqa: BLE001 - vira mensagem para a tela
+        raise PhotoStorageError(
+            code='desconhecido',
+            user_message=MENSAGEM_FOTO_NAO_GUARDADA,
+            retryable=True,
+            detail=str(exc),
+        ) from exc
+    if not url:
+        raise PhotoStorageError(
+            code='sem-bucket',
+            user_message=MENSAGEM_FOTO_NAO_GUARDADA,
+            retryable=True,
+            detail='upload_to_s3 devolveu None',
+        )
+    return url, girada is not foto
+
+
+ENVIOS_ANIMAL_NA_SESSAO = 'animais_por_envio'
+
+
+def _animal_do_envio(envio_id, tutor_id):
+    """Animal já criado por este mesmo envio (reenvio após a resposta se perder).
+
+    O modal da ficha gera um ``envio_id`` por animal. Se a conexão cai depois
+    que o servidor salvou, a pessoa toca em "Salvar" de novo com o mesmo id:
+    devolvemos o animal que já existe em vez de duplicar ou acusar erro. A
+    sessão fica no servidor (Redis/arquivo), então o registro sobrevive mesmo
+    quando a resposta não chegou ao celular.
+    """
+    if not envio_id:
+        return None
+    animal_id = (session.get(ENVIOS_ANIMAL_NA_SESSAO) or {}).get(envio_id)
+    if not animal_id:
+        return None
+    animal = db.session.get(Animal, animal_id)
+    if animal is None or animal.user_id != tutor_id or animal.removido_em:
+        return None
+    return animal
+
+
+def _lembrar_envio(envio_id, animal_id):
+    if not envio_id:
+        return
+    recentes = dict(session.get(ENVIOS_ANIMAL_NA_SESSAO) or {})
+    recentes[envio_id] = animal_id
+    session[ENVIOS_ANIMAL_NA_SESSAO] = dict(list(recentes.items())[-20:])
+
+
+def _foto_enviada():
+    arquivo = request.files.get('image')
+    if arquivo is not None and (arquivo.filename or '').strip():
+        return arquivo
+    return None
+
+
+def _resposta_erro_foto(exc, wants_json):
+    if isinstance(exc, PhotoStorageError):
+        current_app.logger.error("Foto de animal não guardada (code=%s): %s", exc.code, exc.detail or exc.user_message)
+        message, status = exc.user_message, 502
+    else:
+        message, status = exc.user_message, getattr(exc, 'status_code', 400)
+    if wants_json:
+        return jsonify(success=False, message=message, category='danger', field='image'), status
+    flash(message, 'danger')
+    return redirect(request.referrer or url_for('index'))
+
+
+def _animal_payload(animal):
+    """Dados do animal para a tela atualizar o card sem recarregar."""
+    return {
+        'id': animal.id,
+        'name': animal.name,
+        'species': animal.species.name if animal.species else None,
+        'breed': animal.breed.name if animal.breed else None,
+        'sex': animal.sex,
+        'age': animal.age,
+        'neutered': animal.neutered,
+        'peso': animal.peso,
+        'image': animal.image,
+        'photo_offset_x': animal.photo_offset_x,
+        'photo_offset_y': animal.photo_offset_y,
+        'photo_rotation': animal.photo_rotation,
+        'photo_zoom': animal.photo_zoom,
+        'links': {
+            'consulta': url_for('consulta_direct', animal_id=animal.id),
+            'ficha': url_for('ficha_animal', animal_id=animal.id),
+            'delete': url_for('deletar_animal', animal_id=animal.id),
+        },
+    }
 
 
 @bp.route('/update_animal/<int:animal_id>', methods=['POST'])
@@ -2397,13 +2734,53 @@ def update_animal(animal_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
+    # Corpo incompleto nunca pode sobrescrever o cadastro. Quando o upload da
+    # foto cai no meio (rede do celular), o Werkzeug descarta o multipart em
+    # silêncio e ``request.form`` chega vazio; o token CSRF vem no cabeçalho
+    # (csrf_fetch.js), então a requisição passava e gravava nome, sexo, peso e
+    # o resto como vazio — o prontuário passava a mostrar "None". Todas as
+    # telas de edição enviam o campo ``name``: sem ele, nada é alterado.
+    nome_enviado = request.form.get('name')
+    if nome_enviado is None:
+        current_app.logger.warning(
+            "update_animal %s recebido sem o campo name (corpo incompleto ou ilegível; content_length=%s); nada foi alterado",
+            animal.id,
+            request.content_length,
+        )
+        message = ('Os dados do animal chegaram incompletos (a conexão pode ter caído durante o envio). '
+                   'Nada foi alterado. Tente salvar de novo.')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 400
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('index'))
+    nome_enviado = nome_enviado.strip()
+    if not nome_enviado:
+        message = 'Informe o nome do animal.'
+        if wants_json:
+            return jsonify(success=False, message=message, category='warning'), 400
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('index'))
+
+    # Foto primeiro: se ela não puder ser guardada, nada do cadastro muda e a
+    # foto anterior continua lá (antes uma falha no S3 gravava image=None).
+    foto = _foto_enviada()
+    nova_imagem, giro_aplicado = None, False
+    if foto is not None:
+        try:
+            nova_imagem, giro_aplicado = _guardar_foto_animal(foto, request.form.get('photo_rotation'))
+        except (PhotoIntakeError, PhotoStorageError) as exc:
+            db.session.rollback()
+            return _resposta_erro_foto(exc, wants_json)
+
     # Campos básicos
-    animal.name = request.form.get('name')
-    animal.sex = request.form.get('sex')
+    animal.name = nome_enviado
+    animal.sex = _texto_opcional(request.form.get('sex'))
     animal.description = request.form.get('description') or ''
-    animal.microchip_number = request.form.get('microchip_number')
-    animal.health_plan = request.form.get('health_plan')
-    animal.neutered = request.form.get('neutered') == '1'
+    animal.microchip_number = _texto_opcional(request.form.get('microchip_number'))
+    animal.health_plan = _texto_opcional(request.form.get('health_plan'))
+    if 'neutered' in request.form:
+        # "—" é "não informado": antes virava "Não" a cada edição.
+        animal.neutered = _castrado_do_formulario(request.form.get('neutered'))
 
     # Espécie (relacional)
     species_id = request.form.get('species_id')
@@ -2421,15 +2798,11 @@ def update_animal(animal_id):
         except ValueError:
             queue_message('ID de raça inválido.', 'warning')
 
-    # Peso
-    peso_valor = request.form.get('peso')
-    if peso_valor:
-        try:
-            animal.peso = float(peso_valor)
-        except ValueError:
-            queue_message('Peso inválido. Deve ser um número.', 'warning')
-    else:
-        animal.peso = None
+    # Peso (aceita vírgula, como o teclado do celular manda)
+    try:
+        animal.peso = _peso_do_formulario(request.form.get('peso'))
+    except ValueError:
+        queue_message('Peso inválido: use só números, como 12,5. O peso anterior foi mantido.', 'warning')
 
     # Data de nascimento ou idade
     dob_str = request.form.get('date_of_birth')
@@ -2438,7 +2811,10 @@ def update_animal(animal_id):
     idade_numero = None
     if dob_str:
         try:
-            animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
+            nascimento = datetime.strptime(dob_str, '%Y-%m-%d').date()
+            if nascimento > date.today():
+                raise ValueError(dob_str)
+            animal.date_of_birth = nascimento
         except ValueError:
             queue_message('Data de nascimento inválida.', 'warning')
     elif age_input:
@@ -2451,6 +2827,10 @@ def update_animal(animal_id):
                 animal.date_of_birth = date.today() - relativedelta(years=idade_numero)
         except ValueError:
             queue_message('Idade inválida. Deve ser um número inteiro.', 'warning')
+    elif 'date_of_birth' in request.form and 'age' in request.form:
+        # Data e idade vieram vazias de propósito (a pessoa apagou as duas):
+        # sem isto a data antiga voltava e recalculava a idade.
+        animal.date_of_birth = None
 
     if animal.date_of_birth:
         delta = relativedelta(date.today(), animal.date_of_birth)
@@ -2465,18 +2845,18 @@ def update_animal(animal_id):
     else:
         animal.age = None
 
-    # Upload de imagem
-    if 'image' in request.files and request.files['image'].filename != '':
-        image_file = request.files['image']
-        original_filename = secure_filename(image_file.filename)
-        filename = f"{uuid.uuid4().hex}_{original_filename}"
-        image_url = upload_to_s3(image_file, filename, folder="animals")
-        animal.image = image_url
+    # Foto nova (já guardada acima)
+    if nova_imagem:
+        animal.image = nova_imagem
 
-    try:
-        animal.photo_rotation = int(request.form.get('photo_rotation', animal.photo_rotation or 0))
-    except ValueError:
-        pass
+    if giro_aplicado:
+        # O giro foi gravado nos pixels; manter o CSS giraria de novo.
+        animal.photo_rotation = 0
+    else:
+        try:
+            animal.photo_rotation = int(float(request.form.get('photo_rotation', animal.photo_rotation or 0)))
+        except ValueError:
+            pass
     try:
         animal.photo_zoom = float(request.form.get('photo_zoom', animal.photo_zoom or 1.0))
     except ValueError:
@@ -2503,7 +2883,13 @@ def update_animal(animal_id):
 
     message = 'Dados do animal atualizados com sucesso!'
     if wants_json:
-        payload = dict(success=True, message=message, animal_name=animal.name, category='success')
+        payload = dict(
+            success=True,
+            message=message,
+            animal_name=animal.name,
+            animal=_animal_payload(animal),
+            category='success',
+        )
         if queued_messages:
             payload['messages'] = queued_messages
         return jsonify(payload)
@@ -3217,9 +3603,51 @@ def novo_animal():
     current_user_id = getattr(current_user, 'id', None)
 
     if request.method == 'POST':
+        # Retorna conteúdo em JSON apenas quando o cliente realmente
+        # priorizar "application/json" ou quando for uma requisição AJAX.
+        prefers_json = (
+            request.accept_mimetypes['application/json'] >
+            request.accept_mimetypes['text/html']
+        )
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        quer_json = prefers_json or is_ajax
+        tutor = None
+
+        def _recusar(message, status=400, category='warning', field=None):
+            # Antes os erros viravam flash + redirect; o fetch seguia o
+            # redirect, recebia 200 e a tela dizia "Animal cadastrado com
+            # sucesso!" sem nada ter sido salvo.
+            if quer_json:
+                payload = dict(success=False, message=message, category=category)
+                if field:
+                    payload['field'] = field
+                return jsonify(payload), status
+            flash(message, category)
+            if tutor is not None:
+                return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+            return redirect(request.referrer or url_for('novo_animal'))
+
         tutor_id = request.form.get('tutor_id', type=int)
+        if not tutor_id:
+            return _recusar('Selecione o tutor antes de salvar o animal.', field='tutor_id')
         tutor = get_user_or_404(tutor_id)
-        nome_animal = (request.form.get('name') or '').strip()
+
+        nome_animal = ' '.join((request.form.get('name') or '').split())
+        if not nome_animal:
+            return _recusar('Informe o nome do animal.', field='name')
+        if len(nome_animal) > 100:
+            return _recusar('O nome do animal pode ter no máximo 100 caracteres.', field='name')
+
+        envio_id = (request.form.get('envio_id') or '').strip()[:64]
+        ja_criado = _animal_do_envio(envio_id, tutor.id) if quer_json else None
+        if ja_criado is not None:
+            return jsonify(
+                success=True,
+                already_existed=True,
+                message=f'O cadastro de {ja_criado.name} já estava salvo. Nada foi duplicado.',
+                category='info',
+                animal=_animal_payload(ja_criado),
+            )
 
         dob_str = request.form.get('date_of_birth')
         dob = None
@@ -3228,22 +3656,24 @@ def novo_animal():
         if dob_str:
             try:
                 dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
+                if dob > date.today():
+                    raise ValueError(dob_str)
             except ValueError:
-                flash('Data de nascimento inválida. Use AAAA‑MM‑DD.', 'warning')
-                return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+                return _recusar('Data de nascimento inválida. Confira o dia, o mês e o ano.', field='date_of_birth')
         else:
-            age_input = request.form.get('age')
+            age_input = (request.form.get('age') or '').strip()
             if age_input:
                 try:
                     idade_numero = int(age_input)
+                    if idade_numero < 0:
+                        raise ValueError(age_input)
                     unidade_norm = _normalizar_unidade_idade(age_unit_input)
                     if unidade_norm == 'meses':
                         dob = date.today() - relativedelta(months=idade_numero)
                     else:
                         dob = date.today() - relativedelta(years=idade_numero)
                 except ValueError:
-                    flash('Idade inválida. Deve ser um número inteiro.', 'warning')
-                    return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+                    return _recusar('Idade inválida: use um número inteiro, como 3.', field='age')
 
         idade_registrada = None
         if dob:
@@ -3255,31 +3685,24 @@ def novo_animal():
         elif idade_numero is not None:
             idade_registrada = _formatar_idade(idade_numero, age_unit_input)
 
-        peso_str = request.form.get('peso')
-        peso = float(peso_str) if peso_str else None
+        try:
+            peso = _peso_do_formulario(request.form.get('peso'))
+        except ValueError:
+            return _recusar('Peso inválido: use só números, como 12,5.', field='peso')
 
-        neutered_val = request.form.get('neutered')
-        neutered = True if neutered_val == '1' else False if neutered_val == '0' else None
-
-        image_path = None
-        if 'image' in request.files and request.files['image'].filename != '':
-            image_file = request.files['image']
-            filename = secure_filename(image_file.filename)
-            image_path = upload_to_s3(image_file, filename)
+        neutered = _castrado_do_formulario(request.form.get('neutered'))
 
         # IDs para espécie e raça
         species_id = request.form.get('species_id', type=int)
         breed_id = request.form.get('breed_id', type=int)
-
-        # Carrega os objetos Species e Breed (opcional)
-        species_obj = Species.query.get(species_id) if species_id else None
-        breed_obj = Breed.query.get(breed_id) if breed_id else None
 
         microchip_number = (request.form.get('microchip_number') or '').strip() or None
 
         duplicate_filters = [
             Animal.user_id == tutor.id,
             func.lower(Animal.name) == func.lower(nome_animal),
+            # Animal removido não impede cadastrar de novo.
+            Animal.removido_em.is_(None),
         ]
 
         duplicate_conditions = []
@@ -3297,50 +3720,96 @@ def novo_animal():
             duplicate_conditions.append(Animal.date_added >= recent_window)
 
         existing_animal = None
-        if duplicate_conditions:
+        if duplicate_conditions and request.form.get('confirmar_duplicado') != '1':
             existing_animal = (
                 Animal.query.filter(*duplicate_filters)
                 .filter(or_(*duplicate_conditions))
+                .order_by(Animal.id.desc())
                 .first()
             )
 
         if existing_animal:
-            message = 'Já existe um animal com os mesmos dados para este tutor recentemente cadastrado.'
-            flash(message, 'warning')
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
-                request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-            ):
+            # O reenvio do mesmo cadastro (conexão caiu depois de salvar) já foi
+            # reconhecido acima pelo envio_id. Aqui é outro envio com os mesmos
+            # dados: a tela mostra o aviso e deixa confirmar se for outro animal.
+            message = (
+                f'Já existe um animal chamado {existing_animal.name} para este tutor '
+                'com os mesmos dados. Se for outro animal, confirme para cadastrar mesmo assim.'
+            )
+            if quer_json:
                 return (
                     jsonify(
+                        success=False,
+                        duplicate=True,
                         message=message,
                         category='warning',
                         redirect=url_for('ficha_animal', animal_id=existing_animal.id),
+                        animal=_animal_payload(existing_animal),
                     ),
                     409,
                 )
+            flash(message, 'warning')
             return redirect(url_for('ficha_animal', animal_id=existing_animal.id))
+
+        # Foto por último antes de criar: nada sobe ao armazenamento se o
+        # cadastro for recusado acima.
+        image_path = None
+        giro_aplicado = False
+        foto = _foto_enviada()
+        if foto is not None:
+            try:
+                image_path, giro_aplicado = _guardar_foto_animal(foto, request.form.get('photo_rotation'))
+            except (PhotoIntakeError, PhotoStorageError) as exc:
+                return _resposta_erro_foto(exc, quer_json)
+
+        def _numero_do_form(campo, padrao, minimo, maximo):
+            try:
+                valor = float(request.form.get(campo))
+            except (TypeError, ValueError):
+                return padrao
+            if not math.isfinite(valor):
+                return padrao
+            return min(max(valor, minimo), maximo)
+
+        # Enquadramento escolhido no editor (antes era descartado no cadastro).
+        if image_path:
+            photo_rotation = 0 if giro_aplicado else int(_numero_do_form('photo_rotation', 0, 0, 359))
+            photo_zoom = _numero_do_form('photo_zoom', 1.0, 0.5, 3.0)
+            photo_offset_x = _numero_do_form('photo_offset_x', 0.0, -2000, 2000)
+            photo_offset_y = _numero_do_form('photo_offset_y', 0.0, -2000, 2000)
+        else:
+            photo_rotation, photo_zoom, photo_offset_x, photo_offset_y = 0, 1.0, 0.0, 0.0
 
         # Criação do animal
         animal = Animal(
             name=nome_animal,
             species_id=species_id,
             breed_id=breed_id,
-            sex=request.form.get('sex'),
+            sex=_texto_opcional(request.form.get('sex')),
             date_of_birth=dob,
             age=idade_registrada,
             microchip_number=microchip_number,
             peso=peso,
-            health_plan=request.form.get('health_plan'),
+            health_plan=_texto_opcional(request.form.get('health_plan')),
             neutered=neutered,
             user_id=tutor.id,
             added_by_id=current_user.id,
             clinica_id=current_user_clinic_id(),
             status='disponível',
             image=image_path,
+            photo_rotation=photo_rotation,
+            photo_zoom=photo_zoom,
+            photo_offset_x=photo_offset_x,
+            photo_offset_y=photo_offset_y,
             is_alive=True,
             modo='adotado',
         )
         db.session.add(animal)
+        if neutered is None:
+            # "Não sei": a coluna tem default=False e o INSERT aplicaria o
+            # padrão sobre o None; a edição seguinte mostraria "Não".
+            db.session.flush()
+            animal.neutered = None
         db.session.commit()
 
         # Criação da consulta
@@ -3352,68 +3821,55 @@ def novo_animal():
         )
         db.session.add(consulta)
         db.session.commit()
+        _lembrar_envio(envio_id, animal.id)
 
-        # Retorna conteúdo em JSON apenas quando o cliente realmente
-        # priorizar "application/json" ou quando for uma requisição AJAX.
-        prefers_json = (
-            request.accept_mimetypes['application/json'] >
-            request.accept_mimetypes['text/html']
-        )
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-
-        if prefers_json or is_ajax:
-            scope_param = request.args.get('scope', 'all')
-            page = request.args.get('page', 1, type=int)
-            animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
-            animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
-            animais_adicionados, pagination, scope = _get_recent_animais(
-                scope_param,
-                page,
-                clinic_id=clinic_scope,
-                user_id=current_user_id,
-                require_appointments=require_appointments,
-                veterinario_id=veterinarian_scope_id,
-                search=animal_search,
-                sort_option=animal_sort,
-            )
-            html = render_template(
-                'partials/animais_adicionados.html',
-                animais_adicionados=animais_adicionados,
-                pagination=pagination,
-                scope=scope,
-                scope_param=request.args.get('scope_param', 'scope'),
-                search_param='animal_search',
-                sort_param='animal_sort',
-                page_param=request.args.get('page_param', 'page'),
-                fetch_url=url_for('novo_animal'),
-                compact=True,
-                can_create_animals=False,
-                new_animal_url=url_for('novo_animal'),
-            )
-
-            animal_payload = {
-                'id': animal.id,
-                'name': animal.name,
-                'species': animal.species.name if animal.species else None,
-                'breed': animal.breed.name if animal.breed else None,
-                'sex': animal.sex,
-                'image': animal.image,
-                'photo_offset_x': animal.photo_offset_x,
-                'photo_offset_y': animal.photo_offset_y,
-                'photo_rotation': animal.photo_rotation,
-                'photo_zoom': animal.photo_zoom,
-                'links': {
-                    'consulta': url_for('consulta_direct', animal_id=animal.id),
-                    'ficha': url_for('ficha_animal', animal_id=animal.id),
-                    'delete': url_for('deletar_animal', animal_id=animal.id),
-                }
-            }
-            return jsonify(
+        if quer_json:
+            payload = dict(
+                success=True,
                 message='Animal cadastrado com sucesso!',
                 category='success',
-                html=html,
-                animal=animal_payload
+                animal=_animal_payload(animal),
             )
+            # A lista "animais adicionados" só interessa às telas que a
+            # mostram; a ficha do tutor pede sem (sem_lista=1). Se montar a
+            # lista falhar, o animal já está salvo: a resposta continua sendo
+            # de sucesso, só sem o HTML.
+            if request.form.get('sem_lista') != '1':
+                try:
+                    scope_param = request.args.get('scope', 'all')
+                    page = request.args.get('page', 1, type=int)
+                    animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
+                    animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
+                    animais_adicionados, pagination, scope = _get_recent_animais(
+                        scope_param,
+                        page,
+                        clinic_id=clinic_scope,
+                        user_id=current_user_id,
+                        require_appointments=require_appointments,
+                        veterinario_id=veterinarian_scope_id,
+                        search=animal_search,
+                        sort_option=animal_sort,
+                    )
+                    payload['html'] = render_template(
+                        'partials/animais_adicionados.html',
+                        animais_adicionados=animais_adicionados,
+                        pagination=pagination,
+                        scope=scope,
+                        scope_param=request.args.get('scope_param', 'scope'),
+                        search_param='animal_search',
+                        sort_param='animal_sort',
+                        page_param=request.args.get('page_param', 'page'),
+                        fetch_url=url_for('novo_animal'),
+                        compact=True,
+                        can_create_animals=False,
+                        new_animal_url=url_for('novo_animal'),
+                    )
+                except Exception:
+                    db.session.rollback()
+                    current_app.logger.exception(
+                        "Animal %s salvo, mas a lista de animais adicionados não foi montada", animal.id
+                    )
+            return jsonify(payload)
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))

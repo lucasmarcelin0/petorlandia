@@ -1,0 +1,88 @@
+{# Card de um animal na ficha do tutor. Espera: a, detalhes_animais, can_consult. #}
+{%- set nome = (a.name or '')|trim -%}
+{%- set especie = a.species.name if a.species else '' -%}
+{%- set raca = a.breed.name if a.breed else '' -%}
+{%- set detalhe = detalhes_animais.get(a.id, {}) if detalhes_animais is defined else {} -%}
+{%- set pode_editar = can_edit_animal_record(current_user, a) -%}
+{%- set pode_remover = current_user.role == 'admin' or a.user_id == current_user.id or a.added_by_id == current_user.id -%}
+{%- set e_gato = 'gat' in especie|lower -%}
+<li class="tutor-animal{% if not nome %} tutor-animal--sem-nome{% endif %}{% if a.falecido_em %} tutor-animal--falecido{% endif %}"
+    id="animal-card-{{ a.id }}"
+    data-animal-id="{{ a.id }}"
+    data-animal-name="{{ nome }}">
+  <div class="tutor-animal__main">
+    <div class="tutor-animal__photo">
+      {% if a.image %}
+        <img src="{{ a.image }}"
+             alt="Foto de {{ nome or 'animal sem nome' }}"
+             class="avatar"
+             loading="lazy"
+             data-offset-x="{{ a.photo_offset_x or 0 }}"
+             data-offset-y="{{ a.photo_offset_y or 0 }}"
+             data-rotation="{{ a.photo_rotation or 0 }}"
+             data-zoom="{{ a.photo_zoom or 1 }}"
+             style="--avatar-size:64px;">
+      {% else %}
+        <span class="tutor-animal__placeholder" aria-hidden="true">
+          <i class="fa-solid {{ 'fa-cat' if e_gato else 'fa-dog' }}"></i>
+        </span>
+      {% endif %}
+    </div>
+    <div class="tutor-animal__info">
+      <h3 class="tutor-animal__name">
+        <span class="animal-name">{{ nome or 'Sem nome' }}</span>
+        {% if a.falecido_em %}
+          <span class="tutor-tag tutor-tag--muted" title="Animal marcado como falecido"><i class="bi bi-heartbreak" aria-hidden="true"></i> Falecido</span>
+        {% endif %}
+      </h3>
+      {% if not nome %}
+        <p class="tutor-animal__aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Cadastro sem nome. Toque em Editar para corrigir.</p>
+      {% endif %}
+      <p class="tutor-animal__meta">
+        {%- if especie or raca -%}
+          {{ especie or 'Espécie não informada' }}{% if raca %} · {{ raca }}{% endif %}
+        {%- else -%}
+          Espécie não informada
+        {%- endif -%}
+      </p>
+      <div class="tutor-animal__tags">
+        {% if a.sex == 'Fêmea' %}
+          <span class="tutor-tag tutor-tag--femea"><i class="fa-solid fa-venus" aria-hidden="true"></i> Fêmea</span>
+        {% elif a.sex == 'Macho' %}
+          <span class="tutor-tag tutor-tag--macho"><i class="fa-solid fa-mars" aria-hidden="true"></i> Macho</span>
+        {% endif %}
+        {% if detalhe.idade %}<span class="tutor-tag"><i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ detalhe.idade }}</span>{% endif %}
+        {% if detalhe.peso %}<span class="tutor-tag"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> {{ detalhe.peso }}</span>{% endif %}
+        {% if a.neutered %}<span class="tutor-tag"><i class="fa-solid fa-scissors" aria-hidden="true"></i> {{ 'Castrada' if a.sex == 'Fêmea' else 'Castrado' }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="tutor-animal__actions">
+    {% if can_consult|default(False) %}
+      <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="tutor-action tutor-action--consulta">
+        <i class="fas fa-stethoscope" aria-hidden="true"></i><span>Consulta</span>
+      </a>
+    {% endif %}
+    <a href="{{ url_for('ficha_animal', animal_id=a.id) }}" class="tutor-action">
+      <i class="fas fa-file-lines" aria-hidden="true"></i><span>Ficha</span>
+    </a>
+    {% if pode_editar %}
+      <a href="{{ url_for('ficha_tutor', tutor_id=a.user_id, editar=a.id) }}#animais"
+         class="tutor-action{% if not nome %} tutor-action--destaque{% endif %}"
+         data-edit-animal="{{ a.id }}">
+        <i class="fas fa-pen" aria-hidden="true"></i><span>Editar</span>
+      </a>
+    {% endif %}
+    {% if pode_remover %}
+      <button type="button"
+              class="tutor-action tutor-action--icone tutor-action--perigo"
+              data-remove-animal="{{ a.id }}"
+              data-remove-url="{{ url_for('deletar_animal', animal_id=a.id) }}"
+              data-animal-label="{{ nome or 'este animal' }}"
+              aria-label="Remover {{ nome or 'animal sem nome' }}"
+              title="Remover {{ nome or 'animal sem nome' }}">
+        <i class="fas fa-trash" aria-hidden="true"></i>
+      </button>
+    {% endif %}
+  </div>
+</li>

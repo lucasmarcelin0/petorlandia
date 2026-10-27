@@ -116,6 +116,29 @@
       }
     });
 
+    // form.reset() devolve os campos visíveis ao valor original, mas não toca
+    // no oculto com a data ISO (é ele que vai para o servidor) nem no
+    // calendário: ao cadastrar vários animais seguidos, o próximo herdava a
+    // data de nascimento do anterior. Aqui o oculto é refeito a partir do
+    // campo visível já restaurado.
+    const formularioDono = dobInput.form || wrapper.closest('form');
+    if (formularioDono) {
+      formularioDono.addEventListener('reset', () => {
+        window.setTimeout(() => {
+          const restaurada = parseData(dobInput.value || '');
+          if (restaurada) {
+            fp.setDate(restaurada, false);
+            if (hiddenInput) hiddenInput.value = formatISO(restaurada);
+          } else {
+            fp.clear(false);
+            dobInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+          }
+          definirUnidade(obterUnidadeAtual());
+        }, 0);
+      });
+    }
+
     function atualizarIdade(dataNascimento, preferenciaUnidade = null) {
       const hoje = new Date();
       let anos = hoje.getFullYear() - dataNascimento.getFullYear();
@@ -171,6 +194,9 @@
       if (parsed) {
         fp.setDate(parsed, true);
         if (hiddenInput) hiddenInput.value = formatISO(parsed);
+      } else if (!/\d/.test(dobInput.value || '') && hiddenInput) {
+        // Apagou a data: o oculto não pode continuar mandando a antiga.
+        hiddenInput.value = '';
       }
     });
 

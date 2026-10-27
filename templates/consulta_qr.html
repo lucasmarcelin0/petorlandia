@@ -17,7 +17,7 @@
       {% if animal %}
         <p class="consultation-eyebrow mb-2">Prontuário veterinário</p>
         <h2 class="consultation-title mb-1" id="animal-name">
-          <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name }}
+          <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name or 'Sem nome' }}
         </h2>
         <small class="consultation-subtitle">Tutor: {{ tutor.name if tutor else 'não informado' }}</small>
         {% if pode_acessar_internacao is defined and pode_acessar_internacao(current_user) %}
@@ -308,10 +308,19 @@ function bindSyncForms(root) {
       const button = ev.submitter || helper?.getButton?.(form) || form.querySelector('[type="submit"]');
       const toastEl = document.getElementById('actionToast');
 
+      // Foto de celular: espera a redução (js/photo_prepare.js) e acompanha o
+      // upload inteiro. Com o aviso de "Tempo excedido" aos 10 s a pessoa saía
+      // da tela no meio do envio, e o corpo cortado chegava vazio ao servidor.
+      const enviaFoto = Boolean(window.PetPhoto && typeof window.PetPhoto.formHasFile === 'function'
+        && window.PetPhoto.formHasFile(form));
+
       const executarSalvamento = async () => {
         let data = null;
         let ok = false;
         try {
+          if (window.PetPhoto && typeof window.PetPhoto.waitForm === 'function') {
+            await window.PetPhoto.waitForm(form, 8000);
+          }
           const resp = await fetch(form.action, {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
@@ -375,8 +384,9 @@ function bindSyncForms(root) {
       if (helper?.withSavingState) {
         try {
           await helper.withSavingState(button || form, executarSalvamento, {
-            loadingText: form.dataset.loadingText || 'Salvando...',
+            loadingText: enviaFoto ? 'Enviando foto…' : (form.dataset.loadingText || 'Salvando...'),
             errorMessage: 'Falha ao salvar',
+            ...(enviaFoto ? { loadingTimeout: 125000, allowLongTimeout: true } : {}),
           });
         } catch (error) {
           if (error?.name !== 'SavingStateTimeoutError') {

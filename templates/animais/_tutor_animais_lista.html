@@ -1,0 +1,59 @@
+{# Lista de animais da ficha do tutor.
+   Renderizada na página e devolvida por ficha_tutor_animais (JSON) para a
+   tela se atualizar depois de cadastrar, editar, remover ou restaurar.
+   Espera: tutor, animais, detalhes_animais, can_consult. #}
+{%- set ativos = animais | selectattr('removido_em', 'equalto', none) | list -%}
+{%- set removidos = animais | selectattr('removido_em') | list -%}
+<div id="tutor-animais-lista" class="tutor-animais" data-ativos="{{ ativos|length }}" data-removidos="{{ removidos|length }}">
+  {% if ativos %}
+    <ul class="tutor-animal-list" role="list">
+      {% for a in ativos %}
+        {% include 'animais/_tutor_animal_card.html' %}
+      {% endfor %}
+    </ul>
+    <p class="tutor-animais__sem-resultado d-none" data-sem-resultado>
+      Nenhum animal com esse nome. <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-limpar-busca>Limpar busca</button>
+    </p>
+  {% else %}
+    <div class="tutor-empty">
+      <span class="tutor-empty__icon" aria-hidden="true"><i class="fa-solid fa-paw"></i></span>
+      <p class="tutor-empty__title">Nenhum animal cadastrado</p>
+      <p class="tutor-empty__text">Cadastre os animais de {{ ((tutor.name or 'tutor').split() or ['tutor'])[0] }} para abrir consultas e acompanhar o histórico.</p>
+      <button type="button" class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
+        <i class="fa-solid fa-plus me-2" aria-hidden="true"></i>Cadastrar animal
+      </button>
+    </div>
+  {% endif %}
+
+  {% if removidos %}
+    <details class="tutor-removidos">
+      <summary>
+        <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+        Removidos ({{ removidos|length }})
+        <span class="tutor-removidos__dica">histórico preservado</span>
+      </summary>
+      <ul class="tutor-removidos__lista" role="list">
+        {% for r in removidos %}
+          {%- set nome_r = (r.name or '')|trim -%}
+          <li data-animal-id="{{ r.id }}">
+            <div class="tutor-removidos__info">
+              <strong>{{ nome_r or 'Sem nome' }}</strong>
+              <span>{{ r.species.name if r.species else 'Espécie não informada' }}{% if r.breed %} · {{ r.breed.name }}{% endif %}</span>
+            </div>
+            <div class="tutor-removidos__acoes">
+              <a href="{{ url_for('ficha_animal', animal_id=r.id) }}" class="btn btn-sm btn-light border rounded-pill">Ficha</a>
+              {% if current_user.role == 'admin' or r.user_id == current_user.id or r.added_by_id == current_user.id %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-success rounded-pill"
+                        data-restore-animal="{{ r.id }}"
+                        data-restore-url="{{ url_for('restaurar_animal', animal_id=r.id) }}">
+                  <i class="fa-solid fa-rotate-left me-1" aria-hidden="true"></i>Restaurar
+                </button>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+</div>
