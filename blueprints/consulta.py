@@ -1396,7 +1396,13 @@ def agendar_retorno(consulta_id):
         abort(403)
     from models import Veterinario
 
-    form = AppointmentForm(clinic_ids=consulta.clinica_id, tutor=consulta.animal.owner)
+    # O animal é o da consulta (já autorizada acima); animal sem clínica no
+    # cadastro recebia "Selecione um animal válido para esta clínica".
+    form = AppointmentForm(
+        clinic_ids=consulta.clinica_id,
+        tutor=consulta.animal.owner,
+        fixed_animal=consulta.animal,
+    )
     form.populate_animals(
         [consulta.animal],
         restrict_tutors=True,
