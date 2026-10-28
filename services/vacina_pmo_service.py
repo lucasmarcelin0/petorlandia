@@ -2657,9 +2657,20 @@ def _serialize_visit(
         }
         for animal in visit.animals
     ]
+    # Tutor vinculado à visita; sem vínculo, o dono de um animal já ligado ao
+    # cadastro aponta para a mesma ficha.
+    tutor_user_id = visit.tutor_user_id or next(
+        (
+            animal.animal.user_id
+            for animal in visit.animals
+            if animal.animal is not None and animal.animal.user_id
+        ),
+        None,
+    )
     return {
         "id": f"visit-{visit.id}",
         "visitId": visit.id,
+        "tutorUserId": tutor_user_id,
         "status": infer_visit_status(animals),
         "tutor": visit.tutor_name,
         "address": visit.address or "",

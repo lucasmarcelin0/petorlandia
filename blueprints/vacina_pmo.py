@@ -316,12 +316,17 @@ def vacina_pmo():
     import app as app_module
     from services.vacina_pmo_service import DEFAULT_SHEET_URL
 
+    from helpers import has_professional_access
+
     today = app_module.datetime.now(BR_TZ).date().isoformat()
     source_sheet_url = os.getenv('PMO_VACCINE_SHEET_URL', DEFAULT_SHEET_URL)
     return render_template(
         'vacina_pmo/dashboard.html',
         today=today,
         source_sheet_url=source_sheet_url,
+        # Atalhos para as fichas só aparecem para quem consegue abri-las: o
+        # vacinador sem perfil clínico cairia num redirecionamento/404.
+        can_open_fichas=has_professional_access(current_user),
     )
 
 

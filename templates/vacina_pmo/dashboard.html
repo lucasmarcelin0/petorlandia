@@ -166,6 +166,18 @@
     line-height: 1.15;
   }
 
+  .pmo-tutor-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: rgba(37, 99, 235, 0.45);
+    text-underline-offset: 3px;
+  }
+
+  .pmo-tutor-link:hover,
+  .pmo-tutor-link:focus-visible {
+    color: #1d4ed8;
+  }
+
   .pmo-status-badge {
     display: inline-flex;
     align-items: center;
@@ -688,7 +700,8 @@
     color: #64748b;
   }
 
-  .pmo-photo-modal__copy[hidden] {
+  .pmo-photo-modal__copy[hidden],
+  #pmo-photo-ficha[hidden] {
     display: none;
   }
 
@@ -2216,6 +2229,7 @@
       <button type="button" class="btn btn-warning" id="pmo-photo-retry" hidden><i class="fas fa-rotate-right me-1" aria-hidden="true"></i> Tentar enviar de novo</button>
       <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1" aria-hidden="true"></i> Tirar outra</button>
       <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1" aria-hidden="true"></i> Da galeria</button>
+      <a class="btn btn-outline-primary" id="pmo-photo-ficha" href="#" target="_blank" rel="noopener" hidden><i class="fas fa-file-medical me-1" aria-hidden="true"></i> Ficha do animal</a>
       <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
       <button type="button" class="btn btn-link btn-sm pmo-photo-modal__copy" id="pmo-photo-copy-error" hidden><i class="fas fa-copy me-1" aria-hidden="true"></i> Copiar o erro</button>
     </div>
@@ -2427,6 +2441,7 @@
   const photoModalImg = document.getElementById('pmo-photo-modal-img');
   const photoRetakeBtn = document.getElementById('pmo-photo-retake');
   const photoPickBtn = document.getElementById('pmo-photo-pick');
+  const photoFichaLink = document.getElementById('pmo-photo-ficha');
   const photoRetryBtn = document.getElementById('pmo-photo-retry');
   const photoCopyBtn = document.getElementById('pmo-photo-copy-error');
   const photoModalError = document.getElementById('pmo-photo-modal-error');
@@ -2509,6 +2524,11 @@
           }`
         : '';
     }
+    if (photoFichaLink) {
+      const fichaUrl = fichaAnimalUrl(animal);
+      photoFichaLink.hidden = !fichaUrl;
+      photoFichaLink.href = fichaUrl || '#';
+    }
     if (photoRetryBtn) photoRetryBtn.hidden = !(aviso && aviso.acao && aviso.tentar !== false);
     if (photoCopyBtn) {
       photoCopyBtn.hidden = !(aviso && aviso.acao);
@@ -2526,6 +2546,7 @@
     }
     if (photoRetryBtn) photoRetryBtn.hidden = true;
     if (photoCopyBtn) photoCopyBtn.hidden = true;
+    if (photoFichaLink) photoFichaLink.hidden = true;
     photoModalTarget = null;
   }
   if (photoModal) {
@@ -2599,6 +2620,28 @@
     const inputs = Array.from(listPanel.querySelectorAll(selector));
     // Tabela e cards renderizam o mesmo animal; usa o container visivel quando houver.
     return inputs.find((input) => input.closest('.pmo-visit-card, tr')?.offsetParent !== null) || inputs[0] || null;
+  }
+
+  // Fichas abrem em outra aba: a lista do dia continua onde estava.
+  const CAN_OPEN_FICHAS = {{ (can_open_fichas or false) | tojson }};
+  const FICHA_ID_PLACEHOLDER = '999999999';
+  const FICHA_TUTOR_URL = {{ url_for('ficha_tutor', tutor_id=999999999) | tojson }};
+  const FICHA_ANIMAL_URL = {{ url_for('ficha_animal', animal_id=999999999) | tojson }};
+
+  function fichaTutorUrl(row) {
+    const id = Number(row?.tutorUserId);
+    return CAN_OPEN_FICHAS && id > 0 ? FICHA_TUTOR_URL.replace(FICHA_ID_PLACEHOLDER, String(id)) : '';
+  }
+
+  function fichaAnimalUrl(animal) {
+    const id = Number(animal?.animalId);
+    return CAN_OPEN_FICHAS && id > 0 ? FICHA_ANIMAL_URL.replace(FICHA_ID_PLACEHOLDER, String(id)) : '';
+  }
+
+  function renderTutorName(row) {
+    const url = fichaTutorUrl(row);
+    if (!url) return escapeHtml(row.tutor);
+    return `<a class="pmo-tutor-link" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="Abrir ficha do tutor">${escapeHtml(row.tutor)}</a>`;
   }
 
   function findAnimalByTarget(target) {
@@ -7248,7 +7291,7 @@
       <article class="pmo-visit-card" data-id="${row.id}" data-status="${row.status}">
         <div class="pmo-card-head">
           <div class="pmo-card-headmain">
-            <div class="pmo-card-title">${escapeHtml(row.tutor)}${renderImmunityFlag(row)}</div>
+            <div class="pmo-card-title">${renderTutorName(row)}${renderImmunityFlag(row)}</div>
             <div class="pmo-card-address">${renderAddress(row, true)}</div>
             ${renderAttendedBy(row)}
           </div>
@@ -7773,7 +7816,7 @@
           <td>
             <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
           </td>
-          <td><strong>${escapeHtml(row.tutor)}</strong>${renderImmunityFlag(row)}${renderAttendedBy(row)}</td>
+          <td><strong>${renderTutorName(row)}</strong>${renderImmunityFlag(row)}${renderAttendedBy(row)}</td>
           <td class="pmo-address">${renderAddress(row)}</td>
           <td>${animals}</td>
           <td>${row.dogs}</td>
