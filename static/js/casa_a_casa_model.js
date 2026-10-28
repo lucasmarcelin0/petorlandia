@@ -15,8 +15,8 @@
   const INSPECIONADO = new Set(['TRABALHADO', 'PARCIAL']);
   const PENDENCIA = new Set(['FECHADO', 'RECUSA', 'TEMPORADA']);
   const LARVA = { cor: '#9c36b5', clara: '#f3d9fa' };
-  // Temporada e Parcial seguem valendo nos registros antigos e no boletim, mas não aparecem como opção.
-  const OCULTAS = new Set(['TEMPORADA', 'PARCIAL']);
+  // Temporada segue valendo nos registros antigos e no boletim, mas não aparece como opção.
+  const OCULTAS = new Set(['TEMPORADA']);
   const OPCOES = SITUACOES.filter(s => !OCULTAS.has(s.id));
   // Controle feito em cada recipiente; o focal leva o larvicida.
   const CONTROLES = [{ id: 'M', nome: 'Mecânico' }, { id: 'A', nome: 'Alternativo' }, { id: 'F', nome: 'Focal' }];
