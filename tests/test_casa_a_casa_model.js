@@ -147,8 +147,9 @@ const mapa = (...visitas) => M.juntarVisitas(visitas, []);
 
 // --- opções, controle por recipiente e focal
 {
-  assert.deepEqual(M.OPCOES.map(s => s.id), ['TRABALHADO', 'FECHADO', 'DESOCUPADO', 'RECUSA']);
-  assert.ok(M.POR_ID.TEMPORADA && M.POR_ID.PARCIAL);   // registros antigos continuam legíveis
+  assert.deepEqual(M.OPCOES.map(s => s.id), ['TRABALHADO', 'FECHADO', 'DESOCUPADO', 'PARCIAL', 'RECUSA']);
+  assert.ok(M.POR_ID.TEMPORADA);   // registros antigos continuam legíveis
+  assert.ok(M.INSPECIONADO.has('PARCIAL'));   // parcial também anota recipientes
   const linhas = [{ t: 28, e: 2, l: 1, c: 'F', p: 'VECTOBAC' }, { t: 28, e: 1, c: 'M' }, { t: 28, e: 1, c: 'M' }, { t: 5, e: 1, c: 'X' }];
   assert.deepEqual(M.recipientesPorTipo(linhas), [{ t: 5, e: 1, a: 0, l: 0 }, { t: 28, e: 2, a: 1, l: 1, c: 'F', p: 'VECTOBAC' }, { t: 28, e: 2, a: 0, l: 0, c: 'M' }]);
   const v = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'TRABALHADO', recipientes: linhas, atividade: 'ADL' });
