@@ -238,7 +238,7 @@
         "</div>" +
         '<div class="col-auto">' +
           '<button type="button" class="btn btn-outline-danger"' +
-            ' data-action="remove-option"' +
+            ' data-action="remove-option" aria-label="Remover opção"' +
             ' data-section-index="' + sectionIndex + '"' +
             ' data-field-index="' + fieldIndex + '"' +
             ' data-option-index="' + optionIndex + '">' +

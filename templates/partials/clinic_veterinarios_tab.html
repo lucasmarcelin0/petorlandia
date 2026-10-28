@@ -615,7 +615,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <form method="post" action="{{ url_for('remove_funcionario', clinica_id=clinica.id, user_id=s.user.id) }}">
+        <form method="post" action="{{ url_for('remove_funcionario', clinica_id=clinica.id, user_id=s.user.id) }}" data-destructive-confirmation>
           {{ staff_permission_forms[s.user.id].csrf_token }}
           <button type="submit" class="btn btn-danger">Remover</button>
         </form>
@@ -788,12 +788,12 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         {% if vet in veterinarios %}
-        <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=vet.id) }}">
+        <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=vet.id) }}" data-destructive-confirmation>
           {{ vet_schedule_forms[vet.id].csrf_token }}
           <button type="submit" class="btn btn-danger">Remover</button>
         </form>
         {% else %}
-        <form method="post" action="{{ url_for('remove_specialist', clinica_id=clinica.id, veterinario_id=vet.id) }}">
+        <form method="post" action="{{ url_for('remove_specialist', clinica_id=clinica.id, veterinario_id=vet.id) }}" data-destructive-confirmation>
           {{ vet_permission_forms[vet.user.id].csrf_token }}
           <button type="submit" class="btn btn-danger">Remover</button>
         </form>

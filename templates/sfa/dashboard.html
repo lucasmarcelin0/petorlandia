@@ -608,7 +608,7 @@
           <a href="{{ url_for('sfa_routes.pacientes', visao='testes') }}" class="btn btn-sm btn-outline-secondary">Ver validações</a>
           <form method="POST" action="{{ url_for('sfa_routes.apagar_teste_dados') }}" onsubmit="return confirm('Limpar todos os registros de validação da SFA?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-outline-danger">Limpar validações</button>
+            <button type="submit" class="btn btn-sm btn-outline-danger" data-destructive-action>Limpar validações</button>
           </form>
         </div>
       </div>

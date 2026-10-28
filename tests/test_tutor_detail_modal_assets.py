@@ -1,3 +1,5 @@
+from bs4 import BeautifulSoup
+
 from extensions import db
 from models import Clinica, User
 
@@ -40,3 +42,14 @@ def test_ficha_tutor_does_not_load_bootstrap_bundle_twice(app, client):
     html = response.get_data(as_text=True)
     assert "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" not in html
     assert html.count("bootstrap.bundle.min.js") == 1
+    assert html.count("js/destructive_actions.js") == 1
+    assert html.count("css/destructive_actions.css") == 1
+    soup = BeautifulSoup(html, "html.parser")
+    danger = soup.select_one(".tutor-perigo")
+    disclosure = danger.find_parent("details")
+    assert disclosure is not None
+    assert not disclosure.has_attr("open")
+    assert "Mais opções" in disclosure.summary.get_text()
+    assert danger.select_one('input[name="csrf_token"]') is not None
+    assert "confirm(" in danger.form["onsubmit"]
+    assert soup.select_one('[data-confirmar-remocao][data-destructive-confirmation]') is not None
