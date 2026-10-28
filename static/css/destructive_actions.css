@@ -26,6 +26,10 @@
   outline-offset: 2px;
 }
 .destructive-actions[open] > summary { margin-bottom: .5rem; }
+.destructive-actions > :is(button, a, input) {
+  min-width: 44px;
+  min-height: 44px;
+}
 /* Modelos de medicamentos, vacinas e exames só oferecem exclusão após seleção. */
 .destructive-actions:has(> :is(.d-none, [hidden])) { display: none; }
 .destructive-actions--section {

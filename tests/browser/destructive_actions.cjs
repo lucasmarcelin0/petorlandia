@@ -124,6 +124,8 @@ test('listeners diretos e delegados são preservados em tela de celular', async 
   });
   await page.locator('summary').click();
   assert.deepEqual(await page.evaluate(() => [window.direct, window.delegated]), [0, 0]);
+  const bounds = await page.locator('#remove').boundingBox();
+  assert.ok(bounds.width >= 44 && bounds.height >= 44, 'exclusão exige alvo de toque de pelo menos 44px');
   await page.locator('#remove').click();
   assert.deepEqual(await page.evaluate(() => [window.direct, window.delegated]), [1, 1]);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
