@@ -24,6 +24,8 @@ from zoneinfo import ZoneInfo
 
 # Depois deste prazo a visita deixa de colorir o imóvel: é hora de passar de novo.
 JANELA_DIAS = 60
+# Ficha do imóvel: visitas listadas no histórico (as mais recentes).
+HISTORICO_LIMITE = 200
 # Planos concluídos há até este prazo seguem para o aparelho ("trabalhado por último").
 RECENTE_DIAS = 30
 LIMITE_LOTE = 300
@@ -453,6 +455,16 @@ def estado(hoje: date, desde: int = 0) -> dict:
             "parcial": bool(desde), "planos": [plano_dict(p) for p in planos],
             "visitas": [visita_dict(v) for v in visitas],
             "agentes": sorted(agentes.values(), key=lambda a: (-a["hoje"], -a["visitas"], a["nome"]))}
+
+
+def historico(imovel: str, limite: int = HISTORICO_LIMITE) -> dict:
+    """Todas as visitas de um imóvel, da mais recente para a mais antiga, sem a janela do mapa."""
+    from models.entomologia import EntomologiaVisitaDomiciliar as V
+
+    visitas = (V.query.filter(V.imovel == imovel)
+               .order_by(V.data_visita.desc(), V.id.desc())
+               .limit(limite + 1).all())
+    return {"imovel": imovel, "visitas": [visita_dict(v) for v in visitas[:limite]], "mais": len(visitas) > limite}
 
 
 def equipe(usuario=None) -> list[dict]:

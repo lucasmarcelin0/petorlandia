@@ -189,6 +189,18 @@ h2, h3, h4, p { margin: 0; }
 .cac-folha h3 { margin: .7rem 0 .35rem; color: var(--cac-suave); font-size: .74rem; letter-spacing: .05em; text-transform: uppercase; }
 .cac-ultima { padding: .45rem .6rem; border-radius: .6rem; color: var(--cac-tinta); background: #f5f9f8; font-size: .84rem; }
 .cac-ultima p + p { margin-top: .2rem; }
+.cac-historico { border-radius: .6rem; background: #f5f9f8; font-size: .84rem; }
+.cac-historico[hidden] { display: none; }
+.cac-historico > summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .1rem .6rem; padding: .45rem .6rem; border-radius: .6rem; color: var(--cac-tinta); cursor: pointer; list-style: none; }
+.cac-historico > summary::-webkit-details-marker { display: none; }
+.cac-historico-conta { color: var(--cac-verde); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.cac-historico-conta::after { content: ' ▾'; }
+.cac-historico[open] .cac-historico-conta::after { content: ' ▴'; }
+.cac-historico-lista { margin: 0; padding: 0 .6rem .5rem; list-style: none; }
+.cac-historico-lista li { border-top: 1px solid var(--cac-linha); }
+.cac-historico-lista .cac-ultima { padding: .4rem 0; background: none; }
+.cac-historico-lista li.pendente .cac-ultima { color: var(--cac-suave); }
+.cac-historico .cac-nota { padding: 0 .6rem .45rem; }
 .cac-situacoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 .cac-situacoes button { display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .55rem .2rem; border: 2px solid var(--cac-linha); border-radius: .8rem; background: #fff; font-size: .84rem; font-weight: 700; }
 .cac-situacoes button span { font-size: 1.4rem; line-height: 1.1; }

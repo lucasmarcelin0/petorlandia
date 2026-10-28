@@ -234,7 +234,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261015-divisao' in pagina
+    assert 'casa_a_casa.js?v=20261028-historico' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -426,6 +426,39 @@ def test_estado_traz_a_ultima_visita_de_cada_imovel_e_depois_so_as_novas(client,
     assert depois['cursor'] > inicial['cursor'] and len(depois['planos']) == 1
     assert [(a['nome'], a['hoje'], a['recuperadas']) for a in depois['agentes']] == [('Ana Agente', 2, 1), ('Bia Agente', 1, 0)]
     assert client.get(f"{RAIZ}/estado?desde={depois['cursor']}", **HTTPS).json['visitas'] == []
+
+
+def test_historico_traz_todas_as_visitas_do_imovel_inclusive_fora_da_janela(client, restrito, base):
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    enviar(client, visita(base['a'], situacao='FECHADO', uuid='visita-ana-1'), visita(base['a'], uuid='visita-ana-2'),
+           visita(base['a'], '1002', 'RECUSA', 'visita-outro-imovel'))
+    entrar(client, bia)
+    enviar(client, visita(base['a'], situacao='RECUSA', uuid='visita-bia-1'))
+    # Visita antiga, fora da janela do mapa: some do estado, mas fica no histórico.
+    antiga = Visita.query.filter_by(uuid_local='visita-ana-1').one()
+    antiga.data_visita = hoje_local() - timedelta(days=servico.JANELA_DIAS + 30)
+    db.session.commit()
+
+    resposta = client.get(RAIZ + '/historico?imovel=1001', **HTTPS)
+    assert resposta.status_code == 200 and resposta.headers['Cache-Control'] == 'private, no-store'
+    dados = resposta.json
+    assert dados['imovel'] == '1001' and dados['mais'] is False
+    assert [(v['u'], v['s'], v['a']) for v in dados['visitas']] == [
+        ('visita-bia-1', 'RECUSA', 'Bia Agente'), ('visita-ana-2', 'TRABALHADO', 'Ana Agente'), ('visita-ana-1', 'FECHADO', 'Ana Agente')]
+    assert 'visita-ana-1' not in [v['u'] for v in client.get(RAIZ + '/estado', **HTTPS).json['visitas']]
+    assert client.get(RAIZ + '/historico?imovel=sem-visita', **HTTPS).json['visitas'] == []
+    assert client.get(RAIZ + '/historico', **HTTPS).status_code == 400
+    assert client.get(RAIZ + '/historico?imovel=' + 'x' * 81, **HTTPS).status_code == 400
+    assert [v['u'] for v in servico.historico('1001', limite=2)['visitas']] == ['visita-bia-1', 'visita-ana-2']
+    assert servico.historico('1001', limite=2)['mais'] is True
+
+    # Sem conta, não lê o histórico.
+    client.get('/logout', **HTTPS)
+    with client.session_transaction() as session:
+        session.clear()
+    anonimo = client.get(RAIZ + '/historico?imovel=1001', **HTTPS)
+    assert anonimo.status_code == 302 and '/login' in anonimo.headers['Location']
 
 
 def test_boletim_usa_as_colunas_do_arquivo_oficial(client, base):
