@@ -5,7 +5,7 @@ Backfill para preencher as lacunas da carteirinha de vacinacao PMO:
 
 - Copia visit.address para o User.address do tutor (apenas quando vazio).
 - Atualiza Vacina aplicada da campanha PMO: aplicada_por (vet da campanha),
-  lote e fabricante.
+  lote (vazio ou com a validade antiga 09/2026) e fabricante.
 - Ajusta fabricante das doses planejadas (Reforco PMO) para o mesmo padrao.
 
 Uso:
@@ -37,6 +37,7 @@ def run(dry_run: bool = False) -> int:
         PMO_CAMPAIGN_VET_EMAIL,
         PMO_VACCINE_FABRICANTE,
         PMO_VACCINE_LOTE,
+        PMO_VACCINE_LOTE_ANTERIOR,
         _campaign_vet_user_id,
     )
 
@@ -72,7 +73,7 @@ def run(dry_run: bool = False) -> int:
             if not vac.aplicada_por:
                 vac.aplicada_por = vet_id
                 changed.append("aplicada_por")
-            if not vac.lote:
+            if not vac.lote or vac.lote == PMO_VACCINE_LOTE_ANTERIOR:
                 vac.lote = PMO_VACCINE_LOTE
                 changed.append("lote")
             if not vac.fabricante or vac.fabricante == "Prefeitura de Orlandia":
