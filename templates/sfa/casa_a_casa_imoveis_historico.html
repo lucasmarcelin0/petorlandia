@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#0b6568">
+  <title>Endereços de campo · Casa a Casa</title>
+  {# Padrão das páginas com formulário: datas no formato brasileiro em qualquer navegador. #}
+  <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <style>
+    :root { --verde: #0b6568; --tinta: #12343b; --suave: #5d7378; --linha: #dfe7e5; --fundo: #f3f6f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--tinta); background: var(--fundo); }
+    header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: .6rem; padding: .7rem 1rem; color: #fff; background: var(--verde); }
+    header a { color: #fff; font-size: 1.3rem; text-decoration: none; }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    main { max-width: 52rem; margin: 0 auto; padding: .8rem 1rem 2rem; }
+    .nota { color: var(--suave); font-size: .9rem; }
+    .filtros { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0 .8rem; }
+    .filtros button { padding: .4rem .8rem; border: 1px solid var(--linha); border-radius: 999px; color: var(--tinta); background: #fff; font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+    .filtros button[aria-pressed="true"] { border-color: var(--verde); color: #fff; background: var(--verde); }
+    ol { margin: 0; padding: 0; list-style: none; }
+    li { margin-bottom: .6rem; padding: .75rem .9rem; border: 1px solid var(--linha); border-radius: .8rem; background: #fff; }
+    li[hidden] { display: none; }
+    .topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .2rem .8rem; }
+    .selo { padding: .12rem .5rem; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+    .ADICIONADO { color: #2b8a3e; background: #d3f9d8; }
+    .MOVIDO { color: #1864ab; background: #d0ebff; }
+    .EXCLUIDO { color: #c92a2a; background: #ffe3e3; }
+    .RESTAURADO { color: #e67700; background: #fff3bf; }
+    small { color: var(--suave); }
+    a { color: var(--verde); }
+    form { display: inline; }
+    .botao { margin-top: .4rem; padding: .35rem .8rem; border: 1.5px solid var(--verde); border-radius: .6rem; color: var(--verde); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .vazio { padding: 2rem 1rem; color: var(--suave); text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="{{ voltar }}" aria-label="Voltar ao Casa a Casa">←</a>
+    <h1>🕘 Endereços acrescentados em campo</h1>
+  </header>
+  <main>
+    <p class="nota">Tudo o que a equipe fez com os endereços que não estavam na base oficial: quem acrescentou, ajustou o local no mapa, excluiu ou restaurou, e quando.</p>
+    <div class="filtros" role="group" aria-label="Filtrar">
+      <button type="button" data-filtro="" aria-pressed="true">Tudo</button>
+      <button type="button" data-filtro="ADICIONADO" aria-pressed="false">Adições</button>
+      <button type="button" data-filtro="MOVIDO" aria-pressed="false">Ajustes de local</button>
+      <button type="button" data-filtro="EXCLUIDO" aria-pressed="false">Exclusões</button>
+      <button type="button" data-filtro="RESTAURADO" aria-pressed="false">Restaurações</button>
+    </div>
+    <ol>
+      {% for e in eventos %}
+        <li data-acao="{{ e.acao }}">
+          <div class="topo">
+            <strong>{{ e.endereco }}{% if e.quarteirao %} <small>· Quarteirão {{ e.quarteirao }}{% if e.setor %} · SC {{ e.setor }}{% endif %}</small>{% endif %}</strong>
+            <span class="selo {{ e.acao }}">{{ e.acao_nome }}</span>
+          </div>
+          <div>{{ e.por or 'equipe' }} · {{ e.quando }}</div>
+          {% if e.acao == 'MOVIDO' %}<small>Local: {% if e.de %}<a href="{{ e.de }}" target="_blank" rel="noopener">antes</a>{% else %}antes{% endif %} → <a href="{{ e.para }}" target="_blank" rel="noopener">depois</a></small>{% endif %}
+          {% if e.motivo %}<div><small>Motivo: {{ e.motivo }}</small></div>{% endif %}
+          {% if e.acao == 'ADICIONADO' and e.local %}<small><a href="{{ e.local }}" target="_blank" rel="noopener">Ver no mapa</a></small>{% endif %}
+          {% if e.acao == 'EXCLUIDO' and e.excluido_agora %}
+            <div>
+              <form method="post" action="{{ url_for('sfa_routes.casa_a_casa_imovel_restaurar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                <input type="hidden" name="imovel" value="{{ e.imovel }}">
+                <button type="submit" class="botao">↩ Restaurar endereço</button>
+              </form>
+            </div>
+          {% endif %}
+        </li>
+      {% else %}
+        <li class="vazio">Nenhum endereço acrescentado em campo ainda.</li>
+      {% endfor %}
+    </ol>
+  </main>
+  <script>
+    document.querySelectorAll('.filtros button').forEach(botao => botao.addEventListener('click', () => {
+      document.querySelectorAll('.filtros button').forEach(b => b.setAttribute('aria-pressed', String(b === botao)));
+      document.querySelectorAll('li[data-acao]').forEach(item => { item.hidden = Boolean(botao.dataset.filtro) && item.dataset.acao !== botao.dataset.filtro; });
+    }));
+  </script>
+</body>
+</html>

@@ -152,10 +152,12 @@ def _assinatura_campo():
     def consulta():
         from sqlalchemy import func
         from extensions import db
-        from models.entomologia import EntomologiaImovelCampo as C
+        from models.entomologia import EntomologiaImovelCampo as C, EntomologiaImovelCampoEvento as E
         total, maior, retirados = db.session.query(func.count(C.id), func.max(C.id),
                                                    func.count(C.removido_em)).one()
-        return f"{total}-{maior or 0}-{retirados}"
+        # Local ajustado, exclusão e restauração também refazem a base.
+        eventos = db.session.query(func.max(E.id)).scalar()
+        return f"{total}-{maior or 0}-{retirados}-{eventos or 0}"
 
     return consultar_sem_interromper(consulta, "")
 
@@ -167,6 +169,16 @@ def _imoveis_campo() -> list:
         from models.entomologia import EntomologiaImovelCampo as C
         return [(c.imovel, c.bloco, c.logradouro, c.numero, c.complemento or "", c.longitude, c.latitude)
                 for c in C.query.filter(C.removido_em.is_(None)).order_by(C.id).all()]
+
+    return consultar_sem_interromper(consulta, []) or []
+
+
+def _imoveis_campo_removidos() -> list:
+    from services.entomologia_service import consultar_sem_interromper
+
+    def consulta():
+        from models.entomologia import EntomologiaImovelCampo as C
+        return [imovel for (imovel,) in C.query.with_entities(C.imovel).filter(C.removido_em.isnot(None)).all()]
 
     return consultar_sem_interromper(consulta, []) or []
 
@@ -378,7 +390,9 @@ def _montar_base() -> dict:
                               key=lambda casa: (-math.atan2(casa[2] - cy, (casa[1] - cx) * escala), casa[4])))
 
     dados = {"blocos": blocos, "ruas": list(ruas), "imoveis": imoveis, "sem_quarteirao": fora,
-             "janela_dias": JANELA_DIAS, "vias": _vias()}
+             "janela_dias": JANELA_DIAS, "vias": _vias(),
+             # Imóveis acrescentados e depois excluídos: as visitas antigas não os trazem de volta ao mapa.
+             "removidos": sorted(_imoveis_campo_removidos())}
     dados["versao"] = hashlib.sha1(json.dumps(dados, ensure_ascii=False, sort_keys=True,
                                               separators=(",", ":")).encode()).hexdigest()[:16]
     return dados
@@ -1018,6 +1032,109 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
                              criado_por=nome))
             db.session.flush()
     return {"aceitas": aceitas, "recusadas": recusadas, "novas": novas, "imoveis_novos": imoveis_novos}
+
+
+# ---------------------------------------------------------------------------
+# Imóveis acrescentados em campo: ajuste do local, exclusão e histórico
+# ---------------------------------------------------------------------------
+
+# O local ajustado precisa ficar perto do quarteirão do imóvel (evita arrastar para outra quadra).
+MOVER_ATE_M = 400
+ACOES_IMOVEL_CAMPO = {"ADICIONADO": "Adicionado", "MOVIDO": "Local ajustado", "EXCLUIDO": "Excluído",
+                      "RESTAURADO": "Restaurado"}
+
+
+def _imovel_campo(imovel):
+    from models.entomologia import EntomologiaImovelCampo as C
+
+    linha = C.query.filter_by(imovel=str(imovel or "")).first()
+    if linha is None:
+        raise LookupError("Endereço acrescentado não encontrado. Os endereços da base oficial não mudam por aqui.")
+    return linha
+
+
+def _evento_do_imovel(imovel: str, acao: str, usuario, detalhes: dict | None = None, motivo: str | None = None):
+    from extensions import db
+    from models.entomologia import EntomologiaImovelCampoEvento as E
+
+    db.session.add(E(imovel=imovel, acao=acao, por_id=getattr(usuario, "id", None), por=nome_da_conta(usuario),
+                     detalhes_json=json.dumps(detalhes, separators=(",", ":")) if detalhes else None,
+                     motivo=motivo or None))
+
+
+def mover_imovel_campo(imovel, lat, lng, usuario) -> dict:
+    """Ajusta no mapa o local de um imóvel acrescentado em campo."""
+    linha = _imovel_campo(imovel)
+    if linha.removido_em is not None:
+        raise ValueError("Endereço excluído: restaure antes de ajustar o local.")
+    lat, lng = _coordenada(lat, -90, 90), _coordenada(lng, -180, 180)
+    if lat is None or lng is None:
+        raise ValueError("Local inválido.")
+    bloco = indice()["blocos"].get(linha.bloco)
+    if bloco:
+        cx, cy = bloco["c"]
+        distancia = math.hypot((lng - cx) * 111_320 * math.cos(math.radians(cy)), (lat - cy) * 110_540)
+        if distancia > MOVER_ATE_M:
+            raise ValueError(f"O novo local fica longe demais do quarteirão {bloco['n']}. Arraste para perto dele.")
+    de = [linha.latitude, linha.longitude]
+    linha.latitude, linha.longitude = round(lat, 7), round(lng, 7)
+    _evento_do_imovel(linha.imovel, "MOVIDO", usuario, {"de": de, "para": [linha.latitude, linha.longitude]})
+    return {"imovel": linha.imovel, "lat": linha.latitude, "lng": linha.longitude}
+
+
+def excluir_imovel_campo(imovel, usuario, motivo=None) -> dict:
+    """Tira do mapa um imóvel acrescentado com defeito. As visitas dele ficam guardadas; o admin pode restaurar."""
+    linha = _imovel_campo(imovel)
+    if linha.removido_em is None:
+        linha.removido_em, linha.removido_por = datetime.now(FUSO), nome_da_conta(usuario)
+        _evento_do_imovel(linha.imovel, "EXCLUIDO", usuario, motivo=_texto(motivo, 300))
+    return {"imovel": linha.imovel, "excluido": True}
+
+
+def restaurar_imovel_campo(imovel, usuario) -> dict:
+    linha = _imovel_campo(imovel)
+    if linha.removido_em is not None:
+        linha.removido_em = linha.removido_por = None
+        _evento_do_imovel(linha.imovel, "RESTAURADO", usuario)
+    return {"imovel": linha.imovel, "excluido": False}
+
+
+def historico_imoveis_campo(limite: int = 500) -> list[dict]:
+    """Adições, ajustes de local, exclusões e restaurações, da mais recente para a mais antiga, com quem fez."""
+    from models.entomologia import EntomologiaImovelCampo as C, EntomologiaImovelCampoEvento as E
+
+    imoveis = {c.imovel: c for c in C.query.all()}
+    blocos = indice()["blocos"]
+    linhas = [("ADICIONADO", c.imovel, c.criado_em, c.criado_por, None, None) for c in imoveis.values()]
+    linhas += [(e.acao, e.imovel, e.em, e.por, e.detalhes_json, e.motivo)
+               for e in E.query.order_by(E.id.desc()).limit(limite).all()]
+
+    def momento(linha):
+        quando = linha[2]
+        if quando is not None and quando.tzinfo is None:
+            quando = quando.replace(tzinfo=ZoneInfo("UTC"))
+        return quando or datetime.min.replace(tzinfo=ZoneInfo("UTC"))
+
+    saida = []
+    for acao, imovel, quando, por, detalhes_json, motivo in sorted(linhas, key=momento, reverse=True)[:limite]:
+        c = imoveis.get(imovel)
+        bloco = blocos.get(c.bloco) if c else None
+        try:
+            detalhes = json.loads(detalhes_json) if detalhes_json else {}
+        except ValueError:
+            detalhes = {}
+        mapa = lambda ponto: (f"https://www.google.com/maps?q={ponto[0]:.6f},{ponto[1]:.6f}"
+                              if ponto and None not in ponto else "")
+        saida.append({
+            "acao": acao, "acao_nome": ACOES_IMOVEL_CAMPO.get(acao, acao), "imovel": imovel,
+            "endereco": (f"{c.logradouro}, {c.numero}" + (f" · {c.complemento}" if c.complemento else "")) if c else imovel,
+            "quarteirao": bloco["n"] if bloco else (c.quarteirao if c else ""), "setor": c.setor if c else "",
+            "por": por or "", "quando": _data_hora_br(quando), "motivo": motivo or "",
+            "de": mapa(detalhes.get("de")), "para": mapa(detalhes.get("para")),
+            "local": mapa([c.latitude, c.longitude]) if c else "",
+            "excluido_agora": bool(c and c.removido_em is not None),
+        })
+    return saida
 
 
 # ---------------------------------------------------------------------------

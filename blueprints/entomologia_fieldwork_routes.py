@@ -85,6 +85,10 @@ def register(bp, require_access):
                 'solicitacoes': url_for('sfa_routes.casa_a_casa_solicitacoes', token=_token()),
                 'categorias': url_for('sfa_routes.casa_a_casa_categoria_nova') if registra else '',
                 'solicitacoes_do_imovel': url_for('sfa_routes.casa_a_casa_solicitacoes_do_imovel') if registra else '',
+                'mover_imovel': url_for('sfa_routes.casa_a_casa_imovel_mover') if registra else '',
+                'excluir_imovel': url_for('sfa_routes.casa_a_casa_imovel_excluir') if registra else '',
+                'historico_imoveis': url_for('sfa_routes.casa_a_casa_imoveis_historico')
+                if registra and eh_admin(current_user) else '',
                 'categoria_editar': url_for('sfa_routes.casa_a_casa_categoria_editar') if registra else '',
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
@@ -484,6 +488,68 @@ def register(bp, require_access):
         return _sem_cache(render_template('sfa/casa_a_casa_oficio.html', s=servico.solicitacao_dict(solicitacao),
                                           hoje=hoje, data_extenso=servico.data_por_extenso(hoje), voltar=url_for('sfa_routes.casa_a_casa_solicitacoes',
                                                                             token=_token())))
+
+    def _mudar_imovel_campo(funcao, *args):
+        """Aplica a mudança no imóvel acrescentado, grava e faz os aparelhos baixarem a base nova."""
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+        try:
+            resultado = funcao(*args)
+        except LookupError as exc:
+            return _erro(str(exc), 404)
+        except ValueError as exc:
+            db.session.rollback()
+            return _erro(str(exc))
+        db.session.commit()
+        servico.esquecer_base()
+        return _sem_cache(jsonify({'ok': True, **resultado, 'versao_base': servico.base()['versao']}))
+
+    @bp.route('/entomologia/casa-a-casa/imoveis-campo/mover', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_imovel_mover():
+        """Rua: ajusta no mapa o local de um imóvel acrescentado em campo (fica no histórico)."""
+        ensure_entomologia_editor()
+        from services import entomologia_casa_a_casa as servico
+        dados = request.get_json(silent=True) or {}
+        return _mudar_imovel_campo(servico.mover_imovel_campo, dados.get('imovel'), dados.get('lat'), dados.get('lng'),
+                                   current_user)
+
+    @bp.route('/entomologia/casa-a-casa/imoveis-campo/excluir', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_imovel_excluir():
+        """Rua: tira do mapa um imóvel acrescentado com defeito (o administrador pode restaurar)."""
+        ensure_entomologia_editor()
+        from services import entomologia_casa_a_casa as servico
+        dados = request.get_json(silent=True) or {}
+        return _mudar_imovel_campo(servico.excluir_imovel_campo, dados.get('imovel'), current_user, dados.get('motivo'))
+
+    @bp.route('/entomologia/casa-a-casa/imoveis-campo/restaurar', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_imovel_restaurar():
+        """Administrador: devolve ao mapa um imóvel acrescentado que foi excluído."""
+        ensure_entomologia_admin()
+        from flask import redirect
+        from services import entomologia_casa_a_casa as servico
+        dados = (request.get_json(silent=True) if request.is_json else request.form) or {}
+        resposta = _mudar_imovel_campo(servico.restaurar_imovel_campo, dados.get('imovel'), current_user)
+        if request.is_json:
+            return resposta
+        return redirect(url_for('sfa_routes.casa_a_casa_imoveis_historico'))
+
+    @bp.route('/entomologia/casa-a-casa/imoveis-campo/historico')
+    @require_access
+    @login_required
+    def casa_a_casa_imoveis_historico():
+        """Administrador: quem acrescentou, ajustou o local, excluiu ou restaurou cada endereço de campo."""
+        ensure_entomologia_admin()
+        from flask_wtf.csrf import generate_csrf
+        from services import entomologia_casa_a_casa as servico
+        return _sem_cache(render_template('sfa/casa_a_casa_imoveis_historico.html',
+                                          eventos=servico.historico_imoveis_campo(), csrf=generate_csrf(),
+                                          voltar=url_for('sfa_routes.casa_a_casa')))
 
     @bp.route('/entomologia/casa-a-casa/visitas.csv')
     @require_access

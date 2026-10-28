@@ -66,6 +66,7 @@
     hoje: hojeNoAparelho(), cursor: 0, completo: false, csrf: cfg.csrf,
     fila: lerLocal(FILA, []), acoes: lerLocal(ACOES, []), recusadas: lerLocal(RECUSADAS, []),
     solicitacoes: lerLocal(SOLICITACOES, []), fotosNaMemoria: new Map(), moradores: new Map(), solicitacoesDoImovel: new Map(),
+    movendo: null, removidosLocais: new Set(), posicoesAjustadas: new Map(),
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
@@ -140,11 +141,15 @@
     });
     for (const [id, x, y, rua, n, cp, posicao] of base.imoveis) {
       const bloco = S.blocos[posicao];
-      if (!bloco) continue;
-      const casa = { id, x, y, rua: base.ruas[rua] || '', n, cp, bloco };
+      // Excluído ou com o local ajustado neste aparelho: vale o que foi feito aqui até a base nova chegar.
+      if (!bloco || S.removidosLocais.has(id)) continue;
+      const ajustado = S.posicoesAjustadas.get(id);
+      const casa = { id, x: ajustado ? ajustado[1] : x, y: ajustado ? ajustado[0] : y, rua: base.ruas[rua] || '', n, cp, bloco };
       bloco.casas.push(casa);
       S.casaPorId.set(id, casa);
     }
+    // Base nova (endereço acrescentado, ajustado ou excluído): o quarteirão aberto no painel passa a ser o novo.
+    if (S.blocoAtivo) S.blocoAtivo = S.porId.get(S.blocoAtivo.id) || null;
   }
 
   async function carregarBase() {
@@ -232,10 +237,13 @@
     const daFila = S.fila.map(visita => M.comoRegistro(visita, eu()));
     S.ultimas = M.juntarVisitas(S.visitas.values(), daFila);
     for (const bloco of S.blocos) bloco.extras = [];
+    // Endereço acrescentado e depois excluído: as visitas antigas não o trazem de volta ao mapa.
+    const removidos = new Set([...(S.base && S.base.removidos || []), ...S.removidosLocais]);
     for (const v of S.ultimas.values()) {
-      if (S.casaPorId.has(v.m)) continue;
+      if (S.casaPorId.has(v.m) || removidos.has(v.m)) continue;
       const bloco = S.porId.get(v.b);
-      if (bloco) bloco.extras.push({ id: v.m, x: v.lo ?? bloco.c[0], y: v.la ?? bloco.c[1], rua: v.lg || 'Imóvel acrescentado', n: v.n || 's/n', cp: v.cp || '', bloco, extra: true });
+      const ajustado = S.posicoesAjustadas.get(v.m);
+      if (bloco) bloco.extras.push({ id: v.m, x: ajustado ? ajustado[1] : v.lo ?? bloco.c[0], y: ajustado ? ajustado[0] : v.la ?? bloco.c[1], rua: v.lg || 'Imóvel acrescentado', n: v.n || 's/n', cp: v.cp || '', bloco, extra: true });
     }
     const planos = new Map();
     for (const plano of S.planos) { if (!planos.has(plano.b)) planos.set(plano.b, []); planos.get(plano.b).push(plano); }
@@ -465,6 +473,7 @@
     for (const casa of casas) {
       const visita = S.ultimas.get(casa.id);
       const cor = M.corDaCasa(visita, casa.bloco.estado.inicio);
+      if (S.movendo && S.movendo.casa.id === casa.id) { desenharCasaMovendo(casa, cor); continue; }
       if (!centros.has(casa.bloco)) centros.set(casa.bloco, S.mapa.latLngToContainerPoint([casa.bloco.c[1], casa.bloco.c[0]]));
       const naTela = S.mapa.latLngToContainerPoint([casa.y, casa.x]), centro = centros.get(casa.bloco);
       const dx = centro.x - naTela.x, dy = centro.y - naTela.y, distancia = Math.hypot(dx, dy);
@@ -480,12 +489,118 @@
           no.title = casa.rua + ', ' + casa.n;
         }
         marcador.on('click', () => abrirCasa(casa));
+        // Segurar o número de um endereço acrescentado em campo: ajustar o local arrastando.
+        if (podeAjustar(casa)) marcador.on('contextmenu', evento => { if (evento.originalEvent) evento.originalEvent.preventDefault(); iniciarMover(casa); });
       } else {
         L.circleMarker(lugar, { renderer: S.tela, radius: 5, color: cor.cor, weight: 1.5, fillColor: cor.fundo, fillOpacity: 1 })
           .on('click', () => abrirCasa(casa)).addTo(S.camadaCasas);
       }
     }
     S.novas.clear();
+  }
+
+  // ---------------------------------------------------------------- endereços acrescentados em campo
+  const ehAcrescentado = casa => String(casa.id || '').startsWith('novo-');
+  const podeAjustar = casa => cfg.registra && cfg.urls.mover_imovel && ehAcrescentado(casa);
+  // Ainda não chegou ao servidor (só nas visitas guardadas no aparelho): o ajuste é feito ali mesmo.
+  const soNoAparelho = casa => !S.casaPorId.has(casa.id) && S.fila.some(v => v.imovel === casa.id);
+
+  function desenharCasaMovendo(casa, cor) {
+    const ponto = S.movendo.ponto || [casa.y, casa.x];
+    const icone = L.divIcon({ className: 'cac-casa movendo', html: '<span></span>', iconSize: [0, 0] });
+    const marcador = L.marker(ponto, { icon: icone, draggable: true, keyboard: false, zIndexOffset: 1000, autoPan: true }).addTo(S.camadaCasas);
+    const no = marcador.getElement();
+    if (no) {
+      const etiqueta = no.querySelector('span');
+      etiqueta.textContent = casa.n;
+      etiqueta.style.cssText = `background:${cor.fundo};color:${cor.texto};border-color:${cor.cor}`;
+    }
+    marcador.on('dragend', () => { const p = marcador.getLatLng(); S.movendo.ponto = [p.lat, p.lng]; desenharBarraMover(); });
+  }
+
+  function desenharBarraMover() {
+    let barra = $('cac-mover');
+    if (!S.movendo) { if (barra) barra.remove(); return; }
+    if (!barra) { barra = h('div', { class: 'cac-mover', id: 'cac-mover', role: 'status' }); document.querySelector('.cac-mapa-area').append(barra); }
+    const casa = S.movendo.casa;
+    barra.replaceChildren(
+      h('p', {}, S.movendo.ponto ? `Novo local de ${casa.rua}, ${casa.n}. Confira e salve.` : `Segure e arraste o número ${casa.n} até o lugar certo.`),
+      h('div', {}, h('button', { type: 'button', class: 'cac-botao', onclick: () => pararMover() }, 'Cancelar'),
+        h('button', { type: 'button', class: 'cac-botao forte', disabled: !S.movendo.ponto, onclick: () => salvarNovoLocal() }, 'Salvar local')));
+  }
+
+  function iniciarMover(casa) {
+    if (!$('cac-ficha').hidden) fecharFicha(true);
+    // O painel de baixo cobriria o número: recolhe enquanto ajusta e volta como estava depois.
+    S.movendo = { casa, ponto: null, painel: S.prefs.painel };
+    if (window.matchMedia('(max-width: 899px)').matches) abrirPainel(false);
+    S.mapa.invalidateSize();
+    S.mapa.setView([casa.y, casa.x], Math.max(S.mapa.getZoom(), 18.5));
+    desenharBarraMover();
+    desenhar();
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+  function pararMover() {
+    const painel = S.movendo && S.movendo.painel;
+    S.movendo = null;
+    desenharBarraMover();
+    if (painel) abrirPainel(true);
+    desenhar();
+  }
+
+  async function salvarNovoLocal() {
+    const { casa, ponto } = S.movendo || {};
+    if (!casa || !ponto) return;
+    if (soNoAparelho(casa)) {
+      for (const visita of S.fila) if (visita.imovel === casa.id) { visita.lat = ponto[0]; visita.lng = ponto[1]; }
+      salvarLocal(FILA, S.fila);
+    } else {
+      try {
+        await pedir(cfg.urls.mover_imovel, { imovel: casa.id, lat: ponto[0], lng: ponto[1] });
+      } catch (erro) {
+        avisar(navigator.onLine ? (erro.message || 'Não foi possível ajustar o local.') : 'Sem internet: ajuste o local quando houver sinal.', 'ruim');
+        return;
+      }
+    }
+    for (const alvo of [casa, S.casaPorId.get(casa.id)]) if (alvo) { alvo.y = ponto[0]; alvo.x = ponto[1]; }
+    S.posicoesAjustadas.set(casa.id, ponto);
+    pararMover();
+    recalcular(); desenhar();
+    avisar(`Local de ${casa.rua}, ${casa.n} ajustado ✔`, 'bom');
+  }
+
+  async function excluirEndereco(casa) {
+    const motivo = window.prompt(`Excluir o endereço ${casa.rua}, ${casa.n} do mapa? Diga o motivo (opcional), por exemplo: número errado, endereço repetido.`, '');
+    if (motivo === null) return;
+    if (soNoAparelho(casa)) {
+      if (!window.confirm('Este endereço ainda não foi enviado. As visitas guardadas dele neste aparelho também serão descartadas. Continuar?')) return;
+      S.fila = S.fila.filter(v => v.imovel !== casa.id);
+      salvarLocal(FILA, S.fila);
+    } else {
+      try {
+        await pedir(cfg.urls.excluir_imovel, { imovel: casa.id, motivo });
+      } catch (erro) {
+        avisar(navigator.onLine ? (erro.message || 'Não foi possível excluir o endereço.') : 'Sem internet: exclua quando houver sinal.', 'ruim');
+        return;
+      }
+    }
+    S.removidosLocais.add(casa.id);
+    S.casaPorId.delete(casa.id);
+    // A base pode ter sido recarregada com a ficha aberta: vale o quarteirão atual.
+    const bloco = S.porId.get(casa.bloco.id) || casa.bloco;
+    bloco.casas = bloco.casas.filter(c => c.id !== casa.id);
+    fecharFicha(true);
+    recalcular(); desenhar(); desenharConexao();
+    avisar(`Endereço ${casa.rua}, ${casa.n} excluído. O administrador vê no histórico e pode restaurar.`, 'bom');
+  }
+
+  // Na ficha de um endereço acrescentado: ajustar o local no mapa ou excluir.
+  function enderecoAcrescentado(casa) {
+    return h('div', { class: 'cac-acrescentado' },
+      h('p', { class: 'cac-nota' }, 'Endereço acrescentado em campo. Se estiver no lugar errado, ajuste no mapa (ou segure o número no mapa e arraste).'),
+      h('div', { class: 'cac-foto-botoes' },
+        h('button', { type: 'button', class: 'cac-botao', onclick: () => iniciarMover(casa) }, '📍 Ajustar local no mapa'),
+        cfg.urls.excluir_imovel ? h('button', { type: 'button', class: 'cac-botao perigo', onclick: () => excluirEndereco(casa) }, '🗑️ Excluir endereço') : null));
   }
 
   // Quem trabalha o quarteirão: no escritório, o plano do dia escolhido; na rua, o plano em aberto.
@@ -758,6 +873,7 @@
       const s = anterior && M.POR_ID[anterior.s];
       const ultima = anterior ? `Última visita: ${s.icone} ${s.nome}${anterior.l ? ' com larva' : ''} em ${dataBr(anterior.d)}${anterior.a ? ' por ' + primeiroNome(anterior.a) : ''}${anterior.pendente ? ' (ainda não enviada)' : ''}` : '';
       corpo.append(historicoDaCasa(casa, ultima));
+      if (podeAjustar(casa)) corpo.append(enderecoAcrescentado(casa));
       if (cfg.urls.moradores) corpo.append(moradoresDaCasa(casa, d));
       if (cfg.urls.solicitacao) corpo.append(solicitacaoDaCasa(casa));
     }
@@ -1659,6 +1775,7 @@
       cfg.registra ? item(S.pronto ? '🔄 Atualizar o que fica guardado no aparelho' : '📥 Preparar para usar sem internet', () => prepararOffline(true)) : null,
       cfg.registra ? item(`⬆️ Enviar agora${pendentes ? ' (' + pendentes + ')' : ''}`, () => { if (!navigator.onLine) avisar('Sem internet agora. Os registros continuam guardados.'); ciclo(); }, !pendentes) : null,
       cfg.urls.solicitacoes ? item('📨 Solicitações e ofícios', () => { location.href = cfg.urls.solicitacoes; }) : null,
+      cfg.urls.historico_imoveis ? item('🕘 Histórico de endereços acrescentados', () => { location.href = cfg.urls.historico_imoveis; }) : null,
       item('🖨️ Imprimir mapa e plano', imprimir),
       item('📄 Boletim de hoje (CSV)', baixar(cfg.urls.boletim_csv, S.hoje)),
       item('📄 Boletim dos últimos 30 dias (CSV)', baixar(cfg.urls.boletim_csv, somarDias(S.hoje, -30))),
