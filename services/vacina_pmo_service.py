@@ -48,7 +48,11 @@ DEFAULT_SHEET_URL = (
 DEFAULT_SHEET_RANGE = "A:T"
 
 PMO_VACCINE_FABRICANTE = "Bioraiva Pet (Biogenesis Bago)"
-PMO_VACCINE_LOTE = "Fab. 09/2024 - Val. 09/2026"
+# Validade do lote em uso na campanha (vence em 01/2027). O texto anterior,
+# "Fab. 09/2024 - Val. 09/2026", fazia a carteirinha parecer vencida; a
+# migration d4b8f2a6c1e3 corrige as doses ja gravadas com ele.
+PMO_VACCINE_LOTE = "Val. 01/2027"
+PMO_VACCINE_LOTE_ANTERIOR = "Fab. 09/2024 - Val. 09/2026"
 PMO_CAMPAIGN_VET_EMAIL = "lukemarki3@gmail.com"
 PMO_EDUCATIONAL_VIDEO_URL_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEO_URL"
 PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
@@ -1934,7 +1938,7 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
         vaccine.nome = "Vacina Antirrábica"
         if not vaccine.fabricante or vaccine.fabricante in {"Prefeitura de Orlandia", "Prefeitura de Orlândia"}:
             vaccine.fabricante = PMO_VACCINE_FABRICANTE
-        if not vaccine.lote:
+        if not vaccine.lote or vaccine.lote == PMO_VACCINE_LOTE_ANTERIOR:
             vaccine.lote = PMO_VACCINE_LOTE
         if vet_id and not vaccine.aplicada_por:
             vaccine.aplicada_por = vet_id
