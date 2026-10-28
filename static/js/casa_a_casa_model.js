@@ -173,6 +173,17 @@
     return ultimas;
   }
 
+  /* Histórico de um imóvel: o que veio do servidor e o que ainda está no aparelho, sem repetir a mesma
+     visita (uuid), do dia mais recente para o mais antigo; no mesmo dia, a que ainda não foi enviada e
+     depois a que chegou por último. */
+  function historicoDoImovel(doServidor, daFila, imovel) {
+    const porVisita = new Map();
+    for (const v of daFila || []) if (v && v.m === imovel) porVisita.set(v.u, v);
+    for (const v of doServidor || []) if (v && v.m === imovel) porVisita.set(v.u || 'i' + v.i, v);
+    return Array.from(porVisita.values()).sort((a, b) => String(b.d || '').localeCompare(String(a.d || ''))
+      || (b.pendente ? 1 : 0) - (a.pendente ? 1 : 0) || (b.i || 0) - (a.i || 0) || instante(b.h) - instante(a.h));
+  }
+
   // Passe: começa no dia do plano em aberto; sem plano, hoje. O progresso conta as casas visitadas desde então.
   function planoAberto(planos, hoje) {
     let aberto = null;
@@ -364,7 +375,7 @@
 
   const api = {
     SITUACOES, OPCOES, OCULTAS, CONTROLES, PRODUTOS, PARTES, NOME_PARTE, POR_ID, INSPECIONADO, PENDENCIA, LARVA, BLOCOS, XP, NIVEIS, RECENTE_DIAS,
-    dia, diasEntre, diasDeTrabalho, planosDoDia, agendaDoDia, geometriaDoBloco, noL, casasDoL, linhaDaDivisao, paginasDoRoteiro, uuid, maisRecente, juntarVisitas, planoAberto, progresso, estadoDoBloco, corDaCasa,
+    dia, diasEntre, diasDeTrabalho, planosDoDia, agendaDoDia, geometriaDoBloco, noL, casasDoL, linhaDaDivisao, paginasDoRoteiro, uuid, maisRecente, juntarVisitas, historicoDoImovel, planoAberto, progresso, estadoDoBloco, corDaCasa,
     proximaCasa, recipientesPorTipo, somaDosTipos, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
   };
   root.CasaACasaModel = api;

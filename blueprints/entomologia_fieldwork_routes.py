@@ -73,6 +73,7 @@ def register(bp, require_access):
                 'estado': url_for('sfa_routes.casa_a_casa_estado', token=_token()),
                 'plano': url_for('sfa_routes.casa_a_casa_plano'),
                 'visitas': url_for('sfa_routes.casa_a_casa_visitas'),
+                'historico': url_for('sfa_routes.casa_a_casa_historico', token=_token()),
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
                 'recipientes_csv': url_for('sfa_routes.casa_a_casa_recipientes_csv', token=_token()),
@@ -221,6 +222,15 @@ def register(bp, require_access):
             # Imóvel acrescentado em campo entra na base: os aparelhos baixam a nova versão.
             servico.esquecer_base()
         return _sem_cache(jsonify({'ok': True, **resultado}))
+
+    @bp.route('/entomologia/casa-a-casa/historico')
+    @require_access
+    def casa_a_casa_historico():
+        from services.entomologia_casa_a_casa import historico
+        imovel = (request.args.get('imovel') or '').strip()
+        if not imovel or len(imovel) > 80:
+            abort(400)
+        return _sem_cache(jsonify(historico(imovel)))
 
     @bp.route('/entomologia/casa-a-casa/visitas.csv')
     @require_access

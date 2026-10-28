@@ -38,6 +38,8 @@
   };
   const dataBr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
   const horaBr = iso => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(t) : ''; };
+  // Data de outro ano leva o ano: o histórico do imóvel atravessa os ciclos.
+  const dataComAno = iso => dataBr(iso) + (iso && iso.slice(0, 4) !== hojeNoAparelho().slice(0, 4) ? '/' + iso.slice(0, 4) : '');
   const somarDias = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
   const primeiroNome = nome => String(nome || '').trim().split(/\s+/)[0] || 'Sem nome';
@@ -66,7 +68,7 @@
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
     atividadePlano: 'VI_ROTINA', relatorio: null, relatorioInicio: null, relatorioFim: null,
-    aoVivo: false, enviando: false, precisaEntrar: false, pronto: false, novas: new Set(),
+    aoVivo: false, enviando: false, precisaEntrar: false, pronto: false, novas: new Set(), historicos: new Map(),
     mapa: null, tela: null, poligonos: new Map(), camadaRotulos: null, camadaCasas: null, camadaRuas: null, camadaVias: null, eu: null,
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
@@ -727,9 +729,10 @@
         h('label', {}, 'Complemento', h('input', { type: 'text', id: 'cac-nova-complemento', maxlength: '60', placeholder: 'fundos, casa 2…', autocomplete: 'off' })),
         h('p', { class: 'cac-nota' }, 'Ao salvar, este endereço passa a fazer parte do mapa da equipe, na sua posição atual (toque em 📍 antes, se puder).')));
     }
-    if (anterior) {
-      const s = M.POR_ID[anterior.s];
-      corpo.append(h('p', { class: 'cac-ultima' }, `Última visita: ${s.icone} ${s.nome}${anterior.l ? ' com larva' : ''} em ${dataBr(anterior.d)}${anterior.a ? ' por ' + primeiroNome(anterior.a) : ''}${anterior.pendente ? ' (ainda não enviada)' : ''}`));
+    if (!nova) {
+      const s = anterior && M.POR_ID[anterior.s];
+      const ultima = anterior ? `Última visita: ${s.icone} ${s.nome}${anterior.l ? ' com larva' : ''} em ${dataBr(anterior.d)}${anterior.a ? ' por ' + primeiroNome(anterior.a) : ''}${anterior.pendente ? ' (ainda não enviada)' : ''}` : '';
+      corpo.append(historicoDaCasa(casa, ultima, false));
     }
 
     const detalhes = h('div', { class: 'cac-detalhes' });
@@ -876,13 +879,50 @@
     $('cac-ficha-titulo').textContent = `${casa.rua}, ${casa.n}`;
     $('cac-ficha-sub').textContent = `${nomeDoBloco(casa.bloco)} · SC ${casa.bloco.s}`;
     const corpo = $('cac-ficha-corpo');
-    corpo.replaceChildren(v ? resumoDaVisita(v) : h('p', { class: 'cac-ultima' }, 'Sem visita registrada no período.'));
+    corpo.replaceChildren(v ? resumoDaVisita(v) : h('p', { class: 'cac-ultima' }, 'Sem visita registrada no período.'), historicoDaCasa(casa, ''));
     $('cac-ficha').hidden = false;
+  }
+
+  // Histórico do imóvel: todas as visitas, buscadas no servidor ao abrir a ficha. Sem internet, mostra o
+  // que o aparelho já tem (a última visita e as que ainda não foram enviadas).
+  const HISTORICO_VALE_MS = 5 * 60 * 1000;
+  async function buscarHistorico(imovel) {
+    const guardado = S.historicos.get(imovel);
+    if (guardado && Date.now() - guardado.em < HISTORICO_VALE_MS) return guardado;
+    const url = cfg.urls.historico + (cfg.urls.historico.includes('?') ? '&' : '?') + 'imovel=' + encodeURIComponent(imovel);
+    const dados = await pedir(url);
+    const historico = { visitas: dados.visitas || [], mais: Boolean(dados.mais), em: Date.now() };
+    S.historicos.set(imovel, historico);
+    return historico;
+  }
+
+  function historicoDaCasa(casa, ultima) {
+    const conta = h('span', { class: 'cac-historico-conta' });
+    const lista = h('ol', { class: 'cac-historico-lista' });
+    const nota = h('p', { class: 'cac-nota', hidden: true });
+    const caixa = h('details', { class: 'cac-historico' }, h('summary', {}, h('span', {}, ultima || 'Histórico do imóvel'), conta), lista, nota);
+    const desenharLista = (doServidor, aviso) => {
+      // A última visita conhecida entra sempre: pode ter sido enviada depois de o histórico chegar.
+      const conhecida = S.visitas.get(casa.id);
+      const daFila = S.fila.filter(envio => envio.imovel === casa.id).map(envio => M.comoRegistro(envio, eu()));
+      const visitas = M.historicoDoImovel((doServidor || []).concat(conhecida ? [conhecida] : []), daFila, casa.id);
+      caixa.hidden = !visitas.length;
+      conta.textContent = doServidor ? `Histórico: ${plural(visitas.length, 'visita', 'visitas')}` : 'Ver histórico';
+      lista.replaceChildren(...visitas.map(v => h('li', { class: v.pendente ? 'pendente' : null }, resumoDaVisita(v))));
+      nota.textContent = aviso || '';
+      nota.hidden = !aviso;
+    };
+    if (!cfg.urls.historico) { desenharLista(null, ''); return caixa; }
+    desenharLista(null, 'Buscando as visitas anteriores…');
+    buscarHistorico(casa.id)
+      .then(historico => desenharLista(historico.visitas, historico.mais ? `Mostrando as ${historico.visitas.length} visitas mais recentes.` : ''))
+      .catch(() => desenharLista(null, 'Sem conexão: mostrando só as visitas guardadas neste aparelho.'));
+    return caixa;
   }
 
   function resumoDaVisita(v) {
     const s = M.POR_ID[v.s];
-    const linhas = [`${s.icone} ${s.nome} em ${dataBr(v.d)}${horaBr(v.h) ? ' às ' + horaBr(v.h) : ''}${v.a ? ' · ' + v.a : ''}`];
+    const linhas = [`${s.icone} ${s.nome} em ${dataComAno(v.d)}${horaBr(v.h) ? ' às ' + horaBr(v.h) : ''}${v.a ? ' · ' + v.a : ''}${v.pendente ? ' (ainda não enviada)' : ''}`];
     if (M.INSPECIONADO.has(v.s)) {
       linhas.push(`Recipientes: ${v.re} existentes, ${v.ra} com água, ${v.rl} com larva`);
       if (v.rt && v.rt.length) linhas.push('Tipos: ' + v.rt.map(r => `${codigoDoTipo(r.t)} ${(TIPO_RECIPIENTE.get(r.t) || { nome: '' }).nome} ×${r.e}${r.l ? ' (' + r.l + ' com larva)' : ''}${r.c ? ' · ' + nomeDoControle(r) : ''}`).join('; '));

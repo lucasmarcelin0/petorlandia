@@ -160,6 +160,21 @@ const mapa = (...visitas) => M.juntarVisitas(visitas, []);
   assert.equal(M.comoRegistro(v, null).fp, 'VECTOBAC');
 }
 
+// --- histórico do imóvel: servidor e aparelho juntos, sem repetir, do mais novo ao mais antigo
+{
+  const antiga = visita('a', 'FECHADO', '2025-03-02', { i: 2, u: 'u2' });
+  const manha = visita('a', 'RECUSA', HOJE, { i: 7, u: 'u7' });
+  const tarde = visita('a', 'TRABALHADO', HOJE, { i: 9, u: 'u9' });
+  const outra = visita('b', 'TRABALHADO', HOJE, { i: 8, u: 'u8' });
+  const pendente = Object.assign(visita('a', 'TRABALHADO', HOJE, { u: 'u10' }), { i: 0, pendente: true });
+  // A mesma visita que já chegou ao servidor não aparece duas vezes; o imóvel b fica de fora.
+  const lista = M.historicoDoImovel([antiga, tarde, manha, outra, tarde], [pendente, Object.assign({}, tarde, { pendente: true, i: 0 })], 'a');
+  assert.deepEqual(lista.map(v => v.u), ['u10', 'u9', 'u7', 'u2']);
+  assert.equal(lista[1].pendente, undefined);
+  assert.deepEqual(M.historicoDoImovel([], [], 'a'), []);
+  assert.deepEqual(M.historicoDoImovel(null, undefined, 'a'), []);
+}
+
 console.log('casa_a_casa_model: ok');
 
 // A agenda salta o fim de semana nos atalhos, sem excluir datas manuais.
