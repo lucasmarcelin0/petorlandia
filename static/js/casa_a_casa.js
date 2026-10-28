@@ -8,7 +8,7 @@
   const CACHE_APP = 'petorlandia-casa-a-casa-v1';
   const CACHE_DADOS = 'petorlandia-casa-a-casa-dados-v1';
   const FILA = 'cac:fila:v1', ACOES = 'cac:acoes:v1', RECUSADAS = 'cac:recusadas:v1', PREFS = 'cac:prefs:v1';
-  const SOLICITACOES = 'cac:solicitacoes:v1';
+  const SOLICITACOES = 'cac:solicitacoes:v1', CATEGORIAS = 'cac:categorias:v1';
   const ZOOM_CASAS = 16.5, ZOOM_NUMEROS = 17.5, ZOOM_ROTULOS = 14.5, ZOOM_RUAS = 15.5;
   const $ = id => document.getElementById(id);
 
@@ -65,7 +65,7 @@
     planos: [], visitas: new Map(), doDia: new Map(), ultimas: new Map(), agentes: [],
     hoje: hojeNoAparelho(), cursor: 0, completo: false, csrf: cfg.csrf,
     fila: lerLocal(FILA, []), acoes: lerLocal(ACOES, []), recusadas: lerLocal(RECUSADAS, []),
-    solicitacoes: lerLocal(SOLICITACOES, []), fotosNaMemoria: new Map(), moradores: new Map(),
+    solicitacoes: lerLocal(SOLICITACOES, []), fotosNaMemoria: new Map(), moradores: new Map(), solicitacoesDoImovel: new Map(),
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
@@ -75,8 +75,8 @@
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
   const eu = () => cfg.usuario;
-  // Tudo o que espera internet para subir: visitas, mudanças de plano e solicitações.
-  const pendentesTotal = () => S.fila.length + S.acoes.length + S.solicitacoes.length;
+  // Tudo o que espera internet para subir: visitas, mudanças de plano, solicitações e tipos de problema novos.
+  const pendentesTotal = () => S.fila.length + S.acoes.length + S.solicitacoes.length + lerLocal('cac:categorias:v1', []).filter(c => c.pendente).length;
   // Tipos de recipiente da ficha do SISAWEB (1 a 40), vindos do servidor com a página.
   const GRUPOS_RECIPIENTE = cfg.recipientes || [];
   const TIPO_RECIPIENTE = new Map(GRUPOS_RECIPIENTE.flatMap(grupo => grupo.tipos.map(([numero, nome]) => [numero, { g: grupo.g, grupo: grupo.nome, nome }])));
@@ -283,6 +283,12 @@
         await pedir(cfg.urls.plano, S.acoes[0]);
         S.acoes.shift();
         salvarLocal(ACOES, S.acoes);
+      }
+      // Tipos de problema criados sem internet sobem antes das solicitações que os usam.
+      for (const tipo of lerLocal(CATEGORIAS, []).filter(c => c.pendente)) {
+        if (!cfg.urls.categorias) break;
+        const resposta = await pedir(cfg.urls.categorias, { nome: tipo.nome, chave: tipo.chave });
+        confirmarCategoria(tipo, resposta.categoria);
       }
       while (S.solicitacoes.length && cfg.urls.solicitacao) {
         const registro = S.solicitacoes[0];
@@ -1015,26 +1021,37 @@
     try { await (await caches.open(CACHE_DADOS)).delete(chaveFoto(uuid)); } catch (e) { /* sem Cache Storage */ }
   }
 
-  // Envia uma solicitação com a foto. Devolve { ok }, { repetir } (tenta depois) ou { motivo } (recusada).
-  async function enviarSolicitacao(registro, repetirCsrf = true) {
-    const { foto, ...dados } = registro;
+  /* Envia dados (JSON no campo "dados") e, se houver, a foto. Devolve { ok, json }, { repetir } (tenta depois)
+     ou { motivo } (recusado). Token de formulário vencido: renova e repete uma vez. */
+  async function postarComFoto(url, dados, blob, repetirCsrf = true) {
     const corpo = new FormData();
     corpo.append('dados', JSON.stringify(dados));
-    const blob = foto ? await lerFoto(registro.uuid) : null;
     if (blob) corpo.append('foto', blob, 'solicitacao.jpg');
-    const resposta = await fetch(cfg.urls.solicitacao, { method: 'POST', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'same-origin',
+    const resposta = await fetch(url, { method: 'POST', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'same-origin',
       headers: { Accept: 'application/json', 'X-CSRFToken': S.csrf }, body: corpo });
     if (resposta.redirected || [401, 403, 404].includes(resposta.status)) { const erro = new Error('Entre de novo para continuar.'); erro.sessao = true; throw erro; }
     const json = (resposta.headers.get('Content-Type') || '').includes('json') ? await resposta.json() : null;
-    if (resposta.ok && json && json.ok) return { ok: true };
+    if (resposta.ok && json && json.ok) return { ok: true, json };
     const csrf = resposta.status === 400 && (!json || json.error === 'CSRF token missing or invalid' || Boolean(json.errors && json.errors.csrf_token));
     if (csrf && repetirCsrf) {
       const estado = await pedir(cfg.urls.estado + (cfg.urls.estado.includes('?') ? '&' : '?') + 'desde=' + S.cursor);
       S.csrf = estado.csrf || S.csrf;
-      return enviarSolicitacao(registro, false);
+      return postarComFoto(url, dados, blob, false);
     }
     if (resposta.status >= 500 || csrf || (json && json.repetir)) return { repetir: true };
-    return { motivo: (json && json.erro) || 'Solicitação recusada pelo servidor.' };
+    return { motivo: (json && json.erro) || 'Recusado pelo servidor.' };
+  }
+
+  // Envia uma solicitação guardada no aparelho; a que chegou entra na lista do imóvel (vale sem internet depois).
+  async function enviarSolicitacao(registro) {
+    const { foto, ...dados } = registro;
+    const resultado = await postarComFoto(cfg.urls.solicitacao, dados, foto ? await lerFoto(registro.uuid) : null);
+    const nova = resultado.ok && resultado.json.solicitacao;
+    if (nova && S.solicitacoesDoImovel.has(registro.imovel)) {
+      S.solicitacoesDoImovel.set(registro.imovel, [nova].concat(S.solicitacoesDoImovel.get(registro.imovel).filter(s => s.id !== nova.id)));
+    }
+    if (resultado.ok && S.redesenharSolicitacoes) setTimeout(S.redesenharSolicitacoes, 0);
+    return resultado;
   }
 
   // Foto reduzida (até 1600 px) com a faixa de data, hora, endereço e coordenadas gravada na imagem.
@@ -1070,18 +1087,103 @@
     });
   }
 
+  /* Tipos de problema: os da página (prontos e os criados pela equipe) mais os criados ou mudados neste
+     aparelho. Ordem: prontos, os da equipe por nome e "Outro problema" por último. */
+  function listaDeCategorias() {
+    const daPagina = Array.isArray(cfg.categorias_solicitacao) ? cfg.categorias_solicitacao : [];
+    const porChave = new Map(daPagina.map(c => [c.chave, c]));
+    for (const c of lerLocal(CATEGORIAS, [])) {
+      if (c.ativo === false) porChave.delete(c.chave);
+      else porChave.set(c.chave, Object.assign({}, porChave.get(c.chave), c));
+    }
+    const outro = porChave.get('OUTRO');
+    porChave.delete('OUTRO');
+    const todos = Array.from(porChave.values());
+    return todos.filter(c => !c.propria)
+      .concat(todos.filter(c => c.propria).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), outro ? [outro] : []);
+  }
+  function guardarCategoria(tipo) {
+    const locais = lerLocal(CATEGORIAS, []).filter(c => c.chave !== tipo.chave);
+    if (tipo.manter !== false) locais.push(tipo);
+    salvarLocal(CATEGORIAS, locais);
+  }
+  // O servidor confirmou o tipo criado sem internet; com nome repetido, ele devolve o tipo que já existia.
+  function confirmarCategoria(local, doServidor) {
+    guardarCategoria({ chave: local.chave, manter: false });
+    if (doServidor.chave !== local.chave) {
+      for (const registro of S.solicitacoes) if (registro.categoria === local.chave) { registro.categoria = doServidor.chave; registro.categoria_nome = doServidor.nome; }
+      salvarLocal(SOLICITACOES, S.solicitacoes);
+    }
+    if (String(doServidor.chave).startsWith('U-')) {
+      guardarCategoria({ chave: doServidor.chave, nome: doServidor.nome, propria: true, pode_editar: Boolean(doServidor.nova) || doServidor.chave === local.chave });
+    }
+  }
+  // Ao abrir: some o que a página já traz (já confirmado) e o que foi tirado da lista e a página já não mostra.
+  function limparCategoriasLocais() {
+    const daPagina = new Set((Array.isArray(cfg.categorias_solicitacao) ? cfg.categorias_solicitacao : []).map(c => c.chave));
+    salvarLocal(CATEGORIAS, lerLocal(CATEGORIAS, []).filter(c => c.pendente || (c.ativo === false ? daPagina.has(c.chave) : !daPagina.has(c.chave))));
+  }
+  const chaveDeCategoria = () => 'U-' + M.uuid().replace(/[^A-Za-z0-9]/g, '').slice(-12).toUpperCase();
+  const nomeDeCategoria = valor => { const nome = String(valor || '').replace(/\s+/g, ' ').trim().slice(0, 80); return nome.charAt(0).toUpperCase() + nome.slice(1); };
+
   /* Problema para outro setor resolver (lixo, terreno, piscina…): tipo, setor, descrição, foto com data e
      coordenadas. Guardada no aparelho e enviada ao escritório, onde vira ofício. Independe da visita. */
   function solicitacaoDaCasa(casa) {
-    const categoria = h('select', { 'aria-label': 'Tipo do problema' }, h('option', { value: '' }, 'Tipo do problema…'),
-      Object.entries(cfg.categorias_solicitacao || {}).map(([id, nome]) => h('option', { value: id }, nome)));
+    const categoria = h('select', { 'aria-label': 'Tipo do problema' });
+    const editarTipo = h('div', { class: 'cac-tipo-acoes', hidden: true });
+    const desenharCategorias = escolhida => {
+      categoria.replaceChildren(h('option', { value: '' }, 'Tipo do problema…'),
+        ...listaDeCategorias().map(c => h('option', { value: c.chave }, c.nome)),
+        cfg.urls.categorias ? h('option', { value: '__novo' }, '＋ Criar outro tipo…') : null);
+      categoria.value = escolhida && listaDeCategorias().some(c => c.chave === escolhida) ? escolhida : '';
+      const atual = listaDeCategorias().find(c => c.chave === categoria.value);
+      editarTipo.hidden = !(atual && atual.propria && atual.pode_editar);
+    };
+    const criarTipo = () => {
+      const nome = nomeDeCategoria(window.prompt('Nome do novo tipo de problema (ex.: Calha entupida):') || '');
+      if (!nome) { desenharCategorias(''); return; }
+      if (nome.length < 3) { avisar('Dê um nome com 3 letras ou mais.', 'ruim'); desenharCategorias(''); return; }
+      const igual = listaDeCategorias().find(c => c.nome.toLocaleLowerCase('pt-BR') === nome.toLocaleLowerCase('pt-BR'));
+      if (igual) { desenharCategorias(igual.chave); avisar('Esse tipo já existe: ficou escolhido.'); return; }
+      const tipo = { chave: chaveDeCategoria(), nome, propria: true, pode_editar: true, pendente: true };
+      guardarCategoria(tipo);
+      desenharCategorias(tipo.chave);
+      avisar(`Tipo “${nome}” criado. Ele fica disponível para toda a equipe ✔`, 'bom');
+      ciclo();
+    };
+    const mudarTipo = async tirar => {
+      const atual = listaDeCategorias().find(c => c.chave === categoria.value);
+      if (!atual) return;
+      const nome = tirar ? atual.nome : nomeDeCategoria(window.prompt('Novo nome para este tipo de problema:', atual.nome) || '');
+      if (!tirar && (!nome || nome === atual.nome)) return;
+      if (!tirar && nome.length < 3) { avisar('Dê um nome com 3 letras ou mais.', 'ruim'); return; }
+      if (tirar && !window.confirm(`Tirar “${atual.nome}” da lista de tipos? As solicitações já feitas mantêm o nome.`)) return;
+      if (atual.pendente) {
+        // Ainda não foi para o servidor: muda só aqui.
+        guardarCategoria(tirar ? { chave: atual.chave, manter: false } : Object.assign({}, atual, { nome }));
+      } else {
+        try {
+          const resposta = await pedir(cfg.urls.categoria_editar, tirar ? { chave: atual.chave, ativo: false } : { chave: atual.chave, nome });
+          guardarCategoria(tirar ? { chave: atual.chave, ativo: false } : Object.assign({}, atual, { nome: resposta.categoria.nome }));
+        } catch (erro) {
+          avisar(navigator.onLine ? (erro.message || 'Não foi possível mudar o tipo.') : 'Para mudar um tipo que já foi enviado é preciso internet.', 'ruim');
+          return;
+        }
+      }
+      desenharCategorias(tirar ? '' : atual.chave);
+      avisar(tirar ? 'Tipo tirado da lista.' : 'Tipo renomeado ✔', 'bom');
+    };
+    editarTipo.append(h('button', { type: 'button', class: 'cac-botao', onclick: () => mudarTipo(false) }, '✏️ Renomear tipo'),
+      h('button', { type: 'button', class: 'cac-botao', onclick: () => mudarTipo(true) }, 'Tirar da lista'));
+    categoria.addEventListener('change', () => { if (categoria.value === '__novo') criarTipo(); else desenharCategorias(categoria.value); });
+    desenharCategorias('');
     const destino = h('input', { type: 'text', list: 'cac-destinos', maxlength: '120', placeholder: 'Encaminhar para (setor), se souber', 'aria-label': 'Encaminhar para' });
     const descricao = h('textarea', { rows: '3', maxlength: '2000', placeholder: 'O que foi encontrado? Ex.: quintal com pneus e entulho acumulando água.', 'aria-label': 'Descrição do problema' });
     const camera = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
     const galeria = h('input', { type: 'file', accept: 'image/*', hidden: true });
     const previa = h('div', { class: 'cac-foto-previa' });
     const local = h('p', { class: 'cac-nota cac-local' });
-    let foto = null, posicao = null, buscando = null, endereco = null;
+    let foto = null, fotoRemovida = false, posicao = null, buscando = null, endereco = null;
     const desenharLocal = () => {
       local.textContent = posicao ? `📍 ${posicao.lat.toFixed(5)}, ${posicao.lng.toFixed(5)}${posicao.precisao ? ' (± ' + Math.round(posicao.precisao) + ' m)' : ''}`
         : buscando ? '📍 Buscando o GPS…' : `📍 Sem GPS: vale a posição do imóvel no mapa (${casa.y.toFixed(5)}, ${casa.x.toFixed(5)})`;
@@ -1102,41 +1204,146 @@
         `${ponto.lat.toFixed(6)}, ${ponto.lng.toFixed(6)}${posicao && posicao.precisao ? ' (± ' + Math.round(posicao.precisao) + ' m)' : ' (posição do mapa)'} · Orlândia-SP`]);
       if (endereco) URL.revokeObjectURL(endereco);
       endereco = URL.createObjectURL(foto);
-      previa.replaceChildren(h('img', { src: endereco, alt: 'Foto da solicitação' }),
-        h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar a foto', onclick: () => { foto = null; previa.replaceChildren(); } }, '×'));
+      mostrarFoto(endereco, true);
     };
     camera.addEventListener('change', () => { escolher(camera.files[0]); camera.value = ''; });
     galeria.addEventListener('change', () => { escolher(galeria.files[0]); galeria.value = ''; });
+    // Solicitações deste imóvel: as do servidor e as que ainda estão no aparelho; cada uma pode ser corrigida ou excluída.
+    const conta = h('span', { class: 'cac-historico-conta' }, 'Foto e local');
+    const lista = h('ul', { class: 'cac-solicitacoes-lista' });
+    const titulo = h('p', { class: 'cac-solicitacao-titulo' }, 'Nova solicitação');
+    const cancelar = h('button', { type: 'button', class: 'cac-botao', hidden: true, onclick: () => limpar() }, 'Cancelar correção');
+    const botaoGuardar = h('button', { type: 'button', class: 'cac-botao forte', onclick: () => guardar() }, 'Guardar solicitação');
+    // A lista do servidor fica no mapa compartilhado: o envio em segundo plano a atualiza e redesenha esta ficha.
+    if (!S.solicitacoesDoImovel.has(casa.id)) S.solicitacoesDoImovel.set(casa.id, []);
+    const doServidor = () => S.solicitacoesDoImovel.get(casa.id) || [];
+    let editando = null;
+    const nomeDoTipo = chave => (listaDeCategorias().find(c => c.chave === chave) || {}).nome;
+    const podeExcluir = s => s.pendente || cfg.admin || (eu() && s.agente_id === eu().id);
+    const desenharLista = () => {
+      const daFila = S.solicitacoes.filter(r => r.imovel === casa.id).map(r => Object.assign({}, r, {
+        pendente: true, categoria_nome: nomeDoTipo(r.categoria) || r.categoria_nome || r.categoria,
+        quando: new Date(r.horario).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      }));
+      const itens = daFila.concat(doServidor().filter(s => !s.excluida && !daFila.some(r => r.uuid === s.u)));
+      conta.textContent = itens.length ? plural(itens.length, 'registrada', 'registradas') : 'Foto e local';
+      lista.replaceChildren(...itens.map(s => h('li', { class: editando && editando.chave === (s.id || s.uuid) ? 'editando' : null },
+        s.foto && !s.pendente ? h('img', { src: s.foto, alt: '', loading: 'lazy' }) : null,
+        h('div', {},
+          h('strong', {}, s.categoria_nome),
+          h('small', {}, [s.pendente ? 'ainda não enviada' : s.status_nome, s.quando, s.pendente ? '' : s.agente].filter(Boolean).join(' · ')),
+          h('span', {}, s.descricao),
+          s.historico && s.historico.length ? h('small', {}, `${s.historico[0].acao} por ${s.historico[0].por} em ${s.historico[0].quando}`) : null),
+        h('div', { class: 'cac-solicitacao-botoes' },
+          h('button', { type: 'button', class: 'cac-botao', onclick: () => corrigir(s) }, '✏️ Corrigir'),
+          podeExcluir(s) ? h('button', { type: 'button', class: 'cac-botao perigo', onclick: () => excluir(s) }, '🗑️ Excluir') : null))));
+      lista.hidden = !itens.length;
+    };
+    const mostrarFoto = (src, removivel) => {
+      previa.replaceChildren(h('img', { src, alt: 'Foto da solicitação' }),
+        removivel ? h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar a foto', onclick: () => { foto = null; fotoRemovida = true; previa.replaceChildren(); } }, '×') : null);
+    };
+    const limpar = () => {
+      editando = null; foto = null; fotoRemovida = false;
+      desenharCategorias(''); destino.value = ''; descricao.value = ''; previa.replaceChildren();
+      titulo.textContent = 'Nova solicitação'; botaoGuardar.textContent = 'Guardar solicitação'; cancelar.hidden = true;
+      desenharLista();
+    };
+    const corrigir = async s => {
+      editando = { chave: s.id || s.uuid, origem: s.pendente ? 'fila' : 'servidor', item: s };
+      foto = null; fotoRemovida = false;
+      desenharCategorias(s.categoria);
+      if (categoria.value !== s.categoria) {
+        // Tipo fora da lista (tirado depois): continua escolhido nesta correção.
+        categoria.append(h('option', { value: s.categoria }, s.categoria_nome));
+        categoria.value = s.categoria;
+      }
+      destino.value = s.destino || ''; descricao.value = s.descricao || '';
+      previa.replaceChildren();
+      if (s.pendente && s.foto) { const blob = await lerFoto(s.uuid); if (blob) mostrarFoto(URL.createObjectURL(blob), true); }
+      else if (s.foto) mostrarFoto(s.foto, false);
+      titulo.textContent = `Corrigindo: ${s.categoria_nome} (${s.quando})`;
+      botaoGuardar.textContent = 'Salvar correção'; cancelar.hidden = false;
+      desenharLista();
+      titulo.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    const excluir = async s => {
+      if (!window.confirm(`Excluir a solicitação “${s.categoria_nome}”?${s.pendente ? '' : ' Ela sai da lista, mas fica guardada no escritório e pode ser restaurada.'}`)) return;
+      if (s.pendente) {
+        S.solicitacoes = S.solicitacoes.filter(r => r.uuid !== s.uuid);
+        salvarLocal(SOLICITACOES, S.solicitacoes);
+        apagarFoto(s.uuid);
+      } else {
+        try { await pedir(`${cfg.urls.solicitacao}/${s.id}/excluir`, {}); }
+        catch (erro) { avisar(navigator.onLine ? (erro.message || 'Não foi possível excluir.') : 'Para excluir uma solicitação já enviada é preciso internet.', 'ruim'); return; }
+        S.solicitacoesDoImovel.set(casa.id, doServidor().filter(x => x.id !== s.id));
+      }
+      if (editando && editando.chave === (s.id || s.uuid)) limpar();
+      desenharLista(); desenharConexao();
+      avisar('Solicitação excluída.', 'bom');
+    };
     const guardar = async () => {
-      if (!categoria.value) { avisar('Escolha o tipo do problema.', 'ruim'); categoria.focus(); return; }
+      if (!categoria.value || categoria.value === '__novo') { avisar('Escolha o tipo do problema.', 'ruim'); categoria.focus(); return; }
       if (descricao.value.trim().length < 3) { avisar('Descreva o problema encontrado.', 'ruim'); descricao.focus(); return; }
+      const campos = { categoria: categoria.value, categoria_nome: nomeDoTipo(categoria.value) || (editando && editando.item.categoria_nome) || '',
+        destino: destino.value.trim(), descricao: descricao.value.trim() };
+      if (editando && editando.origem === 'fila' && !S.solicitacoes.some(r => r.uuid === editando.item.uuid)) {
+        // Foi enviada enquanto era corrigida: a correção segue para o servidor.
+        const enviada = doServidor().find(x => x.u === editando.item.uuid);
+        if (!enviada) { avisar('Esta solicitação acabou de ser enviada. Abra a ficha de novo para corrigi-la.', 'ruim'); limpar(); return; }
+        editando = { chave: enviada.id, origem: 'servidor', item: enviada };
+      }
+      if (editando && editando.origem === 'servidor') {
+        const resultado = await postarComFoto(`${cfg.urls.solicitacao}/${editando.item.id}`, campos, foto).catch(erro => ({ motivo: erro.sessao ? 'Entre de novo para corrigir.' : '' }));
+        if (!resultado.ok) { avisar(resultado.motivo || 'Para corrigir uma solicitação já enviada é preciso internet.', 'ruim'); return; }
+        S.solicitacoesDoImovel.set(casa.id, doServidor().map(x => (x.id === resultado.json.solicitacao.id ? resultado.json.solicitacao : x)));
+        avisar('Correção salva ✔ (fica no histórico da solicitação)', 'bom');
+        limpar();
+        return;
+      }
+      if (editando) {
+        // Ainda no aparelho: corrige o que vai ser enviado.
+        const registro = S.solicitacoes.find(r => r.uuid === editando.item.uuid);
+        if (!registro) { avisar('Esta solicitação já foi enviada. Abra a ficha de novo para corrigi-la.', 'ruim'); limpar(); return; }
+        Object.assign(registro, campos);
+        if (foto) { await guardarFoto(registro.uuid, foto); registro.foto = true; }
+        else if (fotoRemovida) { apagarFoto(registro.uuid); registro.foto = false; }
+        salvarLocal(SOLICITACOES, S.solicitacoes);
+        avisar('Correção guardada ✔', 'bom');
+        limpar();
+        return;
+      }
       const ponto = posicao || { lat: casa.y, lng: casa.x, precisao: null };
-      const registro = {
+      const registro = Object.assign({
         uuid: M.uuid(), bloco: casa.bloco.id, imovel: casa.id, logradouro: casa.rua, numero: casa.n, complemento: casa.cp || '',
-        lat: ponto.lat, lng: ponto.lng, precisao: ponto.precisao || null, categoria: categoria.value, destino: destino.value.trim(),
-        descricao: descricao.value.trim(), horario: new Date().toISOString(), foto: Boolean(foto),
-      };
+        lat: ponto.lat, lng: ponto.lng, precisao: ponto.precisao || null, horario: new Date().toISOString(), foto: Boolean(foto),
+      }, campos);
       if (foto) await guardarFoto(registro.uuid, foto);
       const fila = S.solicitacoes.concat(registro);
       if (!salvarLocal(SOLICITACOES, fila)) { apagarFoto(registro.uuid); avisar('Não foi possível guardar a solicitação: o aparelho está sem espaço.', 'ruim'); return; }
       S.solicitacoes = fila;
       avisar(`Solicitação guardada${foto ? ' com a foto' : ''}. Vai para o escritório assim que houver internet ✔`, 'bom');
-      categoria.value = ''; destino.value = ''; descricao.value = ''; foto = null; previa.replaceChildren();
-      caixa.open = false;
+      limpar();
       desenharConexao();
       ciclo();
     };
     const caixa = h('details', { class: 'cac-historico cac-solicitacao' },
-      h('summary', {}, h('span', {}, '📨 Solicitação para outro setor'), h('span', { class: 'cac-historico-conta' }, 'Foto e local')),
-      h('div', { class: 'cac-solicitacao-form' }, categoria, destino,
+      h('summary', {}, h('span', {}, '📨 Solicitação para outro setor'), conta),
+      lista,
+      h('div', { class: 'cac-solicitacao-form' }, titulo, categoria, editarTipo, destino,
         h('datalist', { id: 'cac-destinos' }, (cfg.destinos_solicitacao || []).map(nome => h('option', { value: nome }))), descricao,
         h('div', { class: 'cac-foto-botoes' },
           h('button', { type: 'button', class: 'cac-botao', onclick: () => camera.click() }, '📷 Tirar foto'),
           h('button', { type: 'button', class: 'cac-botao', onclick: () => galeria.click() }, '🖼️ Da galeria')),
-        camera, galeria, previa, local,
-        h('button', { type: 'button', class: 'cac-botao forte', onclick: guardar }, 'Guardar solicitação')));
+        camera, galeria, previa, local, h('div', { class: 'cac-foto-botoes' }, cancelar, botaoGuardar)));
     caixa.addEventListener('toggle', () => { if (caixa.open && !posicao) localizar(); });
     desenharLocal();
+    desenharLista();
+    if (cfg.urls.solicitacoes_do_imovel) {
+      const url = cfg.urls.solicitacoes_do_imovel + (cfg.urls.solicitacoes_do_imovel.includes('?') ? '&' : '?') + 'imovel=' + encodeURIComponent(casa.id);
+      pedir(url).then(dados => { S.solicitacoesDoImovel.set(casa.id, dados.solicitacoes || []); desenharLista(); }).catch(() => { /* sem internet: fica o que o aparelho já tem */ });
+    }
+    S.redesenharSolicitacoes = desenharLista;
     return caixa;
   }
 
@@ -1468,7 +1675,7 @@
   async function limparAparelho() {
     if (!window.confirm('Apagar os dados do Casa a Casa guardados neste aparelho? Nada é apagado do servidor.')) return;
     try { await caches.delete(CACHE_DADOS); await caches.delete(CACHE_APP); } catch (e) { /* sem Cache Storage */ }
-    [FILA, ACOES, RECUSADAS, PREFS, SOLICITACOES].forEach(chave => localStorage.removeItem(chave));
+    [FILA, ACOES, RECUSADAS, PREFS, SOLICITACOES, CATEGORIAS].forEach(chave => localStorage.removeItem(chave));
     location.reload();
   }
 
@@ -1565,6 +1772,7 @@
   }
 
   async function iniciar() {
+    limparCategoriasLocais();
     ligarTela();
     iniciarMapa();
     desenharLegenda();

@@ -252,7 +252,8 @@ class EntomologiaSolicitacao(db.Model):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     precisao_m = db.Column(db.Float)
-    categoria = db.Column(db.String(30), nullable=False)   # services.entomologia_casa_a_casa.CATEGORIAS_SOLICITACAO
+    # Chave de services.entomologia_casa_a_casa.CATEGORIAS_SOLICITACAO ou de um tipo criado pela equipe ("U-...").
+    categoria = db.Column(db.String(30), nullable=False)
     destino = db.Column(db.String(120))
     descricao = db.Column(db.Text, nullable=False)
     foto_url = db.Column(db.String(500))
@@ -262,5 +263,33 @@ class EntomologiaSolicitacao(db.Model):
     agente = db.Column(db.String(160))
     registrado_em = db.Column(db.DateTime(timezone=True))
     recebido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    atualizado_por = db.Column(db.String(160))
+    # Exclusão lógica: some das listas, mas fica guardada e pode ser restaurada.
+    excluida_em = db.Column(db.DateTime(timezone=True))
+    excluida_por = db.Column(db.String(160))
+    # Cada correção, mudança de andamento, exclusão ou restauração: [{"em", "por", "acao", "mudou"}].
+    historico_json = db.Column(db.Text)
+
+
+class EntomologiaSolicitacaoCategoria(db.Model):
+    """Tipo de problema criado pela equipe, além dos que vêm prontos no sistema.
+
+    ``chave`` começa com "U-" e pode nascer no aparelho sem internet (vai junto
+    com a solicitação). Quem criou, ou um administrador, renomeia ou tira da
+    lista; tirado da lista, o nome continua valendo nas solicitações antigas.
+    """
+    __tablename__ = "entomologia_solicitacao_categoria"
+    __table_args__ = (
+        db.UniqueConstraint("chave", name="uq_entomologia_solicitacao_categoria_chave"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(30), nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     atualizado_por = db.Column(db.String(160))

@@ -217,7 +217,22 @@ h2, h3, h4, p { margin: 0; }
 .cac-morador-novo input, .cac-solicitacao-form select, .cac-solicitacao-form input[type="text"], .cac-solicitacao-form textarea {
   display: block; width: 100%; min-width: 0; padding: .5rem .6rem; border: 1.5px solid var(--cac-linha); border-radius: .7rem; color: var(--cac-tinta); background: #fff; }
 .cac-solicitacao-form { display: flex; flex-direction: column; gap: .45rem; padding: .2rem .6rem .6rem; }
-.cac-foto-botoes { display: flex; gap: .4rem; }
+.cac-foto-botoes, .cac-tipo-acoes { display: flex; gap: .4rem; }
+.cac-tipo-acoes[hidden] { display: none; }
+.cac-solicitacoes-lista { margin: 0; padding: 0 .6rem; list-style: none; }
+.cac-solicitacoes-lista[hidden] { display: none; }
+.cac-solicitacoes-lista li { display: grid; grid-template-columns: auto 1fr; gap: .2rem .55rem; padding: .5rem 0; border-top: 1px solid var(--cac-linha); }
+.cac-solicitacoes-lista li.editando { margin: 0 -.6rem; padding: .5rem .6rem; background: var(--cac-verde-claro); }
+.cac-solicitacoes-lista img { grid-row: span 2; width: 3.4rem; height: 3.4rem; object-fit: cover; border-radius: .45rem; background: #e9ecef; }
+.cac-solicitacoes-lista li > div:first-of-type { display: flex; flex-direction: column; gap: .1rem; min-width: 0; overflow-wrap: anywhere; }
+.cac-solicitacoes-lista li:not(:has(img)) > div { grid-column: 1 / -1; }
+.cac-solicitacoes-lista small { color: var(--cac-suave); }
+.cac-solicitacao-botoes { display: flex; gap: .4rem; grid-column: 1 / -1; }
+.cac-solicitacao-botoes .cac-botao { padding: .35rem .6rem; font-size: .82rem; }
+.cac-botao.perigo { border-color: #c92a2a; color: #c92a2a; }
+.cac-solicitacao-titulo { margin-top: .3rem; color: var(--cac-suave); font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.cac-foto-botoes .cac-botao[hidden] { display: none; }
+.cac-tipo-acoes .cac-botao { padding: .4rem .6rem; font-size: .84rem; }
 .cac-foto-previa { position: relative; }
 .cac-foto-previa img { display: block; width: 100%; max-height: 16rem; object-fit: contain; border-radius: .6rem; background: #e9ecef; }
 .cac-foto-previa .cac-tipo-tirar { position: absolute; top: .35rem; right: .35rem; }

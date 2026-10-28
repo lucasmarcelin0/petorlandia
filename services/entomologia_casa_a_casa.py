@@ -1028,6 +1028,116 @@ def _texto(valor, limite: int) -> str:
     return " ".join(str(valor or "").split())[:limite]
 
 
+# Tipo criado pela equipe: "U-" e letras/números (a chave pode nascer no aparelho, sem internet).
+_CHAVE_PROPRIA = re.compile(r"U-[A-Z0-9]{6,26}")
+
+
+def _categorias_proprias(so_ativas: bool = False) -> list:
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+    consulta = Ca.query.filter(Ca.ativo.is_(True)) if so_ativas else Ca.query
+    return consulta.order_by(Ca.nome, Ca.id).all()
+
+
+def nomes_das_categorias() -> dict:
+    """Nome de cada tipo, inclusive dos tirados da lista: continuam valendo nas solicitações antigas."""
+    nomes = dict(CATEGORIAS_SOLICITACAO)
+    nomes.update({c.chave: c.nome for c in _categorias_proprias()})
+    return nomes
+
+
+def categorias_para_escolher(usuario=None, admin: bool = False) -> list[dict]:
+    """Na ordem da tela: os tipos prontos, os criados pela equipe (por nome) e "Outro problema" por último."""
+    eu = getattr(usuario, "id", None)
+    lista = [{"chave": chave, "nome": nome, "propria": False, "pode_editar": False}
+             for chave, nome in CATEGORIAS_SOLICITACAO.items() if chave != "OUTRO"]
+    lista += [{"chave": c.chave, "nome": c.nome, "propria": True, "por": c.criado_por or "",
+               "pode_editar": bool(admin or (eu is not None and c.criado_por_id == eu))}
+              for c in _categorias_proprias(so_ativas=True)]
+    lista.append({"chave": "OUTRO", "nome": CATEGORIAS_SOLICITACAO["OUTRO"], "propria": False, "pode_editar": False})
+    return lista
+
+
+def categorias_da_equipe(usuario=None, admin: bool = False) -> list[dict]:
+    """Todos os tipos criados pela equipe, inclusive os tirados da lista (para o escritório)."""
+    eu = getattr(usuario, "id", None)
+    return [{"chave": c.chave, "nome": c.nome, "ativo": c.ativo, "por": c.criado_por or "",
+             "pode_editar": bool(admin or (eu is not None and c.criado_por_id == eu))}
+            for c in _categorias_proprias()]
+
+
+def _nome_de_categoria(valor) -> str:
+    nome = _texto(valor, 80)
+    if len(nome) < 3:
+        raise ValueError("Dê um nome ao tipo de problema (3 letras ou mais).")
+    return nome[:1].upper() + nome[1:]
+
+
+def _mesmo_nome(nome: str, ignorar: str | None = None):
+    """Tipo ativo (pronto ou da equipe) com o mesmo nome, sem diferenciar maiúsculas."""
+    alvo = nome.casefold()
+    for chave, existente in CATEGORIAS_SOLICITACAO.items():
+        if existente.casefold() == alvo:
+            return chave, existente
+    for c in _categorias_proprias(so_ativas=True):
+        if c.chave != ignorar and c.nome.casefold() == alvo:
+            return c.chave, c.nome
+    return None
+
+
+def criar_categoria(nome, usuario, chave: str | None = None) -> dict:
+    """Novo tipo de problema. Nome repetido devolve o tipo que já existe; a mesma chave não duplica."""
+    import uuid as uuid_mod
+    from extensions import db
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+
+    nome = _nome_de_categoria(nome)
+    chave = str(chave or "").upper() or "U-" + uuid_mod.uuid4().hex[:12].upper()
+    if not _CHAVE_PROPRIA.fullmatch(chave):
+        raise ValueError("Tipo de problema inválido.")
+    existente = Ca.query.filter_by(chave=chave).first()
+    if existente is not None:
+        return {"chave": existente.chave, "nome": existente.nome, "nova": False}
+    repetido = _mesmo_nome(nome)
+    if repetido:
+        return {"chave": repetido[0], "nome": repetido[1], "nova": False}
+    db.session.add(Ca(chave=chave, nome=nome, criado_por_id=getattr(usuario, "id", None),
+                      criado_por=nome_da_conta(usuario)))
+    db.session.flush()
+    return {"chave": chave, "nome": nome, "nova": True}
+
+
+def editar_categoria(chave, dados, usuario, admin: bool = False) -> dict:
+    """Renomeia ou tira da lista um tipo criado pela equipe. Só quem criou ou um administrador."""
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+
+    categoria = Ca.query.filter_by(chave=str(chave or "").upper()).first()
+    if categoria is None:
+        raise LookupError("Tipo de problema não encontrado (os tipos prontos não mudam).")
+    if not admin and categoria.criado_por_id != getattr(usuario, "id", None):
+        raise PermissionError("Só quem criou este tipo, ou um administrador, pode mudá-lo.")
+    if dados.get("nome") not in (None, ""):
+        nome = _nome_de_categoria(dados.get("nome"))
+        if _mesmo_nome(nome, ignorar=categoria.chave):
+            raise ValueError("Já existe um tipo de problema com esse nome.")
+        categoria.nome = nome
+    if "ativo" in dados:
+        categoria.ativo = str(dados.get("ativo")).strip().lower() not in ("0", "false", "nao", "não", "")
+    categoria.atualizado_por = nome_da_conta(usuario)
+    return {"chave": categoria.chave, "nome": categoria.nome, "ativo": categoria.ativo}
+
+
+def _categoria_da_solicitacao(item) -> tuple[str, str | None]:
+    """Chave do tipo escolhido e, se for um tipo criado no aparelho sem internet, o nome para criá-lo."""
+    categoria = str(item.get("categoria") or "").upper()
+    if categoria in CATEGORIAS_SOLICITACAO:
+        return categoria, None
+    if not _CHAVE_PROPRIA.fullmatch(categoria):
+        raise ValueError("Escolha o tipo do problema.")
+    if categoria in nomes_das_categorias():
+        return categoria, None
+    return categoria, _nome_de_categoria(item.get("categoria_nome"))
+
+
 def validar_solicitacao(item, blocos: dict) -> dict:
     """Campos de uma solicitação prontos para gravar; ``ValueError`` diz o que recusar."""
     if not isinstance(item, dict):
@@ -1035,9 +1145,7 @@ def validar_solicitacao(item, blocos: dict) -> dict:
     uuid_local = str(item.get("uuid") or "")
     if not _UUID.fullmatch(uuid_local):
         raise ValueError("Identificador da solicitação inválido.")
-    categoria = str(item.get("categoria") or "").upper()
-    if categoria not in CATEGORIAS_SOLICITACAO:
-        raise ValueError("Escolha o tipo do problema.")
+    categoria, categoria_nova = _categoria_da_solicitacao(item)
     descricao = str(item.get("descricao") or "").strip()[:2000]
     if len(descricao) < 3:
         raise ValueError("Descreva o problema encontrado.")
@@ -1064,7 +1172,7 @@ def validar_solicitacao(item, blocos: dict) -> dict:
         "latitude": _coordenada(item.get("lat"), -90, 90), "longitude": _coordenada(item.get("lng"), -180, 180),
         "precisao_m": round(precisao, 1) if precisao is not None else None,
         "categoria": categoria, "destino": _texto(item.get("destino"), 120) or None,
-        "descricao": descricao, "registrado_em": registrado,
+        "descricao": descricao, "registrado_em": registrado, "categoria_nova": categoria_nova,
     }
 
 
@@ -1081,6 +1189,11 @@ def registrar_solicitacao(dados: dict, foto_url: str | None, usuario):
     existente = solicitacao_existente(dados["uuid_local"])
     if existente is not None:
         return existente, False
+    dados = dict(dados)
+    nome_novo = dados.pop("categoria_nova", None)
+    if nome_novo:
+        # Nome igual a um tipo que já existe aproveita o existente.
+        dados["categoria"] = criar_categoria(nome_novo, usuario, chave=dados["categoria"])["chave"]
     solicitacao = So(**dados, foto_url=foto_url, status="ABERTA", agente_id=usuario.id, agente=nome_da_conta(usuario))
     db.session.add(solicitacao)
     db.session.flush()
@@ -1103,48 +1216,143 @@ def data_por_extenso(dia: date) -> str:
     return f"{dia.day} de {MESES[dia.month - 1]} de {dia.year}"
 
 
-def solicitacao_dict(s) -> dict:
+def solicitacao_dict(s, nomes: dict | None = None) -> dict:
+    nomes = nomes if nomes is not None else nomes_das_categorias()
     endereco = ", ".join(parte for parte in (s.logradouro, s.numero) if parte) + (f" · {s.complemento}" if s.complemento else "")
     mapa = (f"https://www.google.com/maps?q={s.latitude:.6f},{s.longitude:.6f}"
             if s.latitude is not None and s.longitude is not None else "")
     return {
         "id": s.id, "u": s.uuid_local, "m": s.imovel, "b": s.bloco, "setor": s.setor or "", "quarteirao": s.quarteirao or "",
         "endereco": endereco or "Endereço não informado", "lat": s.latitude, "lng": s.longitude, "precisao": s.precisao_m,
-        "mapa": mapa, "categoria": s.categoria, "categoria_nome": CATEGORIAS_SOLICITACAO.get(s.categoria, s.categoria),
+        "mapa": mapa, "categoria": s.categoria, "categoria_nome": nomes.get(s.categoria, s.categoria),
         "destino": s.destino or "", "descricao": s.descricao, "foto": s.foto_url or "",
         "status": s.status, "status_nome": STATUS_SOLICITACAO.get(s.status, s.status), "oficio": s.oficio or "",
         "agente": s.agente or "", "registrado": _iso(s.registrado_em or s.recebido_em),
         "quando": _data_hora_br(s.registrado_em or s.recebido_em),
-        "atualizado_por": s.atualizado_por or "",
+        "atualizado_por": s.atualizado_por or "", "agente_id": s.agente_id,
+        "excluida": s.excluida_em is not None, "excluida_por": s.excluida_por or "",
+        "historico": historico_da_solicitacao(s, nomes),
     }
 
 
-def solicitacoes(status: str | None = None, limite: int = 300) -> list[dict]:
+ACOES_SOLICITACAO = {"corrigida": "Corrigida", "andamento": "Andamento", "excluida": "Excluída",
+                     "restaurada": "Restaurada"}
+_CAMPOS_HISTORICO = {"categoria": "tipo", "descricao": "descrição", "destino": "para", "foto_url": "foto",
+                     "status": "andamento", "oficio": "ofício"}
+
+
+def historico_da_solicitacao(s, nomes: dict | None = None) -> list[dict]:
+    """Mudanças da solicitação, da mais recente para a mais antiga, prontas para a tela."""
+    try:
+        eventos = json.loads(s.historico_json or "[]")
+    except ValueError:
+        eventos = []
+    nomes = nomes or {}
+    saida = []
+    for evento in reversed(eventos if isinstance(eventos, list) else []):
+        mudou = []
+        for campo, (antes, depois) in (evento.get("mudou") or {}).items():
+            if campo == "categoria":
+                antes, depois = nomes.get(antes, antes), nomes.get(depois, depois)
+            elif campo == "status":
+                antes, depois = STATUS_SOLICITACAO.get(antes, antes), STATUS_SOLICITACAO.get(depois, depois)
+            elif campo == "foto_url":
+                antes, depois = ("com foto" if antes else "sem foto"), ("foto nova" if depois else "sem foto")
+            mudou.append({"campo": _CAMPOS_HISTORICO.get(campo, campo), "antes": antes or "—", "depois": depois or "—"})
+        momento = None
+        try:
+            momento = datetime.fromisoformat(evento.get("em") or "")
+        except (TypeError, ValueError):
+            pass
+        saida.append({"acao": ACOES_SOLICITACAO.get(evento.get("acao"), evento.get("acao") or ""),
+                      "por": evento.get("por") or "", "quando": _data_hora_br(momento), "mudou": mudou})
+    return saida
+
+
+def _anotar(solicitacao, usuario, acao: str, mudou: dict | None = None) -> None:
+    try:
+        eventos = json.loads(solicitacao.historico_json or "[]")
+    except ValueError:
+        eventos = []
+    eventos.append({"em": datetime.now(FUSO).isoformat(timespec="seconds"), "por": nome_da_conta(usuario),
+                    "acao": acao, "mudou": mudou or {}})
+    solicitacao.historico_json = json.dumps(eventos[-100:], ensure_ascii=False, separators=(",", ":"))
+    solicitacao.atualizado_por = nome_da_conta(usuario)
+
+
+def solicitacoes(status: str | None = None, limite: int = 300, imovel: str | None = None) -> list[dict]:
+    """Lista do escritório (ou de um imóvel). Excluídas só aparecem no filtro "EXCLUIDAS"."""
     from models.entomologia import EntomologiaSolicitacao as So
 
     consulta = So.query
-    if status in STATUS_SOLICITACAO:
-        consulta = consulta.filter(So.status == status)
-    return [solicitacao_dict(s) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
+    if status == "EXCLUIDAS":
+        consulta = consulta.filter(So.excluida_em.isnot(None))
+    else:
+        consulta = consulta.filter(So.excluida_em.is_(None))
+        if status in STATUS_SOLICITACAO:
+            consulta = consulta.filter(So.status == status)
+    if imovel:
+        consulta = consulta.filter(So.imovel == imovel)
+    nomes = nomes_das_categorias()
+    return [solicitacao_dict(s, nomes) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
 
 
-def atualizar_solicitacao(solicitacao_id: int, dados, usuario) -> dict:
-    """Escritório: andamento, número do ofício e setor de destino."""
+def _solicitacao(solicitacao_id: int):
     from extensions import db
     from models.entomologia import EntomologiaSolicitacao as So
 
     solicitacao = db.session.get(So, solicitacao_id)
     if solicitacao is None:
         raise LookupError("Solicitação não encontrada.")
-    status = str(dados.get("status") or solicitacao.status).upper()
-    if status not in STATUS_SOLICITACAO:
-        raise ValueError("Andamento inválido.")
-    solicitacao.status = status
+    return solicitacao
+
+
+def atualizar_solicitacao(solicitacao_id: int, dados, usuario, foto_url: str | None = None) -> dict:
+    """Corrige tipo, descrição, setor e foto, e muda andamento e ofício. Tudo fica no histórico."""
+    solicitacao = _solicitacao(solicitacao_id)
+    if solicitacao.excluida_em is not None:
+        raise ValueError("Solicitação excluída: restaure antes de corrigir.")
+    novos = {}
+    if "status" in dados:
+        status = str(dados.get("status") or "").upper()
+        if status not in STATUS_SOLICITACAO:
+            raise ValueError("Andamento inválido.")
+        novos["status"] = status
     if "oficio" in dados:
-        solicitacao.oficio = _texto(dados.get("oficio"), 60) or None
+        novos["oficio"] = _texto(dados.get("oficio"), 60) or None
     if "destino" in dados:
-        solicitacao.destino = _texto(dados.get("destino"), 120) or None
-    solicitacao.atualizado_por = nome_da_conta(usuario)
+        novos["destino"] = _texto(dados.get("destino"), 120) or None
+    if "descricao" in dados:
+        descricao = str(dados.get("descricao") or "").strip()[:2000]
+        if len(descricao) < 3:
+            raise ValueError("Descreva o problema encontrado.")
+        novos["descricao"] = descricao
+    if dados.get("categoria"):
+        categoria, nome_novo = _categoria_da_solicitacao(dados)
+        novos["categoria"] = criar_categoria(nome_novo, usuario, chave=categoria)["chave"] if nome_novo else categoria
+    if foto_url:
+        novos["foto_url"] = foto_url
+    mudou = {campo: [getattr(solicitacao, campo), valor] for campo, valor in novos.items()
+             if getattr(solicitacao, campo) != valor}
+    if mudou:
+        for campo, (_antes, depois) in mudou.items():
+            setattr(solicitacao, campo, depois)
+        conteudo = set(mudou) & {"categoria", "descricao", "destino", "foto_url"}
+        _anotar(solicitacao, usuario, "corrigida" if conteudo else "andamento", mudou)
+    return solicitacao_dict(solicitacao)
+
+
+def excluir_solicitacao(solicitacao_id: int, usuario, admin: bool = False, restaurar: bool = False) -> dict:
+    """Exclusão lógica (some das listas, fica no banco). Só quem registrou ou um administrador."""
+    solicitacao = _solicitacao(solicitacao_id)
+    if not admin and solicitacao.agente_id != getattr(usuario, "id", None):
+        raise PermissionError("Só quem registrou a solicitação, ou um administrador, pode excluí-la.")
+    if restaurar and solicitacao.excluida_em is not None:
+        solicitacao.excluida_em = solicitacao.excluida_por = None
+        _anotar(solicitacao, usuario, "restaurada")
+    elif not restaurar and solicitacao.excluida_em is None:
+        solicitacao.excluida_em, solicitacao.excluida_por = datetime.now(FUSO), nome_da_conta(usuario)
+        _anotar(solicitacao, usuario, "excluida")
     return solicitacao_dict(solicitacao)
 
 
