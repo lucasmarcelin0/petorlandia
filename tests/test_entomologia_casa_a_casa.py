@@ -241,7 +241,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261028-solicitacoes' in pagina
+    assert 'casa_a_casa.js?v=20261028-tipos' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -806,3 +806,61 @@ def test_foto_da_solicitacao_que_nao_sobe_fica_no_aparelho(client, base, monkeyp
     entrar(client, agente())
     resposta = enviar_solicitacao(client, solicitacao(base['a']))
     assert resposta.status_code == 502 and resposta.json['repetir'] is True and Solicitacao.query.count() == 0
+
+
+def test_tipos_de_problema_criados_pela_equipe(client, restrito, base, monkeypatch):
+    import json as json_mod
+    from models import User as Conta
+    from models.entomologia import EntomologiaSolicitacao as Solicitacao, EntomologiaSolicitacaoCategoria as Tipo
+    monkeypatch.setattr('app.upload_to_s3', lambda arquivo, nome, folder='uploads', **_: f'https://bucket.example/{folder}/{nome}')
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    criado = client.post(RAIZ + '/categorias', json={'nome': '  calha   entupida '}, **HTTPS).json['categoria']
+    assert criado['nova'] is True and criado['nome'] == 'Calha entupida' and criado['chave'].startswith('U-')
+    # Nome repetido (até de um tipo pronto) devolve o que já existe.
+    assert client.post(RAIZ + '/categorias', json={'nome': 'CALHA ENTUPIDA'}, **HTTPS).json['categoria']['chave'] == criado['chave']
+    assert client.post(RAIZ + '/categorias', json={'nome': 'imóvel abandonado'}, **HTTPS).json['categoria']['chave'] == 'IMOVEL_ABANDONADO'
+    assert client.post(RAIZ + '/categorias', json={'nome': 'ab'}, **HTTPS).status_code == 400
+
+    # Na tela: prontos, os da equipe e "Outro problema" por último; quem criou pode editar.
+    config = json_mod.loads(client.get(RAIZ, **HTTPS).get_data(as_text=True).split('id="cac-config">')[1].split('</script>')[0])
+    chaves = [c['chave'] for c in config['categorias_solicitacao']]
+    assert chaves[-1] == 'OUTRO' and chaves[-2] == criado['chave'] and chaves[0] == 'LIXO_ENTULHO'
+    assert config['categorias_solicitacao'][-2]['pode_editar'] is True
+
+    # Tipo criado no aparelho sem internet chega junto com a solicitação.
+    offline = solicitacao(base['a'], 'solic-tipo-1', categoria='u-offline0001', categoria_nome='bueiro sem tampa')
+    assert enviar_solicitacao(client, offline, foto=False).json['solicitacao']['categoria_nome'] == 'Bueiro sem tampa'
+    assert Tipo.query.filter_by(chave='U-OFFLINE0001').one().criado_por_id == ana.id
+    assert 'tipo de problema' in enviar_solicitacao(client, solicitacao(base['a'], 'solic-tipo-2', categoria='U-SEMNOME0001'), foto=False).json['erro'].lower()
+
+    # Bia não muda o tipo da Ana; a Ana renomeia e tira da lista; o nome segue nas solicitações antigas.
+    entrar(client, bia)
+    assert client.post(RAIZ + '/categorias/editar', json={'chave': 'U-OFFLINE0001', 'nome': 'Outro nome'}, **HTTPS).status_code == 403
+    assert client.post(RAIZ + '/categorias/editar', json={'chave': 'LIXO_ENTULHO', 'nome': 'X'}, **HTTPS).status_code == 404
+    config_bia = json_mod.loads(client.get(RAIZ, **HTTPS).get_data(as_text=True).split('id="cac-config">')[1].split('</script>')[0])
+    assert not any(c['pode_editar'] for c in config_bia['categorias_solicitacao'])
+    entrar(client, ana)
+    assert client.post(RAIZ + '/categorias/editar', json={'chave': 'U-OFFLINE0001', 'nome': 'Calha entupida'}, **HTTPS).status_code == 400
+    renomeado = client.post(RAIZ + '/categorias/editar', json={'chave': 'U-OFFLINE0001', 'nome': 'Bueiro aberto'}, **HTTPS).json
+    assert renomeado['categoria']['nome'] == 'Bueiro aberto'
+    assert client.post(RAIZ + '/categorias/editar', json={'chave': 'U-OFFLINE0001', 'ativo': False}, **HTTPS).json['categoria']['ativo'] is False
+    config = json_mod.loads(client.get(RAIZ, **HTTPS).get_data(as_text=True).split('id="cac-config">')[1].split('</script>')[0])
+    assert 'U-OFFLINE0001' not in [c['chave'] for c in config['categorias_solicitacao']]
+    lista = client.get(RAIZ + '/solicitacoes', **HTTPS).get_data(as_text=True)
+    assert 'Bueiro aberto' in lista and 'Voltar à lista' in lista and 'Novo tipo de problema' in lista
+    # Formulário do escritório volta para a lista, com o aviso quando recusa.
+    form = client.post(RAIZ + '/categorias', data={'nome': 'x'}, **HTTPS)
+    assert form.status_code == 302 and 'aviso=' in form.headers['Location'] and form.headers['Location'].endswith('#tipos')
+    assert client.post(RAIZ + '/categorias/editar', data={'chave': 'U-OFFLINE0001', 'ativo': '1'}, **HTTPS).status_code == 302
+    assert db.session.get(Tipo, Tipo.query.filter_by(chave='U-OFFLINE0001').one().id).ativo is True
+
+    # Administrador muda o tipo de qualquer um; quem não é da equipe nem cria.
+    admin = conta('admin@example.test', role='admin', name='Admin')
+    entrar(client, admin)
+    assert client.post(RAIZ + '/categorias/editar', json={'chave': criado['chave'], 'nome': 'Calha cheia'}, **HTTPS).status_code == 200
+    entrar(client, conta('tutor@example.test'))
+    assert client.post(RAIZ + '/categorias', json={'nome': 'Qualquer'}, **HTTPS).status_code in (403, 404)
+    sair(client)
+    assert client.post(RAIZ + '/categorias', json={'nome': 'Qualquer'}, **HTTPS).status_code in (302, 401)
+    assert Tipo.query.count() == 2 and Solicitacao.query.count() == 1 and Conta.query.count() == 4

@@ -79,6 +79,7 @@ from .entomologia import (
     EntomologiaPublicacao,
     EntomologiaQuarteiraoTrabalho,
     EntomologiaSolicitacao,
+    EntomologiaSolicitacaoCategoria,
     EntomologiaVisitaDomiciliar,
 )
 from .petsitter import (
@@ -186,6 +187,7 @@ __all__ = [
     "EntomologiaImovelCampo",
     "EntomologiaImovelMorador",
     "EntomologiaSolicitacao",
+    "EntomologiaSolicitacaoCategoria",
     "EntomologiaImportacao",
     "EntomologiaPublicacao",
     "EntomologiaQuarteiraoTrabalho",

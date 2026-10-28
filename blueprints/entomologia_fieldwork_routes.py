@@ -83,6 +83,8 @@ def register(bp, require_access):
                 'moradores': url_for('sfa_routes.casa_a_casa_moradores') if registra else '',
                 'solicitacao': url_for('sfa_routes.casa_a_casa_solicitacao_nova') if registra else '',
                 'solicitacoes': url_for('sfa_routes.casa_a_casa_solicitacoes', token=_token()),
+                'categorias': url_for('sfa_routes.casa_a_casa_categoria_nova') if registra else '',
+                'categoria_editar': url_for('sfa_routes.casa_a_casa_categoria_editar') if registra else '',
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
                 'recipientes_csv': url_for('sfa_routes.casa_a_casa_recipientes_csv', token=_token()),
@@ -104,7 +106,8 @@ def register(bp, require_access):
             'atividades': servico.ATIVIDADES,
             'partes': servico.NOME_PARTE,
             'produtos_focal': servico.PRODUTOS_FOCAL,
-            'categorias_solicitacao': servico.CATEGORIAS_SOLICITACAO,
+            'categorias_solicitacao': servico.categorias_para_escolher(current_user if registra else None,
+                                                                      registra and eh_admin(current_user)),
             'destinos_solicitacao': list(servico.DESTINOS_SOLICITACAO),
             'equipe': servico.equipe(current_user if registra else None),
             'admin': eh_admin(current_user),
@@ -318,10 +321,14 @@ def register(bp, require_access):
         from services import entomologia_casa_a_casa as servico
 
         status = (request.args.get('status') or '').upper()
+        edita = usuario_pode_alterar()
         return _sem_cache(render_template(
             'sfa/casa_a_casa_solicitacoes.html', solicitacoes=servico.solicitacoes(status or None),
+            prontas=servico.CATEGORIAS_SOLICITACAO,
+            proprias=servico.categorias_da_equipe(current_user if edita else None, edita and eh_admin(current_user)),
+            aviso=request.args.get('aviso') or '',
             status=status, nomes_status=servico.STATUS_SOLICITACAO, destinos=servico.DESTINOS_SOLICITACAO,
-            edita=usuario_pode_alterar(), csrf=generate_csrf(), token=_token(),
+            edita=edita, csrf=generate_csrf(), token=_token(),
             voltar=url_for('sfa_routes.casa_a_casa', token=_token())))
 
     @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>', methods=['POST'])
@@ -346,6 +353,55 @@ def register(bp, require_access):
             return _sem_cache(jsonify({'ok': True, 'solicitacao': resultado}))
         return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', status=request.args.get('status') or None)
                         + f'#solicitacao-{solicitacao_id}')
+
+    def _resposta_de_categoria(resultado=None, erro=None, codigo=400):
+        """JSON para o app de campo; no formulário do escritório, volta para a lista com o aviso."""
+        from flask import redirect
+        if request.is_json:
+            if erro:
+                return _erro(erro, codigo)
+            return _sem_cache(jsonify({'ok': True, 'categoria': resultado}))
+        return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', aviso=erro or None) + '#tipos')
+
+    @bp.route('/entomologia/casa-a-casa/categorias', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_categoria_nova():
+        """Novo tipo de problema para as solicitações, criado por alguém da equipe."""
+        ensure_entomologia_editor()
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+
+        dados = (request.get_json(silent=True) if request.is_json else request.form) or {}
+        try:
+            resultado = servico.criar_categoria(dados.get('nome'), current_user, chave=dados.get('chave'))
+        except ValueError as exc:
+            db.session.rollback()
+            return _resposta_de_categoria(erro=str(exc))
+        db.session.commit()
+        return _resposta_de_categoria(resultado)
+
+    @bp.route('/entomologia/casa-a-casa/categorias/editar', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_categoria_editar():
+        """Renomeia ou tira da lista um tipo criado pela equipe (quem criou ou administrador)."""
+        ensure_entomologia_editor()
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+
+        dados = (request.get_json(silent=True) if request.is_json else request.form) or {}
+        try:
+            resultado = servico.editar_categoria(dados.get('chave'), dados, current_user, eh_admin(current_user))
+        except LookupError as exc:
+            return _resposta_de_categoria(erro=str(exc), codigo=404)
+        except PermissionError as exc:
+            return _resposta_de_categoria(erro=str(exc), codigo=403)
+        except ValueError as exc:
+            db.session.rollback()
+            return _resposta_de_categoria(erro=str(exc))
+        db.session.commit()
+        return _resposta_de_categoria(resultado)
 
     @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>/oficio')
     @require_access

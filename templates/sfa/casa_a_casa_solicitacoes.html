@@ -41,6 +41,14 @@
     .botao.forte { color: #fff; background: var(--verde); }
     .acoes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; }
     .vazio { padding: 2rem 1rem; color: var(--suave); text-align: center; }
+    .aviso { margin: 0 0 .8rem; padding: .6rem .8rem; border-radius: .6rem; color: #c92a2a; background: #ffe3e3; font-weight: 600; }
+    .tipos summary { cursor: pointer; font-weight: 700; }
+    .tipos ul { margin: .6rem 0 0; padding: 0; list-style: none; }
+    .tipos li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; padding: .5rem 0; border-top: 1px solid var(--linha); }
+    .tipos li form { flex: 1 1 16rem; margin: 0; padding: 0; border: 0; }
+    .tipos li form.so-botao { flex: 0 0 auto; }
+    .tipos li small, .tipos .fixos { color: var(--suave); font-size: .85rem; }
+    .tipos .tirado { color: var(--suave); text-decoration: line-through; }
   </style>
 </head>
 <body>
@@ -55,6 +63,44 @@
         <a href="{{ url_for('sfa_routes.casa_a_casa_solicitacoes', status=chave, token=token) }}" {% if status == chave %}aria-current="page"{% endif %}>{{ nome }}s</a>
       {% endfor %}
     </nav>
+    {% if aviso %}<p class="aviso" role="alert">{{ aviso }}</p>{% endif %}
+    <details class="cartao tipos" id="tipos" {% if aviso %}open{% endif %}>
+      <summary>🏷️ Tipos de problema ({{ prontas|length + proprias|selectattr('ativo')|list|length }})</summary>
+      <p class="fixos">Prontos: {{ prontas.values()|join(' · ') }}.</p>
+      {% if proprias %}
+        <ul>
+          {% for c in proprias %}
+            <li>
+              {% if c.pode_editar %}
+                <form method="post" action="{{ url_for('sfa_routes.casa_a_casa_categoria_editar') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                  <input type="hidden" name="chave" value="{{ c.chave }}">
+                  <label>{% if c.ativo %}Nome{% else %}Fora da lista{% endif %}<input name="nome" value="{{ c.nome }}" maxlength="80" required minlength="3"></label>
+                  <button type="submit" class="botao">Renomear</button>
+                </form>
+                <form class="so-botao" method="post" action="{{ url_for('sfa_routes.casa_a_casa_categoria_editar') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                  <input type="hidden" name="chave" value="{{ c.chave }}">
+                  <input type="hidden" name="ativo" value="{{ '0' if c.ativo else '1' }}">
+                  <button type="submit" class="botao">{% if c.ativo %}Tirar da lista{% else %}Voltar à lista{% endif %}</button>
+                </form>
+              {% else %}
+                <span class="{{ '' if c.ativo else 'tirado' }}">{{ c.nome }}</span>
+              {% endif %}
+              <small>criado por {{ c.por or 'equipe' }}</small>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if edita %}
+        <form method="post" action="{{ url_for('sfa_routes.casa_a_casa_categoria_nova') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <label>Novo tipo de problema<input name="nome" maxlength="80" required minlength="3" placeholder="ex.: Calha entupida"></label>
+          <button type="submit" class="botao forte">Incluir</button>
+        </form>
+        <p class="fixos">Quem criou um tipo, ou um administrador, pode renomear ou tirar da lista. As solicitações antigas mantêm o nome.</p>
+      {% endif %}
+    </details>
     {% for s in solicitacoes %}
       <article class="cartao" id="solicitacao-{{ s.id }}">
         <div class="topo">

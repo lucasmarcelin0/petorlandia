@@ -1028,6 +1028,104 @@ def _texto(valor, limite: int) -> str:
     return " ".join(str(valor or "").split())[:limite]
 
 
+# Tipo criado pela equipe: "U-" e letras/números (a chave pode nascer no aparelho, sem internet).
+_CHAVE_PROPRIA = re.compile(r"U-[A-Z0-9]{6,26}")
+
+
+def _categorias_proprias(so_ativas: bool = False) -> list:
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+    consulta = Ca.query.filter(Ca.ativo.is_(True)) if so_ativas else Ca.query
+    return consulta.order_by(Ca.nome, Ca.id).all()
+
+
+def nomes_das_categorias() -> dict:
+    """Nome de cada tipo, inclusive dos tirados da lista: continuam valendo nas solicitações antigas."""
+    nomes = dict(CATEGORIAS_SOLICITACAO)
+    nomes.update({c.chave: c.nome for c in _categorias_proprias()})
+    return nomes
+
+
+def categorias_para_escolher(usuario=None, admin: bool = False) -> list[dict]:
+    """Na ordem da tela: os tipos prontos, os criados pela equipe (por nome) e "Outro problema" por último."""
+    eu = getattr(usuario, "id", None)
+    lista = [{"chave": chave, "nome": nome, "propria": False, "pode_editar": False}
+             for chave, nome in CATEGORIAS_SOLICITACAO.items() if chave != "OUTRO"]
+    lista += [{"chave": c.chave, "nome": c.nome, "propria": True, "por": c.criado_por or "",
+               "pode_editar": bool(admin or (eu is not None and c.criado_por_id == eu))}
+              for c in _categorias_proprias(so_ativas=True)]
+    lista.append({"chave": "OUTRO", "nome": CATEGORIAS_SOLICITACAO["OUTRO"], "propria": False, "pode_editar": False})
+    return lista
+
+
+def categorias_da_equipe(usuario=None, admin: bool = False) -> list[dict]:
+    """Todos os tipos criados pela equipe, inclusive os tirados da lista (para o escritório)."""
+    eu = getattr(usuario, "id", None)
+    return [{"chave": c.chave, "nome": c.nome, "ativo": c.ativo, "por": c.criado_por or "",
+             "pode_editar": bool(admin or (eu is not None and c.criado_por_id == eu))}
+            for c in _categorias_proprias()]
+
+
+def _nome_de_categoria(valor) -> str:
+    nome = _texto(valor, 80)
+    if len(nome) < 3:
+        raise ValueError("Dê um nome ao tipo de problema (3 letras ou mais).")
+    return nome[:1].upper() + nome[1:]
+
+
+def _mesmo_nome(nome: str, ignorar: str | None = None):
+    """Tipo ativo (pronto ou da equipe) com o mesmo nome, sem diferenciar maiúsculas."""
+    alvo = nome.casefold()
+    for chave, existente in CATEGORIAS_SOLICITACAO.items():
+        if existente.casefold() == alvo:
+            return chave, existente
+    for c in _categorias_proprias(so_ativas=True):
+        if c.chave != ignorar and c.nome.casefold() == alvo:
+            return c.chave, c.nome
+    return None
+
+
+def criar_categoria(nome, usuario, chave: str | None = None) -> dict:
+    """Novo tipo de problema. Nome repetido devolve o tipo que já existe; a mesma chave não duplica."""
+    import uuid as uuid_mod
+    from extensions import db
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+
+    nome = _nome_de_categoria(nome)
+    chave = str(chave or "").upper() or "U-" + uuid_mod.uuid4().hex[:12].upper()
+    if not _CHAVE_PROPRIA.fullmatch(chave):
+        raise ValueError("Tipo de problema inválido.")
+    existente = Ca.query.filter_by(chave=chave).first()
+    if existente is not None:
+        return {"chave": existente.chave, "nome": existente.nome, "nova": False}
+    repetido = _mesmo_nome(nome)
+    if repetido:
+        return {"chave": repetido[0], "nome": repetido[1], "nova": False}
+    db.session.add(Ca(chave=chave, nome=nome, criado_por_id=getattr(usuario, "id", None),
+                      criado_por=nome_da_conta(usuario)))
+    db.session.flush()
+    return {"chave": chave, "nome": nome, "nova": True}
+
+
+def editar_categoria(chave, dados, usuario, admin: bool = False) -> dict:
+    """Renomeia ou tira da lista um tipo criado pela equipe. Só quem criou ou um administrador."""
+    from models.entomologia import EntomologiaSolicitacaoCategoria as Ca
+
+    categoria = Ca.query.filter_by(chave=str(chave or "").upper()).first()
+    if categoria is None:
+        raise LookupError("Tipo de problema não encontrado (os tipos prontos não mudam).")
+    if not admin and categoria.criado_por_id != getattr(usuario, "id", None):
+        raise PermissionError("Só quem criou este tipo, ou um administrador, pode mudá-lo.")
+    if dados.get("nome") not in (None, ""):
+        nome = _nome_de_categoria(dados.get("nome"))
+        if _mesmo_nome(nome, ignorar=categoria.chave):
+            raise ValueError("Já existe um tipo de problema com esse nome.")
+        categoria.nome = nome
+    if "ativo" in dados:
+        categoria.ativo = str(dados.get("ativo")).strip().lower() not in ("0", "false", "nao", "não", "")
+    categoria.atualizado_por = nome_da_conta(usuario)
+    return {"chave": categoria.chave, "nome": categoria.nome, "ativo": categoria.ativo}
+
+
 def validar_solicitacao(item, blocos: dict) -> dict:
     """Campos de uma solicitação prontos para gravar; ``ValueError`` diz o que recusar."""
     if not isinstance(item, dict):
@@ -1036,8 +1134,13 @@ def validar_solicitacao(item, blocos: dict) -> dict:
     if not _UUID.fullmatch(uuid_local):
         raise ValueError("Identificador da solicitação inválido.")
     categoria = str(item.get("categoria") or "").upper()
+    categoria_nova = None
     if categoria not in CATEGORIAS_SOLICITACAO:
-        raise ValueError("Escolha o tipo do problema.")
+        if not _CHAVE_PROPRIA.fullmatch(categoria):
+            raise ValueError("Escolha o tipo do problema.")
+        if categoria not in nomes_das_categorias():
+            # Tipo criado no aparelho sem internet: nasce junto com a solicitação.
+            categoria_nova = _nome_de_categoria(item.get("categoria_nome"))
     descricao = str(item.get("descricao") or "").strip()[:2000]
     if len(descricao) < 3:
         raise ValueError("Descreva o problema encontrado.")
@@ -1064,7 +1167,7 @@ def validar_solicitacao(item, blocos: dict) -> dict:
         "latitude": _coordenada(item.get("lat"), -90, 90), "longitude": _coordenada(item.get("lng"), -180, 180),
         "precisao_m": round(precisao, 1) if precisao is not None else None,
         "categoria": categoria, "destino": _texto(item.get("destino"), 120) or None,
-        "descricao": descricao, "registrado_em": registrado,
+        "descricao": descricao, "registrado_em": registrado, "categoria_nova": categoria_nova,
     }
 
 
@@ -1081,6 +1184,11 @@ def registrar_solicitacao(dados: dict, foto_url: str | None, usuario):
     existente = solicitacao_existente(dados["uuid_local"])
     if existente is not None:
         return existente, False
+    dados = dict(dados)
+    nome_novo = dados.pop("categoria_nova", None)
+    if nome_novo:
+        # Nome igual a um tipo que já existe aproveita o existente.
+        dados["categoria"] = criar_categoria(nome_novo, usuario, chave=dados["categoria"])["chave"]
     solicitacao = So(**dados, foto_url=foto_url, status="ABERTA", agente_id=usuario.id, agente=nome_da_conta(usuario))
     db.session.add(solicitacao)
     db.session.flush()
@@ -1103,14 +1211,15 @@ def data_por_extenso(dia: date) -> str:
     return f"{dia.day} de {MESES[dia.month - 1]} de {dia.year}"
 
 
-def solicitacao_dict(s) -> dict:
+def solicitacao_dict(s, nomes: dict | None = None) -> dict:
+    nomes = nomes if nomes is not None else nomes_das_categorias()
     endereco = ", ".join(parte for parte in (s.logradouro, s.numero) if parte) + (f" · {s.complemento}" if s.complemento else "")
     mapa = (f"https://www.google.com/maps?q={s.latitude:.6f},{s.longitude:.6f}"
             if s.latitude is not None and s.longitude is not None else "")
     return {
         "id": s.id, "u": s.uuid_local, "m": s.imovel, "b": s.bloco, "setor": s.setor or "", "quarteirao": s.quarteirao or "",
         "endereco": endereco or "Endereço não informado", "lat": s.latitude, "lng": s.longitude, "precisao": s.precisao_m,
-        "mapa": mapa, "categoria": s.categoria, "categoria_nome": CATEGORIAS_SOLICITACAO.get(s.categoria, s.categoria),
+        "mapa": mapa, "categoria": s.categoria, "categoria_nome": nomes.get(s.categoria, s.categoria),
         "destino": s.destino or "", "descricao": s.descricao, "foto": s.foto_url or "",
         "status": s.status, "status_nome": STATUS_SOLICITACAO.get(s.status, s.status), "oficio": s.oficio or "",
         "agente": s.agente or "", "registrado": _iso(s.registrado_em or s.recebido_em),
@@ -1125,7 +1234,8 @@ def solicitacoes(status: str | None = None, limite: int = 300) -> list[dict]:
     consulta = So.query
     if status in STATUS_SOLICITACAO:
         consulta = consulta.filter(So.status == status)
-    return [solicitacao_dict(s) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
+    nomes = nomes_das_categorias()
+    return [solicitacao_dict(s, nomes) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
 
 
 def atualizar_solicitacao(solicitacao_id: int, dados, usuario) -> dict:

@@ -8,7 +8,7 @@
   const CACHE_APP = 'petorlandia-casa-a-casa-v1';
   const CACHE_DADOS = 'petorlandia-casa-a-casa-dados-v1';
   const FILA = 'cac:fila:v1', ACOES = 'cac:acoes:v1', RECUSADAS = 'cac:recusadas:v1', PREFS = 'cac:prefs:v1';
-  const SOLICITACOES = 'cac:solicitacoes:v1';
+  const SOLICITACOES = 'cac:solicitacoes:v1', CATEGORIAS = 'cac:categorias:v1';
   const ZOOM_CASAS = 16.5, ZOOM_NUMEROS = 17.5, ZOOM_ROTULOS = 14.5, ZOOM_RUAS = 15.5;
   const $ = id => document.getElementById(id);
 
@@ -75,8 +75,8 @@
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
   const eu = () => cfg.usuario;
-  // Tudo o que espera internet para subir: visitas, mudanças de plano e solicitações.
-  const pendentesTotal = () => S.fila.length + S.acoes.length + S.solicitacoes.length;
+  // Tudo o que espera internet para subir: visitas, mudanças de plano, solicitações e tipos de problema novos.
+  const pendentesTotal = () => S.fila.length + S.acoes.length + S.solicitacoes.length + lerLocal('cac:categorias:v1', []).filter(c => c.pendente).length;
   // Tipos de recipiente da ficha do SISAWEB (1 a 40), vindos do servidor com a página.
   const GRUPOS_RECIPIENTE = cfg.recipientes || [];
   const TIPO_RECIPIENTE = new Map(GRUPOS_RECIPIENTE.flatMap(grupo => grupo.tipos.map(([numero, nome]) => [numero, { g: grupo.g, grupo: grupo.nome, nome }])));
@@ -283,6 +283,12 @@
         await pedir(cfg.urls.plano, S.acoes[0]);
         S.acoes.shift();
         salvarLocal(ACOES, S.acoes);
+      }
+      // Tipos de problema criados sem internet sobem antes das solicitações que os usam.
+      for (const tipo of lerLocal(CATEGORIAS, []).filter(c => c.pendente)) {
+        if (!cfg.urls.categorias) break;
+        const resposta = await pedir(cfg.urls.categorias, { nome: tipo.nome, chave: tipo.chave });
+        confirmarCategoria(tipo, resposta.categoria);
       }
       while (S.solicitacoes.length && cfg.urls.solicitacao) {
         const registro = S.solicitacoes[0];
@@ -1070,11 +1076,96 @@
     });
   }
 
+  /* Tipos de problema: os da página (prontos e os criados pela equipe) mais os criados ou mudados neste
+     aparelho. Ordem: prontos, os da equipe por nome e "Outro problema" por último. */
+  function listaDeCategorias() {
+    const daPagina = Array.isArray(cfg.categorias_solicitacao) ? cfg.categorias_solicitacao : [];
+    const porChave = new Map(daPagina.map(c => [c.chave, c]));
+    for (const c of lerLocal(CATEGORIAS, [])) {
+      if (c.ativo === false) porChave.delete(c.chave);
+      else porChave.set(c.chave, Object.assign({}, porChave.get(c.chave), c));
+    }
+    const outro = porChave.get('OUTRO');
+    porChave.delete('OUTRO');
+    const todos = Array.from(porChave.values());
+    return todos.filter(c => !c.propria)
+      .concat(todos.filter(c => c.propria).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), outro ? [outro] : []);
+  }
+  function guardarCategoria(tipo) {
+    const locais = lerLocal(CATEGORIAS, []).filter(c => c.chave !== tipo.chave);
+    if (tipo.manter !== false) locais.push(tipo);
+    salvarLocal(CATEGORIAS, locais);
+  }
+  // O servidor confirmou o tipo criado sem internet; com nome repetido, ele devolve o tipo que já existia.
+  function confirmarCategoria(local, doServidor) {
+    guardarCategoria({ chave: local.chave, manter: false });
+    if (doServidor.chave !== local.chave) {
+      for (const registro of S.solicitacoes) if (registro.categoria === local.chave) { registro.categoria = doServidor.chave; registro.categoria_nome = doServidor.nome; }
+      salvarLocal(SOLICITACOES, S.solicitacoes);
+    }
+    if (String(doServidor.chave).startsWith('U-')) {
+      guardarCategoria({ chave: doServidor.chave, nome: doServidor.nome, propria: true, pode_editar: Boolean(doServidor.nova) || doServidor.chave === local.chave });
+    }
+  }
+  // Ao abrir: some o que a página já traz (já confirmado) e o que foi tirado da lista e a página já não mostra.
+  function limparCategoriasLocais() {
+    const daPagina = new Set((Array.isArray(cfg.categorias_solicitacao) ? cfg.categorias_solicitacao : []).map(c => c.chave));
+    salvarLocal(CATEGORIAS, lerLocal(CATEGORIAS, []).filter(c => c.pendente || (c.ativo === false ? daPagina.has(c.chave) : !daPagina.has(c.chave))));
+  }
+  const chaveDeCategoria = () => 'U-' + M.uuid().replace(/[^A-Za-z0-9]/g, '').slice(-12).toUpperCase();
+  const nomeDeCategoria = valor => { const nome = String(valor || '').replace(/\s+/g, ' ').trim().slice(0, 80); return nome.charAt(0).toUpperCase() + nome.slice(1); };
+
   /* Problema para outro setor resolver (lixo, terreno, piscina…): tipo, setor, descrição, foto com data e
      coordenadas. Guardada no aparelho e enviada ao escritório, onde vira ofício. Independe da visita. */
   function solicitacaoDaCasa(casa) {
-    const categoria = h('select', { 'aria-label': 'Tipo do problema' }, h('option', { value: '' }, 'Tipo do problema…'),
-      Object.entries(cfg.categorias_solicitacao || {}).map(([id, nome]) => h('option', { value: id }, nome)));
+    const categoria = h('select', { 'aria-label': 'Tipo do problema' });
+    const editarTipo = h('div', { class: 'cac-tipo-acoes', hidden: true });
+    const desenharCategorias = escolhida => {
+      categoria.replaceChildren(h('option', { value: '' }, 'Tipo do problema…'),
+        ...listaDeCategorias().map(c => h('option', { value: c.chave }, c.nome)),
+        cfg.urls.categorias ? h('option', { value: '__novo' }, '＋ Criar outro tipo…') : null);
+      categoria.value = escolhida && listaDeCategorias().some(c => c.chave === escolhida) ? escolhida : '';
+      const atual = listaDeCategorias().find(c => c.chave === categoria.value);
+      editarTipo.hidden = !(atual && atual.propria && atual.pode_editar);
+    };
+    const criarTipo = () => {
+      const nome = nomeDeCategoria(window.prompt('Nome do novo tipo de problema (ex.: Calha entupida):') || '');
+      if (!nome) { desenharCategorias(''); return; }
+      if (nome.length < 3) { avisar('Dê um nome com 3 letras ou mais.', 'ruim'); desenharCategorias(''); return; }
+      const igual = listaDeCategorias().find(c => c.nome.toLocaleLowerCase('pt-BR') === nome.toLocaleLowerCase('pt-BR'));
+      if (igual) { desenharCategorias(igual.chave); avisar('Esse tipo já existe: ficou escolhido.'); return; }
+      const tipo = { chave: chaveDeCategoria(), nome, propria: true, pode_editar: true, pendente: true };
+      guardarCategoria(tipo);
+      desenharCategorias(tipo.chave);
+      avisar(`Tipo “${nome}” criado. Ele fica disponível para toda a equipe ✔`, 'bom');
+      ciclo();
+    };
+    const mudarTipo = async tirar => {
+      const atual = listaDeCategorias().find(c => c.chave === categoria.value);
+      if (!atual) return;
+      const nome = tirar ? atual.nome : nomeDeCategoria(window.prompt('Novo nome para este tipo de problema:', atual.nome) || '');
+      if (!tirar && (!nome || nome === atual.nome)) return;
+      if (!tirar && nome.length < 3) { avisar('Dê um nome com 3 letras ou mais.', 'ruim'); return; }
+      if (tirar && !window.confirm(`Tirar “${atual.nome}” da lista de tipos? As solicitações já feitas mantêm o nome.`)) return;
+      if (atual.pendente) {
+        // Ainda não foi para o servidor: muda só aqui.
+        guardarCategoria(tirar ? { chave: atual.chave, manter: false } : Object.assign({}, atual, { nome }));
+      } else {
+        try {
+          const resposta = await pedir(cfg.urls.categoria_editar, tirar ? { chave: atual.chave, ativo: false } : { chave: atual.chave, nome });
+          guardarCategoria(tirar ? { chave: atual.chave, ativo: false } : Object.assign({}, atual, { nome: resposta.categoria.nome }));
+        } catch (erro) {
+          avisar(navigator.onLine ? (erro.message || 'Não foi possível mudar o tipo.') : 'Para mudar um tipo que já foi enviado é preciso internet.', 'ruim');
+          return;
+        }
+      }
+      desenharCategorias(tirar ? '' : atual.chave);
+      avisar(tirar ? 'Tipo tirado da lista.' : 'Tipo renomeado ✔', 'bom');
+    };
+    editarTipo.append(h('button', { type: 'button', class: 'cac-botao', onclick: () => mudarTipo(false) }, '✏️ Renomear tipo'),
+      h('button', { type: 'button', class: 'cac-botao', onclick: () => mudarTipo(true) }, 'Tirar da lista'));
+    categoria.addEventListener('change', () => { if (categoria.value === '__novo') criarTipo(); else desenharCategorias(categoria.value); });
+    desenharCategorias('');
     const destino = h('input', { type: 'text', list: 'cac-destinos', maxlength: '120', placeholder: 'Encaminhar para (setor), se souber', 'aria-label': 'Encaminhar para' });
     const descricao = h('textarea', { rows: '3', maxlength: '2000', placeholder: 'O que foi encontrado? Ex.: quintal com pneus e entulho acumulando água.', 'aria-label': 'Descrição do problema' });
     const camera = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
@@ -1108,12 +1199,13 @@
     camera.addEventListener('change', () => { escolher(camera.files[0]); camera.value = ''; });
     galeria.addEventListener('change', () => { escolher(galeria.files[0]); galeria.value = ''; });
     const guardar = async () => {
-      if (!categoria.value) { avisar('Escolha o tipo do problema.', 'ruim'); categoria.focus(); return; }
+      if (!categoria.value || categoria.value === '__novo') { avisar('Escolha o tipo do problema.', 'ruim'); categoria.focus(); return; }
       if (descricao.value.trim().length < 3) { avisar('Descreva o problema encontrado.', 'ruim'); descricao.focus(); return; }
       const ponto = posicao || { lat: casa.y, lng: casa.x, precisao: null };
       const registro = {
         uuid: M.uuid(), bloco: casa.bloco.id, imovel: casa.id, logradouro: casa.rua, numero: casa.n, complemento: casa.cp || '',
-        lat: ponto.lat, lng: ponto.lng, precisao: ponto.precisao || null, categoria: categoria.value, destino: destino.value.trim(),
+        lat: ponto.lat, lng: ponto.lng, precisao: ponto.precisao || null, categoria: categoria.value,
+        categoria_nome: (listaDeCategorias().find(c => c.chave === categoria.value) || {}).nome || '', destino: destino.value.trim(),
         descricao: descricao.value.trim(), horario: new Date().toISOString(), foto: Boolean(foto),
       };
       if (foto) await guardarFoto(registro.uuid, foto);
@@ -1121,14 +1213,14 @@
       if (!salvarLocal(SOLICITACOES, fila)) { apagarFoto(registro.uuid); avisar('Não foi possível guardar a solicitação: o aparelho está sem espaço.', 'ruim'); return; }
       S.solicitacoes = fila;
       avisar(`Solicitação guardada${foto ? ' com a foto' : ''}. Vai para o escritório assim que houver internet ✔`, 'bom');
-      categoria.value = ''; destino.value = ''; descricao.value = ''; foto = null; previa.replaceChildren();
+      desenharCategorias(''); destino.value = ''; descricao.value = ''; foto = null; previa.replaceChildren();
       caixa.open = false;
       desenharConexao();
       ciclo();
     };
     const caixa = h('details', { class: 'cac-historico cac-solicitacao' },
       h('summary', {}, h('span', {}, '📨 Solicitação para outro setor'), h('span', { class: 'cac-historico-conta' }, 'Foto e local')),
-      h('div', { class: 'cac-solicitacao-form' }, categoria, destino,
+      h('div', { class: 'cac-solicitacao-form' }, categoria, editarTipo, destino,
         h('datalist', { id: 'cac-destinos' }, (cfg.destinos_solicitacao || []).map(nome => h('option', { value: nome }))), descricao,
         h('div', { class: 'cac-foto-botoes' },
           h('button', { type: 'button', class: 'cac-botao', onclick: () => camera.click() }, '📷 Tirar foto'),
@@ -1468,7 +1560,7 @@
   async function limparAparelho() {
     if (!window.confirm('Apagar os dados do Casa a Casa guardados neste aparelho? Nada é apagado do servidor.')) return;
     try { await caches.delete(CACHE_DADOS); await caches.delete(CACHE_APP); } catch (e) { /* sem Cache Storage */ }
-    [FILA, ACOES, RECUSADAS, PREFS, SOLICITACOES].forEach(chave => localStorage.removeItem(chave));
+    [FILA, ACOES, RECUSADAS, PREFS, SOLICITACOES, CATEGORIAS].forEach(chave => localStorage.removeItem(chave));
     location.reload();
   }
 
@@ -1565,6 +1657,7 @@
   }
 
   async function iniciar() {
+    limparCategoriasLocais();
     ligarTela();
     iniciarMapa();
     desenharLegenda();
