@@ -8,6 +8,7 @@
   const CACHE_APP = 'petorlandia-casa-a-casa-v1';
   const CACHE_DADOS = 'petorlandia-casa-a-casa-dados-v1';
   const FILA = 'cac:fila:v1', ACOES = 'cac:acoes:v1', RECUSADAS = 'cac:recusadas:v1', PREFS = 'cac:prefs:v1';
+  const SOLICITACOES = 'cac:solicitacoes:v1';
   const ZOOM_CASAS = 16.5, ZOOM_NUMEROS = 17.5, ZOOM_ROTULOS = 14.5, ZOOM_RUAS = 15.5;
   const $ = id => document.getElementById(id);
 
@@ -64,6 +65,7 @@
     planos: [], visitas: new Map(), doDia: new Map(), ultimas: new Map(), agentes: [],
     hoje: hojeNoAparelho(), cursor: 0, completo: false, csrf: cfg.csrf,
     fila: lerLocal(FILA, []), acoes: lerLocal(ACOES, []), recusadas: lerLocal(RECUSADAS, []),
+    solicitacoes: lerLocal(SOLICITACOES, []), fotosNaMemoria: new Map(), moradores: new Map(),
     prefs: Object.assign({ modo: cfg.registra ? 'rua' : 'escritorio', ruas: false, painel: true, vista: null }, lerLocal(PREFS, {})),
     aba: null, blocoAtivo: null, diaPlano: null, responsavelPlano: cfg.usuario ? cfg.usuario.id : null, planejando: true,
     selecionados: new Set(), origemPlano: null, salvandoPlano: false, buscaPlano: '', setorPlano: '', filtroCasas: 'todas',
@@ -73,6 +75,8 @@
   };
   if (!cfg.registra) S.prefs.modo = 'escritorio';
   const eu = () => cfg.usuario;
+  // Tudo o que espera internet para subir: visitas, mudanças de plano e solicitações.
+  const pendentesTotal = () => S.fila.length + S.acoes.length + S.solicitacoes.length;
   // Tipos de recipiente da ficha do SISAWEB (1 a 40), vindos do servidor com a página.
   const GRUPOS_RECIPIENTE = cfg.recipientes || [];
   const TIPO_RECIPIENTE = new Map(GRUPOS_RECIPIENTE.flatMap(grupo => grupo.tipos.map(([numero, nome]) => [numero, { g: grupo.g, grupo: grupo.nome, nome }])));
@@ -253,7 +257,7 @@
 
   // ---------------------------------------------------------------- envio e atualização
   async function enviarPendentes() {
-    if (!cfg.registra || S.enviando || (!S.fila.length && !S.acoes.length)) return;
+    if (!cfg.registra || S.enviando || !pendentesTotal()) return;
     S.enviando = true;
     desenharConexao();
     try {
@@ -265,6 +269,11 @@
         for (const visita of lote) {
           if (recusadas.has(visita.uuid)) S.recusadas.push({ visita, motivo: recusadas.get(visita.uuid) });
         }
+        // Moradores das visitas aceitas passam para a lista guardada do imóvel (vale sem internet depois).
+        for (const visita of lote) {
+          if (!aceitas.has(visita.uuid) || !(visita.moradores || visita.moradores_removidos) || !S.moradores.has(visita.imovel)) continue;
+          S.moradores.set(visita.imovel, M.moradoresDoImovel(S.moradores.get(visita.imovel), [visita], visita.imovel).map(({ pendente, ...m }) => m));
+        }
         const antes = S.fila.length;
         S.fila = S.fila.filter(visita => !aceitas.has(visita.uuid) && !recusadas.has(visita.uuid));
         salvarLocal(FILA, S.fila); salvarLocal(RECUSADAS, S.recusadas);
@@ -274,6 +283,15 @@
         await pedir(cfg.urls.plano, S.acoes[0]);
         S.acoes.shift();
         salvarLocal(ACOES, S.acoes);
+      }
+      while (S.solicitacoes.length && cfg.urls.solicitacao) {
+        const registro = S.solicitacoes[0];
+        const resultado = await enviarSolicitacao(registro);
+        if (resultado.repetir) break;
+        if (resultado.motivo) { S.recusadas.push({ solicitacao: registro, motivo: resultado.motivo }); salvarLocal(RECUSADAS, S.recusadas); }
+        S.solicitacoes.shift();
+        salvarLocal(SOLICITACOES, S.solicitacoes);
+        apagarFoto(registro.uuid);
       }
       S.precisaEntrar = false;
     } catch (erro) {
@@ -298,10 +316,10 @@
   async function ciclo() {
     clearTimeout(S.relogio);
     if (navigator.onLine) {
-      const tinha = S.fila.length + S.acoes.length;
+      const tinha = pendentesTotal();
       await enviarPendentes();
       await atualizar();
-      if (tinha && !S.fila.length && !S.acoes.length && S.aoVivo) {
+      if (tinha && !pendentesTotal() && S.aoVivo) {
         if (S.ficouFora) avisar(`${plural(tinha, 'registro enviado', 'registros enviados')} para a equipe ✔`, 'bom');
         S.ficouFora = false;
         recalcular(); desenhar();
@@ -309,7 +327,7 @@
     } else {
       S.aoVivo = false;
     }
-    if (!S.aoVivo && (S.fila.length || S.acoes.length)) S.ficouFora = true;
+    if (!S.aoVivo && pendentesTotal()) S.ficouFora = true;
     desenharConexao();
     S.relogio = setTimeout(ciclo, document.hidden ? 45000 : (S.aoVivo ? 8000 : 15000));
   }
@@ -712,6 +730,7 @@
       tratamento_focal: deHoje ? Boolean(deHoje.tf) : false, observacao: deHoje ? deHoje.o : '',
       recipientes: deHoje && deHoje.rt ? deHoje.rt.map(r => Object.assign({}, r)) : [],
       focal_produto: deHoje && deHoje.fp ? deHoje.fp.split(',').filter(Boolean) : [],
+      moradores: [], moradores_removidos: [],
     };
     $('cac-ficha-titulo').textContent = nova ? 'Imóvel que não está na lista' : `${casa.rua}, ${casa.n}`;
     const posicaoCasa = casasDe(casa.bloco).findIndex(c => c.id === casa.id) + 1;
@@ -732,7 +751,9 @@
     if (!nova) {
       const s = anterior && M.POR_ID[anterior.s];
       const ultima = anterior ? `Última visita: ${s.icone} ${s.nome}${anterior.l ? ' com larva' : ''} em ${dataBr(anterior.d)}${anterior.a ? ' por ' + primeiroNome(anterior.a) : ''}${anterior.pendente ? ' (ainda não enviada)' : ''}` : '';
-      corpo.append(historicoDaCasa(casa, ultima, false));
+      corpo.append(historicoDaCasa(casa, ultima));
+      if (cfg.urls.moradores) corpo.append(moradoresDaCasa(casa, d));
+      if (cfg.urls.solicitacao) corpo.append(solicitacaoDaCasa(casa));
     }
 
     const detalhes = h('div', { class: 'cac-detalhes' });
@@ -920,6 +941,205 @@
     return caixa;
   }
 
+  /* Moradores e telefones do imóvel. Dado pessoal: só a equipe logada vê, e nada disso vai no mapa.
+     O que muda aqui sai junto com a visita salva (funciona sem internet, como a visita). */
+  function moradoresDaCasa(casa, d) {
+    const conta = h('span', { class: 'cac-historico-conta' });
+    const lista = h('ul', { class: 'cac-moradores-lista' });
+    const nota = h('p', { class: 'cac-nota', hidden: true });
+    const nome = h('input', { type: 'text', maxlength: '120', placeholder: 'Nome', autocomplete: 'off', 'aria-label': 'Nome do morador' });
+    const telefone = h('input', { type: 'tel', inputmode: 'tel', maxlength: '20', placeholder: 'Telefone com DDD', autocomplete: 'off', 'aria-label': 'Telefone do morador' });
+    const caixa = h('details', { class: 'cac-historico cac-moradores' }, h('summary', {}, h('span', {}, '👪 Moradores'), conta), lista,
+      h('div', { class: 'cac-morador-novo' }, nome, telefone, h('button', { type: 'button', class: 'cac-botao', onclick: () => incluir() }, 'Incluir')), nota);
+    let doServidor = S.moradores.get(casa.id) || null, aviso = '';
+    const daFicha = () => ({ imovel: casa.id, moradores: d.moradores, moradores_removidos: d.moradores_removidos });
+    const desenharLista = () => {
+      const atuais = M.moradoresDoImovel(doServidor || [], S.fila.concat([daFicha()]), casa.id);
+      conta.textContent = atuais.length ? plural(atuais.length, 'morador', 'moradores') : 'Anotar';
+      lista.replaceChildren(...atuais.map(m => h('li', {},
+        h('span', {}, h('strong', {}, m.nome || 'Sem nome'), m.telefone ? h('a', { href: 'tel:' + m.telefone }, '📞 ' + M.telefoneBr(m.telefone)) : null, m.pendente ? h('small', {}, 'ainda não enviado') : null),
+        h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar ' + (m.nome || 'morador'), onclick: () => tirar(m) }, '×'))));
+      const mudou = d.moradores.length || d.moradores_removidos.length;
+      nota.textContent = mudou ? 'Os moradores são guardados quando você salva a visita.' : aviso;
+      nota.hidden = !nota.textContent;
+    };
+    const incluir = () => {
+      const n = nome.value.trim(), t = telefone.value.trim();
+      if (!n && !t) { nome.focus(); return; }
+      if (!M.telefoneValido(t)) { avisar('Telefone inválido: use o DDD e o número, como (16) 99999-9999.', 'ruim'); telefone.focus(); return; }
+      d.moradores.push({ u: M.uuid(), nome: n, telefone: M.telefoneDigitos(t) });
+      nome.value = ''; telefone.value = '';
+      S.fichaSuja = true;
+      desenharLista();
+      nome.focus();
+    };
+    const tirar = m => {
+      if (!window.confirm(`Tirar ${m.nome || 'este morador'} da lista do imóvel?`)) return;
+      const local = d.moradores.findIndex(x => x.u === m.u);
+      if (local >= 0) d.moradores.splice(local, 1);
+      // Se o servidor ou outra visita guardada já conhecem o morador, a remoção vai junto com a visita.
+      if (M.moradoresDoImovel(doServidor || [], S.fila, casa.id).some(x => x.u === m.u)) d.moradores_removidos.push(m.u);
+      S.fichaSuja = true;
+      desenharLista();
+    };
+    telefone.addEventListener('keydown', evento => { if (evento.key === 'Enter') { evento.preventDefault(); incluir(); } });
+    desenharLista();
+    const url = cfg.urls.moradores + (cfg.urls.moradores.includes('?') ? '&' : '?') + 'imovel=' + encodeURIComponent(casa.id);
+    pedir(url).then(dados => { doServidor = dados.moradores || []; S.moradores.set(casa.id, doServidor); aviso = ''; desenharLista(); })
+      .catch(() => { aviso = doServidor ? 'Sem conexão: lista guardada neste aparelho.' : 'Sem conexão: os moradores já anotados aparecem quando houver internet.'; desenharLista(); });
+    return caixa;
+  }
+
+  // ---------------------------------------------------------------- solicitações (ofícios)
+  const chaveFoto = uuid => '/__casa-a-casa/foto/' + uuid;
+  async function guardarFoto(uuid, blob) {
+    try {
+      const cache = await caches.open(CACHE_DADOS);
+      await cache.put(chaveFoto(uuid), new Response(blob, { headers: { 'Content-Type': blob.type || 'image/jpeg' } }));
+      return true;
+    } catch (e) {
+      // Sem Cache Storage: a foto fica na memória até o envio (perde-se se a página recarregar).
+      S.fotosNaMemoria.set(uuid, blob);
+      return false;
+    }
+  }
+  async function lerFoto(uuid) {
+    if (S.fotosNaMemoria.has(uuid)) return S.fotosNaMemoria.get(uuid);
+    try {
+      const resposta = await (await caches.open(CACHE_DADOS)).match(chaveFoto(uuid));
+      return resposta ? await resposta.blob() : null;
+    } catch (e) { return null; }
+  }
+  async function apagarFoto(uuid) {
+    S.fotosNaMemoria.delete(uuid);
+    try { await (await caches.open(CACHE_DADOS)).delete(chaveFoto(uuid)); } catch (e) { /* sem Cache Storage */ }
+  }
+
+  // Envia uma solicitação com a foto. Devolve { ok }, { repetir } (tenta depois) ou { motivo } (recusada).
+  async function enviarSolicitacao(registro, repetirCsrf = true) {
+    const { foto, ...dados } = registro;
+    const corpo = new FormData();
+    corpo.append('dados', JSON.stringify(dados));
+    const blob = foto ? await lerFoto(registro.uuid) : null;
+    if (blob) corpo.append('foto', blob, 'solicitacao.jpg');
+    const resposta = await fetch(cfg.urls.solicitacao, { method: 'POST', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'same-origin',
+      headers: { Accept: 'application/json', 'X-CSRFToken': S.csrf }, body: corpo });
+    if (resposta.redirected || [401, 403, 404].includes(resposta.status)) { const erro = new Error('Entre de novo para continuar.'); erro.sessao = true; throw erro; }
+    const json = (resposta.headers.get('Content-Type') || '').includes('json') ? await resposta.json() : null;
+    if (resposta.ok && json && json.ok) return { ok: true };
+    const csrf = resposta.status === 400 && (!json || json.error === 'CSRF token missing or invalid' || Boolean(json.errors && json.errors.csrf_token));
+    if (csrf && repetirCsrf) {
+      const estado = await pedir(cfg.urls.estado + (cfg.urls.estado.includes('?') ? '&' : '?') + 'desde=' + S.cursor);
+      S.csrf = estado.csrf || S.csrf;
+      return enviarSolicitacao(registro, false);
+    }
+    if (resposta.status >= 500 || csrf || (json && json.repetir)) return { repetir: true };
+    return { motivo: (json && json.erro) || 'Solicitação recusada pelo servidor.' };
+  }
+
+  // Foto reduzida (até 1600 px) com a faixa de data, hora, endereço e coordenadas gravada na imagem.
+  async function carimbarFoto(arquivo, linhas) {
+    try {
+      const imagem = await createImageBitmap(arquivo, { imageOrientation: 'from-image' });
+      const escala = Math.min(1, 1600 / Math.max(imagem.width, imagem.height));
+      const largura = Math.round(imagem.width * escala), altura = Math.round(imagem.height * escala);
+      const tela = document.createElement('canvas');
+      tela.width = largura; tela.height = altura;
+      const ctx = tela.getContext('2d');
+      ctx.drawImage(imagem, 0, 0, largura, altura);
+      const fonte = Math.max(14, Math.round(largura / 42)), linha = Math.round(fonte * 1.35);
+      const faixa = linha * linhas.length + Math.round(fonte * 0.8);
+      ctx.fillStyle = 'rgba(0, 0, 0, .6)';
+      ctx.fillRect(0, altura - faixa, largura, faixa);
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 ${fonte}px system-ui, sans-serif`;
+      ctx.textBaseline = 'top';
+      linhas.forEach((texto, i) => ctx.fillText(texto, Math.round(fonte * 0.6), altura - faixa + Math.round(fonte * 0.4) + i * linha, largura - fonte * 1.2));
+      const blob = await new Promise(pronto => tela.toBlob(pronto, 'image/jpeg', 0.82));
+      if (blob) return blob;
+    } catch (e) { /* formato que o navegador não abre (HEIC): vai a foto original, o servidor converte */ }
+    return arquivo;
+  }
+
+  function posicaoAtual(espera = 15000) {
+    return new Promise(pronto => {
+      if (!navigator.geolocation) { pronto(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        p => pronto({ lat: p.coords.latitude, lng: p.coords.longitude, precisao: p.coords.accuracy }),
+        () => pronto(null), { enableHighAccuracy: true, timeout: espera, maximumAge: 30000 });
+    });
+  }
+
+  /* Problema para outro setor resolver (lixo, terreno, piscina…): tipo, setor, descrição, foto com data e
+     coordenadas. Guardada no aparelho e enviada ao escritório, onde vira ofício. Independe da visita. */
+  function solicitacaoDaCasa(casa) {
+    const categoria = h('select', { 'aria-label': 'Tipo do problema' }, h('option', { value: '' }, 'Tipo do problema…'),
+      Object.entries(cfg.categorias_solicitacao || {}).map(([id, nome]) => h('option', { value: id }, nome)));
+    const destino = h('input', { type: 'text', list: 'cac-destinos', maxlength: '120', placeholder: 'Encaminhar para (setor), se souber', 'aria-label': 'Encaminhar para' });
+    const descricao = h('textarea', { rows: '3', maxlength: '2000', placeholder: 'O que foi encontrado? Ex.: quintal com pneus e entulho acumulando água.', 'aria-label': 'Descrição do problema' });
+    const camera = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
+    const galeria = h('input', { type: 'file', accept: 'image/*', hidden: true });
+    const previa = h('div', { class: 'cac-foto-previa' });
+    const local = h('p', { class: 'cac-nota cac-local' });
+    let foto = null, posicao = null, buscando = null, endereco = null;
+    const desenharLocal = () => {
+      local.textContent = posicao ? `📍 ${posicao.lat.toFixed(5)}, ${posicao.lng.toFixed(5)}${posicao.precisao ? ' (± ' + Math.round(posicao.precisao) + ' m)' : ''}`
+        : buscando ? '📍 Buscando o GPS…' : `📍 Sem GPS: vale a posição do imóvel no mapa (${casa.y.toFixed(5)}, ${casa.x.toFixed(5)})`;
+    };
+    const localizar = () => {
+      if (!buscando) buscando = posicaoAtual().then(p => { if (p) posicao = p; buscando = null; desenharLocal(); return posicao; });
+      desenharLocal();
+      return buscando;
+    };
+    const escolher = async arquivo => {
+      if (!arquivo) return;
+      previa.replaceChildren(h('p', { class: 'cac-nota' }, 'Preparando a foto…'));
+      if (!posicao) await Promise.race([localizar(), new Promise(pronto => setTimeout(pronto, 8000))]);
+      const agora = new Date();
+      const ponto = posicao || { lat: casa.y, lng: casa.x };
+      foto = await carimbarFoto(arquivo, [
+        `${agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} ${horaBr(agora.toISOString())} · ${casa.rua}, ${casa.n}${casa.cp ? ' · ' + casa.cp : ''}`,
+        `${ponto.lat.toFixed(6)}, ${ponto.lng.toFixed(6)}${posicao && posicao.precisao ? ' (± ' + Math.round(posicao.precisao) + ' m)' : ' (posição do mapa)'} · Orlândia-SP`]);
+      if (endereco) URL.revokeObjectURL(endereco);
+      endereco = URL.createObjectURL(foto);
+      previa.replaceChildren(h('img', { src: endereco, alt: 'Foto da solicitação' }),
+        h('button', { type: 'button', class: 'cac-tipo-tirar', 'aria-label': 'Tirar a foto', onclick: () => { foto = null; previa.replaceChildren(); } }, '×'));
+    };
+    camera.addEventListener('change', () => { escolher(camera.files[0]); camera.value = ''; });
+    galeria.addEventListener('change', () => { escolher(galeria.files[0]); galeria.value = ''; });
+    const guardar = async () => {
+      if (!categoria.value) { avisar('Escolha o tipo do problema.', 'ruim'); categoria.focus(); return; }
+      if (descricao.value.trim().length < 3) { avisar('Descreva o problema encontrado.', 'ruim'); descricao.focus(); return; }
+      const ponto = posicao || { lat: casa.y, lng: casa.x, precisao: null };
+      const registro = {
+        uuid: M.uuid(), bloco: casa.bloco.id, imovel: casa.id, logradouro: casa.rua, numero: casa.n, complemento: casa.cp || '',
+        lat: ponto.lat, lng: ponto.lng, precisao: ponto.precisao || null, categoria: categoria.value, destino: destino.value.trim(),
+        descricao: descricao.value.trim(), horario: new Date().toISOString(), foto: Boolean(foto),
+      };
+      if (foto) await guardarFoto(registro.uuid, foto);
+      const fila = S.solicitacoes.concat(registro);
+      if (!salvarLocal(SOLICITACOES, fila)) { apagarFoto(registro.uuid); avisar('Não foi possível guardar a solicitação: o aparelho está sem espaço.', 'ruim'); return; }
+      S.solicitacoes = fila;
+      avisar(`Solicitação guardada${foto ? ' com a foto' : ''}. Vai para o escritório assim que houver internet ✔`, 'bom');
+      categoria.value = ''; destino.value = ''; descricao.value = ''; foto = null; previa.replaceChildren();
+      caixa.open = false;
+      desenharConexao();
+      ciclo();
+    };
+    const caixa = h('details', { class: 'cac-historico cac-solicitacao' },
+      h('summary', {}, h('span', {}, '📨 Solicitação para outro setor'), h('span', { class: 'cac-historico-conta' }, 'Foto e local')),
+      h('div', { class: 'cac-solicitacao-form' }, categoria, destino,
+        h('datalist', { id: 'cac-destinos' }, (cfg.destinos_solicitacao || []).map(nome => h('option', { value: nome }))), descricao,
+        h('div', { class: 'cac-foto-botoes' },
+          h('button', { type: 'button', class: 'cac-botao', onclick: () => camera.click() }, '📷 Tirar foto'),
+          h('button', { type: 'button', class: 'cac-botao', onclick: () => galeria.click() }, '🖼️ Da galeria')),
+        camera, galeria, previa, local,
+        h('button', { type: 'button', class: 'cac-botao forte', onclick: guardar }, 'Guardar solicitação')));
+    caixa.addEventListener('toggle', () => { if (caixa.open && !posicao) localizar(); });
+    desenharLocal();
+    return caixa;
+  }
+
   function resumoDaVisita(v) {
     const s = M.POR_ID[v.s];
     const linhas = [`${s.icone} ${s.nome} em ${dataComAno(v.d)}${horaBr(v.h) ? ' às ' + horaBr(v.h) : ''}${v.a ? ' · ' + v.a : ''}${v.pendente ? ' (ainda não enviada)' : ''}`];
@@ -944,7 +1164,12 @@
   function abrirPainel(aberto) {
     S.prefs.painel = aberto;
     salvarLocal(PREFS, S.prefs);
-    $('cac-painel').classList.toggle('recolhido', !aberto);
+    const painel = $('cac-painel');
+    painel.classList.toggle('recolhido', !aberto);
+    // Altura escolhida arrastando o puxador: volta a valer sempre que o painel abre.
+    const altura = aberto && S.prefs.alturaPainel;
+    painel.classList.toggle('arrastado', Boolean(altura));
+    if (altura) painel.style.setProperty('--cac-altura-painel', altura + '%');
     $('cac-puxador').setAttribute('aria-expanded', String(aberto));
     setTimeout(() => S.mapa && S.mapa.invalidateSize(), 260);
   }
@@ -1135,7 +1360,7 @@
   }
 
   function desenharConexao() {
-    const botao = $('cac-conexao'), pendentes = S.fila.length + S.acoes.length;
+    const botao = $('cac-conexao'), pendentes = pendentesTotal();
     let texto, classe;
     if (S.precisaEntrar) { texto = '🔑 Entrar de novo'; classe = 'alerta'; }
     else if (S.enviando) { texto = '⬆️ Enviando…'; classe = 'envio'; }
@@ -1218,7 +1443,7 @@
   }
 
   function abrirMenu() {
-    const menu = $('cac-menu'), pendentes = S.fila.length + S.acoes.length;
+    const menu = $('cac-menu'), pendentes = pendentesTotal();
     const item = (rotulo, acao, desligado) => h('button', { type: 'button', role: 'menuitem', disabled: desligado, onclick: () => { fecharMenu(); acao(); } }, rotulo);
     const baixar = (url, inicio) => () => { location.href = url + (url.includes('?') ? '&' : '?') + 'inicio=' + inicio + '&fim=' + S.hoje; };
     menu.replaceChildren(
@@ -1226,6 +1451,7 @@
       h('p', { class: 'cac-menu-nota' }, S.pronto ? '✅ Pronto para funcionar sem internet' : '⚠️ Ainda não preparado para funcionar sem internet'),
       cfg.registra ? item(S.pronto ? '🔄 Atualizar o que fica guardado no aparelho' : '📥 Preparar para usar sem internet', () => prepararOffline(true)) : null,
       cfg.registra ? item(`⬆️ Enviar agora${pendentes ? ' (' + pendentes + ')' : ''}`, () => { if (!navigator.onLine) avisar('Sem internet agora. Os registros continuam guardados.'); ciclo(); }, !pendentes) : null,
+      cfg.urls.solicitacoes ? item('📨 Solicitações e ofícios', () => { location.href = cfg.urls.solicitacoes; }) : null,
       item('🖨️ Imprimir mapa e plano', imprimir),
       item('📄 Boletim de hoje (CSV)', baixar(cfg.urls.boletim_csv, S.hoje)),
       item('📄 Boletim dos últimos 30 dias (CSV)', baixar(cfg.urls.boletim_csv, somarDias(S.hoje, -30))),
@@ -1242,11 +1468,60 @@
   async function limparAparelho() {
     if (!window.confirm('Apagar os dados do Casa a Casa guardados neste aparelho? Nada é apagado do servidor.')) return;
     try { await caches.delete(CACHE_DADOS); await caches.delete(CACHE_APP); } catch (e) { /* sem Cache Storage */ }
-    [FILA, ACOES, RECUSADAS, PREFS].forEach(chave => localStorage.removeItem(chave));
+    [FILA, ACOES, RECUSADAS, PREFS, SOLICITACOES].forEach(chave => localStorage.removeItem(chave));
     location.reload();
   }
 
   function imprimir(opcoes = {}) { impressao.abrir(opcoes); }
+
+  /* Gaveta do celular: arrastar o puxador ou as abas para cima e para baixo muda a altura do painel.
+     Solto perto do fundo, ele recolhe; um toque sem arrastar continua abrindo e recolhendo. */
+  function ligarArraste() {
+    const painel = $('cac-painel');
+    const area = painel.parentElement;
+    const celular = () => window.matchMedia('(max-width: 899px)').matches;
+    let gesto = null, fimDoArraste = 0;
+    const comecar = evento => {
+      if (!celular() || gesto || (evento.pointerType === 'mouse' && evento.button !== 0)) return;
+      gesto = { id: evento.pointerId, y: evento.clientY, altura: painel.getBoundingClientRect().height, arrastando: false };
+      // O dedo sai do puxador logo no começo: o movimento é acompanhado na janela toda.
+      window.addEventListener('pointermove', mover);
+      window.addEventListener('pointerup', soltar);
+      window.addEventListener('pointercancel', soltar);
+    };
+    const mover = evento => {
+      if (!gesto || evento.pointerId !== gesto.id) return;
+      const subiu = gesto.y - evento.clientY;
+      if (!gesto.arrastando) {
+        if (Math.abs(subiu) < 8) return;
+        gesto.arrastando = true;
+        painel.classList.add('arrastando', 'arrastado');
+        painel.classList.remove('recolhido');
+      }
+      const altura = Math.max(48, Math.min(area.clientHeight * 0.92, gesto.altura + subiu));
+      painel.style.setProperty('--cac-altura-painel', Math.round(altura) + 'px');
+    };
+    const soltar = evento => {
+      if (!gesto || evento.pointerId !== gesto.id) return;
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', soltar);
+      window.removeEventListener('pointercancel', soltar);
+      const arrastou = gesto.arrastando;
+      gesto = null;
+      if (!arrastou) return;
+      fimDoArraste = Date.now();
+      painel.classList.remove('arrastando');
+      const pct = Math.round(100 * painel.getBoundingClientRect().height / Math.max(1, area.clientHeight));
+      if (pct < 20) { abrirPainel(false); return; }
+      S.prefs.alturaPainel = Math.min(92, pct);
+      abrirPainel(true);
+    };
+    for (const alvo of [$('cac-puxador'), $('cac-abas')]) alvo.addEventListener('pointerdown', comecar);
+    // O toque que termina um arraste não vale como clique no puxador ou numa aba.
+    painel.addEventListener('click', evento => {
+      if (Date.now() - fimDoArraste < 400) { evento.stopPropagation(); evento.preventDefault(); }
+    }, true);
+  }
 
   // ---------------------------------------------------------------- início
   function ligarTela() {
@@ -1258,12 +1533,14 @@
       desenhar();
     }));
     $('cac-puxador').addEventListener('click', () => abrirPainel(!S.prefs.painel));
+    ligarArraste();
     $('cac-conexao').addEventListener('click', () => { if (S.precisaEntrar && cfg.urls.entrar) location.href = cfg.urls.entrar; else ciclo(); });
     $('cac-menu-abrir').addEventListener('click', evento => { evento.stopPropagation(); if ($('cac-menu').hidden) abrirMenu(); else fecharMenu(); });
     document.addEventListener('click', evento => { if (!$('cac-menu').hidden && !$('cac-menu').contains(evento.target)) fecharMenu(); });
     $('cac-ficha-fechar').addEventListener('click', fecharFicha);
-    $('cac-ficha-corpo').addEventListener('input', () => { S.fichaSuja = true; });
-    $('cac-ficha-corpo').addEventListener('change', () => { S.fichaSuja = true; });
+    // A solicitação é guardada à parte: mexer nela não deixa a visita "por salvar".
+    $('cac-ficha-corpo').addEventListener('input', evento => { if (!evento.target.closest('.cac-solicitacao')) S.fichaSuja = true; });
+    $('cac-ficha-corpo').addEventListener('change', evento => { if (!evento.target.closest('.cac-solicitacao')) S.fichaSuja = true; });
     $('cac-ficha-corpo').addEventListener('click', evento => { if (evento.target.closest('.cac-situacoes button, .cac-contador button, .cac-tipo-tirar')) S.fichaSuja = true; });
     $('cac-ficha').addEventListener('click', evento => { if (evento.target === $('cac-ficha')) fecharFicha(); });
     document.addEventListener('keydown', evento => {

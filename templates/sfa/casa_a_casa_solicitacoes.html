@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#0b6568">
+  <title>Solicitações · Casa a Casa</title>
+  <style>
+    :root { --verde: #0b6568; --verde-claro: #e6f4f1; --tinta: #12343b; --suave: #5d7378; --linha: #dfe7e5; --fundo: #f3f6f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--tinta); background: var(--fundo); }
+    header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: .6rem; padding: .7rem 1rem; color: #fff; background: var(--verde); }
+    header a { color: #fff; font-size: 1.3rem; text-decoration: none; }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    main { max-width: 52rem; margin: 0 auto; padding: .8rem 1rem 2rem; }
+    .filtros { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
+    .filtros a { padding: .4rem .8rem; border: 1px solid var(--linha); border-radius: 999px; color: var(--tinta); background: #fff; font-size: .9rem; font-weight: 600; text-decoration: none; }
+    .filtros a[aria-current="page"] { border-color: var(--verde); color: #fff; background: var(--verde); }
+    .cartao { margin-bottom: .8rem; padding: .9rem; border: 1px solid var(--linha); border-radius: .9rem; background: #fff; }
+    .topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .3rem .8rem; }
+    .topo h2 { margin: 0; font-size: 1.05rem; }
+    .selo { padding: .15rem .55rem; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+    .selo.ABERTA { color: #c92a2a; background: #ffe3e3; }
+    .selo.ENCAMINHADA { color: #e67700; background: #fff3bf; }
+    .selo.RESOLVIDA { color: #2b8a3e; background: #d3f9d8; }
+    .corpo { display: grid; grid-template-columns: 1fr; gap: .8rem; margin-top: .6rem; }
+    @media (min-width: 640px) { .corpo.com-foto { grid-template-columns: 14rem 1fr; } }
+    .corpo img { display: block; width: 100%; max-height: 18rem; object-fit: cover; border-radius: .6rem; background: #eef2f1; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: .25rem .7rem; margin: 0; font-size: .92rem; }
+    dt { color: var(--suave); font-weight: 600; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .descricao { white-space: pre-line; }
+    form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--linha); }
+    label { display: flex; flex: 1 1 9rem; flex-direction: column; gap: .2rem; color: var(--suave); font-size: .8rem; font-weight: 600; }
+    input, select { min-height: 2.5rem; padding: .4rem .55rem; border: 1px solid var(--linha); border-radius: .55rem; color: var(--tinta); background: #fff; font: inherit; font-size: 1rem; }
+    .botao { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: .45rem .9rem; border: 1.5px solid var(--verde); border-radius: .6rem; color: var(--verde); background: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .botao.forte { color: #fff; background: var(--verde); }
+    .acoes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; }
+    .vazio { padding: 2rem 1rem; color: var(--suave); text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="{{ voltar }}" aria-label="Voltar ao Casa a Casa">←</a>
+    <h1>📨 Solicitações e ofícios</h1>
+  </header>
+  <main>
+    <nav class="filtros" aria-label="Andamento">
+      <a href="{{ url_for('sfa_routes.casa_a_casa_solicitacoes', token=token) }}" {% if not status %}aria-current="page"{% endif %}>Todas</a>
+      {% for chave, nome in nomes_status.items() %}
+        <a href="{{ url_for('sfa_routes.casa_a_casa_solicitacoes', status=chave, token=token) }}" {% if status == chave %}aria-current="page"{% endif %}>{{ nome }}s</a>
+      {% endfor %}
+    </nav>
+    {% for s in solicitacoes %}
+      <article class="cartao" id="solicitacao-{{ s.id }}">
+        <div class="topo">
+          <h2>{{ s.categoria_nome }}</h2>
+          <span class="selo {{ s.status }}">{{ s.status_nome }}{% if s.oficio %} · Ofício {{ s.oficio }}{% endif %}</span>
+        </div>
+        <div class="corpo{% if s.foto %} com-foto{% endif %}">
+          {% if s.foto %}<a href="{{ s.foto }}" target="_blank" rel="noopener"><img src="{{ s.foto }}" alt="Foto: {{ s.categoria_nome }} em {{ s.endereco }}" loading="lazy"></a>{% endif %}
+          <dl>
+            <dt>Endereço</dt><dd>{{ s.endereco }}{% if s.quarteirao %} · Quarteirão {{ s.quarteirao }}{% endif %}{% if s.setor %} · SC {{ s.setor }}{% endif %}</dd>
+            <dt>Local</dt><dd>{% if s.mapa %}<a href="{{ s.mapa }}" target="_blank" rel="noopener">{{ '%.5f'|format(s.lat) }}, {{ '%.5f'|format(s.lng) }}</a>{% if s.precisao %} (± {{ s.precisao|round|int }} m){% endif %}{% else %}Sem coordenadas{% endif %}</dd>
+            <dt>Para</dt><dd>{{ s.destino or 'A definir' }}</dd>
+            <dt>Problema</dt><dd class="descricao">{{ s.descricao }}</dd>
+            <dt>Registro</dt><dd>{{ s.agente or 'Equipe' }} · {{ s.quando }}</dd>
+            {% if s.atualizado_por %}<dt>Atualizado</dt><dd>{{ s.atualizado_por }}</dd>{% endif %}
+          </dl>
+        </div>
+        <div class="acoes">
+          <a class="botao" href="{{ url_for('sfa_routes.casa_a_casa_solicitacao_oficio', solicitacao_id=s.id, token=token) }}">🖨️ Ofício</a>
+        </div>
+        {% if edita %}
+          <form method="post" action="{{ url_for('sfa_routes.casa_a_casa_solicitacao_atualizar', solicitacao_id=s.id, status=status or None) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <label>Andamento
+              <select name="status">
+                {% for chave, nome in nomes_status.items() %}<option value="{{ chave }}" {% if s.status == chave %}selected{% endif %}>{{ nome }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>Encaminhar para<input name="destino" value="{{ s.destino }}" list="destinos" maxlength="120"></label>
+            <label>Nº do ofício<input name="oficio" value="{{ s.oficio }}" maxlength="60" placeholder="ex.: 123/2026"></label>
+            <button type="submit" class="botao forte">Salvar</button>
+          </form>
+        {% endif %}
+      </article>
+    {% else %}
+      <p class="vazio">Nenhuma solicitação {% if status %}{{ nomes_status[status]|lower }} {% endif %}ainda. Em campo, abra um imóvel no Casa a Casa e toque em “📨 Solicitação para outro setor”.</p>
+    {% endfor %}
+    <datalist id="destinos">{% for destino in destinos %}<option value="{{ destino }}">{% endfor %}</datalist>
+  </main>
+</body>
+</html>

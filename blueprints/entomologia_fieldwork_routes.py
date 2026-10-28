@@ -25,6 +25,12 @@ def _token():
     return request.args.get('token') or None
 
 
+def _enviar_foto(*args, **kwargs):
+    # Resolve app.upload_to_s3 na hora: é o que os testes trocam (sem falar com a AWS).
+    import app as app_module
+    return app_module.upload_to_s3(*args, **kwargs)
+
+
 def _erro(mensagem, codigo=400):
     return _sem_cache(jsonify({'ok': False, 'erro': mensagem})), codigo
 
@@ -74,6 +80,9 @@ def register(bp, require_access):
                 'plano': url_for('sfa_routes.casa_a_casa_plano'),
                 'visitas': url_for('sfa_routes.casa_a_casa_visitas'),
                 'historico': url_for('sfa_routes.casa_a_casa_historico', token=_token()),
+                'moradores': url_for('sfa_routes.casa_a_casa_moradores') if registra else '',
+                'solicitacao': url_for('sfa_routes.casa_a_casa_solicitacao_nova') if registra else '',
+                'solicitacoes': url_for('sfa_routes.casa_a_casa_solicitacoes', token=_token()),
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
                 'recipientes_csv': url_for('sfa_routes.casa_a_casa_recipientes_csv', token=_token()),
@@ -95,6 +104,8 @@ def register(bp, require_access):
             'atividades': servico.ATIVIDADES,
             'partes': servico.NOME_PARTE,
             'produtos_focal': servico.PRODUTOS_FOCAL,
+            'categorias_solicitacao': servico.CATEGORIAS_SOLICITACAO,
+            'destinos_solicitacao': list(servico.DESTINOS_SOLICITACAO),
             'equipe': servico.equipe(current_user if registra else None),
             'admin': eh_admin(current_user),
             'csrf': generate_csrf(),
@@ -231,6 +242,127 @@ def register(bp, require_access):
         if not imovel or len(imovel) > 80:
             abort(400)
         return _sem_cache(jsonify(historico(imovel)))
+
+    @bp.route('/entomologia/casa-a-casa/moradores')
+    @require_access
+    @login_required
+    def casa_a_casa_moradores():
+        """Moradores e telefones do imóvel: dado pessoal, só para a equipe logada."""
+        ensure_entomologia_editor()
+        from services.entomologia_casa_a_casa import moradores
+        imovel = (request.args.get('imovel') or '').strip()
+        if not imovel or len(imovel) > 80:
+            abort(400)
+        return _sem_cache(jsonify({'imovel': imovel, 'moradores': moradores(imovel)}))
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_solicitacao_nova():
+        """Rua: solicitação com foto, data e coordenadas (na hora ou guardada sem internet)."""
+        ensure_entomologia_editor()
+        import uuid as uuid_mod
+
+        from werkzeug.utils import secure_filename
+
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+
+        if request.content_length and request.content_length > 9 * 1024 * 1024:
+            return _erro('A foto é muito grande. Use uma imagem de até 8 MB.', 413)
+        try:
+            item = json.loads(request.form.get('dados') or '{}')
+        except ValueError:
+            return _erro('Solicitação em formato inválido.')
+        existente = servico.solicitacao_existente(item.get('uuid') if isinstance(item, dict) else '')
+        if existente is not None:
+            # Reenvio do aparelho: já está gravada, não sobe a foto de novo.
+            return _sem_cache(jsonify({'ok': True, 'nova': False, 'solicitacao': servico.solicitacao_dict(existente)}))
+        try:
+            dados = servico.validar_solicitacao(item, servico.indice()['blocos'])
+        except ValueError as exc:
+            return _erro(str(exc))
+
+        foto_url = None
+        arquivo = request.files.get('foto')
+        if arquivo is not None:
+            from services.photo_intake import PhotoIntakeError, normalize_photo_upload, normalized_filename
+            from services.photo_storage import PhotoStorageError, store_photo
+            conteudo = arquivo.stream.read()
+            if not conteudo:
+                return _erro('A foto chegou vazia. Tire a foto de novo.')
+            if len(conteudo) > 8 * 1024 * 1024:
+                return _erro('A foto é muito grande. Use uma imagem de até 8 MB.', 413)
+            try:
+                foto = normalize_photo_upload(conteudo)
+            except PhotoIntakeError as exc:
+                return _erro(exc.user_message, exc.status_code)
+            nome = f"{uuid_mod.uuid4().hex}_{secure_filename(normalized_filename(arquivo.filename or 'foto', foto))}"
+            try:
+                foto_url = store_photo(foto.stream, nome, folder='entomologia/solicitacoes', uploader=_enviar_foto)
+            except PhotoStorageError as exc:
+                current_app.logger.error('Foto da solicitação não guardada (code=%s): %s', exc.code,
+                                         exc.detail or exc.user_message)
+                # 502: o aparelho mantém a solicitação e a foto e tenta de novo depois.
+                return _sem_cache(jsonify({'ok': False, 'erro': exc.user_message, 'repetir': True})), 502
+
+        solicitacao, nova = servico.registrar_solicitacao(dados, foto_url, current_user)
+        db.session.commit()
+        return _sem_cache(jsonify({'ok': True, 'nova': nova, 'solicitacao': servico.solicitacao_dict(solicitacao)}))
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes')
+    @require_access
+    def casa_a_casa_solicitacoes():
+        """Escritório: solicitações vindas do campo, com foto, mapa e o ofício para imprimir."""
+        from flask_wtf.csrf import generate_csrf
+        from services import entomologia_casa_a_casa as servico
+
+        status = (request.args.get('status') or '').upper()
+        return _sem_cache(render_template(
+            'sfa/casa_a_casa_solicitacoes.html', solicitacoes=servico.solicitacoes(status or None),
+            status=status, nomes_status=servico.STATUS_SOLICITACAO, destinos=servico.DESTINOS_SOLICITACAO,
+            edita=usuario_pode_alterar(), csrf=generate_csrf(), token=_token(),
+            voltar=url_for('sfa_routes.casa_a_casa', token=_token())))
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_solicitacao_atualizar(solicitacao_id):
+        ensure_entomologia_editor()
+        from flask import redirect
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+
+        dados = request.get_json(silent=True) if request.is_json else request.form
+        try:
+            resultado = servico.atualizar_solicitacao(solicitacao_id, dados or {}, current_user)
+        except LookupError:
+            abort(404)
+        except ValueError as exc:
+            db.session.rollback()
+            return _erro(str(exc))
+        db.session.commit()
+        if request.is_json:
+            return _sem_cache(jsonify({'ok': True, 'solicitacao': resultado}))
+        return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', status=request.args.get('status') or None)
+                        + f'#solicitacao-{solicitacao_id}')
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>/oficio')
+    @require_access
+    def casa_a_casa_solicitacao_oficio(solicitacao_id):
+        """Ofício pronto para imprimir: texto editável na tela, foto, endereço e coordenadas."""
+        from extensions import db
+        from models.entomologia import EntomologiaSolicitacao
+        from services import entomologia_casa_a_casa as servico
+        from services.sfa_workflow import hoje_local
+
+        solicitacao = db.session.get(EntomologiaSolicitacao, solicitacao_id)
+        if solicitacao is None:
+            abort(404)
+        hoje = hoje_local()
+        return _sem_cache(render_template('sfa/casa_a_casa_oficio.html', s=servico.solicitacao_dict(solicitacao),
+                                          hoje=hoje, data_extenso=servico.data_por_extenso(hoje), voltar=url_for('sfa_routes.casa_a_casa_solicitacoes',
+                                                                            token=_token())))
 
     @bp.route('/entomologia/casa-a-casa/visitas.csv')
     @require_access

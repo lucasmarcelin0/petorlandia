@@ -197,3 +197,23 @@ assert(M.paginasDoRoteiro(longos)[0].length < 14);
 assert.deepEqual(M.paginasDoRoteiro(longos).flat(), longos);
 const concluidoReal = M.estadoDoBloco([{ d: '2026-10-10', c: HOJE + 'T15:00:00Z' }], casas, mapa(visita('a', 'TRABALHADO', '2026-10-11')), HOJE, 60);
 assert.deepEqual([concluidoReal.inicio, concluidoReal.prog.feitas], ['2026-10-10', 1]);
+
+// --- moradores: telefone e lista com as mudanças ainda no aparelho
+{
+  assert.equal(M.telefoneDigitos('+55 (16) 99999-1234'), '16999991234');
+  assert.equal(M.telefoneBr('16999991234'), '(16) 99999-1234');
+  assert.equal(M.telefoneBr('1638261111'), '(16) 3826-1111');
+  assert.equal(M.telefoneBr('38261111'), '3826-1111');
+  assert.ok(M.telefoneValido('') && M.telefoneValido('99999-1234') && !M.telefoneValido('123'));
+  const servidor = [{ u: 'm1', nome: 'Ana', telefone: '16999990000' }, { u: 'm2', nome: 'Bia', telefone: '' }];
+  const fila = [
+    { imovel: 'a', moradores: [{ u: 'm3', nome: 'Caio', telefone: '' }], moradores_removidos: ['m2'] },
+    { imovel: 'b', moradores: [{ u: 'm9', nome: 'Outro', telefone: '' }] },
+    { imovel: 'a', moradores: [{ u: 'm1', nome: 'Ana Souza', telefone: '16999990000' }] },
+  ];
+  const lista = M.moradoresDoImovel(servidor, fila, 'a');
+  assert.deepEqual(lista.map(m => [m.u, m.nome, Boolean(m.pendente)]), [['m1', 'Ana Souza', true], ['m3', 'Caio', true]]);
+  const v = M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'FECHADO', moradores: [{ u: 'm4', nome: ' Dora ', telefone: '(16) 3826-1111' }], moradores_removidos: ['m1'] });
+  assert.deepEqual([v.moradores, v.moradores_removidos], [[{ u: 'm4', nome: 'Dora', telefone: '1638261111' }], ['m1']]);
+  assert.ok(!('moradores' in M.novaVisita({ bloco: 'q1', imovel: 'a', data: HOJE, situacao: 'FECHADO' })));
+}

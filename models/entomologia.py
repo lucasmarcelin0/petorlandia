@@ -201,3 +201,66 @@ class EntomologiaImovelCampo(db.Model):
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     removido_em = db.Column(db.DateTime(timezone=True))
     removido_por = db.Column(db.String(160))
+
+
+class EntomologiaImovelMorador(db.Model):
+    """Morador de um imóvel do casa a casa, com telefone, anotado pela equipe em campo.
+
+    Dado pessoal: só a equipe logada lê (nunca vai no estado do mapa nem no token
+    interno). ``uuid_local`` vem do aparelho e torna o envio repetível. Ao remover,
+    nome e telefone são apagados e fica só a marca de remoção, para um reenvio
+    antigo do aparelho não trazer o morador de volta.
+    """
+    __tablename__ = "entomologia_imovel_morador"
+    __table_args__ = (
+        db.UniqueConstraint("uuid_local", name="uq_entomologia_morador_uuid"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    uuid_local = db.Column(db.String(64), nullable=False)
+    imovel = db.Column(db.String(80), nullable=False, index=True)
+    nome = db.Column(db.String(120))
+    telefone = db.Column(db.String(20))
+    criado_por_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    removido_em = db.Column(db.DateTime(timezone=True))
+    removido_por = db.Column(db.String(160))
+
+
+class EntomologiaSolicitacao(db.Model):
+    """Problema encontrado em campo para outro setor resolver (base do ofício).
+
+    Vem do aparelho com foto, data e coordenadas; o escritório acompanha o
+    andamento (ABERTA, ENCAMINHADA, RESOLVIDA) e imprime o ofício.
+    """
+    __tablename__ = "entomologia_solicitacao"
+    __table_args__ = (
+        db.UniqueConstraint("uuid_local", name="uq_entomologia_solicitacao_uuid"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    uuid_local = db.Column(db.String(64), nullable=False)
+    imovel = db.Column(db.String(80), index=True)
+    bloco = db.Column(db.String(40), index=True)
+    setor = db.Column(db.String(20))
+    quarteirao = db.Column(db.String(20))
+    logradouro = db.Column(db.String(200))
+    numero = db.Column(db.String(50))
+    complemento = db.Column(db.String(80))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    precisao_m = db.Column(db.Float)
+    categoria = db.Column(db.String(30), nullable=False)   # services.entomologia_casa_a_casa.CATEGORIAS_SOLICITACAO
+    destino = db.Column(db.String(120))
+    descricao = db.Column(db.Text, nullable=False)
+    foto_url = db.Column(db.String(500))
+    status = db.Column(db.String(20), nullable=False, default="ABERTA", index=True)
+    oficio = db.Column(db.String(60))
+    agente_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    agente = db.Column(db.String(160))
+    registrado_em = db.Column(db.DateTime(timezone=True))
+    recebido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    atualizado_por = db.Column(db.String(160))
