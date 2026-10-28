@@ -1912,6 +1912,7 @@
 
           <div class="alert alert-light border small mt-3 mb-0 d-none" id="pmo-stock-hint"></div>
           <div class="alert alert-warning small mt-3 mb-0 d-none" id="pmo-stock-alerts"></div>
+          <button type="button" class="btn btn-link btn-sm text-muted p-0 mt-2 d-none" id="pmo-stock-dismissed"></button>
 
           <form class="mt-3 d-none" id="pmo-stock-form">
             <div class="row g-2 align-items-end">
@@ -7305,6 +7306,7 @@
   const stockSubEl = document.getElementById('pmo-stock-sub');
   const stockHintEl = document.getElementById('pmo-stock-hint');
   const stockAlertsEl = document.getElementById('pmo-stock-alerts');
+  const stockDismissedBtn = document.getElementById('pmo-stock-dismissed');
   const stockFormEl = document.getElementById('pmo-stock-form');
   const stockEditBtn = document.getElementById('pmo-stock-edit');
   const stockAutoBtn = document.getElementById('pmo-stock-auto');
@@ -7316,6 +7318,104 @@
   };
   let stockSignature = '';
   let stockTimer = null;
+  let lastStock = null;
+  let showDismissedNotices = false;
+
+  // Avisos fechados ficam guardados neste aparelho pelo texto exato: se a
+  // situação mudar (outra sobra, outra data), o texto muda e o aviso volta.
+  const STOCK_DISMISSED_KEY = 'pmo_stock_dismissed_notices';
+  const STOCK_DISMISSED_TTL_MS = 60 * 24 * 60 * 60 * 1000;
+
+  function readDismissedNotices() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STOCK_DISMISSED_KEY) || '{}');
+      const now = Date.now();
+      return Object.fromEntries(
+        Object.entries(parsed && typeof parsed === 'object' ? parsed : {})
+          .filter(([, at]) => Number(at) && now - Number(at) < STOCK_DISMISSED_TTL_MS)
+      );
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function writeDismissedNotices(records) {
+    try {
+      localStorage.setItem(STOCK_DISMISSED_KEY, JSON.stringify(records));
+    } catch (error) {
+      // Sem armazenamento local o aviso só fica fechado até recarregar.
+    }
+  }
+
+  const dismissedNotices = readDismissedNotices();
+
+  function noticeHtml(text, prefix = '') {
+    const action = dismissedNotices[text]
+      ? `<button type="button" class="btn btn-link btn-sm p-0 flex-shrink-0"
+          data-stock-restore="${escapeHtml(text)}">Reativar</button>`
+      : `<button type="button" class="btn-close flex-shrink-0" aria-label="Fechar aviso"
+          title="Fechar aviso" data-stock-dismiss="${escapeHtml(text)}"></button>`;
+    return `<div class="d-flex align-items-start gap-2${dismissedNotices[text] ? ' opacity-75' : ''}">
+      <div class="flex-grow-1">${prefix}${escapeHtml(text)}</div>
+      ${action}
+    </div>`;
+  }
+
+  function renderStockNotices(stock) {
+    const hint = stock.planningHint || '';
+    const alerts = stock.alerts || [];
+    const hiddenCount = [hint, ...alerts].filter((text) => text && dismissedNotices[text]).length;
+    if (!hiddenCount) showDismissedNotices = false;
+    const isVisible = (text) => showDismissedNotices || !dismissedNotices[text];
+
+    if (hint && isVisible(hint)) {
+      stockHintEl.innerHTML = noticeHtml(hint);
+      stockHintEl.classList.remove('d-none');
+    } else {
+      stockHintEl.innerHTML = '';
+      stockHintEl.classList.add('d-none');
+    }
+
+    const visibleAlerts = alerts.filter(isVisible);
+    if (visibleAlerts.length) {
+      stockAlertsEl.innerHTML = visibleAlerts.map((alert) => noticeHtml(alert, '⚠️ ')).join('');
+      stockAlertsEl.classList.remove('d-none');
+    } else {
+      stockAlertsEl.innerHTML = '';
+      stockAlertsEl.classList.add('d-none');
+    }
+
+    if (hiddenCount && !showDismissedNotices) {
+      stockDismissedBtn.textContent = `Mostrar ${hiddenCount} aviso(s) fechado(s)`;
+      stockDismissedBtn.classList.remove('d-none');
+    } else if (hiddenCount) {
+      stockDismissedBtn.textContent = 'Ocultar avisos fechados';
+      stockDismissedBtn.classList.remove('d-none');
+    } else {
+      stockDismissedBtn.classList.add('d-none');
+    }
+  }
+
+  function handleStockNoticeClick(event) {
+    const dismiss = event.target.closest('[data-stock-dismiss]');
+    const restore = event.target.closest('[data-stock-restore]');
+    if (dismiss?.dataset.stockDismiss) {
+      dismissedNotices[dismiss.dataset.stockDismiss] = Date.now();
+    } else if (restore?.dataset.stockRestore) {
+      delete dismissedNotices[restore.dataset.stockRestore];
+    } else {
+      return;
+    }
+    writeDismissedNotices(dismissedNotices);
+    if (lastStock) renderStockNotices(lastStock);
+  }
+
+  stockHintEl.addEventListener('click', handleStockNoticeClick);
+  stockAlertsEl.addEventListener('click', handleStockNoticeClick);
+  stockDismissedBtn.addEventListener('click', () => {
+    showDismissedNotices = !showDismissedNotices;
+    if (lastStock) renderStockNotices(lastStock);
+  });
 
   function stockValue(key, text) {
     const el = document.querySelector(`[data-stock="${key}"]`);
@@ -7370,19 +7470,8 @@
       ? `${manual.join(' e ')} ajustado(s) à mão${stock.updatedBy ? ` por ${stock.updatedBy}` : ''}; o resto continua calculado pelas fichas.`
       : 'Calculado pelas fichas: vacinados + perdas. Ajuste se a realidade divergir.';
 
-    if (stock.planningHint) {
-      stockHintEl.textContent = stock.planningHint;
-      stockHintEl.classList.remove('d-none');
-    } else {
-      stockHintEl.classList.add('d-none');
-    }
-
-    if ((stock.alerts || []).length) {
-      stockAlertsEl.innerHTML = stock.alerts.map((alert) => `<div>⚠️ ${escapeHtml(alert)}</div>`).join('');
-      stockAlertsEl.classList.remove('d-none');
-    } else {
-      stockAlertsEl.classList.add('d-none');
-    }
+    lastStock = stock;
+    renderStockNotices(stock);
 
     // O campo em branco mostra o número automático como placeholder: dá para
     // ver o que o site calculou sem transformar isso num valor digitado.
