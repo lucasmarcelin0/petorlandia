@@ -1126,6 +1126,18 @@ def editar_categoria(chave, dados, usuario, admin: bool = False) -> dict:
     return {"chave": categoria.chave, "nome": categoria.nome, "ativo": categoria.ativo}
 
 
+def _categoria_da_solicitacao(item) -> tuple[str, str | None]:
+    """Chave do tipo escolhido e, se for um tipo criado no aparelho sem internet, o nome para criá-lo."""
+    categoria = str(item.get("categoria") or "").upper()
+    if categoria in CATEGORIAS_SOLICITACAO:
+        return categoria, None
+    if not _CHAVE_PROPRIA.fullmatch(categoria):
+        raise ValueError("Escolha o tipo do problema.")
+    if categoria in nomes_das_categorias():
+        return categoria, None
+    return categoria, _nome_de_categoria(item.get("categoria_nome"))
+
+
 def validar_solicitacao(item, blocos: dict) -> dict:
     """Campos de uma solicitação prontos para gravar; ``ValueError`` diz o que recusar."""
     if not isinstance(item, dict):
@@ -1133,14 +1145,7 @@ def validar_solicitacao(item, blocos: dict) -> dict:
     uuid_local = str(item.get("uuid") or "")
     if not _UUID.fullmatch(uuid_local):
         raise ValueError("Identificador da solicitação inválido.")
-    categoria = str(item.get("categoria") or "").upper()
-    categoria_nova = None
-    if categoria not in CATEGORIAS_SOLICITACAO:
-        if not _CHAVE_PROPRIA.fullmatch(categoria):
-            raise ValueError("Escolha o tipo do problema.")
-        if categoria not in nomes_das_categorias():
-            # Tipo criado no aparelho sem internet: nasce junto com a solicitação.
-            categoria_nova = _nome_de_categoria(item.get("categoria_nome"))
+    categoria, categoria_nova = _categoria_da_solicitacao(item)
     descricao = str(item.get("descricao") or "").strip()[:2000]
     if len(descricao) < 3:
         raise ValueError("Descreva o problema encontrado.")
@@ -1224,37 +1229,130 @@ def solicitacao_dict(s, nomes: dict | None = None) -> dict:
         "status": s.status, "status_nome": STATUS_SOLICITACAO.get(s.status, s.status), "oficio": s.oficio or "",
         "agente": s.agente or "", "registrado": _iso(s.registrado_em or s.recebido_em),
         "quando": _data_hora_br(s.registrado_em or s.recebido_em),
-        "atualizado_por": s.atualizado_por or "",
+        "atualizado_por": s.atualizado_por or "", "agente_id": s.agente_id,
+        "excluida": s.excluida_em is not None, "excluida_por": s.excluida_por or "",
+        "historico": historico_da_solicitacao(s, nomes),
     }
 
 
-def solicitacoes(status: str | None = None, limite: int = 300) -> list[dict]:
+ACOES_SOLICITACAO = {"corrigida": "Corrigida", "andamento": "Andamento", "excluida": "Excluída",
+                     "restaurada": "Restaurada"}
+_CAMPOS_HISTORICO = {"categoria": "tipo", "descricao": "descrição", "destino": "para", "foto_url": "foto",
+                     "status": "andamento", "oficio": "ofício"}
+
+
+def historico_da_solicitacao(s, nomes: dict | None = None) -> list[dict]:
+    """Mudanças da solicitação, da mais recente para a mais antiga, prontas para a tela."""
+    try:
+        eventos = json.loads(s.historico_json or "[]")
+    except ValueError:
+        eventos = []
+    nomes = nomes or {}
+    saida = []
+    for evento in reversed(eventos if isinstance(eventos, list) else []):
+        mudou = []
+        for campo, (antes, depois) in (evento.get("mudou") or {}).items():
+            if campo == "categoria":
+                antes, depois = nomes.get(antes, antes), nomes.get(depois, depois)
+            elif campo == "status":
+                antes, depois = STATUS_SOLICITACAO.get(antes, antes), STATUS_SOLICITACAO.get(depois, depois)
+            elif campo == "foto_url":
+                antes, depois = ("com foto" if antes else "sem foto"), ("foto nova" if depois else "sem foto")
+            mudou.append({"campo": _CAMPOS_HISTORICO.get(campo, campo), "antes": antes or "—", "depois": depois or "—"})
+        momento = None
+        try:
+            momento = datetime.fromisoformat(evento.get("em") or "")
+        except (TypeError, ValueError):
+            pass
+        saida.append({"acao": ACOES_SOLICITACAO.get(evento.get("acao"), evento.get("acao") or ""),
+                      "por": evento.get("por") or "", "quando": _data_hora_br(momento), "mudou": mudou})
+    return saida
+
+
+def _anotar(solicitacao, usuario, acao: str, mudou: dict | None = None) -> None:
+    try:
+        eventos = json.loads(solicitacao.historico_json or "[]")
+    except ValueError:
+        eventos = []
+    eventos.append({"em": datetime.now(FUSO).isoformat(timespec="seconds"), "por": nome_da_conta(usuario),
+                    "acao": acao, "mudou": mudou or {}})
+    solicitacao.historico_json = json.dumps(eventos[-100:], ensure_ascii=False, separators=(",", ":"))
+    solicitacao.atualizado_por = nome_da_conta(usuario)
+
+
+def solicitacoes(status: str | None = None, limite: int = 300, imovel: str | None = None) -> list[dict]:
+    """Lista do escritório (ou de um imóvel). Excluídas só aparecem no filtro "EXCLUIDAS"."""
     from models.entomologia import EntomologiaSolicitacao as So
 
     consulta = So.query
-    if status in STATUS_SOLICITACAO:
-        consulta = consulta.filter(So.status == status)
+    if status == "EXCLUIDAS":
+        consulta = consulta.filter(So.excluida_em.isnot(None))
+    else:
+        consulta = consulta.filter(So.excluida_em.is_(None))
+        if status in STATUS_SOLICITACAO:
+            consulta = consulta.filter(So.status == status)
+    if imovel:
+        consulta = consulta.filter(So.imovel == imovel)
     nomes = nomes_das_categorias()
     return [solicitacao_dict(s, nomes) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
 
 
-def atualizar_solicitacao(solicitacao_id: int, dados, usuario) -> dict:
-    """Escritório: andamento, número do ofício e setor de destino."""
+def _solicitacao(solicitacao_id: int):
     from extensions import db
     from models.entomologia import EntomologiaSolicitacao as So
 
     solicitacao = db.session.get(So, solicitacao_id)
     if solicitacao is None:
         raise LookupError("Solicitação não encontrada.")
-    status = str(dados.get("status") or solicitacao.status).upper()
-    if status not in STATUS_SOLICITACAO:
-        raise ValueError("Andamento inválido.")
-    solicitacao.status = status
+    return solicitacao
+
+
+def atualizar_solicitacao(solicitacao_id: int, dados, usuario, foto_url: str | None = None) -> dict:
+    """Corrige tipo, descrição, setor e foto, e muda andamento e ofício. Tudo fica no histórico."""
+    solicitacao = _solicitacao(solicitacao_id)
+    if solicitacao.excluida_em is not None:
+        raise ValueError("Solicitação excluída: restaure antes de corrigir.")
+    novos = {}
+    if "status" in dados:
+        status = str(dados.get("status") or "").upper()
+        if status not in STATUS_SOLICITACAO:
+            raise ValueError("Andamento inválido.")
+        novos["status"] = status
     if "oficio" in dados:
-        solicitacao.oficio = _texto(dados.get("oficio"), 60) or None
+        novos["oficio"] = _texto(dados.get("oficio"), 60) or None
     if "destino" in dados:
-        solicitacao.destino = _texto(dados.get("destino"), 120) or None
-    solicitacao.atualizado_por = nome_da_conta(usuario)
+        novos["destino"] = _texto(dados.get("destino"), 120) or None
+    if "descricao" in dados:
+        descricao = str(dados.get("descricao") or "").strip()[:2000]
+        if len(descricao) < 3:
+            raise ValueError("Descreva o problema encontrado.")
+        novos["descricao"] = descricao
+    if dados.get("categoria"):
+        categoria, nome_novo = _categoria_da_solicitacao(dados)
+        novos["categoria"] = criar_categoria(nome_novo, usuario, chave=categoria)["chave"] if nome_novo else categoria
+    if foto_url:
+        novos["foto_url"] = foto_url
+    mudou = {campo: [getattr(solicitacao, campo), valor] for campo, valor in novos.items()
+             if getattr(solicitacao, campo) != valor}
+    if mudou:
+        for campo, (_antes, depois) in mudou.items():
+            setattr(solicitacao, campo, depois)
+        conteudo = set(mudou) & {"categoria", "descricao", "destino", "foto_url"}
+        _anotar(solicitacao, usuario, "corrigida" if conteudo else "andamento", mudou)
+    return solicitacao_dict(solicitacao)
+
+
+def excluir_solicitacao(solicitacao_id: int, usuario, admin: bool = False, restaurar: bool = False) -> dict:
+    """Exclusão lógica (some das listas, fica no banco). Só quem registrou ou um administrador."""
+    solicitacao = _solicitacao(solicitacao_id)
+    if not admin and solicitacao.agente_id != getattr(usuario, "id", None):
+        raise PermissionError("Só quem registrou a solicitação, ou um administrador, pode excluí-la.")
+    if restaurar and solicitacao.excluida_em is not None:
+        solicitacao.excluida_em = solicitacao.excluida_por = None
+        _anotar(solicitacao, usuario, "restaurada")
+    elif not restaurar and solicitacao.excluida_em is None:
+        solicitacao.excluida_em, solicitacao.excluida_por = datetime.now(FUSO), nome_da_conta(usuario)
+        _anotar(solicitacao, usuario, "excluida")
     return solicitacao_dict(solicitacao)
 
 

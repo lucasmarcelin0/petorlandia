@@ -265,6 +265,11 @@ class EntomologiaSolicitacao(db.Model):
     recebido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     atualizado_por = db.Column(db.String(160))
+    # Exclusão lógica: some das listas, mas fica guardada e pode ser restaurada.
+    excluida_em = db.Column(db.DateTime(timezone=True))
+    excluida_por = db.Column(db.String(160))
+    # Cada correção, mudança de andamento, exclusão ou restauração: [{"em", "por", "acao", "mudou"}].
+    historico_json = db.Column(db.Text)
 
 
 class EntomologiaSolicitacaoCategoria(db.Model):

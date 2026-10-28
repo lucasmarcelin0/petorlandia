@@ -241,7 +241,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261028-tipos' in pagina
+    assert 'casa_a_casa.js?v=20261028-historico-solic' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -864,3 +864,54 @@ def test_tipos_de_problema_criados_pela_equipe(client, restrito, base, monkeypat
     sair(client)
     assert client.post(RAIZ + '/categorias', json={'nome': 'Qualquer'}, **HTTPS).status_code in (302, 401)
     assert Tipo.query.count() == 2 and Solicitacao.query.count() == 1 and Conta.query.count() == 4
+
+
+def test_solicitacao_corrigida_excluida_e_restaurada_fica_no_historico(client, restrito, base, monkeypatch):
+    import json as json_mod
+    from models.entomologia import EntomologiaSolicitacao as Solicitacao
+    monkeypatch.setattr('app.upload_to_s3', lambda arquivo, nome, folder='uploads', **_: f'https://bucket.example/{folder}/{nome}')
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    s = enviar_solicitacao(client, solicitacao(base['a'])).json['solicitacao']
+    enviar_solicitacao(client, solicitacao(base['a'], 'solic-outro-imovel', imovel='1002'), foto=False)
+    do_imovel = client.get(RAIZ + '/solicitacoes/do-imovel?imovel=1001', **HTTPS).json['solicitacoes']
+    assert [x['id'] for x in do_imovel] == [s['id']] and do_imovel[0]['historico'] == []
+
+    # Correção pelo app: multipart com foto nova; o que mudou fica no histórico.
+    corpo = {'dados': json_mod.dumps({'categoria': 'PISCINA', 'descricao': 'Piscina verde no fundo.', 'destino': 'Vigilância Sanitária'}),
+             'foto': (_jpeg(), 'nova.jpg', 'image/jpeg')}
+    corrigida = client.post(f"{RAIZ}/solicitacoes/{s['id']}", data=corpo, content_type='multipart/form-data', **HTTPS).json['solicitacao']
+    assert (corrigida['categoria'], corrigida['descricao'], corrigida['destino']) == ('PISCINA', 'Piscina verde no fundo.', 'Vigilância Sanitária')
+    assert corrigida['foto'] != s['foto']
+    evento = corrigida['historico'][0]
+    assert evento['acao'] == 'Corrigida' and evento['por'] == 'Ana Agente'
+    assert {m['campo']: (m['antes'], m['depois']) for m in evento['mudou']}['tipo'] == ('Lixo ou entulho acumulado', "Piscina ou caixa d'água sem cuidado")
+    # Sem mudança, nada entra no histórico; andamento entra como andamento.
+    client.post(f"{RAIZ}/solicitacoes/{s['id']}", json={'descricao': 'Piscina verde no fundo.'}, **HTTPS)
+    andamento = client.post(f"{RAIZ}/solicitacoes/{s['id']}", json={'status': 'RESOLVIDA'}, **HTTPS).json['solicitacao']['historico']
+    assert [e['acao'] for e in andamento] == ['Andamento', 'Corrigida']
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}", json={'descricao': 'x'}, **HTTPS).status_code == 400
+
+    # Bia corrige (equipe), mas não exclui o que a Ana registrou.
+    entrar(client, bia)
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}", json={'destino': 'Obras'}, **HTTPS).status_code == 200
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}/excluir", json={}, **HTTPS).status_code == 403
+    entrar(client, ana)
+    excluida = client.post(f"{RAIZ}/solicitacoes/{s['id']}/excluir", json={}, **HTTPS).json['solicitacao']
+    assert excluida['excluida'] is True and excluida['historico'][0]['acao'] == 'Excluída'
+    assert Solicitacao.query.count() == 2   # exclusão lógica: continua guardada
+    assert client.get(RAIZ + '/solicitacoes/do-imovel?imovel=1001', **HTTPS).json['solicitacoes'] == []
+    assert 'Piscina verde' not in client.get(RAIZ + '/solicitacoes', **HTTPS).get_data(as_text=True)
+    lixeira = client.get(RAIZ + '/solicitacoes?status=EXCLUIDAS', **HTTPS).get_data(as_text=True)
+    assert 'Piscina verde' in lixeira and 'Restaurar' in lixeira and 'Histórico (4)' in lixeira
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}", json={'destino': 'X'}, **HTTPS).status_code == 400
+    # Restaurar pelo formulário do escritório.
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}/excluir", data={'restaurar': '1'}, **HTTPS).status_code == 302
+    pagina = client.get(RAIZ + '/solicitacoes', **HTTPS).get_data(as_text=True)
+    assert 'Piscina verde' in pagina and 'Restaurada' in pagina and '🗑️ Excluir' in pagina
+    assert client.post(f'{RAIZ}/solicitacoes/99999/excluir', json={}, **HTTPS).status_code == 404
+
+    # Quem não é da equipe não lê a lista do imóvel nem exclui.
+    entrar(client, conta('tutor@example.test'))
+    assert client.get(RAIZ + '/solicitacoes/do-imovel?imovel=1001', **HTTPS).status_code in (403, 404)
+    assert client.post(f"{RAIZ}/solicitacoes/{s['id']}/excluir", json={}, **HTTPS).status_code in (403, 404)

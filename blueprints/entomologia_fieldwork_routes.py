@@ -84,6 +84,7 @@ def register(bp, require_access):
                 'solicitacao': url_for('sfa_routes.casa_a_casa_solicitacao_nova') if registra else '',
                 'solicitacoes': url_for('sfa_routes.casa_a_casa_solicitacoes', token=_token()),
                 'categorias': url_for('sfa_routes.casa_a_casa_categoria_nova') if registra else '',
+                'solicitacoes_do_imovel': url_for('sfa_routes.casa_a_casa_solicitacoes_do_imovel') if registra else '',
                 'categoria_editar': url_for('sfa_routes.casa_a_casa_categoria_editar') if registra else '',
                 'visitas_csv': url_for('sfa_routes.casa_a_casa_visitas_csv', token=_token()),
                 'boletim_csv': url_for('sfa_routes.casa_a_casa_boletim_csv', token=_token()),
@@ -258,16 +259,41 @@ def register(bp, require_access):
             abort(400)
         return _sem_cache(jsonify({'imovel': imovel, 'moradores': moradores(imovel)}))
 
+    def _foto_da_requisicao():
+        """Foto enviada junto (opcional): normaliza e guarda no S3. Devolve (url, resposta de erro)."""
+        import uuid as uuid_mod
+
+        from werkzeug.utils import secure_filename
+
+        arquivo = request.files.get('foto')
+        if arquivo is None:
+            return None, None
+        from services.photo_intake import PhotoIntakeError, normalize_photo_upload, normalized_filename
+        from services.photo_storage import PhotoStorageError, store_photo
+        conteudo = arquivo.stream.read()
+        if not conteudo:
+            return None, _erro('A foto chegou vazia. Tire a foto de novo.')
+        if len(conteudo) > 8 * 1024 * 1024:
+            return None, _erro('A foto é muito grande. Use uma imagem de até 8 MB.', 413)
+        try:
+            foto = normalize_photo_upload(conteudo)
+        except PhotoIntakeError as exc:
+            return None, _erro(exc.user_message, exc.status_code)
+        nome = f"{uuid_mod.uuid4().hex}_{secure_filename(normalized_filename(arquivo.filename or 'foto', foto))}"
+        try:
+            return store_photo(foto.stream, nome, folder='entomologia/solicitacoes', uploader=_enviar_foto), None
+        except PhotoStorageError as exc:
+            current_app.logger.error('Foto da solicitação não guardada (code=%s): %s', exc.code,
+                                     exc.detail or exc.user_message)
+            # 502: o aparelho mantém a solicitação e a foto e tenta de novo depois.
+            return None, (_sem_cache(jsonify({'ok': False, 'erro': exc.user_message, 'repetir': True})), 502)
+
     @bp.route('/entomologia/casa-a-casa/solicitacoes', methods=['POST'])
     @require_access
     @login_required
     def casa_a_casa_solicitacao_nova():
         """Rua: solicitação com foto, data e coordenadas (na hora ou guardada sem internet)."""
         ensure_entomologia_editor()
-        import uuid as uuid_mod
-
-        from werkzeug.utils import secure_filename
-
         from extensions import db
         from services import entomologia_casa_a_casa as servico
 
@@ -286,28 +312,9 @@ def register(bp, require_access):
         except ValueError as exc:
             return _erro(str(exc))
 
-        foto_url = None
-        arquivo = request.files.get('foto')
-        if arquivo is not None:
-            from services.photo_intake import PhotoIntakeError, normalize_photo_upload, normalized_filename
-            from services.photo_storage import PhotoStorageError, store_photo
-            conteudo = arquivo.stream.read()
-            if not conteudo:
-                return _erro('A foto chegou vazia. Tire a foto de novo.')
-            if len(conteudo) > 8 * 1024 * 1024:
-                return _erro('A foto é muito grande. Use uma imagem de até 8 MB.', 413)
-            try:
-                foto = normalize_photo_upload(conteudo)
-            except PhotoIntakeError as exc:
-                return _erro(exc.user_message, exc.status_code)
-            nome = f"{uuid_mod.uuid4().hex}_{secure_filename(normalized_filename(arquivo.filename or 'foto', foto))}"
-            try:
-                foto_url = store_photo(foto.stream, nome, folder='entomologia/solicitacoes', uploader=_enviar_foto)
-            except PhotoStorageError as exc:
-                current_app.logger.error('Foto da solicitação não guardada (code=%s): %s', exc.code,
-                                         exc.detail or exc.user_message)
-                # 502: o aparelho mantém a solicitação e a foto e tenta de novo depois.
-                return _sem_cache(jsonify({'ok': False, 'erro': exc.user_message, 'repetir': True})), 502
+        foto_url, falha = _foto_da_requisicao()
+        if falha is not None:
+            return falha
 
         solicitacao, nova = servico.registrar_solicitacao(dados, foto_url, current_user)
         db.session.commit()
@@ -328,31 +335,89 @@ def register(bp, require_access):
             proprias=servico.categorias_da_equipe(current_user if edita else None, edita and eh_admin(current_user)),
             aviso=request.args.get('aviso') or '',
             status=status, nomes_status=servico.STATUS_SOLICITACAO, destinos=servico.DESTINOS_SOLICITACAO,
-            edita=edita, csrf=generate_csrf(), token=_token(),
+            edita=edita, csrf=generate_csrf(), token=_token(), eu=current_user.get_id() if edita else None,
+            admin=edita and eh_admin(current_user),
+            categorias=servico.categorias_para_escolher() if edita else [],
             voltar=url_for('sfa_routes.casa_a_casa', token=_token())))
 
     @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>', methods=['POST'])
     @require_access
     @login_required
     def casa_a_casa_solicitacao_atualizar(solicitacao_id):
+        """Corrige a solicitação (app: JSON ou multipart com foto nova) ou muda o andamento (escritório)."""
         ensure_entomologia_editor()
         from flask import redirect
         from extensions import db
         from services import entomologia_casa_a_casa as servico
 
-        dados = request.get_json(silent=True) if request.is_json else request.form
+        do_app = request.is_json or 'dados' in request.form
+        if 'dados' in request.form:
+            try:
+                dados = json.loads(request.form.get('dados') or '{}')
+            except ValueError:
+                return _erro('Correção em formato inválido.')
+        else:
+            dados = (request.get_json(silent=True) if request.is_json else request.form) or {}
+        if not isinstance(dados, dict):
+            return _erro('Correção em formato inválido.')
         try:
-            resultado = servico.atualizar_solicitacao(solicitacao_id, dados or {}, current_user)
+            servico._solicitacao(solicitacao_id)
         except LookupError:
             abort(404)
+        foto_url, falha = _foto_da_requisicao()
+        if falha is not None:
+            return falha
+        try:
+            resultado = servico.atualizar_solicitacao(solicitacao_id, dados, current_user, foto_url=foto_url)
         except ValueError as exc:
             db.session.rollback()
-            return _erro(str(exc))
+            if do_app:
+                return _erro(str(exc))
+            return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', aviso=str(exc))
+                            + f'#solicitacao-{solicitacao_id}')
         db.session.commit()
-        if request.is_json:
+        if do_app:
             return _sem_cache(jsonify({'ok': True, 'solicitacao': resultado}))
         return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', status=request.args.get('status') or None)
                         + f'#solicitacao-{solicitacao_id}')
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes/<int:solicitacao_id>/excluir', methods=['POST'])
+    @require_access
+    @login_required
+    def casa_a_casa_solicitacao_excluir(solicitacao_id):
+        """Exclui (ou restaura) a solicitação: some das listas mas fica guardada, com o histórico."""
+        ensure_entomologia_editor()
+        from flask import redirect
+        from extensions import db
+        from services import entomologia_casa_a_casa as servico
+
+        dados = (request.get_json(silent=True) if request.is_json else request.form) or {}
+        restaurar = str(dados.get('restaurar') or '').lower() in ('1', 'true', 'sim')
+        try:
+            resultado = servico.excluir_solicitacao(solicitacao_id, current_user, eh_admin(current_user), restaurar)
+        except LookupError:
+            abort(404)
+        except PermissionError as exc:
+            if request.is_json:
+                return _erro(str(exc), 403)
+            return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes', aviso=str(exc)))
+        db.session.commit()
+        if request.is_json:
+            return _sem_cache(jsonify({'ok': True, 'solicitacao': resultado}))
+        return redirect(url_for('sfa_routes.casa_a_casa_solicitacoes',
+                                status='EXCLUIDAS' if not restaurar else None))
+
+    @bp.route('/entomologia/casa-a-casa/solicitacoes/do-imovel')
+    @require_access
+    @login_required
+    def casa_a_casa_solicitacoes_do_imovel():
+        """Histórico de solicitações de um imóvel, para a ficha de quem está em campo."""
+        ensure_entomologia_editor()
+        from services import entomologia_casa_a_casa as servico
+        imovel = (request.args.get('imovel') or '').strip()
+        if not imovel or len(imovel) > 80:
+            abort(400)
+        return _sem_cache(jsonify({'imovel': imovel, 'solicitacoes': servico.solicitacoes(imovel=imovel, limite=50)}))
 
     def _resposta_de_categoria(resultado=None, erro=None, codigo=400):
         """JSON para o app de campo; no formulário do escritório, volta para a lista com o aviso."""

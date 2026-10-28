@@ -46,9 +46,18 @@
     .tipos ul { margin: .6rem 0 0; padding: 0; list-style: none; }
     .tipos li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; padding: .5rem 0; border-top: 1px solid var(--linha); }
     .tipos li form { flex: 1 1 16rem; margin: 0; padding: 0; border: 0; }
-    .tipos li form.so-botao { flex: 0 0 auto; }
+    .tipos li form.so-botao, .acoes form.so-botao { flex: 0 0 auto; margin: 0; padding: 0; border: 0; }
     .tipos li small, .tipos .fixos { color: var(--suave); font-size: .85rem; }
     .tipos .tirado { color: var(--suave); text-decoration: line-through; }
+    .selo.EXCLUIDA { color: #495057; background: #e9ecef; }
+    label.largo { flex-basis: 100%; }
+    textarea { min-height: 4.5rem; padding: .45rem .55rem; border: 1px solid var(--linha); border-radius: .55rem; color: var(--tinta); font: inherit; font-size: 1rem; resize: vertical; }
+    .botao.perigo { border-color: #c92a2a; color: #c92a2a; }
+    .historico { margin-top: .7rem; font-size: .88rem; }
+    .historico summary { color: var(--verde); font-weight: 700; cursor: pointer; }
+    .historico ol { margin: .4rem 0 0; padding-left: 1.1rem; }
+    .historico li { margin-bottom: .35rem; }
+    .historico small { color: var(--suave); }
   </style>
 </head>
 <body>
@@ -62,6 +71,7 @@
       {% for chave, nome in nomes_status.items() %}
         <a href="{{ url_for('sfa_routes.casa_a_casa_solicitacoes', status=chave, token=token) }}" {% if status == chave %}aria-current="page"{% endif %}>{{ nome }}s</a>
       {% endfor %}
+      <a href="{{ url_for('sfa_routes.casa_a_casa_solicitacoes', status='EXCLUIDAS', token=token) }}" {% if status == 'EXCLUIDAS' %}aria-current="page"{% endif %}>Excluídas</a>
     </nav>
     {% if aviso %}<p class="aviso" role="alert">{{ aviso }}</p>{% endif %}
     <details class="cartao tipos" id="tipos" {% if aviso %}open{% endif %}>
@@ -105,7 +115,8 @@
       <article class="cartao" id="solicitacao-{{ s.id }}">
         <div class="topo">
           <h2>{{ s.categoria_nome }}</h2>
-          <span class="selo {{ s.status }}">{{ s.status_nome }}{% if s.oficio %} · Ofício {{ s.oficio }}{% endif %}</span>
+          {% if s.excluida %}<span class="selo EXCLUIDA">Excluída{% if s.excluida_por %} por {{ s.excluida_por }}{% endif %}</span>
+          {% else %}<span class="selo {{ s.status }}">{{ s.status_nome }}{% if s.oficio %} · Ofício {{ s.oficio }}{% endif %}</span>{% endif %}
         </div>
         <div class="corpo{% if s.foto %} com-foto{% endif %}">
           {% if s.foto %}<a href="{{ s.foto }}" target="_blank" rel="noopener"><img src="{{ s.foto }}" alt="Foto: {{ s.categoria_nome }} em {{ s.endereco }}" loading="lazy"></a>{% endif %}
@@ -118,10 +129,19 @@
             {% if s.atualizado_por %}<dt>Atualizado</dt><dd>{{ s.atualizado_por }}</dd>{% endif %}
           </dl>
         </div>
+        {% set pode_excluir = edita and (admin or (s.agente_id|string) == eu) %}
         <div class="acoes">
-          <a class="botao" href="{{ url_for('sfa_routes.casa_a_casa_solicitacao_oficio', solicitacao_id=s.id, token=token) }}">🖨️ Ofício</a>
+          {% if not s.excluida %}<a class="botao" href="{{ url_for('sfa_routes.casa_a_casa_solicitacao_oficio', solicitacao_id=s.id, token=token) }}">🖨️ Ofício</a>{% endif %}
+          {% if pode_excluir %}
+            <form class="so-botao" method="post" action="{{ url_for('sfa_routes.casa_a_casa_solicitacao_excluir', solicitacao_id=s.id) }}"
+                  {% if not s.excluida %}onsubmit="return confirm('Excluir esta solicitação? Ela sai da lista, mas fica guardada e pode ser restaurada.')"{% endif %}>
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              {% if s.excluida %}<input type="hidden" name="restaurar" value="1"><button type="submit" class="botao">↩ Restaurar</button>
+              {% else %}<button type="submit" class="botao perigo">🗑️ Excluir</button>{% endif %}
+            </form>
+          {% endif %}
         </div>
-        {% if edita %}
+        {% if edita and not s.excluida %}
           <form method="post" action="{{ url_for('sfa_routes.casa_a_casa_solicitacao_atualizar', solicitacao_id=s.id, status=status or None) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <label>Andamento
@@ -131,8 +151,28 @@
             </label>
             <label>Encaminhar para<input name="destino" value="{{ s.destino }}" list="destinos" maxlength="120"></label>
             <label>Nº do ofício<input name="oficio" value="{{ s.oficio }}" maxlength="60" placeholder="ex.: 123/2026"></label>
+            <label>Tipo do problema
+              <select name="categoria">
+                {% set achou = namespace(v=false) %}
+                {% for c in categorias %}<option value="{{ c.chave }}" {% if c.chave == s.categoria %}selected{% set achou.v = true %}{% endif %}>{{ c.nome }}</option>{% endfor %}
+                {% if not achou.v %}<option value="{{ s.categoria }}" selected>{{ s.categoria_nome }}</option>{% endif %}
+              </select>
+            </label>
+            <label class="largo">Descrição<textarea name="descricao" maxlength="2000" required minlength="3">{{ s.descricao }}</textarea></label>
             <button type="submit" class="botao forte">Salvar</button>
           </form>
+        {% endif %}
+        {% if s.historico %}
+          <details class="historico">
+            <summary>🕘 Histórico ({{ s.historico|length }})</summary>
+            <ol>
+              {% for evento in s.historico %}
+                <li><b>{{ evento.acao }}</b> por {{ evento.por or 'equipe' }} em {{ evento.quando }}
+                  {% for m in evento.mudou %}<br><small>{{ m.campo }}: {{ m.antes }} → {{ m.depois }}</small>{% endfor %}</li>
+              {% endfor %}
+              <li><b>Registrada</b> por {{ s.agente or 'equipe' }} em {{ s.quando }}</li>
+            </ol>
+          </details>
         {% endif %}
       </article>
     {% else %}
