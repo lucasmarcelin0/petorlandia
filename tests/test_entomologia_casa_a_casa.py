@@ -32,6 +32,13 @@ def entrar(client, user):
         g.pop(chave, None)
 
 
+def sair(client):
+    with client.session_transaction() as session:
+        session.clear()
+    for chave in ('_login_user', '_entomologia_membro', '_sfa_unidades_usuario', 'user_experience'):
+        g.pop(chave, None)
+
+
 def agente(email='agente@example.test', name='Ana Agente'):
     user = conta(email, name=name)
     conceder(user, 'Coordenação')
@@ -234,7 +241,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261028-parcial' in pagina
+    assert 'casa_a_casa.js?v=20261028-solicitacoes' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -676,3 +683,126 @@ def test_administrador_inclui_trabalhador_pelo_email(client, base):
     # Quem é da equipe mas não é administrador não inclui ninguém.
     entrar(client, novo)
     assert client.post(RAIZ + '/equipe', json={'email': 'chefe@example.test'}, **HTTPS).status_code in (403, 404)
+
+
+# ---------------------------------------------------------------------------
+# Moradores do imóvel e solicitações para outros setores
+# ---------------------------------------------------------------------------
+
+def test_moradores_vao_com_a_visita_e_so_a_equipe_ve(client, restrito, base, monkeypatch):
+    from models.entomologia import EntomologiaImovelMorador as Morador
+    ana = agente()
+    entrar(client, ana)
+    com_moradores = visita(base['a'], uuid='visita-mor-1', moradores=[
+        {'u': 'morador-0001', 'nome': '  Maria   da Silva ', 'telefone': '+55 (16) 99999-1234'},
+        {'u': 'morador-0002', 'nome': '', 'telefone': '3826-1111'}])
+    assert enviar(client, com_moradores).json['aceitas'] == ['visita-mor-1']
+    # Reenviar não duplica.
+    assert enviar(client, com_moradores).json['aceitas'] == ['visita-mor-1'] and Morador.query.count() == 2
+    lista = client.get(RAIZ + '/moradores?imovel=1001', **HTTPS)
+    assert lista.status_code == 200 and lista.headers['Cache-Control'] == 'private, no-store'
+    assert [(m['u'], m['nome'], m['telefone']) for m in lista.json['moradores']] == [
+        ('morador-0001', 'Maria da Silva', '16999991234'), ('morador-0002', '', '38261111')]
+
+    # Corrigir um e tirar o outro, numa nova visita. A remoção apaga nome e telefone.
+    enviar(client, visita(base['a'], uuid='visita-mor-2', moradores=[{'u': 'morador-0001', 'nome': 'Maria S.', 'telefone': '16999991234'}],
+                          moradores_removidos=['morador-0002']))
+    assert [(m['nome'], m['telefone']) for m in client.get(RAIZ + '/moradores?imovel=1001', **HTTPS).json['moradores']] == [('Maria S.', '16999991234')]
+    removido = Morador.query.filter_by(uuid_local='morador-0002').one()
+    assert (removido.nome, removido.telefone, removido.removido_por) == (None, None, 'Ana Agente') and removido.removido_em
+    # Um reenvio antigo do aparelho não traz o removido de volta.
+    enviar(client, com_moradores)
+    assert len(client.get(RAIZ + '/moradores?imovel=1001', **HTTPS).json['moradores']) == 1
+
+    # Telefone inválido recusa a visita com o motivo; o dado não vai no estado do mapa.
+    ruim = enviar(client, visita(base['a'], uuid='visita-mor-3', moradores=[{'u': 'morador-0003', 'nome': 'X', 'telefone': '123'}]))
+    assert ruim.json['aceitas'] == [] and 'Telefone' in ruim.json['recusadas'][0]['motivo']
+    estado = client.get(RAIZ + '/estado', **HTTPS).get_data(as_text=True)
+    assert 'Maria' not in estado and '99999' not in estado
+    assert client.get(RAIZ + '/moradores', **HTTPS).status_code == 400
+
+    # Sem conta, sem papel ou só com o token interno: não lê.
+    entrar(client, conta('tutor@example.test'))
+    assert client.get(RAIZ + '/moradores?imovel=1001', **HTTPS).status_code in (403, 404)
+    sair(client)
+    assert client.get(RAIZ + '/moradores?imovel=1001', **HTTPS).status_code == 302
+    monkeypatch.setenv('SFA_ADMIN_TOKEN', 'token-de-teste')
+    assert client.get(RAIZ + '/moradores?imovel=1001&token=token-de-teste', **HTTPS).status_code in (302, 401, 403, 404)
+
+
+def _jpeg():
+    import io
+    from PIL import Image
+    saida = io.BytesIO()
+    Image.new('RGB', (40, 30), (200, 30, 30)).save(saida, 'JPEG')
+    saida.seek(0)
+    return saida
+
+
+def solicitacao(bloco, uuid='solic-0001', **extra):
+    return {'uuid': uuid, 'bloco': bloco, 'imovel': '1001', 'logradouro': 'Rua Um', 'numero': '10', 'lat': -20.72,
+            'lng': -47.88, 'precisao': 6.4, 'categoria': 'LIXO_ENTULHO', 'destino': 'Obras',
+            'descricao': 'Quintal com entulho e pneus acumulando água.', 'horario': '2026-10-28T14:05:00-03:00', **extra}
+
+
+def enviar_solicitacao(client, dados, foto=True):
+    import json
+    corpo = {'dados': json.dumps(dados)}
+    if foto:
+        corpo['foto'] = (_jpeg(), 'foto.jpg', 'image/jpeg')
+    return client.post(RAIZ + '/solicitacoes', data=corpo, content_type='multipart/form-data', **HTTPS)
+
+
+def test_solicitacao_com_foto_e_coordenadas_vira_oficio(client, restrito, base, monkeypatch):
+    from models.entomologia import EntomologiaSolicitacao as Solicitacao
+    enviadas = []
+    monkeypatch.setattr('app.upload_to_s3', lambda arquivo, nome, folder='uploads', **_: enviadas.append((nome, folder))
+                        or f'https://bucket.example/{folder}/{nome}')
+    ana = agente()
+    entrar(client, ana)
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert 'LIXO_ENTULHO' in pagina and '/solicitacoes' in pagina
+
+    resposta = enviar_solicitacao(client, solicitacao(base['a']))
+    assert resposta.status_code == 200 and resposta.json['nova'] is True
+    s = Solicitacao.query.one()
+    assert (s.categoria, s.destino, s.imovel, s.bloco, s.status, s.agente_id, s.agente) == (
+        'LIXO_ENTULHO', 'Obras', '1001', base['a'], 'ABERTA', ana.id, 'Ana Agente')
+    assert (s.latitude, s.longitude, s.precisao_m) == (-20.72, -47.88, 6.4)
+    assert s.foto_url.startswith('https://bucket.example/entomologia/solicitacoes/') and len(enviadas) == 1
+    # Reenvio do aparelho: não grava de novo nem sobe a foto outra vez.
+    assert enviar_solicitacao(client, solicitacao(base['a'])).json['nova'] is False
+    assert Solicitacao.query.count() == 1 and len(enviadas) == 1
+    # Sem foto também vale; dados inválidos são recusados com o motivo.
+    assert enviar_solicitacao(client, solicitacao(base['a'], 'solic-0002', categoria='PISCINA'), foto=False).json['ok'] is True
+    assert 'tipo do problema' in enviar_solicitacao(client, solicitacao(base['a'], 'solic-0003', categoria='X')).json['erro']
+    assert enviar_solicitacao(client, solicitacao(base['a'], 'solic-0004', descricao=''), foto=False).status_code == 400
+    assert Solicitacao.query.count() == 2
+
+    lista = client.get(RAIZ + '/solicitacoes', **HTTPS)
+    html = lista.get_data(as_text=True)
+    assert lista.status_code == 200 and 'Lixo ou entulho acumulado' in html and 'google.com/maps?q=-20.720000,-47.880000' in html
+    assert 'name="csrf_token"' in html
+    atualizada = client.post(f'{RAIZ}/solicitacoes/{s.id}', json={'status': 'ENCAMINHADA', 'oficio': '123/2026'}, **HTTPS)
+    assert atualizada.json['solicitacao']['status'] == 'ENCAMINHADA' and atualizada.json['solicitacao']['oficio'] == '123/2026'
+    assert client.post(f'{RAIZ}/solicitacoes/{s.id}', json={'status': 'XYZ'}, **HTTPS).status_code == 400
+    assert client.post(f'{RAIZ}/solicitacoes/99999', json={'status': 'RESOLVIDA'}, **HTTPS).status_code == 404
+    assert 'Encaminhada' in client.get(RAIZ + '/solicitacoes?status=ENCAMINHADA', **HTTPS).get_data(as_text=True)
+    oficio = client.get(f'{RAIZ}/solicitacoes/{s.id}/oficio', **HTTPS).get_data(as_text=True)
+    assert 'Ofício nº 123/2026' in oficio and 'Ao setor de <b>Obras</b>' in oficio and s.foto_url in oficio
+
+    # Quem não é da equipe não grava nem muda o andamento.
+    entrar(client, conta('tutor@example.test'))
+    assert enviar_solicitacao(client, solicitacao(base['a'], 'solic-0009')).status_code in (403, 404)
+    assert client.post(f'{RAIZ}/solicitacoes/{s.id}', json={'status': 'RESOLVIDA'}, **HTTPS).status_code in (403, 404)
+    sair(client)
+    assert enviar_solicitacao(client, solicitacao(base['a'], 'solic-0010')).status_code == 302
+    assert Solicitacao.query.count() == 2 and db.session.get(Solicitacao, s.id).status == 'ENCAMINHADA'
+
+
+def test_foto_da_solicitacao_que_nao_sobe_fica_no_aparelho(client, base, monkeypatch):
+    from models.entomologia import EntomologiaSolicitacao as Solicitacao
+    monkeypatch.setattr('app.upload_to_s3', lambda *args, **kwargs: None)
+    entrar(client, agente())
+    resposta = enviar_solicitacao(client, solicitacao(base['a']))
+    assert resposta.status_code == 502 and resposta.json['repetir'] is True and Solicitacao.query.count() == 0

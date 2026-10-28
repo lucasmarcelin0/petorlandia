@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Ofício · {{ s.categoria_nome }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Georgia, "Times New Roman", serif; color: #111; background: #e9ecef; }
+    .barra { position: sticky; top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem 1rem; font-family: system-ui, sans-serif; background: #0b6568; }
+    .barra a, .barra button { padding: .45rem .9rem; border: 1.5px solid #fff; border-radius: .6rem; color: #fff; background: none; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .barra button { color: #0b6568; background: #fff; }
+    .barra span { color: #e6f4f1; font-size: .85rem; }
+    .folha { width: min(100% - 1rem, 21cm); margin: 1rem auto; padding: 1.6cm 1.8cm; background: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, .15); font-size: 12pt; line-height: 1.5; }
+    [contenteditable] { outline: none; border-radius: 3px; }
+    [contenteditable]:focus { box-shadow: 0 0 0 2px #74c0fc; }
+    .cabecalho { margin-bottom: 1.2rem; text-align: center; }
+    .cabecalho strong { display: block; font-size: 13pt; }
+    .direita { text-align: right; }
+    p { margin: 0 0 .7rem; }
+    .foto { margin: .8rem 0; text-align: center; }
+    .foto img { max-width: 100%; max-height: 9cm; border: 1px solid #ccc; }
+    .foto small { display: block; color: #555; font-size: 9.5pt; }
+    .assinatura { margin-top: 2.2cm; text-align: center; }
+    .assinatura span { display: inline-block; min-width: 8cm; padding-top: .3rem; border-top: 1px solid #111; }
+    @media (max-width: 600px) { .folha { padding: 1rem; font-size: 11pt; } }
+    @media print {
+      body { background: #fff; }
+      .barra { display: none; }
+      .folha { width: auto; margin: 0; padding: 0; box-shadow: none; }
+      @page { size: A4; margin: 1.8cm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="barra">
+    <a href="{{ voltar }}#solicitacao-{{ s.id }}">← Solicitações</a>
+    <button type="button" onclick="window.print()">🖨️ Imprimir</button>
+    <span>Toque no texto para ajustar antes de imprimir.</span>
+  </div>
+  <article class="folha">
+    <div class="cabecalho" contenteditable="true">
+      <strong>Vigilância em Saúde · Controle de Vetores</strong>
+      Combate à dengue · Orlândia – SP
+    </div>
+    <p class="direita" contenteditable="true">Orlândia, {{ data_extenso }}.</p>
+    <p contenteditable="true"><b>Ofício nº {{ s.oficio or '_____/' ~ hoje.year }}</b></p>
+    <p contenteditable="true">Ao setor de <b>{{ s.destino or '____________________' }}</b></p>
+    <p contenteditable="true"><b>Assunto:</b> {{ s.categoria_nome }} — {{ s.endereco }}</p>
+    <p contenteditable="true">Prezados,</p>
+    <p contenteditable="true">Durante o trabalho casa a casa de combate ao <i>Aedes aegypti</i>, em {{ s.quando[:10] }}, nossa equipe encontrou no endereço <b>{{ s.endereco }}</b>{% if s.quarteirao %} (quarteirão {{ s.quarteirao }}{% if s.setor %}, setor {{ s.setor }}{% endif %}){% endif %} a seguinte situação: <b>{{ s.categoria_nome|lower }}</b>. {{ s.descricao }}</p>
+    <p contenteditable="true">Essa situação favorece a criação do mosquito transmissor da dengue, zika e chikungunya. Solicitamos as providências cabíveis e, se possível, o retorno sobre o encaminhamento.</p>
+    {% if s.mapa %}<p contenteditable="true"><b>Localização:</b> {{ '%.6f'|format(s.lat) }}, {{ '%.6f'|format(s.lng) }}{% if s.precisao %} (precisão de {{ s.precisao|round|int }} m){% endif %} — {{ s.mapa }}</p>{% endif %}
+    {% if s.foto %}
+      <figure class="foto">
+        <img src="{{ s.foto }}" alt="Foto do local">
+        <small>Foto registrada em campo em {{ s.quando }}{% if s.agente %} por {{ s.agente }}{% endif %}.</small>
+      </figure>
+    {% endif %}
+    <p contenteditable="true">Atenciosamente,</p>
+    <div class="assinatura" contenteditable="true"><span>{{ s.agente or 'Responsável' }}<br>Controle de Vetores</span></div>
+  </article>
+</body>
+</html>

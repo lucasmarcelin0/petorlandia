@@ -280,6 +280,34 @@
     return { e: Math.min(999, r.e), a: Math.min(999, r.a), l: Math.min(999, r.l) };
   }
 
+  // Telefone: só os dígitos, sem o 55 do país; vale número local (8 ou 9) ou com DDD (10 ou 11).
+  function telefoneDigitos(valor) {
+    const d = String(valor || '').replace(/\D/g, '');
+    return (d.length === 12 || d.length === 13) && d.startsWith('55') ? d.slice(2) : d;
+  }
+  const telefoneValido = valor => { const d = telefoneDigitos(valor); return !d || (d.length >= 8 && d.length <= 11); };
+  function telefoneBr(valor) {
+    const d = telefoneDigitos(valor);
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    if (d.length === 9) return `${d.slice(0, 5)}-${d.slice(5)}`;
+    if (d.length === 8) return `${d.slice(0, 4)}-${d.slice(4)}`;
+    return d;
+  }
+
+  /* Moradores do imóvel: os do servidor com as mudanças das visitas que ainda estão no aparelho, na ordem
+     em que foram feitas (incluir ou corrigir pelo uuid, tirar pela lista de removidos). */
+  function moradoresDoImovel(doServidor, envios, imovel) {
+    const porId = new Map();
+    for (const m of doServidor || []) if (m && m.u) porId.set(m.u, m);
+    for (const envio of envios || []) {
+      if (!envio || envio.imovel !== imovel) continue;
+      for (const m of envio.moradores || []) porId.set(m.u, Object.assign({}, m, { pendente: true }));
+      for (const u of envio.moradores_removidos || []) porId.delete(u);
+    }
+    return Array.from(porId.values());
+  }
+
   // Monta a visita no formato que o servidor recebe. Sem inspeção, os campos de recipiente ficam zerados.
   // Com recipientes anotados por tipo, os totais do boletim são a soma dos tipos.
   function novaVisita(d) {
@@ -308,6 +336,9 @@
       controle_alternativo: inspecionado && (Boolean(d.controle_alternativo) || controles.has('A')),
       tratamento_focal: focal, focal_produto: Array.from(produtos).sort(),
       observacao: String(d.observacao || '').trim().slice(0, 1000),
+      // Moradores valem pelo imóvel: vão junto com a visita só quando mudaram nesta ficha.
+      ...((d.moradores || []).length ? { moradores: d.moradores.map(m => ({ u: m.u, nome: String(m.nome || '').trim().slice(0, 120), telefone: telefoneDigitos(m.telefone) })) } : {}),
+      ...((d.moradores_removidos || []).length ? { moradores_removidos: d.moradores_removidos.slice() } : {}),
     };
   }
 
@@ -376,7 +407,7 @@
   const api = {
     SITUACOES, OPCOES, OCULTAS, CONTROLES, PRODUTOS, PARTES, NOME_PARTE, POR_ID, INSPECIONADO, PENDENCIA, LARVA, BLOCOS, XP, NIVEIS, RECENTE_DIAS,
     dia, diasEntre, diasDeTrabalho, planosDoDia, agendaDoDia, geometriaDoBloco, noL, casasDoL, linhaDaDivisao, paginasDoRoteiro, uuid, maisRecente, juntarVisitas, historicoDoImovel, planoAberto, progresso, estadoDoBloco, corDaCasa,
-    proximaCasa, recipientesPorTipo, somaDosTipos, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
+    proximaCasa, recipientesPorTipo, somaDosTipos, telefoneDigitos, telefoneValido, telefoneBr, moradoresDoImovel, novaVisita, comoRegistro, pontos, nivel, medalhas, comFila, resumoDoDia,
   };
   root.CasaACasaModel = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

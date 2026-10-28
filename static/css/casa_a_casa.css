@@ -78,7 +78,7 @@ h2, h3, h4, p { margin: 0; }
 .cac-painel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100; display: flex; flex-direction: column; max-height: 62%; border-radius: 1rem 1rem 0 0; background: var(--cac-fundo); box-shadow: 0 -8px 26px rgba(18, 52, 59, .2); transition: max-height .22s ease; }
 .cac-painel.recolhido { max-height: 5.6rem; }
 .cac-painel.recolhido .cac-conteudo { display: none; }
-.cac-puxador { flex: 0 0 auto; height: 1.3rem; border: 0; background: none; }
+.cac-puxador { flex: 0 0 auto; height: 1.5rem; border: 0; background: none; cursor: grab; }
 .cac-puxador::before { content: ""; display: block; width: 2.6rem; height: .28rem; margin: 0 auto; border-radius: 999px; background: #b8c6c4; }
 .cac-abas { display: flex; flex: 0 0 auto; gap: .3rem; padding: 0 .6rem .5rem; }
 .cac-abas button { flex: 1 1 0; padding: .45rem .3rem; border: 1px solid var(--cac-linha); border-radius: .7rem; background: #fff; font-size: .84rem; font-weight: 700; white-space: nowrap; }
@@ -92,6 +92,10 @@ h2, h3, h4, p { margin: 0; }
   .cac-modos button { padding: .3rem .55rem; }
   .cac-conexao { margin-left: auto; }
   .cac .leaflet-control-zoom { display: none; }
+  /* Gaveta arrastável: o puxador e as abas seguem o dedo sem rolar a página. */
+  .cac-puxador, .cac-abas { touch-action: none; }
+  .cac-painel.arrastado:not(.recolhido) { height: var(--cac-altura-painel, 62%); max-height: none; }
+  .cac-painel.arrastando { transition: none; }
 }
 @media (min-width: 900px) {
   .cac-painel { position: static; flex: 0 0 24rem; max-height: none; border-radius: 0; border-left: 1px solid var(--cac-linha); box-shadow: none; }
@@ -201,6 +205,23 @@ h2, h3, h4, p { margin: 0; }
 .cac-historico-lista .cac-ultima { padding: .4rem 0; background: none; }
 .cac-historico-lista li.pendente .cac-ultima { color: var(--cac-suave); }
 .cac-historico .cac-nota { padding: 0 .6rem .45rem; }
+/* Moradores e solicitação: blocos recolhíveis da ficha, como o histórico. */
+.cac-moradores, .cac-solicitacao { margin-top: .45rem; }
+.cac-moradores-lista { margin: 0; padding: 0 .6rem; list-style: none; }
+.cac-moradores-lista li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem 0; border-top: 1px solid var(--cac-linha); }
+.cac-moradores-lista li > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .6rem; min-width: 0; overflow-wrap: anywhere; }
+.cac-moradores-lista a { color: var(--cac-verde); font-weight: 700; text-decoration: none; white-space: nowrap; }
+.cac-moradores-lista small { color: var(--cac-suave); }
+.cac-morador-novo { display: grid; grid-template-columns: 1fr 1fr auto; gap: .35rem; padding: .45rem .6rem; }
+@media (max-width: 420px) { .cac-morador-novo { grid-template-columns: 1fr 1fr; } .cac-morador-novo .cac-botao { grid-column: 1 / -1; } }
+.cac-morador-novo input, .cac-solicitacao-form select, .cac-solicitacao-form input[type="text"], .cac-solicitacao-form textarea {
+  display: block; width: 100%; min-width: 0; padding: .5rem .6rem; border: 1.5px solid var(--cac-linha); border-radius: .7rem; color: var(--cac-tinta); background: #fff; }
+.cac-solicitacao-form { display: flex; flex-direction: column; gap: .45rem; padding: .2rem .6rem .6rem; }
+.cac-foto-botoes { display: flex; gap: .4rem; }
+.cac-foto-previa { position: relative; }
+.cac-foto-previa img { display: block; width: 100%; max-height: 16rem; object-fit: contain; border-radius: .6rem; background: #e9ecef; }
+.cac-foto-previa .cac-tipo-tirar { position: absolute; top: .35rem; right: .35rem; }
+.cac-solicitacao-form .cac-nota { padding: 0; text-align: left; }
 .cac-situacoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 .cac-situacoes button { display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .55rem .2rem; border: 2px solid var(--cac-linha); border-radius: .8rem; background: #fff; font-size: .84rem; font-weight: 700; }
 .cac-situacoes button span { font-size: 1.4rem; line-height: 1.1; }

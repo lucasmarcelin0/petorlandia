@@ -84,6 +84,23 @@ GRUPOS_RECIPIENTE = (
 TIPOS_RECIPIENTE = {numero: (grupo, nome) for grupo, _titulo, tipos in GRUPOS_RECIPIENTE for numero, nome in tipos}
 
 
+# Solicitação: problema achado em campo que outro setor precisa resolver (vira ofício).
+CATEGORIAS_SOLICITACAO = {
+    "LIXO_ENTULHO": "Lixo ou entulho acumulado",
+    "TERRENO": "Terreno baldio sem limpeza",
+    "IMOVEL_ABANDONADO": "Imóvel abandonado",
+    "PISCINA": "Piscina ou caixa d'água sem cuidado",
+    "PONTO_ESTRATEGICO": "Pneus, ferro-velho ou sucata",
+    "AGUA_PARADA": "Água parada em via pública, bueiro ou calha",
+    "VAZAMENTO": "Vazamento de água ou esgoto",
+    "OUTRO": "Outro problema",
+}
+# Sugestões para "encaminhar para"; o campo aceita qualquer setor.
+DESTINOS_SOLICITACAO = ("Obras", "Meio Ambiente", "Limpeza Urbana", "Fiscalização de Posturas",
+                        "Vigilância Sanitária", "Água e Esgoto", "Defesa Civil")
+STATUS_SOLICITACAO = {"ABERTA": "Aberta", "ENCAMINHADA": "Encaminhada", "RESOLVIDA": "Resolvida"}
+
+
 def grupos_recipiente() -> list[dict]:
     """Os tipos de recipiente no formato da tela (vai na página, então vale sem internet)."""
     return [{"g": grupo, "nome": titulo, "tipos": [[numero, nome] for numero, nome in tipos]}
@@ -873,6 +890,77 @@ def validar_visita(item, blocos: dict, hoje: date) -> dict:
     }
 
 
+def _telefone(valor) -> str:
+    """Só os dígitos, sem o 55 do país: 8 ou 9 (número local) ou 10 e 11 (com DDD)."""
+    digitos = re.sub(r"\D", "", str(valor or ""))
+    if len(digitos) in (12, 13) and digitos.startswith("55"):
+        digitos = digitos[2:]
+    if digitos and not 8 <= len(digitos) <= 11:
+        raise ValueError("Telefone do morador inválido: use DDD e número.")
+    return digitos
+
+
+def moradores_da_visita(item) -> tuple[list[dict], list[str]]:
+    """Moradores anotados na ficha: ``moradores`` (novos ou corrigidos) e ``moradores_removidos`` (uuids)."""
+    lista, removidos = item.get("moradores") or [], item.get("moradores_removidos") or []
+    if not isinstance(lista, list) or not isinstance(removidos, list) or len(lista) > 40 or len(removidos) > 40:
+        raise ValueError("Lista de moradores inválida.")
+    moradores = []
+    for morador in lista:
+        if not isinstance(morador, dict) or not _UUID.fullmatch(str(morador.get("u") or "")):
+            raise ValueError("Morador em formato inválido.")
+        nome = " ".join(str(morador.get("nome") or "").split())[:120]
+        telefone = _telefone(morador.get("telefone"))
+        if not nome and not telefone:
+            raise ValueError("Informe o nome ou o telefone do morador.")
+        moradores.append({"u": str(morador["u"]), "nome": nome, "telefone": telefone})
+    saem = []
+    for uuid in removidos:
+        if not _UUID.fullmatch(str(uuid or "")):
+            raise ValueError("Morador em formato inválido.")
+        saem.append(str(uuid))
+    return moradores, saem
+
+
+def _guardar_moradores(imovel: str, moradores: list[dict], removidos: list[str], usuario, nome: str) -> None:
+    """Inclui, corrige e remove moradores. Removido não volta com um reenvio antigo do aparelho."""
+    from extensions import db
+    from models.entomologia import EntomologiaImovelMorador as Mo
+
+    uuids = [m["u"] for m in moradores] + removidos
+    if not uuids:
+        return
+    linhas = {linha.uuid_local: linha for linha in Mo.query.filter(Mo.uuid_local.in_(uuids)).all()}
+    for morador in moradores:
+        linha = linhas.get(morador["u"])
+        if linha is None:
+            linhas[morador["u"]] = linha = Mo(uuid_local=morador["u"], imovel=imovel, criado_por_id=usuario.id,
+                                              criado_por=nome)
+            db.session.add(linha)
+        elif linha.imovel != imovel or linha.removido_em is not None:
+            continue
+        linha.nome, linha.telefone = morador["nome"] or None, morador["telefone"] or None
+    for uuid in removidos:
+        linha = linhas.get(uuid)
+        if linha is None:
+            linhas[uuid] = linha = Mo(uuid_local=uuid, imovel=imovel, criado_por_id=usuario.id, criado_por=nome)
+            db.session.add(linha)
+        if linha.imovel == imovel and linha.removido_em is None:
+            # Dado pessoal: ao remover, apaga nome e telefone; fica só a marca.
+            linha.nome = linha.telefone = None
+            linha.removido_em, linha.removido_por = datetime.now(FUSO), nome
+
+
+def moradores(imovel: str) -> list[dict]:
+    """Moradores atuais do imóvel, do mais antigo para o mais novo. Só para a equipe logada."""
+    from models.entomologia import EntomologiaImovelMorador as Mo
+
+    linhas = (Mo.query.filter(Mo.imovel == imovel, Mo.removido_em.is_(None))
+              .order_by(Mo.criado_em, Mo.id).limit(100).all())
+    return [{"u": linha.uuid_local, "nome": linha.nome or "", "telefone": linha.telefone or "",
+             "por": linha.criado_por or "", "em": _iso(linha.atualizado_em or linha.criado_em)} for linha in linhas]
+
+
 def registrar_visitas(itens, usuario, hoje: date) -> dict:
     """Grava o lote vindo do aparelho. Reenviar a mesma visita não duplica."""
     from extensions import db
@@ -891,11 +979,14 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
     for item in itens:
         try:
             dados = validar_visita(item, blocos, hoje)
+            novos_moradores, moradores_removidos = moradores_da_visita(item)
         except ValueError as exc:
             recusadas.append({"uuid": str(item.get("uuid") or "") if isinstance(item, dict) else "",
                               "motivo": str(exc)})
             continue
         aceitas.append(dados["uuid_local"])
+        # Moradores valem pelo imóvel, não pela visita; reenviar não duplica (uuid de cada um).
+        _guardar_moradores(dados["imovel"], novos_moradores, moradores_removidos, usuario, nome)
         if dados["uuid_local"] in existentes:
             continue
         existentes.add(dados["uuid_local"])
@@ -927,6 +1018,134 @@ def registrar_visitas(itens, usuario, hoje: date) -> dict:
                              criado_por=nome))
             db.session.flush()
     return {"aceitas": aceitas, "recusadas": recusadas, "novas": novas, "imoveis_novos": imoveis_novos}
+
+
+# ---------------------------------------------------------------------------
+# Solicitações para outros setores (ofícios)
+# ---------------------------------------------------------------------------
+
+def _texto(valor, limite: int) -> str:
+    return " ".join(str(valor or "").split())[:limite]
+
+
+def validar_solicitacao(item, blocos: dict) -> dict:
+    """Campos de uma solicitação prontos para gravar; ``ValueError`` diz o que recusar."""
+    if not isinstance(item, dict):
+        raise ValueError("Solicitação em formato inválido.")
+    uuid_local = str(item.get("uuid") or "")
+    if not _UUID.fullmatch(uuid_local):
+        raise ValueError("Identificador da solicitação inválido.")
+    categoria = str(item.get("categoria") or "").upper()
+    if categoria not in CATEGORIAS_SOLICITACAO:
+        raise ValueError("Escolha o tipo do problema.")
+    descricao = str(item.get("descricao") or "").strip()[:2000]
+    if len(descricao) < 3:
+        raise ValueError("Descreva o problema encontrado.")
+    bloco = None
+    if item.get("bloco"):
+        bloco = blocos.get(str(item.get("bloco")))
+        if bloco is None:
+            raise ValueError("Quarteirão desconhecido.")
+    imovel = str(item.get("imovel") or "")
+    if imovel and not _IMOVEL.fullmatch(imovel):
+        raise ValueError("Imóvel inválido.")
+    try:
+        registrado = datetime.fromisoformat(str(item.get("horario") or "").replace("Z", "+00:00"))
+        if registrado.tzinfo is None:
+            registrado = registrado.replace(tzinfo=FUSO)
+    except ValueError:
+        registrado = None
+    precisao = _coordenada(item.get("precisao"), 0, 100000)
+    return {
+        "uuid_local": uuid_local, "imovel": imovel or None, "bloco": bloco["id"] if bloco else None,
+        "setor": bloco["s"] if bloco else None, "quarteirao": bloco["n"] if bloco else None,
+        "logradouro": _texto(item.get("logradouro"), 200) or None,
+        "numero": _texto(item.get("numero"), 50) or None, "complemento": _texto(item.get("complemento"), 80) or None,
+        "latitude": _coordenada(item.get("lat"), -90, 90), "longitude": _coordenada(item.get("lng"), -180, 180),
+        "precisao_m": round(precisao, 1) if precisao is not None else None,
+        "categoria": categoria, "destino": _texto(item.get("destino"), 120) or None,
+        "descricao": descricao, "registrado_em": registrado,
+    }
+
+
+def solicitacao_existente(uuid_local: str):
+    from models.entomologia import EntomologiaSolicitacao as So
+    return So.query.filter_by(uuid_local=str(uuid_local or "")).first()
+
+
+def registrar_solicitacao(dados: dict, foto_url: str | None, usuario):
+    """Grava a solicitação já validada. Reenviar a mesma (uuid) devolve a que já existe."""
+    from extensions import db
+    from models.entomologia import EntomologiaSolicitacao as So
+
+    existente = solicitacao_existente(dados["uuid_local"])
+    if existente is not None:
+        return existente, False
+    solicitacao = So(**dados, foto_url=foto_url, status="ABERTA", agente_id=usuario.id, agente=nome_da_conta(usuario))
+    db.session.add(solicitacao)
+    db.session.flush()
+    return solicitacao, True
+
+
+def _data_hora_br(momento) -> str:
+    if momento is None:
+        return ""
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=ZoneInfo("UTC"))
+    return momento.astimezone(FUSO).strftime("%d/%m/%Y %H:%M")
+
+
+MESES = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
+         "novembro", "dezembro")
+
+
+def data_por_extenso(dia: date) -> str:
+    return f"{dia.day} de {MESES[dia.month - 1]} de {dia.year}"
+
+
+def solicitacao_dict(s) -> dict:
+    endereco = ", ".join(parte for parte in (s.logradouro, s.numero) if parte) + (f" · {s.complemento}" if s.complemento else "")
+    mapa = (f"https://www.google.com/maps?q={s.latitude:.6f},{s.longitude:.6f}"
+            if s.latitude is not None and s.longitude is not None else "")
+    return {
+        "id": s.id, "u": s.uuid_local, "m": s.imovel, "b": s.bloco, "setor": s.setor or "", "quarteirao": s.quarteirao or "",
+        "endereco": endereco or "Endereço não informado", "lat": s.latitude, "lng": s.longitude, "precisao": s.precisao_m,
+        "mapa": mapa, "categoria": s.categoria, "categoria_nome": CATEGORIAS_SOLICITACAO.get(s.categoria, s.categoria),
+        "destino": s.destino or "", "descricao": s.descricao, "foto": s.foto_url or "",
+        "status": s.status, "status_nome": STATUS_SOLICITACAO.get(s.status, s.status), "oficio": s.oficio or "",
+        "agente": s.agente or "", "registrado": _iso(s.registrado_em or s.recebido_em),
+        "quando": _data_hora_br(s.registrado_em or s.recebido_em),
+        "atualizado_por": s.atualizado_por or "",
+    }
+
+
+def solicitacoes(status: str | None = None, limite: int = 300) -> list[dict]:
+    from models.entomologia import EntomologiaSolicitacao as So
+
+    consulta = So.query
+    if status in STATUS_SOLICITACAO:
+        consulta = consulta.filter(So.status == status)
+    return [solicitacao_dict(s) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
+
+
+def atualizar_solicitacao(solicitacao_id: int, dados, usuario) -> dict:
+    """Escritório: andamento, número do ofício e setor de destino."""
+    from extensions import db
+    from models.entomologia import EntomologiaSolicitacao as So
+
+    solicitacao = db.session.get(So, solicitacao_id)
+    if solicitacao is None:
+        raise LookupError("Solicitação não encontrada.")
+    status = str(dados.get("status") or solicitacao.status).upper()
+    if status not in STATUS_SOLICITACAO:
+        raise ValueError("Andamento inválido.")
+    solicitacao.status = status
+    if "oficio" in dados:
+        solicitacao.oficio = _texto(dados.get("oficio"), 60) or None
+    if "destino" in dados:
+        solicitacao.destino = _texto(dados.get("destino"), 120) or None
+    solicitacao.atualizado_por = nome_da_conta(usuario)
+    return solicitacao_dict(solicitacao)
 
 
 # ---------------------------------------------------------------------------
