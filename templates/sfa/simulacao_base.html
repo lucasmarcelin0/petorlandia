@@ -10,6 +10,7 @@
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_simulacao.css') }}?v=20260929b">
+  {% include 'components/destructive_actions_assets.html' %}
 </head>
 <body>
   <main class="sim-shell">

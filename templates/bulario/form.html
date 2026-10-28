@@ -321,7 +321,7 @@
       </div>
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <form method="POST" action="{{ url_for('bulario_excluir', medicamento_id=med.id) }}">
+        <form method="POST" action="{{ url_for('bulario_excluir', medicamento_id=med.id) }}" data-destructive-confirmation>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash me-1" aria-hidden="true"></i>Excluir

@@ -249,7 +249,7 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
               Cancelar
             </button>
-            <form id="formExcluir" method="POST">
+            <form id="formExcluir" method="POST" data-destructive-confirmation>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-sm">
                 <i class="fas fa-trash me-1" aria-hidden="true"></i>Excluir
