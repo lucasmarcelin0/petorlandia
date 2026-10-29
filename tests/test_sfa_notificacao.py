@@ -1005,3 +1005,16 @@ def test_sincronizacao_guarda_agravo_e_unidade_da_planilha(app, monkeypatch):
     novo = SfaSinanLog.query.filter_by(ficha_sinan='7000002').one()
     assert (novo.agravo, novo.unidade_notificante) == ('Chikungunya', 'Hospital')
     assert sfa_service.sincronizar_sinan()['atualizados'] == 0
+
+
+def test_so_o_administrador_ve_o_atalho_de_volta_ao_site(client, ubs, autora):
+    def atalho(pagina):
+        return BeautifulSoup(pagina.data, 'html.parser').select_one('#sfa-sidebar a.sfa-voltar-site')
+
+    sem_atalho = client.get('/sfa/notificacao', **HTTPS)
+    assert sem_atalho.status_code == 200 and atalho(sem_atalho) is None
+
+    entrar(client, conta('admin-volta@example.test', role='admin', name='Admin'))
+    for rota in ('/sfa/notificacao', '/sfa/notificacao/unidades'):
+        link = atalho(client.get(rota, **HTTPS))
+        assert link is not None and link['href'] == '/' and 'Voltar ao PetOrlândia' in link.get_text(), rota
