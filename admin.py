@@ -18,6 +18,7 @@ from wtforms import (
     SubmitField,
     StringField,
     PasswordField,
+    SelectMultipleField,
 )
 from wtforms.validators import NumberRange, Optional
 from markupsafe import Markup, escape
@@ -58,6 +59,45 @@ USER_WORKER_CHOICES = [
     # services.sfa_notificacao.PERFIL_MASTER_NOTIFICACAO: só a Notificação SINAN, com todas as unidades.
     ('master_notificacao', 'Master da Notificação SINAN (todas as unidades)'),
 ]
+
+class _CaixasDeUnidades:
+    """Uma caixa de marcar por unidade: no celular e no computador marca-se mais de uma sem segurar Ctrl.
+
+    Leva junto um marcador oculto, porque o navegador não envia o campo quando nenhuma caixa
+    fica marcada; assim desmarcar tudo também retira o acesso.
+    """
+
+    def __call__(self, field, **kwargs):
+        classes = ' '.join(c for c in str(kwargs.pop('class', '')).split() if c != 'form-control')
+        itens = []
+        for indice, (valor, rotulo, marcada, _) in enumerate(field.iter_choices()):
+            item_id = f'{field.id}-{indice}'
+            itens.append(
+                f'<div class="form-check py-1">'
+                f'<input type="checkbox" class="form-check-input" id="{escape(item_id)}" '
+                f'name="{escape(field.name)}" value="{escape(valor)}"{" checked" if marcada else ""}>'
+                f'<label class="form-check-label" for="{escape(item_id)}">{escape(rotulo)}</label></div>'
+            )
+        if not itens:
+            itens.append('<p class="text-muted mb-0">Nenhuma unidade cadastrada.</p>')
+        return Markup(
+            f'<div id="{escape(field.id)}" class="{escape(classes)} border rounded px-3 py-2">'
+            f'<input type="hidden" name="{escape(field.name)}{_MARCADOR_UNIDADES}" value="1">'
+            f'{"".join(itens)}</div>'
+        )
+
+
+_MARCADOR_UNIDADES = '__enviado'
+
+
+class _UnidadesSinanField(SelectMultipleField):
+    """Unidades da conta; ignora o valor vazio que telas antigas enviavam para "Nenhuma"."""
+
+    widget = _CaixasDeUnidades()
+
+    def process_formdata(self, valuelist):
+        super().process_formdata([valor for valor in valuelist if str(valor).strip()])
+
 
 ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
 ADMIN_IMAGE_ACCEPT = ','.join(f'image/{extension}' for extension in ADMIN_IMAGE_EXTENSIONS)
@@ -720,14 +760,15 @@ class UserAdminView(MyModelView):
                         '(mínimo 6 caracteres). Deixe em branco para manter a atual.',
         ),
         # As opções (unidades cadastradas) entram em create_form/edit_form.
-        'unidade_sinan': SelectField(
-            'Unidade de saúde (Notificação SINAN)',
-            default='',
-            description='Unidade pela qual a conta registra fichas SINAN. Com o perfil interno '
-                        '"Unidade de saúde (somente Notificação SINAN)" a conta passa a ver só essa área, '
-                        'responde só por esta unidade e não precisa escolher a unidade ao registrar. '
-                        'O perfil "Master da Notificação SINAN" não precisa de unidade: vê só essa área, '
-                        'com as fichas de todas as unidades. Deixe "Nenhuma" para contas sem esse acesso.',
+        'unidade_sinan': _UnidadesSinanField(
+            'Unidades de saúde (Notificação SINAN)',
+            default=list,
+            description='Marque as unidades pelas quais a conta registra fichas SINAN; quem atua em mais '
+                        'de uma (ex.: NAS e Pronto Atendimento) marca todas e escolhe a unidade ao abrir '
+                        'cada ficha. Com o perfil interno "Unidade de saúde (somente Notificação SINAN)" a '
+                        'conta passa a ver só essa área, com as unidades marcadas. O perfil "Master da '
+                        'Notificação SINAN" não precisa de unidade: vê só essa área, com as fichas de todas '
+                        'as unidades. Deixe tudo desmarcado para contas sem esse acesso.',
         ),
     }
 
@@ -789,20 +830,20 @@ class UserAdminView(MyModelView):
         from services.entomologia_service import consultar_sem_interromper
         unidades = consultar_sem_interromper(
             lambda: SfaUnidadeSaude.query.order_by(SfaUnidadeSaude.ativa.desc(), SfaUnidadeSaude.nome).all(), [])
-        campo.choices = [('', 'Nenhuma')] + [
-            (str(u.id), u.nome if u.ativa else f'{u.nome} (desativada)') for u in unidades
-        ]
+        campo.choices = [(str(u.id), u.nome if u.ativa else f'{u.nome} (desativada)') for u in unidades]
         return form
 
     @staticmethod
-    def _unidade_sinan_enviada(form):
-        """(campo, unidade escolhida) quando o campo veio no envio; outras telas que gravam o usuário não o enviam."""
+    def _unidades_sinan_enviadas(form):
+        """(campo, unidades marcadas) quando o campo veio no envio; outras telas que gravam o usuário não o enviam."""
         from models.sfa import SfaUnidadeSaude
         campo = getattr(form, 'unidade_sinan', None)
-        if campo is None or campo.name not in request.form:
-            return None, None
-        valor = str(campo.data or '')
-        return campo, (db.session.get(SfaUnidadeSaude, int(valor)) if valor.isdigit() else None)
+        if campo is None or (campo.name not in request.form
+                             and f'{campo.name}{_MARCADOR_UNIDADES}' not in request.form):
+            return None, []
+        ids = list(dict.fromkeys(int(valor) for valor in (campo.data or []) if str(valor).isdigit()))
+        unidades = [db.session.get(SfaUnidadeSaude, unidade_id) for unidade_id in ids]
+        return campo, [unidade for unidade in unidades if unidade is not None]
 
     @staticmethod
     def _so_notificacao(worker, role):
@@ -818,56 +859,44 @@ class UserAdminView(MyModelView):
             worker.errors = [*worker.errors, 'O administrador continua vendo o site inteiro. Para a conta ficar só '
                                              'com a Notificação SINAN, escolha outro tipo de conta.']
             return False
-        campo, escolhida = self._unidade_sinan_enviada(form)
+        campo, escolhidas = self._unidades_sinan_enviadas(form)
         if not valido or campo is None:
             return valido
         if not self._so_notificacao(getattr(getattr(form, 'worker', None), 'data', None),
                                     getattr(getattr(form, 'role', None), 'data', None)):
             return True
         # O painel não mostra avisos soltos: o motivo aparece embaixo do próprio campo.
-        if escolhida is None:
-            erro = ('Escolha a unidade desta conta: com o perfil "Unidade de saúde" ela só acessa '
-                    'a Notificação SINAN da própria unidade.')
-        elif not escolhida.ativa:
-            erro = f'{escolhida.nome} está desativada. Reative a unidade em "Unidades e responsáveis" ou escolha outra.'
+        desativadas = [unidade.nome for unidade in escolhidas if not unidade.ativa]
+        if not escolhidas:
+            erro = ('Marque a unidade desta conta: com o perfil "Unidade de saúde" ela só acessa '
+                    'a Notificação SINAN das unidades marcadas.')
+        elif desativadas:
+            erro = (f'{", ".join(desativadas)} está desativada. Reative a unidade em "Unidades e responsáveis" '
+                    f'ou desmarque-a.')
         else:
             return True
         campo.errors = [*campo.errors, erro]
         return False
 
     def _sincronizar_unidade_sinan(self, form, model, is_created):
-        """Liga a conta à unidade escolhida; a conta de unidade responde só por ela.
+        """Deixa a conta respondendo exatamente pelas unidades marcadas.
 
         Só age quando o campo veio no envio (``validate_form`` já conferiu a
-        escolha). O formulário mostra a unidade quando a conta responde por uma
-        só: trocar a escolha troca a unidade e esvaziar o campo retira o acesso.
-        Conta que responde por várias (campo em branco) só ganha a escolhida,
-        exceto no perfil de unidade, que fica só com ela.
+        escolha): marcar concede, desmarcar retira o acesso àquela unidade.
         """
-        from services.sfa_notificacao import (auditar, definir_unidade_da_conta, nome_da_conta, revogar,
-                                              vinculos_ativos)
+        from services.sfa_notificacao import auditar, definir_unidades_da_conta, nome_da_conta
 
-        campo, escolhida = self._unidade_sinan_enviada(form)
+        campo, escolhidas = self._unidades_sinan_enviadas(form)
         if campo is None:
             return
-        restrita = self._so_notificacao(model.worker, model.role)
         if is_created:
             db.session.flush()
         por = nome_da_conta(current_user)[:160]
         detalhes = {'user_id': model.id, 'origem': 'painel_usuarios'}
-        vinculos = vinculos_ativos(model)
-        if escolhida is None:
-            if len(vinculos) == 1:
-                vinculo = revogar(vinculos[0].id, por)
-                auditar('revogar_responsavel',
-                        f'Conta #{model.id} deixou de responder pela unidade #{vinculo.unidade_id}',
-                        {'unidade_id': vinculo.unidade_id, **detalhes}, ator=current_user)
-            return
-        concedido, revogados = definir_unidade_da_conta(model, escolhida, por,
-                                                        exclusiva=restrita or len(vinculos) <= 1)
-        if concedido:
-            auditar('conceder_responsavel', f'Conta #{model.id} passou a responder pela unidade #{escolhida.id}',
-                    {'unidade_id': escolhida.id, **detalhes}, ator=current_user)
+        concedidas, revogados = definir_unidades_da_conta(model, escolhidas, por)
+        for unidade in concedidas:
+            auditar('conceder_responsavel', f'Conta #{model.id} passou a responder pela unidade #{unidade.id}',
+                    {'unidade_id': unidade.id, **detalhes}, ator=current_user)
         for vinculo in revogados:
             auditar('revogar_responsavel', f'Conta #{model.id} deixou de responder pela unidade #{vinculo.unidade_id}',
                     {'unidade_id': vinculo.unidade_id, **detalhes}, ator=current_user)
@@ -901,19 +930,11 @@ class UserAdminView(MyModelView):
                 f'style="max-height:150px;margin-top:10px;">'
             )
         campo = getattr(form, 'unidade_sinan', None)
-        if obj and campo is not None:
+        if obj and campo is not None and request.method == 'GET':
             from services.entomologia_service import consultar_sem_interromper
             from services.sfa_notificacao import vinculos_ativos
             vinculos = consultar_sem_interromper(lambda: vinculos_ativos(obj), [])
-            if len(vinculos) == 1 and request.method == 'GET':
-                campo.data = str(vinculos[0].unidade_id)
-            elif len(vinculos) > 1:
-                nomes = ', '.join(str(escape(v.unidade.nome)) for v in vinculos)
-                campo.description = (f'Hoje esta conta responde por {len(vinculos)} unidades ({nomes}) e por isso '
-                                     f'escolhe a unidade a cada ficha. Escolha uma aqui para deixar só ela no perfil '
-                                     f'"Unidade de saúde"; nos demais perfis, a escolhida é somada às outras.')
-
-
+            campo.data = [str(v.unidade_id) for v in vinculos]
 
 
 class EnderecoAdmin(MyModelView):

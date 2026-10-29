@@ -207,19 +207,16 @@ def vinculos_ativos(user) -> list:
             .order_by(SfaUnidadeResponsavel.id).all())
 
 
-def definir_unidade_da_conta(user, unidade, por: str, *, exclusiva: bool = False) -> tuple[bool, list]:
-    """Faz a conta responder por ``unidade``; com ``exclusiva``, deixa de responder pelas outras.
+def definir_unidades_da_conta(user, unidades, por: str) -> tuple[list, list]:
+    """Faz a conta responder exatamente por ``unidades``: concede as novas e revoga as que ficaram de fora.
 
-    A conta de uma unidade (perfil ``PERFIL_SO_NOTIFICACAO``) responde só pela dela, e assim
-    registra fichas sem precisar escolher a unidade. Devolve (concedido, vínculos revogados).
+    Quem atua em mais de uma unidade escolhe por qual delas abre cada ficha; com uma só,
+    registra direto. Devolve (unidades concedidas, vínculos revogados).
     """
-    _, concedido = conceder(unidade, user, por)
-    revogados = []
-    if exclusiva:
-        for vinculo in vinculos_ativos(user):
-            if vinculo.unidade_id != unidade.id:
-                revogados.append(revogar(vinculo.id, por))
-    return concedido, revogados
+    concedidas = [unidade for unidade in unidades if conceder(unidade, user, por)[1]]
+    manter = {unidade.id for unidade in unidades}
+    revogados = [revogar(vinculo.id, por) for vinculo in vinculos_ativos(user) if vinculo.unidade_id not in manter]
+    return concedidas, revogados
 
 
 def auditar(funcao: str, mensagem: str, detalhes: dict, *, ator=None, id_estudo=None) -> None:

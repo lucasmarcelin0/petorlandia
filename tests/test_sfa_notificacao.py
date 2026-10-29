@@ -345,31 +345,45 @@ def editar_conta(client, user, **campos):
     return client.post(f'/painel/user/edit/?id={user.id}', data=dados, **HTTPS)
 
 
-def test_painel_de_usuarios_deixa_a_conta_so_com_a_propria_unidade(client, ubs):
+def test_painel_de_usuarios_marca_uma_ou_varias_unidades_da_conta(client, ubs):
     ubs2 = unidade('UBS 2', '2222222')
     ubs2_conta = responsavel(ubs, 'ubs2@example.test', 'UBS 2')
-    notificacao.conceder(ubs2, ubs2_conta, 'Admin')  # indicada por engano nas duas unidades
+    notificacao.conceder(ubs2, ubs2_conta, 'Admin')  # atua nas duas unidades
     db.session.commit()
     admin = conta('admin7@example.test', role='admin', name='Admin')
     entrar(client, admin)
 
     tela = BeautifulSoup(client.get(f'/painel/user/edit/?id={ubs2_conta.id}', **HTTPS).data, 'html.parser')
-    opcoes = {o['value']: o.get_text() for o in tela.select('select[name="unidade_sinan"] option')}
-    assert opcoes == {'': 'Nenhuma', str(ubs.id): 'UBS Teste', str(ubs2.id): 'UBS 2'}
-    assert 'responde por 2 unidades' in tela.get_text()
+    caixas = tela.select('input[type="checkbox"][name="unidade_sinan"]')
+    assert {c['value']: c.find_next('label').get_text() for c in caixas} == {str(ubs.id): 'UBS Teste',
+                                                                            str(ubs2.id): 'UBS 2'}
+    assert {c['value'] for c in caixas if c.has_attr('checked')} == {str(ubs.id), str(ubs2.id)}
     perfis = [o['value'] for o in tela.select('select[name="worker"] option')]
     assert notificacao.PERFIL_SO_NOTIFICACAO in perfis
 
-    # Perfil de unidade exige a unidade; nada muda enquanto ela não é escolhida.
-    sem_unidade = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO, unidade_sinan='')
-    assert sem_unidade.status_code == 200 and 'Escolha a unidade desta conta' in sem_unidade.get_data(as_text=True)
+    # Perfil de unidade exige ao menos uma unidade; nada muda enquanto nenhuma é marcada.
+    sem_unidade = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO,
+                               unidade_sinan__enviado='1')
+    assert sem_unidade.status_code == 200 and 'Marque a unidade desta conta' in sem_unidade.get_data(as_text=True)
     db.session.refresh(ubs2_conta)
     assert ubs2_conta.worker is None and len(notificacao.vinculos_ativos(ubs2_conta)) == 2
 
-    salvo = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO, unidade_sinan=str(ubs2.id))
-    assert salvo.status_code == 302
+    # Quem atua em duas unidades fica com as duas, mesmo no perfil de unidade, e escolhe a cada ficha.
+    duas = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO,
+                        unidade_sinan=[str(ubs.id), str(ubs2.id)], unidade_sinan__enviado='1')
+    assert duas.status_code == 302
     db.session.refresh(ubs2_conta)
     assert ubs2_conta.worker == notificacao.PERFIL_SO_NOTIFICACAO and ubs2_conta.role == 'tutor'
+    assert sorted(v.unidade_id for v in notificacao.vinculos_ativos(ubs2_conta)) == sorted([ubs.id, ubs2.id])
+    entrar(client, ubs2_conta)
+    escolha = client.get('/sfa/notificacao/ficha', **HTTPS).get_data(as_text=True)
+    assert f'/sfa/notificacao/ficha?unidade={ubs.id}' in escolha and f'?unidade={ubs2.id}' in escolha
+    entrar(client, admin)
+
+    # Desmarcar uma unidade retira só aquele acesso.
+    salvo = editar_conta(client, ubs2_conta, worker=notificacao.PERFIL_SO_NOTIFICACAO,
+                         unidade_sinan=str(ubs2.id), unidade_sinan__enviado='1')
+    assert salvo.status_code == 302
     assert [v.unidade_id for v in notificacao.vinculos_ativos(ubs2_conta)] == [ubs2.id]
     revogado = SfaUnidadeResponsavel.query.filter_by(user_id=ubs2_conta.id, unidade_id=ubs.id).one()
     assert revogado.revogado_por == 'Admin'
@@ -377,7 +391,7 @@ def test_painel_de_usuarios_deixa_a_conta_so_com_a_propria_unidade(client, ubs):
     assert json.loads(auditoria.detalhes_json)['origem'] == 'painel_usuarios'
 
     tela = BeautifulSoup(client.get(f'/painel/user/edit/?id={ubs2_conta.id}', **HTTPS).data, 'html.parser')
-    assert tela.select_one('select[name="unidade_sinan"] option[selected]')['value'] == str(ubs2.id)
+    assert [c['value'] for c in tela.select('input[name="unidade_sinan"][checked]')] == [str(ubs2.id)]
     # Outra tela que grava o usuário sem o campo não mexe nos vínculos.
     assert editar_conta(client, ubs2_conta, name='UBS Dois').status_code == 302
     assert [v.unidade_id for v in notificacao.vinculos_ativos(ubs2_conta)] == [ubs2.id]
@@ -415,22 +429,30 @@ def test_painel_de_usuarios_troca_soma_ou_retira_unidade_das_demais_contas(clien
     terceira = unidade('UBS Três', '3333333')
     entrar(client, conta('admin8@example.test', role='admin', name='Admin'))
 
-    # Uma unidade só aparece no campo: escolher outra troca a unidade; esvaziar retira o acesso.
+    # O campo mostra as unidades da conta: trocar a marcada troca a unidade; desmarcar tudo retira o acesso.
     enfermeira = responsavel(ubs, 'enfermeira3@example.test', 'Enfermeira')
     assert editar_conta(client, enfermeira, unidade_sinan=str(vizinha.id)).status_code == 302
     assert [v.unidade_id for v in notificacao.vinculos_ativos(enfermeira)] == [vizinha.id]
     assert db.session.get(User, enfermeira.id).worker is None
+    assert editar_conta(client, enfermeira, unidade_sinan__enviado='1').status_code == 302
+    assert notificacao.vinculos_ativos(enfermeira) == []
+    # O valor vazio do antigo "Nenhuma" também retira o acesso.
+    notificacao.conceder(ubs, enfermeira, 'Admin')
+    db.session.commit()
     assert editar_conta(client, enfermeira, unidade_sinan='').status_code == 302
     assert notificacao.vinculos_ativos(enfermeira) == []
 
-    # Várias unidades (campo em branco): fora do perfil de unidade, a escolhida é somada.
+    # Fora do perfil de unidade, marcar outra soma às que continuam marcadas.
     coordenadora = responsavel(ubs, 'coordenadora@example.test', 'Coordenadora')
     notificacao.conceder(vizinha, coordenadora, 'Admin')
     db.session.commit()
-    assert editar_conta(client, coordenadora, unidade_sinan='').status_code == 302
+    marcadas = [str(ubs.id), str(vizinha.id)]
+    assert editar_conta(client, coordenadora, unidade_sinan=marcadas).status_code == 302
     assert len(notificacao.vinculos_ativos(coordenadora)) == 2
-    assert editar_conta(client, coordenadora, unidade_sinan=str(terceira.id)).status_code == 302
+    assert editar_conta(client, coordenadora, unidade_sinan=[*marcadas, str(terceira.id)]).status_code == 302
     assert len(notificacao.vinculos_ativos(coordenadora)) == 3
+    concedidas = SfaAuditoria.query.filter_by(funcao='conceder_responsavel').all()
+    assert any(json.loads(a.detalhes_json).get('unidade_id') == terceira.id for a in concedidas)
 
     vizinha.ativa = False
     db.session.commit()
@@ -441,10 +463,10 @@ def test_painel_de_usuarios_troca_soma_ou_retira_unidade_das_demais_contas(clien
     assert User.query.filter_by(email='ubs5@example.test').first() is None
     nova = client.post('/painel/user/new/', data={'name': 'UBS 5', 'email': 'ubs5@example.test', 'new_password': 'senha-123',
                                                   'role': 'adotante', 'worker': notificacao.PERFIL_SO_NOTIFICACAO,
-                                                  'unidade_sinan': str(terceira.id)}, **HTTPS)
+                                                  'unidade_sinan': [str(ubs.id), str(terceira.id)]}, **HTTPS)
     assert nova.status_code == 302
     criada = User.query.filter_by(email='ubs5@example.test').one()
-    assert [v.unidade_id for v in notificacao.vinculos_ativos(criada)] == [terceira.id]
+    assert sorted(v.unidade_id for v in notificacao.vinculos_ativos(criada)) == sorted([ubs.id, terceira.id])
 
 
 def test_ficha_enviada_pelo_navegador_passa_no_csrf_em_https(app, client, ubs, autora):
