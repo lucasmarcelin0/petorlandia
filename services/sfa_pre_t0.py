@@ -221,6 +221,33 @@ def carregar_esquema_pre_t0() -> dict:
             "definitions": raw.get("definicoes", []), "sections": sections}
 
 
+# Notificação pelas unidades: no hospital o médico registra a ficha na consulta e a enfermagem a
+# completa depois. Na consulta são exigidos só os campos 1 a 8 e os quadros 33, 34, 68 e 70; os
+# demais obrigatórios continuam marcados, mas a ficha salva sem eles e eles ficam listados como pendência.
+OBRIGATORIOS_NA_CONSULTA = frozenset({"33", "34", "68", "70"})
+COMPLETAR_DEPOIS = frozenset(
+    spec["key"] for numero, spec in FIELD_SPECS.items()
+    if (spec.get("required") or spec.get("required_with"))
+    and not (numero.isdigit() and (int(numero) <= 8 or numero in OBRIGATORIOS_NA_CONSULTA))
+)
+
+
+def esquema_da_notificacao(schema: dict | None = None) -> dict:
+    """A ficha da área das unidades: os obrigatórios fora da consulta podem ser completados depois."""
+    schema = schema or carregar_esquema_pre_t0()
+    sections = []
+    for section in schema["sections"]:
+        fields = []
+        for field in section["fields"]:
+            if field["key"] in COMPLETAR_DEPOIS:
+                depois_com = field.get("required_with", "")
+                field = {k: v for k, v in field.items() if k not in ("required", "required_with", "required_unless")}
+                field.update(completar_depois=True, completar_depois_com=depois_com)
+            fields.append(field)
+        sections.append({**section, "fields": fields})
+    return {**schema, "sections": sections}
+
+
 class CampoInvalido(ValueError):
     """ValueError que também diz qual campo (atributo name do input) precisa de correção."""
 

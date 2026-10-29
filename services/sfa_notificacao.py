@@ -243,7 +243,7 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
     óbito quando a evolução foi óbito. Campo em branco que a ficha não exige
     naquele caso (hospital sem internação, sorologia não colhida) não é pendência.
     """
-    from services.sfa_pre_t0 import carregar_esquema_pre_t0
+    from services.sfa_pre_t0 import COMPLETAR_DEPOIS, carregar_esquema_pre_t0
 
     schema = schema or carregar_esquema_pre_t0()
     campos = {field["key"]: field for section in schema["sections"] for field in section["fields"]}
@@ -263,7 +263,8 @@ def pendencias(answers: dict, schema: dict | None = None) -> list[dict]:
     def falta(etapa: str, key: str, *, campo: str = "", rotulo: str = "", detalhe: str = "") -> None:
         field = campos[key]
         itens.append({"grupo": etapa, "numero": field["number"], "rotulo": rotulo or field["campo"],
-                      "chave": key, "campo": campo or key, "detalhe": detalhe})
+                      "chave": key, "campo": campo or key, "detalhe": detalhe,
+                      "obrigatorio": key in COMPLETAR_DEPOIS})
 
     # Notificação e investigação
     if not texto("ficha_sinan"):

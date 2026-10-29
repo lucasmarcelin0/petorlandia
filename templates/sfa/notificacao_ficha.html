@@ -43,7 +43,7 @@
   <h3>{{ grupo.titulo }}</h3>
   <ul>
     {% for item in grupo.itens %}
-    <li>{% if pode_completar %}<a href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id, campo=item.campo) }}">{% else %}<span>{% endif %}<span class="notif-numero">{{ item.numero }}</span>{{ item.rotulo }}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}{% if pode_completar %}</a>{% else %}</span>{% endif %}</li>
+    <li>{% if pode_completar %}<a href="{{ url_for('sfa_routes.notificacao_completar', ficha_id=log.id, campo=item.campo) }}">{% else %}<span>{% endif %}<span class="notif-numero">{{ item.numero }}</span>{{ item.rotulo }}{% if item.obrigatorio %} <span class="notif-chip">obrigatório</span>{% endif %}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}{% if pode_completar %}</a>{% else %}</span>{% endif %}</li>
     {% endfor %}
   </ul>
   {% endfor %}

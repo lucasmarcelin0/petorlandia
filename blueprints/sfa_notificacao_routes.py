@@ -98,6 +98,18 @@ def register(bp):
         """A unidade pedida, se a conta pode registrar em nome dela (a única, quando nenhuma foi pedida)."""
         return next((u for u in unidades if unidade_id in (None, u.id)), None) or abort(404)
 
+    def _mensagem_ao_salvar(mensagem, answers, schema):
+        """Diz quantos obrigatórios ainda faltam, para a enfermagem saber que precisa completar a ficha."""
+        from services.sfa_notificacao import pendencias
+
+        faltam = [item for item in pendencias(answers, schema) if item['obrigatorio']]
+        if not faltam:
+            return mensagem
+        numeros = ', '.join(dict.fromkeys(item['numero'] for item in faltam))
+        return (f"{mensagem} {'Falta' if len(faltam) == 1 else 'Faltam'} {len(faltam)} "
+                f"{'campo obrigatório' if len(faltam) == 1 else 'campos obrigatórios'} para completar depois "
+                f"({numeros}); use “Completar ficha”.")
+
     def _formulario(schema, submitted, form_action, contexto, error='', error_field=''):
         return _sem_cache(render_template('sfa/pre_t0_form.html', schema=schema, error=error,
                                           error_field=error_field, submitted=submitted,
@@ -126,7 +138,7 @@ def register(bp):
     @login_required
     def notificacao_nova():
         from services.sfa_notificacao import ficha_ja_registrada, ficha_visivel, nome_da_conta, unidades_para_registrar
-        from services.sfa_pre_t0 import CampoInvalido, carregar_esquema_pre_t0, coletar_respostas_pre_t0, salvar_ficha_pre_t0
+        from services.sfa_pre_t0 import CampoInvalido, coletar_respostas_pre_t0, esquema_da_notificacao, salvar_ficha_pre_t0
         from services.sfa_workflow import hoje_local
 
         unidades = unidades_para_registrar(current_user)
@@ -138,7 +150,7 @@ def register(bp):
             return _sem_cache(render_template('sfa/notificacao_escolher.html', unidades=unidades))
         unidade = ensure_unidade_da_conta(unidades, unidade_id)
 
-        schema = carregar_esquema_pre_t0()
+        schema = esquema_da_notificacao()
         acao = url_for('sfa_routes.notificacao_nova', unidade=unidade.id)
         contexto = {'modo': 'nova', 'unidade_nome': unidade.nome, 'voltar_url': url_for('sfa_routes.notificacao_fichas')}
         if request.method == 'POST':
@@ -160,7 +172,7 @@ def register(bp):
                 salvo = salvar_ficha_pre_t0(answers, autor_id=current_user.id, unidade=unidade)
             except (ValueError, RuntimeError) as exc:
                 return _formulario(schema, request.form, acao, contexto, str(exc), getattr(exc, 'campo', ''))
-            flash('Ficha registrada.', 'success')
+            flash(_mensagem_ao_salvar('Ficha registrada.', answers, schema), 'success')
             return redirect(url_for('sfa_routes.notificacao_ficha', ficha_id=salvo['log_id']))
 
         iniciais = {
@@ -209,13 +221,13 @@ def register(bp):
     @login_required
     def notificacao_completar(ficha_id):
         from services.sfa_notificacao import pendencias, pendencias_por_grupo, pode_completar
-        from services.sfa_pre_t0 import (atualizar_ficha_pre_t0, carregar_esquema_pre_t0, coletar_respostas_pre_t0,
+        from services.sfa_pre_t0 import (atualizar_ficha_pre_t0, coletar_respostas_pre_t0, esquema_da_notificacao,
                                          obter_ficha_do_log, respostas_para_formulario)
 
         log_entry = ensure_ficha_da_unidade(ficha_id)
         if not pode_completar(current_user, log_entry):
             abort(404)
-        schema = carregar_esquema_pre_t0()
+        schema = esquema_da_notificacao()
         respostas = obter_ficha_do_log(log_entry, schema)['respostas']
         faltam = pendencias(respostas, schema)
         destino = url_for('sfa_routes.notificacao_ficha', ficha_id=log_entry.id)
@@ -235,7 +247,7 @@ def register(bp):
             except (ValueError, RuntimeError) as exc:
                 return _formulario(schema, request.form, acao, contexto, str(exc), getattr(exc, 'campo', ''))
             if resultado['alterados']:
-                flash('Alterações salvas.', 'success')
+                flash(_mensagem_ao_salvar('Alterações salvas.', answers, schema), 'success')
             else:
                 flash('Nada mudou: a ficha continua como estava.', 'info')
             return redirect(destino)
