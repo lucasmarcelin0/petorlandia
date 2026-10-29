@@ -544,7 +544,7 @@ def test_colega_da_unidade_ve_e_so_o_autor_completa(client, ubs, autora):
 
 
 def test_autor_completa_depois_e_o_que_falta_some(client, ubs, autora):
-    # NS1 com data já exige o resultado no envio; o RT-PCR pode ficar aguardando o laboratório.
+    # Exame colhido pode ficar aguardando o laboratório: o resultado entra como pendência.
     log = registrar(client, rt_pcr_data='2026-10-11')
     detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
     assert 'O que ainda falta nesta ficha' in detalhe and 'aguardando resultado' in detalhe
@@ -748,16 +748,64 @@ def test_formulario_reabre_com_erro_no_campo(client, ubs, autora):
     assert form['data-error-field'] == 'cep' and form['action'].endswith(f'/sfa/notificacao/ficha?unidade={ubs.id}')
 
 
-def test_ficha_sem_campo_obrigatorio_nao_e_registrada_e_volta_no_campo(client, ubs, autora):
-    for extra, campo in (({'nome_mae': ''}, 'nome_mae'), ({'numero_residencia': ''}, 'numero_residencia'),
-                         ({'sinais_clinicos__febre': ''}, 'sinais_clinicos__febre'),
-                         ({'ns1_data_coleta': '2026-10-11'}, 'ns1_resultado')):
+def test_ficha_sem_campo_obrigatorio_da_consulta_nao_e_registrada_e_volta_no_campo(client, ubs, autora):
+    # Na consulta o médico precisa dos campos 1 a 8 e dos quadros 33, 34, 68 e 70.
+    for extra, campo in (({'nome': ''}, 'nome'), ({'data_inicio_sintomas': ''}, 'data_inicio_sintomas'),
+                         ({'agravo': ''}, 'agravo'), ({'sinais_clinicos__febre': ''}, 'sinais_clinicos__febre'),
+                         ({'doencas_preexistentes__diabetes': ''}, 'doencas_preexistentes__diabetes'),
+                         ({'sinais_alarme': ''}, 'sinais_alarme'), ({'dengue_grave': ''}, 'dengue_grave')):
         resposta = client.post('/sfa/notificacao/ficha', data=ficha_form(**extra), **HTTPS)
         assert resposta.status_code == 200, campo
         pagina = BeautifulSoup(resposta.data, 'html.parser')
         assert pagina.select_one('form[data-step-form]')['data-error-field'] == campo
-        assert pagina.select_one('#input-nome')['value'] == 'Maria Paciente'
+        assert pagina.select_one('#input-ficha_sinan')['value'] == '2985999'
     assert SfaSinanLog.query.count() == 0 and SfaPaciente.query.count() == 0
+
+
+def test_medico_salva_na_consulta_e_enfermagem_completa_os_obrigatorios_depois(client, ubs, autora):
+    from services.sfa_pre_t0 import COMPLETAR_DEPOIS, CampoInvalido
+
+    tela = BeautifulSoup(client.get('/sfa/notificacao/ficha', **HTTPS).data, 'html.parser')
+    assert 'Na consulta:' in tela.get_text() and 'Completar depois' in tela.get_text()
+    assert tela.select_one('#campo-nome .required-mark').get_text() == 'Obrigatório'
+    assert tela.select_one('#input-nome').has_attr('required')
+    assert tela.select_one('#campo-nome_mae .required-later').get_text() == 'Completar depois'
+    assert not tela.select_one('#input-nome_mae').has_attr('required')
+    assert not tela.select_one('#campo-ns1_resultado').has_attr('data-required-with')
+
+    # O médico salva só com o da consulta; o que falta fica listado como obrigatório.
+    depois = {chave: '' for chave in ('nome_mae', 'numero_residencia', 'telefone', 'sexo', 'gestante',
+                                      'data_nascimento', 'raca_cor', 'logradouro', 'zona', 'ocupacao',
+                                      'hospitalizacao', 'caso_autoctone')}
+    salva = client.post('/sfa/notificacao/ficha', data=ficha_form(ns1_data_coleta='2026-10-11', **depois), **HTTPS)
+    assert salva.status_code == 302
+    log = SfaSinanLog.query.one()
+    detalhe = client.get(f'/sfa/notificacao/fichas/{log.id}', **HTTPS).get_data(as_text=True)
+    assert 'Ficha registrada. Faltam' in detalhe and 'campos obrigatórios para completar depois' in detalhe
+    pendentes = notificacao.pendencias(json.loads(log.dados_json)[FULL_KEY]['respostas'])
+    obrigatorios = {item['chave'] for item in pendentes if item['obrigatorio']}
+    assert {'nome_mae', 'numero_residencia', 'ns1_resultado', 'caso_autoctone'} <= obrigatorios <= COMPLETAR_DEPOIS
+    assert f'/sfa/notificacao/fichas/{log.id}/completar?campo=nome_mae' in detalhe and 'obrigatório' in detalhe
+
+    # A enfermagem completa em partes: salvar com obrigatórios ainda em branco é permitido.
+    parcial = client.post(f'/sfa/notificacao/fichas/{log.id}/completar',
+                          data=ficha_form(ns1_data_coleta='2026-10-11', **{**depois, 'nome_mae': 'Joana da Silva'}),
+                          **HTTPS)
+    assert parcial.status_code == 302
+    edicao = BeautifulSoup(client.get(f'/sfa/notificacao/fichas/{log.id}/completar', **HTTPS).data, 'html.parser')
+    assert edicao.select_one('#campo-telefone.is-pending') and not edicao.select_one('#campo-nome_mae.is-pending')
+    # Apagar um obrigatório da consulta ao editar continua recusado.
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome=''),
+                       **HTTPS).status_code == 200
+    completa = client.post(f'/sfa/notificacao/fichas/{log.id}/completar',
+                           data=ficha_form(ns1_data_coleta='2026-10-11', ns1_resultado='2'), **HTTPS)
+    assert completa.status_code == 302
+    respostas_gravadas = json.loads(db.session.get(SfaSinanLog, log.id).dados_json)[FULL_KEY]['respostas']
+    assert not [item for item in notificacao.pendencias(respostas_gravadas) if item['obrigatorio']]
+
+    # A ficha pré-T0 do estudo continua exigindo todos os obrigatórios no envio.
+    with pytest.raises(CampoInvalido):
+        coletar_respostas_pre_t0(MultiDict(ficha_form(nome_mae='')))
 
 
 def test_ficha_antiga_mostra_o_que_ficou_obrigatorio_e_salva_quando_completa(client, ubs, autora):
@@ -774,11 +822,12 @@ def test_ficha_antiga_mostra_o_que_ficou_obrigatorio_e_salva_quando_completa(cli
     # Como na ficha nova, as doenças pré-existentes já vêm marcadas como "Não".
     assert edicao.select_one('input[name="doencas_preexistentes__diabetes"][checked]')['value'] == '2'
 
-    recusada = client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome_mae=''), **HTTPS)
-    assert recusada.status_code == 200
-    assert BeautifulSoup(recusada.data, 'html.parser').select_one('form[data-step-form]')['data-error-field'] == 'nome_mae'
+    # O nome da mãe pode ficar para depois: salva e continua listado como obrigatório.
+    assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(nome_mae=''),
+                       **HTTPS).status_code == 302
     db.session.refresh(log)
-    assert 'revisoes' not in json.loads(log.dados_json)[FULL_KEY]
+    ainda = notificacao.pendencias(json.loads(log.dados_json)[FULL_KEY]['respostas'])
+    assert any(item['chave'] == 'nome_mae' and item['obrigatorio'] for item in ainda)
 
     assert client.post(f'/sfa/notificacao/fichas/{log.id}/completar', data=ficha_form(), **HTTPS).status_code == 302
     db.session.refresh(log)

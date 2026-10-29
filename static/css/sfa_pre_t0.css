@@ -275,4 +275,8 @@ a.brand-status:hover, a.brand-status:focus-visible { border-color: var(--teal); 
 .pending-group a:hover, .pending-group a:focus-visible { border-color: var(--orange); outline: 0; box-shadow: 0 0 0 3px rgba(229,155,70,.2); }
 .pending-group a small { color: #8b6f45; font-weight: 500; }
 .field-card.is-pending { border-color: #ecc98f; background: #fffdf8; }
+.required-later { color: #1d5a63; background: #dcefef; }
+.fill-stages { margin-top: 14px; display: grid; gap: 8px; }
+.fill-stages p { margin: 0; font-size: 13px; line-height: 1.45; }
+.fill-stages .required-mark { margin-left: 0; margin-right: 4px; vertical-align: 1px; }
 .pending-mark { flex: 0 0 auto; margin-left: auto; padding: 3px 7px; border-radius: 999px; color: #85531c; background: #fde9c7; font-size: 9px; font-weight: 700; white-space: nowrap; }

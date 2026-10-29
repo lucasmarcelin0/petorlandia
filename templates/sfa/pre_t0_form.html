@@ -13,7 +13,7 @@
   <title>{% if completar %}Editar ficha {{ u.ficha_sinan or 'sem número' }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261013">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261029">
 </head>
 <body>
   <main class="pre-t0-shell">
@@ -32,8 +32,10 @@
         {% if completar %}
         {% if u.ficha_sinan %}<p class="hero-lede">Ficha nº {{ u.ficha_sinan }}. Preencha o que já souber e salve; os campos marcados como obrigatórios precisam estar preenchidos e o que continuar em branco fica listado para depois. O número da ficha e a unidade não mudam.</p>
         {% else %}<p class="hero-lede">Ficha ainda sem número da notificação. Preencha o que já souber e salve; os campos marcados como obrigatórios precisam estar preenchidos e o que continuar em branco fica listado para depois. Depois de informado, o número não muda; a unidade também não.</p>{% endif %}
+        {% include "sfa/_notificacao_etapas.html" %}
         {% elif u %}
-        <p class="hero-lede">Registre a notificação com o que já se sabe. Os campos marcados como obrigatórios precisam ser preenchidos; o restante pode ser completado depois, em Fichas da unidade. Use “Ignorado” quando essa opção existir.</p>
+        <p class="hero-lede">Registre a notificação com o que já se sabe. Use “Ignorado” quando essa opção existir.</p>
+        {% include "sfa/_notificacao_etapas.html" %}
         {% else %}
         <p class="hero-lede">Preencha esta ficha da rotina antes do formulário T0. Avance por etapas e volte para revisar suas respostas antes de enviar. Os campos marcados como obrigatórios precisam ser preenchidos; nos demais, se um dado ainda não estiver disponível, deixe o campo em branco. Use “Ignorado” quando essa opção existir.</p>
         {% endif %}
@@ -65,7 +67,7 @@
       {% for grupo in u.grupos %}
       <div class="pending-group">
         <h3>{{ grupo.titulo }}</h3>
-        <ul>{% for item in grupo.itens %}<li><a href="#campo-{{ item.chave }}" data-ir-para="{{ item.campo }}"><span class="question-number">{{ item.numero }}</span>{{ item.rotulo }}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}</a></li>{% endfor %}</ul>
+        <ul>{% for item in grupo.itens %}<li><a href="#campo-{{ item.chave }}" data-ir-para="{{ item.campo }}"><span class="question-number">{{ item.numero }}</span>{{ item.rotulo }}{% if item.obrigatorio %} <small>(obrigatório)</small>{% endif %}{% if item.detalhe %} <small>{{ item.detalhe }}</small>{% endif %}</a></li>{% endfor %}</ul>
       </div>
       {% endfor %}
     </section>
@@ -111,6 +113,7 @@
           {% if field.number %}<span class="question-number">{{ field.number }}</span>{% endif %}
           <span>{{ field.campo }}</span>
           {% if field.required %}<span class="required-mark" title="Obrigatório">Obrigatório</span>
+          {% elif field.completar_depois %}<span class="required-mark required-later" title="Obrigatório{{ ' quando a data da coleta estiver preenchida' if field.completar_depois_com }}, mas a ficha pode ser salva sem ele e completada depois">Completar depois</span>
           {% elif field.required_with %}<span class="required-mark" title="Obrigatório quando a data da coleta estiver preenchida">Obrigatório se houver data</span>{% endif %}
           {% if completar and field.key in u.faltando %}<span class="pending-mark">Falta</span>{% endif %}
         </span>
