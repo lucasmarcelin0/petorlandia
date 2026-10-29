@@ -222,13 +222,13 @@ def carregar_esquema_pre_t0() -> dict:
 
 
 # Notificação pelas unidades: no hospital o médico registra a ficha na consulta e a enfermagem a
-# completa depois. Na consulta são exigidos só os campos 1 a 8 e os quadros 33, 34, 68 e 70; os
+# completa depois. Na consulta são exigidos só os campos 2, 3, 7 e 8 e os quadros 33, 34, 68 e 70; os
 # demais obrigatórios continuam marcados, mas a ficha salva sem eles e eles ficam listados como pendência.
-OBRIGATORIOS_NA_CONSULTA = frozenset({"33", "34", "68", "70"})
+OBRIGATORIOS_NA_CONSULTA = frozenset({"2", "3", "7", "8", "33", "34", "68", "70"})
 COMPLETAR_DEPOIS = frozenset(
     spec["key"] for numero, spec in FIELD_SPECS.items()
     if (spec.get("required") or spec.get("required_with"))
-    and not (numero.isdigit() and (int(numero) <= 8 or numero in OBRIGATORIOS_NA_CONSULTA))
+    and numero not in OBRIGATORIOS_NA_CONSULTA
 )
 
 

@@ -767,6 +767,11 @@ def test_medico_salva_na_consulta_e_enfermagem_completa_os_obrigatorios_depois(c
 
     tela = BeautifulSoup(client.get('/sfa/notificacao/ficha', **HTTPS).data, 'html.parser')
     assert 'Na consulta:' in tela.get_text() and 'Completar depois' in tela.get_text()
+    # Até o 8, só os que já eram obrigatórios: 2, 3, 7 e 8.
+    marcados = {campo['id'].removeprefix('campo-') for campo in tela.select('[data-field-card]')
+                if campo.select_one('.required-mark:not(.required-later)')}
+    assert marcados == {'agravo', 'data_notificacao', 'data_inicio_sintomas', 'nome', 'sinais_clinicos',
+                        'doencas_preexistentes', 'sinais_alarme', 'dengue_grave'}
     assert tela.select_one('#campo-nome .required-mark').get_text() == 'Obrigatório'
     assert tela.select_one('#input-nome').has_attr('required')
     assert tela.select_one('#campo-nome_mae .required-later').get_text() == 'Completar depois'
