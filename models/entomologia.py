@@ -293,3 +293,22 @@ class EntomologiaSolicitacaoCategoria(db.Model):
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     atualizado_em = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     atualizado_por = db.Column(db.String(160))
+
+
+class EntomologiaImovelCampoEvento(db.Model):
+    """O que aconteceu com um imóvel acrescentado em campo depois de criado, e por quem.
+
+    acao: MOVIDO (local ajustado no mapa), EXCLUIDO ou RESTAURADO. A criação fica
+    no próprio ``EntomologiaImovelCampo`` (criado_por, criado_em).
+    """
+    __tablename__ = "entomologia_imovel_campo_evento"
+
+    id = db.Column(db.Integer, primary_key=True)
+    imovel = db.Column(db.String(80), nullable=False, index=True)
+    acao = db.Column(db.String(20), nullable=False)
+    # {"de": [lat, lng], "para": [lat, lng]} ao mover.
+    detalhes_json = db.Column(db.Text)
+    motivo = db.Column(db.String(300))
+    por_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    por = db.Column(db.String(160))
+    em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)

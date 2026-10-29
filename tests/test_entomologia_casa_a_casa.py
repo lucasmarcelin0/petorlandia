@@ -241,7 +241,7 @@ def test_plano_recupera_csrf_json_com_token_atualizado(client, base, app):
     dados = {'acao': 'planejar', 'blocos': [base['a']], 'responsavel_id': ana.id,
              'esperado': [{'b': base['a']}]}
     pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
-    assert 'casa_a_casa.js?v=20261028-historico-solic' in pagina
+    assert 'casa_a_casa.js?v=20261028-enderecos' in pagina
     rejeitada = client.post(RAIZ + '/plano', json=dados,
                            headers={'Accept': 'application/json', 'X-CSRFToken': 'vencido'}, **HTTPS)
     assert rejeitada.status_code == 400 and rejeitada.is_json
@@ -915,3 +915,56 @@ def test_solicitacao_corrigida_excluida_e_restaurada_fica_no_historico(client, r
     entrar(client, conta('tutor@example.test'))
     assert client.get(RAIZ + '/solicitacoes/do-imovel?imovel=1001', **HTTPS).status_code in (403, 404)
     assert client.post(f"{RAIZ}/solicitacoes/{s['id']}/excluir", json={}, **HTTPS).status_code in (403, 404)
+
+
+def test_endereco_acrescentado_tem_local_ajustado_excluido_e_historico_para_o_admin(client, restrito, base):
+    from models.entomologia import EntomologiaImovelCampo, EntomologiaImovelCampoEvento as Evento
+    ana, bia = agente(), agente('bia@example.test', 'Bia Agente')
+    entrar(client, ana)
+    cx, cy = servico.indice()['blocos'][base['a']]['c']
+    enviar(client, visita(base['a'], 'novo-abc123def456', 'FECHADO', 'visita-n1', logradouro='Rua Um', numero='995',
+                          lat=cy, lng=cx))
+    assert EntomologiaImovelCampo.query.count() == 1
+    config = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert '/imoveis-campo/mover' in config and '/imoveis-campo/historico' not in config   # histórico só para admin
+
+    # Ajustar o local: perto do quarteirão vale e muda a base; longe demais é recusado.
+    versao = servico.base()['versao']
+    movido = client.post(RAIZ + '/imoveis-campo/mover', json={'imovel': 'novo-abc123def456', 'lat': cy + 0.0001, 'lng': cx + 0.0001}, **HTTPS)
+    assert movido.status_code == 200 and movido.json['versao_base'] != versao
+    casa = next(c for c in servico.base()['imoveis'] if c[0] == 'novo-abc123def456')
+    assert (casa[1], casa[2]) == (round(cx + 0.0001, 6), round(cy + 0.0001, 6))
+    longe = client.post(RAIZ + '/imoveis-campo/mover', json={'imovel': 'novo-abc123def456', 'lat': cy + 0.02, 'lng': cx}, **HTTPS)
+    assert longe.status_code == 400 and 'longe' in longe.json['erro']
+    assert client.post(RAIZ + '/imoveis-campo/mover', json={'imovel': 'cnefe-1001-abc', 'lat': cy, 'lng': cx}, **HTTPS).status_code == 404
+
+    # Bia (equipe) exclui com motivo: some da base, as visitas ficam, e o reenvio antigo não o traz de volta.
+    entrar(client, bia)
+    excluido = client.post(RAIZ + '/imoveis-campo/excluir', json={'imovel': 'novo-abc123def456', 'motivo': 'número repetido'}, **HTTPS)
+    assert excluido.status_code == 200
+    dados = servico.base()
+    assert 'novo-abc123def456' in dados['removidos'] and not any(c[0] == 'novo-abc123def456' for c in dados['imoveis'])
+    assert client.post(RAIZ + '/imoveis-campo/mover', json={'imovel': 'novo-abc123def456', 'lat': cy, 'lng': cx}, **HTTPS).status_code == 400
+    enviar(client, visita(base['a'], 'novo-abc123def456', 'TRABALHADO', 'visita-n2', logradouro='Rua Um', numero='995', lat=cy, lng=cx))
+    assert EntomologiaImovelCampo.query.one().removido_em is not None
+    # Quem não é administrador não vê o histórico nem restaura.
+    assert client.get(RAIZ + '/imoveis-campo/historico', **HTTPS).status_code in (403, 404)
+    assert client.post(RAIZ + '/imoveis-campo/restaurar', json={'imovel': 'novo-abc123def456'}, **HTTPS).status_code in (403, 404)
+
+    admin = conta('admin@example.test', role='admin', name='Admin Geral')
+    entrar(client, admin)
+    assert '/imoveis-campo/historico' in client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    historico = client.get(RAIZ + '/imoveis-campo/historico', **HTTPS).get_data(as_text=True)
+    for trecho in ('Rua Um, 995', 'Adicionado', 'Local ajustado', 'Excluído', 'Ana Agente', 'Bia Agente', 'número repetido',
+                   'Restaurar endereço'):
+        assert trecho in historico, trecho
+    assert client.post(RAIZ + '/imoveis-campo/restaurar', data={'imovel': 'novo-abc123def456'}, **HTTPS).status_code == 302
+    assert any(c[0] == 'novo-abc123def456' for c in servico.base()['imoveis'])
+    assert [(e.acao, e.por) for e in Evento.query.order_by(Evento.id)] == [
+        ('MOVIDO', 'Ana Agente'), ('EXCLUIDO', 'Bia Agente'), ('RESTAURADO', 'Admin Geral')]
+
+    # Quem não é da equipe não mexe nos endereços.
+    entrar(client, conta('tutor@example.test'))
+    assert client.post(RAIZ + '/imoveis-campo/excluir', json={'imovel': 'novo-abc123def456'}, **HTTPS).status_code in (403, 404)
+    sair(client)
+    assert client.post(RAIZ + '/imoveis-campo/mover', json={'imovel': 'novo-abc123def456', 'lat': cy, 'lng': cx}, **HTTPS).status_code in (302, 401)

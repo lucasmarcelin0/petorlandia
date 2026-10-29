@@ -10,7 +10,7 @@
   {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
      dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261028-historico-solic') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261028-enderecos') }}">
   {% include 'components/destructive_actions_assets.html' %}
 </head>
 <body class="cac" data-modo="rua">
@@ -70,10 +70,10 @@
 
   <script type="application/json" id="cac-config">{{ config | tojson }}</script>
   <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261028-historico-solic') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261028-historico-solic') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261028-historico-solic') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261028-historico-solic') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261028-historico-solic') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261028-enderecos') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261028-enderecos') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261028-enderecos') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261028-enderecos') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261028-enderecos') }}"></script>
 </body>
 </html>
