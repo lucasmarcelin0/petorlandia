@@ -20,6 +20,17 @@
   <p><a href="{{ url_for('sfa_routes.entomologia', token=token) }}">← Voltar ao painel</a></p>
   {% if not pode_alterar %}<div class="ento-notice" role="note"><strong>Somente leitura.</strong> Enviar, confirmar, desfazer e publicar exigem entrar com uma conta de administrador ou da equipe “Combate à dengue”; assim cada alteração fica atribuída a uma pessoa na auditoria.</div>{% endif %}
 
+  {% if gerencia_equipe %}
+  <section class="ento-panel mt-3"><h2>Inspeções SIVISA · acesso de administrador</h2>
+    <p>Envie o arquivo preparado de inspeções e licenças. Um novo envio substitui a versão em uso; os registros sem coordenadas permanecem para consulta.</p>
+    <form method="post" enctype="multipart/form-data" class="ento-form-stack" action="{{ url_for('sfa_routes.entomologia_sivisa') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="sivisa-arquivo">Arquivo JSON preparado</label><input id="sivisa-arquivo" name="arquivo" type="file" accept=".json" required>
+      {{ responsavel('sivisa-responsavel') }}<button class="btn btn-primary">Importar inspeções SIVISA</button>
+    </form>
+  </section>
+  {% endif %}
+
   <ol class="ento-steps" aria-label="Como atualizar">
     <li><strong>Exporte</strong><span>“Visita a Imóvel” no sistema, em CSV ou ZIP, com o período desejado.</span></li>
     <li><strong>Envie</strong><span>O arquivo é lido aqui; LOGIN e AGENTE são descartados na leitura.</span></li>

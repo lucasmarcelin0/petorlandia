@@ -116,7 +116,7 @@ def _signature():
     from models.entomologia import EntomologiaImportacao as E
     from services.entomologia_service import consultar_sem_interromper
     rows = consultar_sem_interromper(
-        lambda: E.query.filter_by(status='ATIVA').filter(E.tipo != 'cadastro_privado')
+        lambda: E.query.filter_by(status='ATIVA').filter(E.tipo.notin_(('cadastro_privado', 'sivisa_privado')))
         .with_entities(E.id, E.sha256).order_by(E.id).all())
     if rows is None:
         return None

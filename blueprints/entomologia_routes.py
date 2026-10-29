@@ -13,7 +13,7 @@ from flask_login import current_user, login_required
 
 # These snapshots have their own access and revision flows. Never expose or
 # mutate them through the team's ordinary file-import screens.
-TIPOS_ENVIO_RESTRITO = ('atlas_edit', 'cadastro_privado')
+TIPOS_ENVIO_RESTRITO = ('atlas_edit', 'cadastro_privado', 'sivisa_privado')
 
 
 def _ator():
@@ -113,6 +113,42 @@ def url_publica():
 
 
 def register(bp, require_access):
+    @bp.route('/entomologia/sivisa', methods=['GET', 'POST'])
+    @require_access
+    @login_required
+    def entomologia_sivisa():
+        ensure_entomologia_admin()
+        from extensions import db
+        from models.entomologia import EntomologiaImportacao
+        from flask import jsonify
+        from time_utils import utcnow
+        if request.method == 'GET':
+            row = EntomologiaImportacao.query.filter_by(tipo='sivisa_privado', status='ATIVA').order_by(EntomologiaImportacao.id.desc()).first()
+            return _sem_cache(jsonify(json.loads(row.dados_json) if row else {'registros': []}))
+        from services.entomologia_sivisa import validar
+        import hashlib
+        arquivo = request.files.get('arquivo')
+        try:
+            if not arquivo: raise ValueError('Selecione o arquivo preparado do SIVISA.')
+            raw = arquivo.stream.read(5_000_001)
+            dados = validar(raw)
+            responsavel = _responsavel()
+            row = EntomologiaImportacao(tipo='sivisa_privado', status='ATIVA', nome_arquivo='sivisa.json',
+                titulo='Inspeções SIVISA', sha256=hashlib.sha256(raw).hexdigest(),
+                linhas=len(dados['registros']), dados_json=json.dumps(dados,ensure_ascii=False),
+                responsavel=responsavel, ator=_ator(), confirmado_em=utcnow())
+            anteriores = EntomologiaImportacao.query.filter_by(tipo='sivisa_privado', status='ATIVA').all()
+            for anterior in anteriores:
+                anterior.status='SUBSTITUIDA'
+            db.session.add(row)
+            _auditar('importar_sivisa','Importação restrita ao administrador',{'linhas':row.linhas,'responsavel':responsavel})
+            db.session.commit()
+            flash(f'Camada SIVISA importada: {row.linhas} registros.', 'success')
+        except (ValueError, UnicodeError) as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+        return redirect(url_for('sfa_routes.entomologia_atualizar'))
+
     @bp.context_processor
     def _inject_entomologia_url_publica():
         return {'entomologia_url_publica': url_publica}
