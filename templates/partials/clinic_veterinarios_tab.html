@@ -54,6 +54,7 @@
               </h5>
               <form method="post" id="add-staff-form">
                 {{ staff_form.hidden_tag() }}
+                <input type="hidden" name="clinic_form_name" value="add_staff">
                 <div class="input-group">
                   {{ staff_form.email(class="form-control", placeholder="Email do usuário") }}
                   {{ staff_form.submit(class="btn btn-primary") }}
@@ -497,14 +498,11 @@
   <div class="offcanvas-body">
     <form method="post" class="mb-4">
       {{ invite_form.hidden_tag() }}
+      <input type="hidden" name="clinic_form_name" value="invite_vet">
       <div class="mb-3">
         {{ invite_form.email.label(class_="form-label") }}
-        {{ invite_form.email(class="form-control", list="all-vets-list") }}
-        <datalist id="all-vets-list">
-          {% for v in all_veterinarios %}
-          <option value="{{ v.user.email }}">{{ v.user.name }}{% if v.crmv_exibicao %} (CRMV: {{ v.crmv_exibicao }}){% endif %}</option>
-          {% endfor %}
-        </datalist>
+        {{ invite_form.email(class="form-control", type="email", autocomplete="off", placeholder="email@do-veterinario.com") }}
+        <div class="form-text">O veterinário recebe o convite e passa a fazer parte da equipe depois de aceitar.</div>
       </div>
       {{ invite_form.submit(class="btn btn-primary w-100") }}
     </form>

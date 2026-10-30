@@ -193,6 +193,24 @@ def normalize_phone(value: str | None) -> str | None:
     return f"+55{digits}"
 
 
+_NAME_TITLES = {"dr", "dra", "prof", "profa", "sr", "sra"}
+
+
+def primeiro_nome(value) -> str:
+    """Primeiro nome para saudações, mantendo o título junto ("Dra. Ana").
+
+    Profissionais costumam se cadastrar como "Dra. Ana Souza"; pegar só a
+    primeira palavra gerava "Olá, Dra.!" e "Tudo pronto, Dra.. Por onde...".
+    """
+    parts = str(value or "").split()
+    if not parts:
+        return ""
+    if len(parts) > 1 and parts[0].rstrip(".").lower() in _NAME_TITLES:
+        title = parts[0] if parts[0].endswith(".") else f"{parts[0]}."
+        return f"{title} {parts[1]}"
+    return parts[0]
+
+
 def format_cnpj(value):
     """Return a formatted CNPJ (00.000.000/0000-00)."""
     return format_cnpj_value(value)
@@ -393,6 +411,7 @@ _FILTERS = {
     "format_timedelta": format_timedelta,
     "digits_only": digits_only,
     "format_cnpj": format_cnpj,
+    "primeiro_nome": primeiro_nome,
     "cpf_br": cpf_br,
     "telefone_br": telefone_br,
     "currency_br": currency_br,

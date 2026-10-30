@@ -934,6 +934,16 @@
           }
         });
       }
+
+      // Link direto para uma seção (ex.: #section-new, usado pelo passo
+      // "Criar agendamento" da ativação da clínica).
+      var hash = window.location.hash;
+      if (/^#section-[\w-]+$/.test(hash)) {
+        var deepLinkTab = tabs.querySelector('[data-bs-target="' + hash + '"]');
+        if (deepLinkTab) {
+          deepLinkTab.click();
+        }
+      }
     })();
 
     // Escolher um horário no calendário ativa a aba de Novo Agendamento

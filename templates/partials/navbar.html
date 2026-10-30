@@ -1,5 +1,5 @@
 {% set is_admin = current_user.is_authenticated and current_user.role == "admin" %}
-{% set first_name = (current_user.name or '').split(' ')[0] if current_user.is_authenticated else '' %}
+{% set first_name = current_user.name|primeiro_nome if current_user.is_authenticated else '' %}
 {% set total_pending = (pending_exam_count|default(0)) + (pending_appointment_count|default(0)) %}
 {% set unread_total = unread_messages|default(0) %}
 {% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}

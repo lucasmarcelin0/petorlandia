@@ -5,7 +5,7 @@
 {% block main %}
 <div class="container onboarding-page">
 
-  {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
+  {% set primeiro_nome = current_user.name|primeiro_nome %}
   <header class="onboarding-hero">
     <span class="onboarding-kicker">Bem-vindo</span>
     <h1>Tudo pronto{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}. Por onde você quer começar?</h1>

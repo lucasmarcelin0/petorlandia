@@ -67,6 +67,7 @@
       <h5 class="fw-semibold mb-3">Atualizar informações da clínica</h5>
       <form method="post" enctype="multipart/form-data" class="row g-3">
         {{ clinic_form.hidden_tag() }}
+        <input type="hidden" name="clinic_form_name" value="clinic_info">
         <div class="col-md-6">{{ clinic_form.nome.label }} {{ clinic_form.nome(class="form-control") }}</div>
         <div class="col-md-6">{{ clinic_form.cnpj.label }} {{ clinic_form.cnpj(class="form-control", **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}</div>
         <div class="col-md-12">{{ clinic_form.endereco.label }} {{ clinic_form.endereco(class="form-control") }}</div>
@@ -362,6 +363,7 @@
           <h6 class="fw-semibold mb-3">Adicionar/editar faixa de atendimento</h6>
           <form method="post" class="row g-3">
             {{ form.hidden_tag() }}
+            <input type="hidden" name="clinic_form_name" value="clinic_hours">
             <div class="col-md-12">
               {{ form.clinica_id.label }} {{ form.clinica_id(class="form-select") }}
             </div>

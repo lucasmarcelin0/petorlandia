@@ -44,7 +44,8 @@
       {% elif membership.is_trial_active() %}
         <span class="badge bg-primary-subtle text-primary mb-2">Avaliação gratuita</span>
         <h2 class="h5 mb-1">
-          Faltam {{ membership.remaining_trial_days() }} dia(s) de avaliação.
+          {% set dias_restantes = membership.remaining_trial_days() %}
+          {% if dias_restantes == 1 %}Falta 1 dia de avaliação.{% else %}Faltam {{ dias_restantes }} dias de avaliação.{% endif %}
         </h2>
         <p class="text-muted mb-2">
           Termina em <strong>{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>.
