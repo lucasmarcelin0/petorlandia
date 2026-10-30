@@ -76,7 +76,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workspaces.css', v='1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home_profiles.css', v='3') }}">
 <div class="tutor-page-shell dashboard-home">
-    {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
+    {% set primeiro_nome = current_user.name|primeiro_nome %}
     {% set dashboard_work_first = user_experience.primary_workspace is not none %}
     {% if next_actions %}
     <header class="workspace-heading">

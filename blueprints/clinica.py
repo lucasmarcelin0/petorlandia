@@ -624,12 +624,36 @@ def clinic_detail(clinica_id):
                 staff.can_manage_inventory,
             ]
         )
-    if staff_form.submit.data and staff_form.validate_on_submit():
+    # Equipe, convite de veterinário, dados e horários da clínica dividem os
+    # nomes ``submit`` e ``email``. Sem saber qual deles foi enviado, "Convidar"
+    # um veterinário caía no "adicionar funcionário" (vinculando-o à clínica
+    # sem aceite) e salvar o e-mail de contato da clínica era tratado como
+    # inclusão de funcionário. O campo ``clinic_form_name`` diz qual foi; sem
+    # ele (página aberta antes desta versão), vale o texto do botão.
+    submitted_form_name = (request.form.get('clinic_form_name') or '').strip()
+
+    def _form_submitted(name, form):
+        if request.method != 'POST':
+            return False
+        if submitted_form_name:
+            if submitted_form_name != name:
+                return False
+        elif request.form.get('submit') != form.submit.label.text:
+            return False
+        return form.validate_on_submit()
+
+    if _form_submitted('add_staff', staff_form):
         if not (_is_admin() or current_user.id == clinica.owner_id):
             abort(403)
-        user = User.query.filter_by(email=staff_form.email.data).first()
+        user = User.query.filter(func.lower(User.email) == staff_form.email.data.strip().lower()).first()
         if not user:
-            flash('Usuário não encontrado', 'danger')
+            flash(
+                'Não encontramos uma conta com este e-mail. Peça para a pessoa criar a conta '
+                'gratuita no PetOrlândia e tente novamente. Veterinários podem ser cadastrados '
+                'direto em "Adicionar profissional".',
+                'warning',
+            )
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
         else:
             staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=user.id).first()
             if staff:
@@ -677,7 +701,7 @@ def clinic_detail(clinica_id):
             flash('Especialista associado com sucesso. Defina as permissões.', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#especialistas')
 
-    if clinic_form.submit.data and clinic_form.validate_on_submit():
+    if _form_submitted('clinic_info', clinic_form):
         if not pode_editar:
             abort(403)
         original_logo = clinica.logotipo
@@ -693,7 +717,7 @@ def clinic_detail(clinica_id):
         db.session.commit()
         flash('Clínica atualizada com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    if invite_form.submit.data and invite_form.validate_on_submit():
+    if _form_submitted('invite_vet', invite_form):
         if not pode_editar:
             abort(403)
         email = invite_form.email.data.strip().lower()
@@ -729,7 +753,7 @@ def clinic_detail(clinica_id):
                         'warning',
                     )
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
-    if hours_form.submit.data and hours_form.validate_on_submit():
+    if _form_submitted('clinic_hours', hours_form):
         if not pode_editar:
             abort(403)
         for dia in hours_form.dias_semana.data:
@@ -765,7 +789,6 @@ def clinic_detail(clinica_id):
         v for v in associated_vets if v.id not in veterinarios_ids
     ]
     specialists.sort(key=lambda vet: (vet.user.name or '').lower())
-    all_veterinarios = Veterinario.query.all()
     staff_members = ClinicStaff.query.filter(
         ClinicStaff.clinic_id == clinica.id,
         ClinicStaff.user.has(User.veterinario == None),
@@ -1321,7 +1344,6 @@ def clinic_detail(clinica_id):
         invite_cancel_form=invite_cancel_form,
         invite_resend_form=invite_resend_form,
         veterinarios=veterinarios,
-        all_veterinarios=all_veterinarios,
         vet_schedule_forms=vet_schedule_forms,
         dias_semana=DIAS_SEMANA,
         staff_members=staff_members,

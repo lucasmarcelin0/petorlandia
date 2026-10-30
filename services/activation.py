@@ -71,14 +71,14 @@ def _compute(user) -> list[dict]:
         {
             'label': 'Primeiro paciente cadastrado',
             'done': has_patient,
-            'url': url_for('novo_animal'),
+            'url': url_for('novo_animal', panel='cadastro'),
             'cta': 'Cadastrar paciente',
             'short': 'cadastrar o primeiro paciente',
         },
         {
             'label': 'Primeiro agendamento criado',
             'done': has_appointment,
-            'url': url_for('appointments'),
+            'url': url_for('appointments') + '#section-new',
             'cta': 'Criar agendamento',
             'short': 'criar o primeiro agendamento',
         },
