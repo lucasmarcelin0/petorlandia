@@ -42,10 +42,12 @@ def _compute(user) -> list[dict]:
         return []
 
     from helpers import ensure_veterinarian_membership, has_veterinarian_profile
-    from models import Animal, Appointment
+    from models import Animal, Appointment, ClinicHours, ClinicStaff, Veterinario, VetClinicInvite
 
     clinic_ids = [clinic.id for clinic in clinicas]
+    principal = next((c for c in clinicas if c.id == getattr(user, 'clinica_id', None)), clinicas[0])
 
+    has_hours = bool(ClinicHours.query.filter(ClinicHours.clinica_id.in_(clinic_ids)).first())
     has_patient = bool(
         Animal.query
         .filter(Animal.clinica_id.in_(clinic_ids))
@@ -55,18 +57,30 @@ def _compute(user) -> list[dict]:
     has_appointment = bool(
         Appointment.query.filter(Appointment.clinica_id.in_(clinic_ids)).first()
     )
+    # Equipe: qualquer outra pessoa na clínica, ou convite já enviado.
+    has_team = bool(
+        ClinicStaff.query
+        .filter(ClinicStaff.clinic_id.in_(clinic_ids), ClinicStaff.user_id != user.id)
+        .first()
+        or Veterinario.query
+        .filter(Veterinario.clinica_id.in_(clinic_ids), Veterinario.user_id != user.id)
+        .first()
+        or VetClinicInvite.query.filter(VetClinicInvite.clinica_id.in_(clinic_ids)).first()
+    )
 
-    membership = None
-    if has_veterinarian_profile(user):
-        membership = ensure_veterinarian_membership(user.veterinario)
-    has_payment = bool(membership and membership.has_payment_method())
-
-    return [
+    steps = [
         {
             'label': 'Clínica cadastrada',
             'done': True,
             'url': url_for('minha_clinica'),
             'cta': 'Abrir clínica',
+        },
+        {
+            'label': 'Horários de atendimento',
+            'done': has_hours,
+            'url': url_for('clinic_detail', clinica_id=principal.id, abrir='horarios') + '#clinica',
+            'cta': 'Definir horários',
+            'short': 'definir os horários de atendimento',
         },
         {
             'label': 'Primeiro paciente cadastrado',
@@ -82,15 +96,31 @@ def _compute(user) -> list[dict]:
             'cta': 'Criar agendamento',
             'short': 'criar o primeiro agendamento',
         },
-        {
+    ]
+
+    # A assinatura é do perfil veterinário: para o dono que não é veterinário
+    # o link levava a uma página proibida (403).
+    if has_veterinarian_profile(user):
+        membership = ensure_veterinarian_membership(user.veterinario)
+        steps.append({
             'label': 'Renovação configurada',
-            'done': has_payment,
+            'done': bool(membership and membership.has_payment_method()),
             'url': url_for('veterinarian_membership'),
             'cta': 'Ver assinatura',
             'short': 'configurar a renovação',
             'optional': True,
-        },
-    ]
+            'optional_hint': 'recomendado antes do fim do teste',
+        })
+    steps.append({
+        'label': 'Equipe cadastrada',
+        'done': has_team,
+        'url': url_for('clinic_detail', clinica_id=principal.id) + '#veterinarios',
+        'cta': 'Cadastrar equipe',
+        'short': 'cadastrar a equipe',
+        'optional': True,
+        'optional_hint': 'se mais alguém usa o sistema',
+    })
+    return steps
 
 
 def membership_attention(membership) -> str | None:
@@ -136,7 +166,8 @@ def activation_progress(user, *, include_dismissed=False) -> dict | None:
         return None
 
     done = len(steps) - len(pending)
-    nxt = pending[0]
+    # Opcionais (equipe, renovação) só depois dos obrigatórios.
+    nxt = next((step for step in pending if not step.get('optional')), pending[0])
     progress = {
         'urgent': False,
         'done': done,

@@ -141,6 +141,16 @@ class ClinicHoursForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={"class": "form-control", "type": "time"},
     )
+    intervalo_inicio = TimeField(
+        'Início do intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    intervalo_fim = TimeField(
+        'Fim do intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
     submit = SubmitField('Salvar')
 
     def __init__(self, *args, **kwargs):
@@ -150,6 +160,17 @@ class ClinicHoursForm(FlaskForm):
         self.clinica_id.choices = [
             (c.id, c.nome) for c in clinicas_do_usuario().all()
         ]
+
+    def validate(self, **kwargs):  # type: ignore[override]
+        valid = super().validate(**kwargs)
+        inicio, fim = self.intervalo_inicio.data, self.intervalo_fim.data
+        if bool(inicio) != bool(fim):
+            self.intervalo_fim.errors.append('Informe o início e o fim do intervalo, ou deixe os dois vazios.')
+            return False
+        if inicio and fim and inicio >= fim:
+            self.intervalo_fim.errors.append('O intervalo precisa terminar depois de começar.')
+            return False
+        return valid
 
 
 def _strip_filter(value):

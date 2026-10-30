@@ -965,7 +965,12 @@ def onboarding():
         .filter(Animal.removido_em.is_(None))
         .first()
     )
-    tem_clinica = bool(getattr(current_user, 'clinicas', None))
+    clinicas = list(getattr(current_user, 'clinicas', None) or [])
+    tem_clinica = bool(clinicas)
+    clinica_principal = next(
+        (c for c in clinicas if c.id == getattr(current_user, 'clinica_id', None)),
+        clinicas[0] if clinicas else None,
+    )
     e_veterinario = has_veterinarian_profile(current_user)
     from services.activation import activation_steps as _activation_steps
 
@@ -984,6 +989,7 @@ def onboarding():
         'onboarding.html',
         tem_pet=tem_pet,
         tem_clinica=tem_clinica,
+        clinica_principal=clinica_principal,
         e_veterinario=e_veterinario,
         activation_steps=activation_steps,
         trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),

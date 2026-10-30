@@ -79,6 +79,11 @@
         </a>
       {% endif %}
       {% if pode_editar %}
+        <a href="{{ url_for('clinica_routes.export_clinic_data', clinica_id=clinica.id) }}"
+           class="btn btn-outline-secondary">
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+          Exportar dados
+        </a>
         <a href="#clinica" class="btn btn-primary" data-clinic-open-panel="#edit-info">
           <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
           Editar dados
@@ -180,16 +185,15 @@
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
   }
   function selectDays(mode) {
-    const select = document.getElementById('dias_semana');
     const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta'];
     const weekend = ['Sábado','Domingo'];
-    for (const opt of select.options) {
-    if (mode === 'all') opt.selected = true;
-    else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
-    else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
-    else if (mode === 'clear') opt.selected = false;
+    const marcar = (value) => (
+      mode === 'all' || (mode === 'weekday' && weekdays.includes(value)) || (mode === 'weekend' && weekend.includes(value))
+    );
+    document.querySelectorAll('#edit-hours input[name="dias_semana"]').forEach((box) => {
+      box.checked = marcar(box.value);
+    });
   }
-}
 
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('appointment-filter-form');
@@ -382,6 +386,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (activeTab) {
         showClinicTab(activeTab, { updateHash: false });
       }
+    }
+
+    // ?abrir=horarios|dados: os passos da ativação levam direto ao formulário.
+    const painelInicial = { horarios: '#edit-hours', dados: '#edit-info' }[
+      new URLSearchParams(window.location.search).get('abrir')
+    ];
+    if (painelInicial) {
+      showClinicTab('#clinica', { updateHash: false, openPanel: painelInicial });
     }
 
     const tabs = document.querySelectorAll('#clinicTabs button[data-bs-toggle="tab"]');

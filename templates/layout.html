@@ -97,14 +97,14 @@
   <link href="{{ url_for('static', filename='images.css', v='20260905-responsive') }}" rel="stylesheet">
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
-  <link href="{{ url_for('static', filename='styles.css', v='20261027fotos') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css', v='20261030clinica') }}" rel="stylesheet">
   {% if not current_user.is_authenticated %}
-  <link href="{{ url_for('static', filename='css/public_nav_auth.css', v='20260905-brand-overlap') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/public_nav_auth.css', v='20261030-nav-uma-linha') }}" rel="stylesheet">
   {% endif %}
   {# clinic.css ainda contém a base visual compartilhada (body, footer,
      alertas e responsividade). Mantê-la global evita que páginas públicas
      percam essas regras até a separação definitiva em base-shell.css. #}
-  <link href="{{ url_for('static', filename='css/clinic.css', v='20260802-mobile-navbar2') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/clinic.css', v='20261030-clinica-setup') }}" rel="stylesheet">
   {# Camada visual do portal do tutor. Mantida separada da base clínica para
      que os padrões de navegação, cards e rodapé evoluam juntos. #}
   <link href="{{ url_for('static', filename='css/tutor-experience.css', v='20260912-footer-egg') }}" rel="stylesheet">

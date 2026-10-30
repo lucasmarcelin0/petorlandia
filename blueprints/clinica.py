@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from extensions import db, mail
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
 from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
@@ -110,6 +110,78 @@ def ensure_clinic_access(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.ensure_clinic_access.
     import app as app_module
     return app_module.ensure_clinic_access(*args, **kwargs)
+
+
+#: Itens por página nas abas Animais e Tutores do painel da clínica.
+PAINEL_ITENS_POR_PAGINA = 12
+
+
+#: Funções sugeridas ao cadastrar alguém da equipe. Só preenchem as permissões
+#: iniciais; o dono ajusta caixa por caixa depois, em "Gerenciar permissões".
+STAFF_ROLE_PRESETS = {
+    'recepcao': (
+        'Recepção',
+        dict(can_manage_clients=True, can_manage_animals=True, can_manage_schedule=True, can_view_full_calendar=True),
+    ),
+    'auxiliar': (
+        'Auxiliar / técnico(a)',
+        dict(can_manage_animals=True, can_manage_schedule=True, can_view_full_calendar=True),
+    ),
+    'gestao': (
+        'Gestão / administrativo',
+        dict(
+            can_manage_clients=True,
+            can_manage_animals=True,
+            can_manage_schedule=True,
+            can_manage_inventory=True,
+            can_view_full_calendar=True,
+        ),
+    ),
+    'estoque': (
+        'Estoque',
+        dict(can_manage_inventory=True, can_view_full_calendar=False),
+    ),
+}
+
+
+def _vet_de_outra_clinica(user, clinica):
+    vet = getattr(user, 'veterinario', None)
+    return bool(vet and vet.clinica_id and vet.clinica_id != clinica.id)
+
+
+def _convidar_veterinario(clinica, vet_user):
+    """Convite com aceite para um veterinário que já tem conta.
+
+    Devolve ``(mensagem, categoria)`` para o ``flash``. Quem já trabalha em
+    outra clínica só muda de clínica aceitando: vincular direto tirava a
+    pessoa da clínica dela sem ela saber.
+    """
+    vet = vet_user.veterinario
+    if vet.clinica_id == clinica.id:
+        return 'Veterinário já associado à clínica.', 'warning'
+    existing = VetClinicInvite.query.filter_by(
+        clinica_id=clinica.id,
+        veterinario_id=vet.id,
+        status='pending',
+    ).first()
+    if existing:
+        return 'Convite já enviado.', 'warning'
+    db.session.add(VetClinicInvite(clinica_id=clinica.id, veterinario_id=vet.id))
+    db.session.commit()
+    if _send_clinic_invite_email(clinica, vet_user, current_user):
+        return 'Convite enviado.', 'success'
+    return 'Convite criado, mas houve um problema ao enviar o e-mail para o veterinário.', 'warning'
+
+
+def _convite_no_lugar_de_vinculo(clinica, vet_user):
+    """Mensagem de quando "adicionar funcionário" vira convite."""
+    mensagem, categoria = _convidar_veterinario(clinica, vet_user)
+    if categoria == 'success':
+        mensagem = (
+            f'{vet_user.name} já faz parte de outra clínica. Em vez de transferir, '
+            'enviamos um convite: entra na equipe depois de aceitar.'
+        )
+    return mensagem, categoria
 
 
 def _export_json_value(value):
@@ -376,12 +448,24 @@ def minha_clinica():
                 url=url_for('admin_parcerias', _external=True),
             )
             if current_user.veterinario:
+                # Quem escolheu um plano na página de preços segue para a
+                # assinatura. Os demais vieram pelos dias grátis "sem cartão":
+                # cair direto em "Configurar pagamento" contradizia a promessa,
+                # então seguem para configurar a clínica. A assinatura continua
+                # no checklist de ativação.
+                if session.get('preferred_membership_plan') in {'mensal', 'anual'}:
+                    flash(
+                        'Clínica criada e acesso profissional ativado. A aprovação serve apenas para publicar '
+                        'seu perfil; você já pode testar as ferramentas agora.',
+                        'success',
+                    )
+                    return redirect(url_for('veterinarian_membership'))
                 flash(
-                    'Clínica criada e acesso profissional ativado. A aprovação serve apenas para publicar '
-                    'seu perfil; você já pode testar as ferramentas agora.',
+                    'Clínica criada e avaliação gratuita ativada. Agora complete os horários, a equipe '
+                    'e cadastre o primeiro paciente — a aprovação serve apenas para publicar seu perfil.',
                     'success',
                 )
-                return redirect(url_for('veterinarian_membership'))
+                return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
             flash(
                 'Clínica criada! A aprovação serve apenas para publicar seu perfil. '
                 'Você já pode configurar equipe, horários e demais informações.',
@@ -658,6 +742,9 @@ def clinic_detail(clinica_id):
             staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=user.id).first()
             if staff:
                 flash('Funcionário já está na clínica', 'warning')
+            elif _vet_de_outra_clinica(user, clinica):
+                flash(*_convite_no_lugar_de_vinculo(clinica, user))
+                return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
             else:
                 is_intern = is_intern_account(user)
                 staff = ClinicStaff(
@@ -672,6 +759,10 @@ def clinic_detail(clinica_id):
                 if getattr(user, 'veterinario', None):
                     user.veterinario.clinica_id = clinica.id
                     db.session.add(user.veterinario)
+                elif getattr(user, 'worker', None) is None:
+                    # Igual a /funcionarios: sem o papel "colaborador" a pessoa
+                    # continuava vista como tutor e as permissões não valiam.
+                    user.worker = 'colaborador'
                 db.session.add(user)
                 db.session.commit()
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
@@ -727,31 +818,13 @@ def clinic_detail(clinica_id):
             .first()
         )
         if not user or getattr(user, 'worker', '') != 'veterinario' or not getattr(user, 'veterinario', None):
-            flash('Veterinário não encontrado.', 'danger')
+            flash(
+                'Não encontramos um veterinário com este e-mail. Para quem ainda não tem conta, '
+                'use "Cadastrar profissional manualmente" logo abaixo.',
+                'danger',
+            )
         else:
-            existing = VetClinicInvite.query.filter_by(
-                clinica_id=clinica.id,
-                veterinario_id=user.veterinario.id,
-                status='pending',
-            ).first()
-            if user.veterinario.clinica_id == clinica.id:
-                flash('Veterinário já associado à clínica.', 'warning')
-            elif existing:
-                flash('Convite já enviado.', 'warning')
-            else:
-                invite = VetClinicInvite(
-                    clinica_id=clinica.id,
-                    veterinario_id=user.veterinario.id,
-                )
-                db.session.add(invite)
-                db.session.commit()
-                if _send_clinic_invite_email(clinica, user, current_user):
-                    flash('Convite enviado.', 'success')
-                else:
-                    flash(
-                        'Convite criado, mas houve um problema ao enviar o e-mail para o veterinário.',
-                        'warning',
-                    )
+            flash(*_convidar_veterinario(clinica, user))
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
     if _form_submitted('clinic_hours', hours_form):
         if not pode_editar:
@@ -763,6 +836,8 @@ def clinic_detail(clinica_id):
             if existentes:
                 existentes[0].hora_abertura = hours_form.hora_abertura.data
                 existentes[0].hora_fechamento = hours_form.hora_fechamento.data
+                existentes[0].intervalo_inicio = hours_form.intervalo_inicio.data
+                existentes[0].intervalo_fim = hours_form.intervalo_fim.data
                 for extra in existentes[1:]:
                     db.session.delete(extra)
             else:
@@ -772,12 +847,24 @@ def clinic_detail(clinica_id):
                         dia_semana=dia,
                         hora_abertura=hours_form.hora_abertura.data,
                         hora_fechamento=hours_form.hora_fechamento.data,
+                        intervalo_inicio=hours_form.intervalo_inicio.data,
+                        intervalo_fim=hours_form.intervalo_fim.data,
                     )
                 )
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
+    if submitted_form_name == 'clinic_hours' and hours_form.errors:
+        # O formulário fica num painel recolhido: sem isto o erro sumia junto.
+        erros = [msg for msgs in hours_form.errors.values() for msg in msgs]
+        if 'dias_semana' in hours_form.errors:
+            erros = ['Escolha pelo menos um dia da semana.']
+        flash('Horário não salvo: ' + ' '.join(erros), 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id, abrir='horarios') + '#clinica')
+    horarios = sorted(
+        ClinicHours.query.filter_by(clinica_id=clinica_id).all(),
+        key=lambda h: DIAS_SEMANA.index(h.dia_semana) if h.dia_semana in DIAS_SEMANA else len(DIAS_SEMANA),
+    )
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
     # Inclui o vet dono da clínica mesmo que clinica_id do seu perfil seja diferente
     owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
@@ -952,18 +1039,25 @@ def clinic_detail(clinica_id):
             db.session.commit()
             flash('Horário do funcionário salvo com sucesso.', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    animais_adicionados = (
+    # Só a primeira página: carregar todos os animais e tutores a cada abertura
+    # deixava o painel lento em clínica grande. As páginas seguintes, a busca e
+    # a ordenação vêm do próprio quadro (fetch para /novo_animal e /tutores).
+    animais_pagination = (
         Animal.query
         .filter_by(clinica_id=clinica_id)
         .filter(Animal.removido_em.is_(None))
-        .all()
+        .order_by(Animal.date_added.desc(), Animal.id.desc())
+        .paginate(page=1, per_page=PAINEL_ITENS_POR_PAGINA, error_out=False)
     )
-    tutores_adicionados = (
+    animais_adicionados = animais_pagination.items
+    tutores_pagination = (
         User.query
         .filter_by(clinica_id=clinica_id)
         .filter(or_(User.worker != 'veterinario', User.worker == None))
-        .all()
+        .order_by(func.lower(User.name), User.id)
+        .paginate(page=1, per_page=PAINEL_ITENS_POR_PAGINA, error_out=False)
     )
+    tutores_adicionados = tutores_pagination.items
 
     clinic_metrics = {
         'animals': db.session.query(func.count(Animal.id))
@@ -1377,6 +1471,8 @@ def clinic_detail(clinica_id):
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
+        animais_pagination=animais_pagination,
+        tutores_pagination=tutores_pagination,
         pagination=None,
         start=start_str,
         end=end_str,
@@ -1405,6 +1501,7 @@ def clinic_detail(clinica_id):
         invite_status_order=invite_status_order,
         clinic_new_animal_url=clinic_new_animal_url,
         team_user_avatars=team_user_avatars,
+        staff_role_presets=STAFF_ROLE_PRESETS,
     )
 
 
@@ -1568,6 +1665,212 @@ def create_clinic_veterinario(clinica_id):
             'warning',
         )
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+
+@bp.route("/clinica/<int:clinica_id>/colaborador", methods=["POST"])
+@login_required
+def create_clinic_staff_member(clinica_id):
+    """Cadastra alguém da equipe (recepção, auxiliar...) que ainda não tem conta.
+
+    Antes só dava para adicionar quem já tinha conta: a recepcionista precisava
+    se cadastrar sozinha e o dono recebia "conta não encontrada". Agora a
+    clínica cria o acesso e a pessoa recebe o link para criar a própria senha,
+    como já acontece com veterinários.
+    """
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    destino = url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios'
+
+    name = (request.form.get('name') or '').strip()
+    email = (request.form.get('email') or '').strip().lower()
+    phone = normalize_phone(request.form.get('phone'))
+    funcao = (request.form.get('funcao') or 'recepcao').strip()
+    if funcao not in STAFF_ROLE_PRESETS:
+        funcao = 'recepcao'
+
+    if not name or not email or not phone:
+        flash('Nome, e-mail e celular são obrigatórios.', 'danger')
+        return redirect(destino)
+    if '@' not in email or '.' not in email.rsplit('@', 1)[-1]:
+        flash('Informe um e-mail válido.', 'danger')
+        return redirect(destino)
+    if len(phone.lstrip('+')) < 12:
+        # +55 + DDD + número: sem DDD o primeiro acesso não reconhece o celular.
+        flash('Informe o celular com DDD, por exemplo (16) 99123-4567.', 'danger')
+        return redirect(destino)
+    if User.query.filter(func.lower(User.email) == email).first():
+        flash(
+            'Este e-mail já está cadastrado no PetOrlândia. Use "Adicionar pelo e-mail da conta" '
+            'com o mesmo e-mail.',
+            'warning',
+        )
+        return redirect(destino)
+    if find_users_by_phone(phone):
+        flash('Celular já cadastrado em outra conta.', 'danger')
+        return redirect(destino)
+
+    user = User(
+        name=name,
+        email=email,
+        phone=phone,
+        worker='colaborador',
+        is_private=True,
+        added_by=current_user,
+    )
+    # Senha provisória inacessível: o acesso real é criado pela própria pessoa
+    # através do link de primeiro acesso enviado abaixo.
+    user.set_password(uuid.uuid4().hex)
+    user.clinica_id = clinica.id
+    db.session.add(user)
+    funcao_label, permissoes = STAFF_ROLE_PRESETS[funcao]
+    db.session.add(ClinicStaff(clinic_id=clinica.id, user=user, **permissoes))
+    db.session.commit()
+    track_event('clinic_staff_created', feature='clinic_team', stage=funcao)
+
+    first_access_link = _first_access_url_for_user(user, _external=True)
+    email_enviado = False
+    try:
+        mail.send(MailMessage(
+            subject=f'Seu acesso à {clinica.nome} no PetOrlândia',
+            recipients=[email],
+            body=(
+                f'Olá, {name.split()[0]}!\n\n'
+                f'Você foi cadastrado(a) na equipe da clínica {clinica.nome} no PetOrlândia '
+                f'({funcao_label}).\n'
+                f'Para criar sua senha e acessar a plataforma, use este link:\n{first_access_link}\n\n'
+                'Abraços,\nEquipe PetOrlândia'
+            ),
+        ))
+        email_enviado = True
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning('Falha ao enviar primeiro acesso do colaborador %s: %s', email, exc)
+
+    if email_enviado:
+        flash(
+            f'{name} cadastrado(a) como {funcao_label}. Enviamos por e-mail o link para criar a senha. '
+            'As permissões podem ser ajustadas em "Gerenciar".',
+            'success',
+        )
+    else:
+        flash(
+            f'{name} cadastrado(a), mas o e-mail não pôde ser enviado. '
+            f'Envie a ele(a) este link de primeiro acesso: {first_access_link}',
+            'warning',
+        )
+    return redirect(destino)
+
+
+def _pode_importar_clientes(clinica):
+    if _user_can_manage_clinic(clinica):
+        return True
+    staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    return bool(staff and staff.can_manage_clients)
+
+
+def _linhas_confirmadas(bruto):
+    """Linhas devolvidas pela prévia; aceita só o formato que a própria prévia gera."""
+    from services.clinic_import import COLUNAS, MAX_LINHAS
+
+    try:
+        linhas = json.loads(bruto or '[]')
+    except ValueError:
+        return None
+    if not isinstance(linhas, list) or not linhas or len(linhas) > MAX_LINHAS:
+        return None
+    limpas = []
+    for linha in linhas:
+        if not isinstance(linha, dict):
+            return None
+        limpas.append({
+            chave: str(valor)[:200]
+            for chave, valor in linha.items()
+            if chave in COLUNAS and isinstance(valor, (str, int, float))
+        })
+    return limpas
+
+
+@bp.route("/clinica/<int:clinica_id>/importar", methods=["GET", "POST"])
+@login_required
+def importar_clientes(clinica_id):
+    """Importa tutores e animais de uma planilha CSV, com prévia antes de gravar."""
+    from services.clinic_import import (
+        COLUNAS, PlanilhaInvalida, aplicar, ler_planilha, planejar, resumo,
+    )
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _pode_importar_clientes(clinica):
+        abort(403)
+
+    if request.method == 'POST' and request.form.get('acao') == 'confirmar':
+        linhas = _linhas_confirmadas(request.form.get('linhas_json'))
+        if linhas is None:
+            flash('Não foi possível ler a prévia. Envie a planilha de novo.', 'danger')
+            return redirect(url_for('importar_clientes', clinica_id=clinica.id))
+        try:
+            totais = aplicar(linhas, clinica.id, current_user)
+        except Exception:  # noqa: BLE001 -- nada fica gravado pela metade
+            db.session.rollback()
+            current_app.logger.exception('Falha ao importar planilha na clínica %s', clinica.id)
+            flash('Não foi possível concluir a importação; nada foi gravado. Tente de novo.', 'danger')
+            return redirect(url_for('importar_clientes', clinica_id=clinica.id))
+        track_event('clinic_import_done', feature='clinic_import', stage=str(totais['animais_novos']))
+        partes = [
+            f"{totais['tutores_novos']} tutor(es) novo(s)",
+            f"{totais['animais_novos']} animal(is) novo(s)",
+        ]
+        if totais['tutores_existentes'] or totais['animais_existentes']:
+            partes.append(
+                f"{totais['tutores_existentes']} tutor(es) e {totais['animais_existentes']} animal(is) já existiam"
+            )
+        if totais['com_erro']:
+            partes.append(f"{totais['com_erro']} linha(s) com erro ignorada(s)")
+        flash('Importação concluída: ' + '; '.join(partes) + '.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#tutores')
+
+    plano = None
+    totais = None
+    linhas_json = ''
+    if request.method == 'POST':
+        arquivo = request.files.get('arquivo')
+        if not arquivo or not getattr(arquivo, 'filename', ''):
+            flash('Escolha o arquivo da planilha (.csv).', 'warning')
+            return redirect(url_for('importar_clientes', clinica_id=clinica.id))
+        try:
+            linhas = ler_planilha(arquivo.read())
+        except PlanilhaInvalida as exc:
+            flash(str(exc), 'danger')
+            return redirect(url_for('importar_clientes', clinica_id=clinica.id))
+        plano = planejar(linhas, clinica.id)
+        totais = resumo(plano)
+        linhas_json = json.dumps(linhas, ensure_ascii=False)
+        track_event('clinic_import_preview', feature='clinic_import', stage=str(totais['linhas']))
+
+    return render_template(
+        'clinica/clinic_import.html',
+        clinica=clinica,
+        colunas=COLUNAS,
+        plano=plano,
+        totais=totais,
+        linhas_json=linhas_json,
+    )
+
+
+@bp.route("/clinica/<int:clinica_id>/importar/modelo.csv", methods=["GET"])
+@login_required
+def importar_clientes_modelo(clinica_id):
+    from services.clinic_import import gerar_modelo_csv
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _pode_importar_clientes(clinica):
+        abort(403)
+    # BOM: o Excel só reconhece os acentos do CSV com ele.
+    conteudo = '﻿' + gerar_modelo_csv()
+    return current_app.response_class(
+        conteudo,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename="modelo-clientes-petorlandia.csv"'},
+    )
 
 
 @bp.route("/convites/clinica", methods=["GET", "POST"])
@@ -2428,6 +2731,11 @@ def clinic_staff(clinica_id):
                 if request.accept_mimetypes.accept_json:
                     return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
+            elif _vet_de_outra_clinica(user, clinic):
+                mensagem, categoria = _convite_no_lugar_de_vinculo(clinic, user)
+                if request.accept_mimetypes.accept_json:
+                    return jsonify(success=False, message=mensagem, category=categoria)
+                flash(mensagem, categoria)
             else:
                 is_intern = is_intern_account(user)
                 staff = ClinicStaff(

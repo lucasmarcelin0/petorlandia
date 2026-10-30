@@ -4350,6 +4350,12 @@ body {
   font-size: 0.92rem;
 }
 
+.onboarding-tutor-link {
+  margin: 1.25rem 0 0;
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .onboarding-cta {
     transition: none;

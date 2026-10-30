@@ -176,8 +176,10 @@ def test_ativacao_da_clinica_cria_veterinario_e_avaliacao(app, client, monkeypat
         )
 
         assert response.status_code == 302
-        assert response.headers["Location"].endswith("/veterinario/assinatura")
         clinic = Clinica.query.filter_by(nome="Clínica Conversão").one()
+        # Veio pelos dias grátis "sem cartão": segue para configurar a clínica,
+        # não para a tela de pagamento.
+        assert response.headers["Location"].endswith(f"/clinica/{clinic.id}#clinica")
         vet = Veterinario.query.filter_by(user_id=user.id).one()
         assert clinic.status == "pendente"
         assert vet.clinica_id == clinic.id
@@ -185,6 +187,27 @@ def test_ativacao_da_clinica_cria_veterinario_e_avaliacao(app, client, monkeypat
         assert vet.crmv_estado == "SP"
         assert vet.membership is not None
         assert vet.membership.is_trial_active()
+
+
+def test_ativacao_com_plano_escolhido_segue_para_assinatura(app, client, monkeypatch):
+    with app.app_context():
+        user = _user("plano@example.com")
+        _login(monkeypatch, user)
+        with client.session_transaction() as sess:
+            sess["preferred_membership_plan"] = "anual"
+
+        response = client.post(
+            "/minha-clinica",
+            data={
+                "nome": "Clínica Plano Anual",
+                "sou_veterinario": "y",
+                "crmv": "54321",
+                "crmv_estado": "SP",
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/veterinario/assinatura")
 
 
 def test_checkout_veterinario_limita_reason_do_mercado_pago(app, client, monkeypatch):

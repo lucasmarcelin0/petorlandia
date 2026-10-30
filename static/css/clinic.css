@@ -180,6 +180,86 @@
   color: #842029;
 }
 
+.clinic-hour-badge--break {
+  background: rgba(255, 193, 7, 0.18);
+  color: #664d03;
+}
+
+.clinic-day-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.clinic-day-picker .btn {
+  min-width: 3.25rem;
+  min-height: 2.5rem;
+  border-radius: 999px;
+}
+
+/* No celular, "main .btn" ocupa a largura toda; aqui os dias e os atalhos
+   ficam lado a lado, como chips. */
+main .clinic-day-picker .btn,
+main .clinic-day-shortcuts .btn {
+  margin-bottom: 0;
+  width: auto;
+}
+
+/* Cores explícitas: o tema global deixava o dia marcado sem texto visível. */
+.clinic-day-picker .btn-check + .btn {
+  background: #fff;
+  border-color: #2458d3;
+  color: #2458d3;
+}
+
+.clinic-day-picker .btn-check:checked + .btn {
+  background: #2458d3;
+  border-color: #2458d3;
+  color: #fff;
+}
+
+.clinic-day-picker .btn-check:focus-visible + .btn {
+  outline: 2px solid #1949bd;
+  outline-offset: 2px;
+}
+
+.clinic-payments-section {
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.clinic-payments-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: space-between;
+  list-style: none;
+  padding: 1rem 1.25rem;
+}
+
+.clinic-payments-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.clinic-payments-section > summary::after {
+  content: "\25BE";
+  color: #6c757d;
+  margin-left: auto;
+}
+
+.clinic-payments-section[open] > summary::after {
+  content: "\25B4";
+}
+
+.clinic-payments-section > .card {
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
+}
+
 .clinic-hour-actions button {
   text-decoration: none;
 }

@@ -1,3 +1,10 @@
-{% with compact=True, fetch_url=url_for('tutores'), viewer_clinic_id=clinica.id %}
+{% with compact=True, fetch_url=url_for('tutores'), viewer_clinic_id=clinica.id, pagination=tutores_pagination|default(None) %}
   {% include 'partials/tutores_adicionados.html' %}
 {% endwith %}
+{% if pode_editar %}
+<p class="small text-muted mt-3 mb-0">
+  <i class="fa-solid fa-file-import me-1" aria-hidden="true"></i>
+  Tem a lista de clientes numa planilha?
+  <a href="{{ url_for('importar_clientes', clinica_id=clinica.id) }}" data-cta="clinic_import_open">Importar tutores e animais</a>
+</p>
+{% endif %}

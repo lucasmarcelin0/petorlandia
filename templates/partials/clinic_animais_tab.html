@@ -2,6 +2,7 @@
 {% with compact=True,
         fetch_url=url_for('novo_animal'),
         can_create_animals=pode_editar,
-        new_animal_url=clinic_animals_create_url %}
+        new_animal_url=clinic_animals_create_url,
+        pagination=animais_pagination|default(None) %}
   {% include 'partials/animais_adicionados.html' %}
 {% endwith %}
