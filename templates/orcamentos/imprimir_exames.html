@@ -14,7 +14,9 @@
 
 <div class="no-print print-toolbar" role="region" aria-label="Ações do documento">
   <div class="print-toolbar__row">
-  <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+  <button type="button" class="print-action" onclick="window.print()">Imprimir página</button>
+  <a class="print-action" href="{{ url_for('consulta_routes.imprimir_bloco_exames', bloco_id=bloco.id, token=request.args.get('token') or None, clinica_id=request.args.get('clinica_id') or None, format='pdf', inline=1) }}" target="_blank" rel="noopener">Imprimir PDF</a>
+  <a class="print-action" href="{{ url_for('consulta_routes.imprimir_bloco_exames', bloco_id=bloco.id, token=request.args.get('token') or None, clinica_id=request.args.get('clinica_id') or None, format='pdf') }}">Baixar PDF</a>
   <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar</button>
   <button type="button" class="print-action" onclick="enviarWhatsApp()" id="btn-whatsapp">Enviar WhatsApp</button>
   <a class="print-action print-action--ghost print-toolbar__back" href="{{ url_for('consulta_direct', animal_id=animal.id) }}">Voltar</a>
