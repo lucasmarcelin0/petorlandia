@@ -1,0 +1,17 @@
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><th scope="row">Vendas concluídas</th><td class="text-end">{{ resumo.quantidade_vendas }}</td><td class="text-end">{{ resumo.total_vendas|currency_br }}</td></tr>
+        {% if resumo.quantidade_canceladas %}<tr class="text-muted"><th scope="row">Vendas canceladas</th><td class="text-end">{{ resumo.quantidade_canceladas }}</td><td class="text-end">{{ resumo.total_canceladas|currency_br }}</td></tr>{% endif %}
+        {% for forma in resumo.formas %}
+        <tr><td colspan="2">{{ forma.rotulo }}{% if forma.t_pag == '01' %} (já descontado o troco){% endif %}</td><td class="text-end">{{ forma.valor|currency_br }}</td></tr>
+        {% endfor %}
+        <tr><td colspan="2">Troco inicial</td><td class="text-end">{{ resumo.abertura|currency_br }}</td></tr>
+        {% if resumo.suprimentos %}<tr><td colspan="2">Reforços de troco</td><td class="text-end">+ {{ resumo.suprimentos|currency_br }}</td></tr>{% endif %}
+        {% if resumo.sangrias %}<tr><td colspan="2">Retiradas (sangrias)</td><td class="text-end">− {{ resumo.sangrias|currency_br }}</td></tr>{% endif %}
+        <tr class="fw-bold"><td colspan="2">Dinheiro previsto na gaveta</td><td class="text-end">{{ resumo.dinheiro_esperado|currency_br }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

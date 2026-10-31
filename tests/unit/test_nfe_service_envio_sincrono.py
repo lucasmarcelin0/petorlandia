@@ -211,6 +211,54 @@ def test_duplicidade_consulta_a_chave_e_aproveita_autorizacao(fiscal_env, monkey
     assert result.protocol == "135260000000042"
 
 
+def test_duplicidade_com_consulta_sem_resposta_fica_recuperavel(fiscal_env, monkeypatch):
+    """204 + consulta que não responde: FAILED (reprocessável), não REJECTED."""
+    document = fiscal_env["document"]
+    fake = FakeClient(consulta=SefazSoapResponse(False, None, "<req/>", None, "Read timed out"))
+
+    def responder(xml):
+        fake.lotes.append(xml)
+        return _ok(
+            f'<retEnviNFe xmlns="{NFE}" versao="4.00"><cStat>104</cStat><xMotivo>Lote processado</xMotivo>'
+            + _prot(_chave_do_lote(xml), "204", "Duplicidade de NF-e").replace(f' xmlns="{NFE}"', "")
+            + "</retEnviNFe>"
+        )
+
+    fake.autorizacao = responder
+    monkeypatch.setattr(nfe_service, "_build_sefaz_client", lambda certificate, env: fake)
+
+    result = nfe_service.emit_nfe_sync(document.id)
+    assert result.status == FiscalDocumentStatus.FAILED
+    assert result.error_code == "204"
+    assert "sem confirmação" in result.error_message
+
+
+def test_duplicidade_de_nota_cancelada_nao_vira_autorizada(fiscal_env, monkeypatch):
+    document = fiscal_env["document"]
+    fake = FakeClient()
+
+    def responder(xml):
+        fake.lotes.append(xml)
+        chave = _chave_do_lote(xml)
+        fake._consulta = _ok(
+            f'<retConsSitNFe xmlns="{NFE}" versao="4.00"><cStat>101</cStat><xMotivo>Cancelamento homologado</xMotivo>'
+            + _prot(chave).replace(f' xmlns="{NFE}"', "")
+            + "</retConsSitNFe>"
+        )
+        return _ok(
+            f'<retEnviNFe xmlns="{NFE}" versao="4.00"><cStat>104</cStat><xMotivo>Lote processado</xMotivo>'
+            + _prot(chave, "204", "Duplicidade de NF-e").replace(f' xmlns="{NFE}"', "")
+            + "</retEnviNFe>"
+        )
+
+    fake.autorizacao = responder
+    monkeypatch.setattr(nfe_service, "_build_sefaz_client", lambda certificate, env: fake)
+
+    result = nfe_service.emit_nfe_sync(document.id)
+    assert result.status == FiscalDocumentStatus.CANCELED
+    assert result.xml_authorized is None
+
+
 def test_rejeicao_guarda_codigo_e_motivo(fiscal_env, monkeypatch):
     document = fiscal_env["document"]
     fake = FakeClient()

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Comprovante da venda #{{ venda.id }}</title>
+  <style>
+    @page { size: {{ largura }}mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: #000; font: 11px/1.3 "Courier New", Courier, monospace; }
+    .cupom { width: {{ '72mm' if largura == '80' else '48mm' }}; margin: 0 auto; padding: 3mm 0; }
+    .c { text-align: center; }
+    .b { font-weight: bold; }
+    .sep { border-top: 1px dashed #000; margin: 2mm 0; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { padding: 0; vertical-align: top; font-size: 10px; }
+    th { text-align: left; font-weight: bold; }
+    .r { text-align: right; }
+    .acoes { text-align: center; margin: 4mm 0; font-family: system-ui, sans-serif; }
+    .acoes button, .acoes a { font-size: 14px; padding: 6px 14px; margin: 0 4px; }
+    @media print { .acoes { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="acoes">
+    <button type="button" onclick="window.print()">Imprimir</button>
+    <a href="?largura={{ '58' if largura == '80' else '80' }}">Bobina de {{ '58' if largura == '80' else '80' }} mm</a>
+  </div>
+  <div class="cupom">
+    <div class="c b">{{ casa.nome }}</div>
+    {% if casa.cnpj %}<div class="c">CNPJ {{ casa.cnpj }}</div>{% endif %}
+    {% if casa.endereco %}<div class="c">{{ casa.endereco }}</div>{% endif %}
+    {% if casa.telefone %}<div class="c">{{ casa.telefone }}</div>{% endif %}
+    <div class="sep"></div>
+    <div class="c b">COMPROVANTE DE VENDA — NÃO É DOCUMENTO FISCAL</div>
+    <div class="c">Venda #{{ venda.id }} · {{ venda.created_at|data_br }}</div>
+    {% if venda.status == 'cancelada' %}<div class="c b">VENDA CANCELADA</div>{% endif %}
+    <div class="sep"></div>
+    <table>
+      <thead><tr><th>Descrição</th><th class="r">Qtd</th><th class="r">Vl Unit</th><th class="r">Total</th></tr></thead>
+      <tbody>
+        {% for item in venda.itens %}
+        <tr><td colspan="4">{{ item.descricao }}</td></tr>
+        <tr>
+          <td></td>
+          <td class="r">{{ ('%.3f'|format(item.quantidade)).rstrip('0').rstrip('.').replace('.', ',') }} {{ item.unidade }}</td>
+          <td class="r">{{ '%.2f'|format(item.preco_unitario)|replace('.', ',') }}</td>
+          <td class="r">{{ '%.2f'|format(item.total + item.desconto)|replace('.', ',') }}</td>
+        </tr>
+        {% if item.desconto %}<tr><td colspan="3">Desconto</td><td class="r">-{{ '%.2f'|format(item.desconto)|replace('.', ',') }}</td></tr>{% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="sep"></div>
+    <table>
+      <tr><td>Subtotal R$</td><td class="r">{{ '%.2f'|format(venda.subtotal)|replace('.', ',') }}</td></tr>
+      {% if venda.desconto %}<tr><td>Descontos R$</td><td class="r">-{{ '%.2f'|format(venda.desconto)|replace('.', ',') }}</td></tr>{% endif %}
+      <tr><td class="b">Total R$</td><td class="r b">{{ '%.2f'|format(venda.total)|replace('.', ',') }}</td></tr>
+      {% for p in venda.pagamentos %}<tr><td>{{ p.forma }}</td><td class="r">{{ '%.2f'|format(p.valor)|replace('.', ',') }}</td></tr>{% endfor %}
+      {% if venda.troco %}<tr><td>Troco R$</td><td class="r">{{ '%.2f'|format(venda.troco)|replace('.', ',') }}</td></tr>{% endif %}
+    </table>
+    <div class="sep"></div>
+    {% if venda.nfce and venda.nfce.status == 'autorizada' %}
+    <div class="c">NFC-e nº {{ venda.nfce.numero }} série {{ venda.nfce.serie }} emitida para esta venda.</div>
+    {% endif %}
+    <div class="c">Obrigado pela preferência!</div>
+  </div>
+</body>
+</html>

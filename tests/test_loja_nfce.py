@@ -91,6 +91,7 @@ class FakeSefaz:
         self.evento_cstat = "135"
         self.inut_cstat = "102"
         self.schema = schema
+        self.ambientes: list[str] = []
 
     def _chave(self, lote: str) -> str:
         root = etree.fromstring(lote.encode("utf-8"))
@@ -103,7 +104,10 @@ class FakeSefaz:
         chave = self._chave(lote)
         if self.modo == "timeout":
             return SefazSoapResponse(False, None, "<req/>", None, "Read timed out")
-        c_stat, motivo = ("100", "Autorizado o uso da NF-e") if self.modo == "autoriza" else ("778", "Informado NCM inexistente")
+        c_stat, motivo = {
+            "autoriza": ("100", "Autorizado o uso da NF-e"),
+            "duplicidade": ("204", "Duplicidade de NF-e [nRec:351000000000001]"),
+        }.get(self.modo, ("778", "Informado NCM inexistente"))
         ret = (
             f'<retEnviNFe xmlns="{NFE}" versao="4.00"><cStat>104</cStat><xMotivo>Lote processado</xMotivo>'
             f"<dhRecbto>2026-10-31T10:00:01-03:00</dhRecbto>"
@@ -115,9 +119,14 @@ class FakeSefaz:
 
     def consulta_protocolo(self, xml):
         chave = etree.fromstring(xml.encode()).find(f"{{{NFE}}}chNFe").text
-        if self.consulta == "100":
+        self.consultas = getattr(self, "consultas", []) + [chave]
+        if self.consulta == "timeout":
+            return SefazSoapResponse(False, None, "<req/>", None, "Read timed out")
+        if self.consulta in {"100", "101"}:
+            # Nota cancelada: cStat principal 101, protNFe com a autorização original (100).
+            motivo = "Autorizado" if self.consulta == "100" else "Cancelamento de NF-e homologado"
             ret = (
-                f'<retConsSitNFe xmlns="{NFE}" versao="4.00"><cStat>100</cStat><xMotivo>Autorizado</xMotivo>'
+                f'<retConsSitNFe xmlns="{NFE}" versao="4.00"><cStat>{self.consulta}</cStat><xMotivo>{motivo}</xMotivo>'
                 f'<protNFe versao="4.00"><infProt><chNFe>{chave}</chNFe><nProt>135260000000999</nProt>'
                 "<cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe></retConsSitNFe>"
             )
@@ -149,7 +158,12 @@ class FakeSefaz:
 @pytest.fixture()
 def sefaz(monkeypatch):
     fake = FakeSefaz(schema=etree.XMLSchema(etree.parse(str(XSD))))
-    monkeypatch.setattr(nfce_service, "_cliente", lambda config: fake)
+
+    def _cliente(config, ambiente=None):
+        fake.ambientes.append(ambiente or config.ambiente)
+        return fake
+
+    monkeypatch.setattr(nfce_service, "_cliente", _cliente)
     return fake
 
 
@@ -229,6 +243,90 @@ def test_reenvio_aproveita_autorizacao_que_chegou_na_sefaz(loja, sefaz):
     assert documento.status == "autorizada"
     assert documento.protocolo == "135260000000999"
     assert len(sefaz.lotes) == 1, "não transmite de novo uma nota já autorizada"
+
+
+def test_reenvio_nao_remonta_sem_resposta_conclusiva_da_sefaz(loja, sefaz):
+    """Sem o 217 da SEFAZ, a chave original pode estar autorizada: nada muda."""
+    config = loja["config"]
+    sefaz.modo = "timeout"
+    documento = nfce_service.emitir_nfce(
+        config, itens=[_item()], pagamentos=[PagamentoNfce(t_pag="01", valor=Decimal("200"))]
+    )
+    chave, xml = documento.chave, documento.xml_assinado
+    documento.dh_emi = "2026-10-31T08:00:00-03:00"  # fora da janela: remontaria
+    db.session.commit()
+
+    sefaz.consulta = "timeout"
+    with pytest.raises(NfceServiceError, match="Nada foi alterado"):
+        nfce_service.reenviar_nfce(documento)
+    documento = db.session.get(NfceDocumento, documento.id)
+    assert documento.status == "erro"
+    assert documento.chave == chave and documento.xml_assinado == xml
+    assert len(sefaz.lotes) == 1
+
+    # Com a confirmação de que a chave não existe, remonta (mesmo número).
+    sefaz.consulta = "217"
+    sefaz.modo = "autoriza"
+    documento = nfce_service.reenviar_nfce(documento)
+    assert documento.status == "autorizada" and documento.chave != chave
+    assert documento.numero == 1
+
+
+def test_duplicidade_sem_confirmacao_fica_recuperavel(loja, sefaz):
+    config = loja["config"]
+    sefaz.modo = "duplicidade"
+    sefaz.consulta = "timeout"
+    documento = nfce_service.emitir_nfce(
+        config, itens=[_item()], pagamentos=[PagamentoNfce(t_pag="01", valor=Decimal("200"))]
+    )
+    assert documento.status == "erro", "não vira rejeição definitiva"
+    assert documento.c_stat == "204"
+
+    sefaz.consulta = "100"
+    documento = nfce_service.reenviar_nfce(documento)
+    assert documento.status == "autorizada"
+    assert len(sefaz.lotes) == 1, "a mesma chave é recuperada sem transmitir de novo"
+
+
+def test_consulta_de_nota_cancelada_nao_vira_autorizada(loja, sefaz):
+    config = loja["config"]
+    sefaz.modo = "timeout"
+    documento = nfce_service.emitir_nfce(
+        config, itens=[_item()], pagamentos=[PagamentoNfce(t_pag="01", valor=Decimal("200"))]
+    )
+    sefaz.consulta = "101"
+    documento = nfce_service.reenviar_nfce(documento)
+    assert documento.status == "cancelada"
+    assert documento.c_stat == "101"
+    assert documento.xml_autorizado is None
+    assert len(sefaz.lotes) == 1
+
+
+def test_nota_de_teste_continua_em_homologacao_depois_da_troca(loja, sefaz):
+    """Trocar a loja para produção não manda nota de teste para a produção."""
+    config = loja["config"]
+    sefaz.modo = "timeout"
+    documento = nfce_service.emitir_nfce(
+        config, itens=[_item()], pagamentos=[PagamentoNfce(t_pag="01", valor=Decimal("200"))]
+    )
+    assert documento.ambiente == "homologacao"
+    documento.dh_emi = "2026-10-31T08:00:00-03:00"
+    config.ambiente = "producao"
+    db.session.commit()
+    sefaz.ambientes.clear()
+
+    sefaz.modo = "autoriza"
+    documento = nfce_service.reenviar_nfce(documento)
+    assert documento.status == "autorizada"
+    assert set(sefaz.ambientes) == {"homologacao"}
+    nfe = etree.fromstring(sefaz.lotes[-1].encode())
+    assert nfe.find(f".//{{{NFE}}}ide/{{{NFE}}}tpAmb").text == "2"
+    assert documento.qrcode.endswith("|3|2") and "homologacao" in documento.qrcode
+    assert config.ultimo_numero_producao == 0
+
+    sefaz.ambientes.clear()
+    nfce_service.cancelar_nfce(documento, "Teste de cancelamento em homologacao")
+    assert set(sefaz.ambientes) == {"homologacao"}
 
 
 def test_rejeitada_remonta_com_mesmo_numero_e_nova_chave(loja, sefaz):

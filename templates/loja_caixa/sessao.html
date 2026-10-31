@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% block page_title %}Caixa #{{ sessao.id }} · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5" style="max-width: 860px">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap d-print-none">
+    <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Caixa
+    </a>
+    <a href="{{ url_for('loja_caixa_vendas', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">Vendas</a>
+    <button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick="window.print()">Imprimir</button>
+  </div>
+  <h1 class="h3 fw-bold mb-1">Caixa #{{ sessao.id }} · {{ casa.nome }}</h1>
+  <p class="text-muted">
+    Aberto em {{ sessao.aberto_em|data_br }}{% if sessao.fechado_em %} · fechado em {{ sessao.fechado_em|data_br }}{% else %} · <strong>aberto</strong>{% endif %}
+  </p>
+
+  {% include "loja_caixa/_resumo.html" %}
+
+  {% if sessao.status == 'fechado' %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between"><span>Dinheiro previsto</span><strong>{{ sessao.valor_esperado|currency_br }}</strong></div>
+      <div class="d-flex justify-content-between"><span>Dinheiro contado</span><strong>{{ sessao.valor_contado|currency_br }}</strong></div>
+      {% set dif = sessao.diferenca %}
+      <div class="d-flex justify-content-between fw-bold {{ 'text-success' if dif == 0 else 'text-danger' }}">
+        <span>{{ 'Sobra' if dif and dif > 0 else ('Falta' if dif and dif < 0 else 'Diferença') }}</span>
+        <span>{{ (dif if dif and dif > 0 else (-dif if dif else 0))|currency_br }}</span>
+      </div>
+      {% if sessao.observacao %}<p class="small text-muted mb-0 mt-2">{{ sessao.observacao }}</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if movimentos %}
+  <h2 class="h6 fw-bold">Retiradas e reforços</h2>
+  <table class="table table-sm">
+    <tbody>
+      {% for m in movimentos %}
+      <tr><td>{{ m.created_at|data_br }}</td><td>{{ 'Retirada' if m.tipo == 'sangria' else 'Reforço' }}</td><td>{{ m.motivo or '' }}</td><td class="text-end">{{ m.valor|currency_br }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h2 class="h6 fw-bold">Vendas</h2>
+  {% if vendas %}
+  <table class="table table-sm">
+    <thead><tr><th scope="col">#</th><th scope="col">Hora</th><th scope="col">Situação</th><th scope="col">NFC-e</th><th scope="col" class="text-end">Total</th></tr></thead>
+    <tbody>
+      {% for v in vendas %}
+      <tr class="{{ 'text-muted' if v.status == 'cancelada' else '' }}">
+        <td><a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=v.id) }}">{{ v.id }}</a></td>
+        <td>{{ v.created_at|data_br }}</td>
+        <td>{{ 'Cancelada' if v.status == 'cancelada' else 'Concluída' }}</td>
+        <td>{% if v.nfce %}{{ v.nfce.serie }}-{{ v.nfce.numero }} {{ v.nfce.status_label }}{% elif v.emitir_nfce %}não emitida{% else %}—{% endif %}</td>
+        <td class="text-end">{{ v.total|currency_br }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted">Nenhuma venda neste caixa.</p>
+  {% endif %}
+</div>
+{% endblock %}

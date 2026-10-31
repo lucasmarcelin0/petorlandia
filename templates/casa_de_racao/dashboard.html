@@ -100,6 +100,8 @@
     <a href="#recebimentos"><i class="fa-solid fa-wallet" aria-hidden="true"></i>{{ 'Recebimentos conectados' if payment_account and payment_account.status == 'connected' else 'Configurar recebimentos' }}</a>
     <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Vendas</a>
     <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"><i class="fa-solid fa-truck" aria-hidden="true"></i>Entregas{% if entregas_pendentes %} ({{ entregas_pendentes }}){% endif %}</a>
+    <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}"><i class="fa-solid fa-cash-register" aria-hidden="true"></i>Caixa (PDV)</a>
+    <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Estoque</a>
     <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}"><i class="fa-solid fa-receipt" aria-hidden="true"></i>Notas fiscais (NFC-e)</a>
   </nav>
   <nav class="clinic-tabs-shell" aria-label="Seções da loja">

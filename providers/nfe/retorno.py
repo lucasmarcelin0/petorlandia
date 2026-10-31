@@ -20,6 +20,8 @@ _NS = {"n": NFE_NS}
 
 # Autorizado o uso (100) e autorizado fora de prazo (150).
 CSTAT_AUTORIZADO = frozenset({"100", "150"})
+# Situação atual cancelada: 101, 151 (fora de prazo) e 155 (extemporâneo).
+CSTAT_CANCELADO = frozenset({"101", "151", "155"})
 # Uso denegado: a numeração fica consumida e a nota não pode ser reenviada.
 CSTAT_DENEGADO = frozenset({"110", "301", "302", "303"})
 # Lote recebido / em processamento (fluxo assíncrono).
@@ -152,14 +154,31 @@ class SituacaoRetorno:
     x_motivo: Optional[str] = None
     prot_nfe_xml: Optional[str] = None
     n_prot: Optional[str] = None
+    # cStat do protNFe: a autorização ORIGINAL (continua 100 numa nota cancelada).
+    prot_c_stat: Optional[str] = None
 
     @property
     def autorizado(self) -> bool:
+        """Situação ATUAL autorizada (uma nota cancelada não conta)."""
         return self.c_stat in CSTAT_AUTORIZADO
+
+    @property
+    def cancelado(self) -> bool:
+        return self.c_stat in CSTAT_CANCELADO
+
+    @property
+    def nao_consta(self) -> bool:
+        """Resposta conclusiva de que a chave não existe na SEFAZ."""
+        return self.c_stat == "217"
 
 
 def parse_consulta_situacao(xml: str | bytes | None) -> SituacaoRetorno:
-    """Lê ``retConsSitNFe``: situação atual de uma chave na SEFAZ."""
+    """Lê ``retConsSitNFe``: situação atual de uma chave na SEFAZ.
+
+    O ``cStat`` principal é a situação atual (100 autorizada, 101 cancelada,
+    217 não consta...). O ``protNFe`` traz a autorização original e serve só
+    para o protocolo e o XML de guarda.
+    """
     root = _parse(xml)
     if root is None:
         return SituacaoRetorno()
@@ -170,9 +189,9 @@ def parse_consulta_situacao(xml: str | bytes | None) -> SituacaoRetorno:
     prot = ret.find("n:protNFe", _NS)
     if prot is not None:
         inf_prot = prot.find("n:infProt", _NS)
-        prot_c_stat = _text(inf_prot, "n:cStat")
-        if prot_c_stat:
-            result.c_stat = prot_c_stat
+        result.prot_c_stat = _text(inf_prot, "n:cStat")
+        if not result.c_stat:
+            result.c_stat = result.prot_c_stat
             result.x_motivo = _text(inf_prot, "n:xMotivo")
         result.n_prot = _text(inf_prot, "n:nProt")
         result.prot_nfe_xml = etree.tostring(prot, encoding="unicode")

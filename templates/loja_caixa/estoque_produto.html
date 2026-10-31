@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ product.name }} · Estoque · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5" style="max-width: 960px">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Estoque
+    </a>
+    <a href="{{ url_for('casa_produto_editar', casa_id=casa.id, product_id=product.id) }}" class="btn btn-outline-secondary btn-sm ms-auto">Nome, preço e foto</a>
+  </div>
+  <h1 class="h3 fw-bold">{{ product.name }}</h1>
+
+  <form method="post" class="card shadow-sm mb-4">
+    <div class="card-body">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h2 class="h6 fw-bold">Dados fiscais (NFC-e)</h2>
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="ncm">NCM (8 dígitos)</label>
+          <input class="form-control" id="ncm" name="ncm" inputmode="numeric" value="{{ product.ncm or '' }}" placeholder="23091000">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="cest">CEST (se tiver ST)</label>
+          <input class="form-control" id="cest" name="cest" inputmode="numeric" value="{{ product.cest or '' }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="unidade">Unidade</label>
+          <select class="form-select" id="unidade" name="unidade">
+            {% set atual = (product.unidade or 'UN')|upper %}
+            {% for u in unidades %}<option value="{{ u }}" {{ 'selected' if u == atual }}>{{ u }}{{ ' (granel)' if u in fracionadas else '' }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="cfop">CFOP (opcional)</label>
+          <input class="form-control" id="cfop" name="cfop" inputmode="numeric" value="{{ product.cfop or '' }}" placeholder="automático">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="csosn">CSOSN</label>
+          <select class="form-select" id="csosn" name="csosn">
+            {% for codigo, rotulo in csosn_opcoes.items() %}<option value="{{ codigo }}" {{ 'selected' if (product.csosn or '') == codigo }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="origem">Origem</label>
+          <select class="form-select" id="origem" name="origem">
+            {% for codigo, rotulo in origens.items() %}<option value="{{ codigo }}" {{ 'selected' if (product.origem or '0') == codigo }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <p class="small text-muted">CFOP em branco: 5102, ou 5405 quando o CSOSN é 500. Confirme NCM, CEST e CSOSN com o contador.</p>
+
+      <h2 class="h6 fw-bold mt-3">Apresentações e estoque</h2>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th scope="col">Apresentação</th><th scope="col">Código de barras</th><th scope="col">SKU</th><th scope="col" class="text-end">Saldo atual</th><th scope="col">Novo saldo</th></tr></thead>
+          <tbody>
+            {% for l in linhas %}
+            {% set sufixo = l.variant.id if l.variant else 'produto' %}
+            <tr>
+              <td>{{ l.variant.display_name if l.variant else product.name }}<div class="small text-muted">{{ l.preco|currency_br }}</div></td>
+              <td>{% if l.variant %}<input class="form-control form-control-sm" name="codigo_barras_{{ sufixo }}" value="{{ l.variant.barcode or '' }}" aria-label="Código de barras">{% else %}<span class="small text-muted">—</span>{% endif %}</td>
+              <td>{% if l.variant %}<input class="form-control form-control-sm" name="sku_{{ sufixo }}" value="{{ l.variant.sku or '' }}" aria-label="SKU">{% endif %}</td>
+              <td class="text-end">{{ l.saldo_texto }} {{ l.unidade }}</td>
+              <td><input class="form-control form-control-sm" name="saldo_{{ sufixo }}" inputmode="decimal" placeholder="manter" aria-label="Novo saldo"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label small" for="motivo">Motivo da alteração de estoque</label>
+          <input class="form-control" id="motivo" name="motivo" maxlength="255" placeholder="Ex.: contagem do mês, avaria, brinde">
+        </div>
+        <div class="col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="inventario" name="inventario" value="1">
+            <label class="form-check-label small" for="inventario">É contagem de inventário</label>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit">Salvar</button>
+    </div>
+  </form>
+
+  <h2 class="h6 fw-bold">Movimentos de estoque</h2>
+  {% if movimentos %}
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr><th scope="col">Quando</th><th scope="col">Tipo</th><th scope="col" class="text-end">Quantidade</th><th scope="col" class="text-end">Saldo após</th><th scope="col">Referência</th></tr></thead>
+      <tbody>
+        {% for m in movimentos %}
+        <tr>
+          <td>{{ m.created_at|data_br }}</td>
+          <td>{{ tipos.get(m.tipo, m.tipo) }}{% if m.observacao %}<div class="small text-muted">{{ m.observacao }}</div>{% endif %}</td>
+          <td class="text-end {{ 'text-danger' if m.quantidade < 0 else 'text-success' }}">{{ ('%+.3f'|format(m.quantidade)).rstrip('0').rstrip('.').replace('.', ',') }}</td>
+          <td class="text-end">{{ ('%.3f'|format(m.saldo_apos or 0)).rstrip('0').rstrip('.').replace('.', ',') }}</td>
+          <td>{% if m.referencia_tipo == 'venda' and m.referencia_id %}<a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=m.referencia_id) }}">venda #{{ m.referencia_id }}</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted small">Nenhum movimento registrado ainda. Vendas do caixa, ajustes e entradas por nota aparecem aqui.</p>
+  {% endif %}
+</div>
+{% endblock %}

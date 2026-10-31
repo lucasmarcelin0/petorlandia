@@ -26,6 +26,9 @@
         {% if documento.status == 'cancelada' %}
         <dt class="col-sm-3">Cancelamento</dt><dd class="col-sm-9">Protocolo {{ documento.cancel_protocolo }} · {{ documento.cancel_motivo }}</dd>
         {% endif %}
+        {% if documento.origem == 'venda_balcao' and documento.origem_id %}
+        <dt class="col-sm-3">Venda</dt><dd class="col-sm-9"><a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=documento.origem_id) }}">Venda #{{ documento.origem_id }} do caixa</a>{% if documento.status == 'autorizada' %} · para cancelar a venda e devolver o estoque, cancele por lá{% endif %}</dd>
+        {% endif %}
       </dl>
     </div>
   </div>
