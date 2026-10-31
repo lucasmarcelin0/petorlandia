@@ -422,6 +422,8 @@ class ProductVariant(db.Model):
     image_url = db.Column(db.String(200), nullable=True)
     status = db.Column(db.String(20), default="active", nullable=False)
     position = db.Column(db.Integer, default=0, nullable=False)
+    # Custo unitário da última entrada por nota de compra (caixa da loja).
+    custo = db.Column(db.Numeric(12, 4), nullable=True)
 
     product = db.relationship("Product", back_populates="variants")
     order_items = db.relationship("OrderItem", back_populates="variant")

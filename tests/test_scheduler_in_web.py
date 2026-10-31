@@ -24,6 +24,7 @@ EXPECTED_JOB_IDS = {
     'carrinho-abandonado',
     'snapshot-financeiro',
     'mercadopago-oauth-renewal',
+    'loja-dfe-sefaz',
 }
 
 

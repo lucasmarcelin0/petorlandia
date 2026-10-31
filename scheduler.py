@@ -223,6 +223,22 @@ def _run_adoption_reminders() -> None:
             current_app.logger.exception("[Scheduler] Falha nos lembretes de adocao.")
 
 
+def _run_loja_dfe() -> None:
+    """Notas de compra emitidas contra as lojas (SEFAZ, 1 consulta por hora)."""
+    with app.app_context():
+        if not _env_bool("LOJA_DFE_ENABLED", True):
+            return
+        from services.loja_caixa.dfe import rotina_horaria
+
+        try:
+            resumo = rotina_horaria()
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha ao buscar notas de compra das lojas na SEFAZ.")
+            return
+        if resumo.get("lojas"):
+            current_app.logger.info("[Scheduler] DF-e das lojas: %s", resumo)
+
+
 def _scheduler_timezone() -> str:
     return os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
 
@@ -299,6 +315,16 @@ def register_jobs(scheduler) -> None:
         max_instances=1,
         coalesce=True,
         next_run_time=datetime.now(dt_timezone.utc),
+    )
+    # Notas de compra das lojas na SEFAZ (DF-e): a SEFAZ aceita uma consulta
+    # por hora por CNPJ; o serviço respeita a espera de cada loja.
+    scheduler.add_job(
+        _memory_bounded_job(_run_loja_dfe),
+        _interval(60),
+        id='loja-dfe-sefaz',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     # Jobs diários que antes rodavam no dyno web (BackgroundScheduler no
     # app.py). Centralizados aqui: uma única execução, independente do nº de

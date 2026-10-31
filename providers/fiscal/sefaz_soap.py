@@ -45,23 +45,34 @@ def strip_xml_declaration(xml: str) -> str:
     return _XML_DECLARATION.sub("", xml or "", count=1)
 
 
-def build_soap12_envelope(service: str, body_xml: str) -> str:
-    """Envelope SOAP 1.2 com o XML do documento dentro de ``nfeDadosMsg``."""
+def build_soap12_envelope(service: str, body_xml: str, operation_wrapper: str | None = None) -> str:
+    """Envelope SOAP 1.2 com o XML do documento dentro de ``nfeDadosMsg``.
+
+    ``operation_wrapper``: serviços como a Distribuição DF-e põem o
+    ``nfeDadosMsg`` dentro do elemento da operação (``nfeDistDFeInteresse``).
+    """
+    dados = strip_xml_declaration(body_xml)
+    if operation_wrapper:
+        corpo = (
+            f'<{operation_wrapper} xmlns="{service_namespace(service)}">'
+            f"<nfeDadosMsg>{dados}</nfeDadosMsg>"
+            f"</{operation_wrapper}>"
+        )
+    else:
+        corpo = f'<nfeDadosMsg xmlns="{service_namespace(service)}">{dados}</nfeDadosMsg>'
     return (
         '<?xml version="1.0" encoding="utf-8"?>'
         '<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
         'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
         f'xmlns:soap12="{SOAP12_NS}">'
-        "<soap12:Body>"
-        f'<nfeDadosMsg xmlns="{service_namespace(service)}">'
-        f"{strip_xml_declaration(body_xml)}"
-        "</nfeDadosMsg>"
-        "</soap12:Body>"
+        f"<soap12:Body>{corpo}</soap12:Body>"
         "</soap12:Envelope>"
     )
 
 
-def extract_result_body(response_xml: str | None) -> tuple[Optional[str], Optional[str]]:
+def extract_result_body(
+    response_xml: str | None, result_tags: tuple[str, ...] = ("nfeResultMsg",)
+) -> tuple[Optional[str], Optional[str]]:
     """Devolve (XML do retorno dentro de ``nfeResultMsg``, mensagem de Fault)."""
     if not response_xml:
         return None, None
@@ -74,11 +85,11 @@ def extract_result_body(response_xml: str | None) -> tuple[Optional[str], Option
         if not isinstance(node.tag, str):
             continue
         local = node.tag.split("}", 1)[-1]
-        if local == "nfeResultMsg":
+        if local in result_tags:
             children = [child for child in node if isinstance(child.tag, str)]
             if children:
                 return etree.tostring(children[0], encoding="unicode"), None
-            return None, "Resposta da SEFAZ sem conteúdo em nfeResultMsg."
+            return None, f"Resposta da SEFAZ sem conteúdo em {local}."
         if local == "Fault":
             texts = [
                 (item.text or "").strip()
@@ -111,9 +122,11 @@ def post_soap12(
     cert_files: tuple[str, str] | None,
     timeout: int = 30,
     session: Optional[requests.Session] = None,
+    operation_wrapper: str | None = None,
+    result_tags: tuple[str, ...] = ("nfeResultMsg",),
 ) -> SoapResult:
     """Envia ``body_xml`` ao serviço SOAP 1.2 da SEFAZ e extrai o retorno."""
-    envelope = build_soap12_envelope(service, body_xml)
+    envelope = build_soap12_envelope(service, body_xml, operation_wrapper)
     headers = {
         "Content-Type": (
             'application/soap+xml; charset=utf-8; '
@@ -137,7 +150,7 @@ def post_soap12(
 
     response.encoding = response.encoding or "utf-8"
     response_xml = response.text
-    body_xml, fault = extract_result_body(response_xml)
+    body_xml, fault = extract_result_body(response_xml, result_tags)
     if response.status_code >= 400 or body_xml is None:
         message = fault or f"SEFAZ respondeu HTTP {response.status_code}."
         logger.warning("SEFAZ %s respondeu %s: %s", service, response.status_code, message)
