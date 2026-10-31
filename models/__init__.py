@@ -57,6 +57,11 @@ from .fiscal import (
     FiscalEmitter,
     FiscalEvent,
 )
+from .loja_fiscal import (  # noqa: F401
+    LojaFiscalConfig,
+    NfceDocumento,
+    NfceEvento,
+)
 from .sfa import (
     SfaAuditoria,
     SfaInstrumentReview,
@@ -209,4 +214,7 @@ __all__ = [
     "PushSubscription",
     "RacaoAssinatura",
     "RacaoAssinaturaCiclo",
+    "LojaFiscalConfig",
+    "NfceDocumento",
+    "NfceEvento",
 ]
