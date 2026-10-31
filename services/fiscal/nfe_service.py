@@ -23,8 +23,18 @@ from models import (
     FiscalEvent,
     Order,
 )
+from providers.nfe.chave import montar_chave
+from providers.nfe.retorno import parse_autorizacao, parse_consulta_situacao, parse_evento
 from providers.nfe.sefaz_sp.client import SefazSpNfeClient, get_sefaz_sp_wsdl_config
-from providers.nfe.xml_builder import UF_TO_CUF, build_cancel_event_xml, build_nfe_xml
+from providers.nfe.xml_builder import (
+    UF_TO_CUF,
+    build_cancel_event_xml,
+    build_cons_sit_xml,
+    build_envi_nfe_xml,
+    build_nfe_proc_xml,
+    build_nfe_xml,
+    format_dh,
+)
 from providers.nfe.xml_signer import sign_event_xml, sign_nfe_xml
 from security.crypto import decrypt_bytes, decrypt_text
 from services.fiscal.numbering import reserve_next_number
@@ -119,7 +129,7 @@ def test_nfe_connection(emitter_id: int) -> dict[str, Any]:
         raise ValueError("Certificado fiscal A1 não encontrado.")
     env = os.getenv("NFE_ENV", "homolog")
     client = _build_sefaz_client(certificate, env)
-    response = client.test_connection()
+    response = client.test_connection(_cuf_for_emitter(emitter))
     return {
         "success": response.success,
         "error_message": response.error_message,
@@ -158,26 +168,30 @@ def emit_nfe_sync(document_id: int) -> FiscalDocument:
         password=decrypt_text(certificate.pfx_password_encrypted),
     )
 
-    client = _build_sefaz_client(certificate, env)
-    response = client.autorizacao(signed_xml)
-
+    # Chave e dhEmi ficam gravados: um novo envio (após falha de rede)
+    # repete a MESMA chave, e a SEFAZ acusa duplicidade em vez de autorizar
+    # duas notas para a mesma venda.
     document.xml_signed = signed_xml
     document.access_key = payload["access_key"]
-    protocol = _extract_xml_value(response.response_xml or "", "nProt")
-    if protocol:
-        document.protocol = protocol
-    else:
-        document.protocol = _extract_xml_value(response.response_xml or "", "nRec")
+    document.payload_json = {**(document.payload_json or {}), "dhEmi": payload["ide"]["dhEmi"]}
 
-    status, error_code, error_message, authorized_xml = _handle_autorizacao_response(
+    client = _build_sefaz_client(certificate, env)
+    response = client.autorizacao(build_envi_nfe_xml(signed_xml, id_lote=document.id))
+
+    status, error_code, error_message, authorized_xml, protocol = _handle_autorizacao_response(
         response,
         client,
         tp_amb,
+        signed_xml=signed_xml,
+        access_key=document.access_key,
     )
     document.status = status
     document.error_code = error_code
     document.error_message = error_message
-    document.xml_authorized = authorized_xml
+    if protocol:
+        document.protocol = protocol
+    if authorized_xml:
+        document.xml_authorized = authorized_xml
     if status == FiscalDocumentStatus.AUTHORIZED:
         document.authorized_at = now_in_brazil()
 
@@ -231,23 +245,28 @@ def cancel_nfe_document(document_id: int, reason: Optional[str] = None) -> Fisca
     client = _build_sefaz_client(certificate, env)
     response = client.evento_cancelamento(document.access_key, signed_event)
 
-    status_code = _extract_xml_value(response.response_xml or "", "cStat")
-    if status_code == "135":
+    # O primeiro cStat do retorno é o do LOTE de eventos (128); o do
+    # cancelamento fica em retEvento/infEvento (135 ou 155).
+    retorno = parse_evento(response.response or response.response_xml)
+    cancel_error = None
+    if retorno.registrado:
         document.status = FiscalDocumentStatus.CANCELED
         document.canceled_at = now_in_brazil()
     else:
-        document.status = FiscalDocumentStatus.REJECTED
-        document.error_code = status_code
-        document.error_message = _extract_xml_value(response.response_xml or "", "xMotivo")
+        # Cancelamento recusado NÃO desfaz a autorização: a nota continua
+        # válida e o motivo fica registrado no evento.
+        cancel_error = retorno.x_motivo or response.error_message or "Cancelamento não registrado."
+        document.error_code = retorno.c_stat
+        document.error_message = f"Cancelamento recusado: {cancel_error}"
 
     _log_event(
         document,
         "cancelamento",
-        document.status.value,
+        FiscalDocumentStatus.CANCELED.value if retorno.registrado else "REJECTED",
         request_xml=_redact_xml(response.request_xml),
         response_xml=_redact_xml(response.response_xml),
         protocol=document.protocol,
-        error_message=document.error_message,
+        error_message=cancel_error,
     )
     db.session.add(document)
     db.session.commit()
@@ -269,21 +288,30 @@ def poll_nfe(document_id: int) -> FiscalDocument:
     env = os.getenv("NFE_ENV", "homolog")
     tp_amb = "2" if env == "homolog" else "1"
     recibo = document.protocol
+    if not recibo and document.access_key:
+        # Envio interrompido antes do retorno: pergunta à SEFAZ pela chave.
+        return _sync_by_access_key(document, certificate, env, tp_amb)
     if not recibo:
         raise ValueError("Recibo não disponível para consulta.")
 
     client = _build_sefaz_client(certificate, env)
     recibo_xml = _build_recibo_xml(recibo, tp_amb)
     response = client.ret_autorizacao(recibo_xml)
-    status, error_code, error_message, authorized_xml = _handle_autorizacao_response(
+    status, error_code, error_message, authorized_xml, protocol = _handle_autorizacao_response(
         response,
         client,
         tp_amb,
+        signed_xml=document.xml_signed,
+        access_key=document.access_key,
+        follow_receipt=False,
     )
     document.status = status
     document.error_code = error_code
     document.error_message = error_message
-    document.xml_authorized = authorized_xml
+    if protocol:
+        document.protocol = protocol
+    if authorized_xml:
+        document.xml_authorized = authorized_xml
     if status == FiscalDocumentStatus.AUTHORIZED:
         document.authorized_at = now_in_brazil()
 
@@ -324,7 +352,10 @@ def _normalize_payload(
     payload = dict(document.payload_json or {})
     order = db.session.get(Order, document.related_id) if document.related_type == "order" else None
 
-    access_key, c_dv, c_nf = _generate_access_key(emitter, document)
+    # Reenvio da mesma nota: mesma chave e mesmo dhEmi (o AAMM da chave
+    # precisa bater com a data de emissão).
+    dh_emi = payload.get("dhEmi") if document.access_key and payload.get("dhEmi") else format_dh()
+    access_key, c_dv, c_nf = _generate_access_key(emitter, document, dh_emi)
     ide = {
         "cUF": _cuf_for_emitter(emitter),
         "cNF": c_nf,
@@ -332,7 +363,7 @@ def _normalize_payload(
         "mod": "55",
         "serie": document.series,
         "nNF": document.number,
-        "dhEmi": now_in_brazil().isoformat(),
+        "dhEmi": dh_emi,
         "tpNF": "1",
         "idDest": "1",
         "cMunFG": emitter.municipio_ibge or "",
@@ -403,6 +434,7 @@ def _normalize_payload(
 def _build_items(order: Order, emitter: FiscalEmitter) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     items: list[dict[str, Any]] = []
     v_prod_total = Decimal("0")
+    v_bc_total = Decimal("0")
     v_icms_total = Decimal("0")
     v_pis_total = Decimal("0")
     v_cofins_total = Decimal("0")
@@ -413,14 +445,17 @@ def _build_items(order: Order, emitter: FiscalEmitter) -> tuple[list[dict[str, A
         quantity = Decimal(str(item.quantity or 1))
         unit_price = Decimal(str(item.unit_price or (product.price if product else 0)))
         v_prod = quantity * unit_price
-        aliquota_icms = Decimal(str(getattr(product, "aliquota_icms", 0) or 0))
-        aliquota_pis = Decimal(str(getattr(product, "aliquota_pis", 0) or 0))
-        aliquota_cofins = Decimal(str(getattr(product, "aliquota_cofins", 0) or 0))
+        # Simples Nacional (CSOSN): sem destaque de ICMS, PIS e COFINS na nota.
+        aliquota_icms = Decimal("0") if simples else Decimal(str(getattr(product, "aliquota_icms", 0) or 0))
+        aliquota_pis = Decimal("0") if simples else Decimal(str(getattr(product, "aliquota_pis", 0) or 0))
+        aliquota_cofins = Decimal("0") if simples else Decimal(str(getattr(product, "aliquota_cofins", 0) or 0))
         v_icms = (v_prod * aliquota_icms) / Decimal("100")
         v_pis = (v_prod * aliquota_pis) / Decimal("100")
         v_cofins = (v_prod * aliquota_cofins) / Decimal("100")
 
         v_prod_total += v_prod
+        if not simples:
+            v_bc_total += v_prod
         v_icms_total += v_icms
         v_pis_total += v_pis
         v_cofins_total += v_cofins
@@ -455,7 +490,7 @@ def _build_items(order: Order, emitter: FiscalEmitter) -> tuple[list[dict[str, A
         )
 
     totals = {
-        "vBC": _format_decimal(v_prod_total),
+        "vBC": _format_decimal(v_bc_total),
         "vICMS": _format_decimal(v_icms_total),
         "vICMSDeson": "0.00",
         "vFCP": "0.00",
@@ -484,6 +519,7 @@ def _build_items_from_payload(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     items: list[dict[str, Any]] = []
     v_prod_total = Decimal("0")
+    v_bc_total = Decimal("0")
     v_icms_total = Decimal("0")
     v_pis_total = Decimal("0")
     v_cofins_total = Decimal("0")
@@ -493,14 +529,17 @@ def _build_items_from_payload(
         quantity = Decimal(str(item.get("quantity") or 1))
         unit_price = Decimal(str(item.get("unit_price") or 0))
         v_prod = quantity * unit_price
-        aliquota_icms = Decimal(str(item.get("aliquota_icms") or 0))
-        aliquota_pis = Decimal(str(item.get("aliquota_pis") or 0))
-        aliquota_cofins = Decimal(str(item.get("aliquota_cofins") or 0))
+        # Simples Nacional (CSOSN): sem destaque de ICMS, PIS e COFINS na nota.
+        aliquota_icms = Decimal("0") if simples else Decimal(str(item.get("aliquota_icms") or 0))
+        aliquota_pis = Decimal("0") if simples else Decimal(str(item.get("aliquota_pis") or 0))
+        aliquota_cofins = Decimal("0") if simples else Decimal(str(item.get("aliquota_cofins") or 0))
         v_icms = (v_prod * aliquota_icms) / Decimal("100")
         v_pis = (v_prod * aliquota_pis) / Decimal("100")
         v_cofins = (v_prod * aliquota_cofins) / Decimal("100")
 
         v_prod_total += v_prod
+        if not simples:
+            v_bc_total += v_prod
         v_icms_total += v_icms
         v_pis_total += v_pis
         v_cofins_total += v_cofins
@@ -535,7 +574,7 @@ def _build_items_from_payload(
         )
 
     totals = {
-        "vBC": _format_decimal(v_prod_total),
+        "vBC": _format_decimal(v_bc_total),
         "vICMS": _format_decimal(v_icms_total),
         "vICMSDeson": "0.00",
         "vFCP": "0.00",
@@ -605,27 +644,108 @@ def _build_sefaz_client(certificate: FiscalCertificate, env: str) -> SefazSpNfeC
     )
 
 
+AutorizacaoResultado = tuple[
+    FiscalDocumentStatus, Optional[str], Optional[str], Optional[str], Optional[str]
+]
+
+# Duplicidade: a chave já foi recebida antes (ex.: retorno perdido na rede).
+CSTAT_DUPLICIDADE = {"204"}
+
+
 def _handle_autorizacao_response(
     response,
     client: SefazSpNfeClient,
     tp_amb: str,
-) -> tuple[FiscalDocumentStatus, str | None, str | None, str | None]:
-    c_stat = _extract_xml_value(response.response_xml or "", "cStat")
-    x_motivo = _extract_xml_value(response.response_xml or "", "xMotivo")
-    if c_stat in {"100", "150"}:
-        return FiscalDocumentStatus.AUTHORIZED, None, None, response.response_xml
-    if c_stat == "103":
-        recibo = _extract_xml_value(response.response_xml or "", "nRec")
-        if not recibo:
-            return FiscalDocumentStatus.REJECTED, c_stat, x_motivo, response.response_xml
-        recibo_xml = _build_recibo_xml(recibo, tp_amb)
-        ret_response = client.ret_autorizacao(recibo_xml)
-        ret_cstat = _extract_xml_value(ret_response.response_xml or "", "cStat")
-        ret_motivo = _extract_xml_value(ret_response.response_xml or "", "xMotivo")
-        if ret_cstat in {"100", "150"}:
-            return FiscalDocumentStatus.AUTHORIZED, None, None, ret_response.response_xml
-        return FiscalDocumentStatus.REJECTED, ret_cstat, ret_motivo, ret_response.response_xml
-    return FiscalDocumentStatus.REJECTED, c_stat, x_motivo, response.response_xml
+    *,
+    signed_xml: str | None = None,
+    access_key: str | None = None,
+    follow_receipt: bool = True,
+) -> AutorizacaoResultado:
+    """Traduz o retorno da SEFAZ em (status, código, mensagem, nfeProc, protocolo).
+
+    O protocolo devolvido é o ``nProt`` quando autorizada, ou o ``nRec``
+    quando o lote ficou em processamento (usado depois por ``poll_nfe``).
+    """
+    if not response.success and not response.response:
+        # Rede/TLS/timeout: a nota pode ou não ter chegado. FAILED entra no
+        # reprocessamento automático, que reenvia a MESMA chave.
+        return FiscalDocumentStatus.FAILED, None, response.error_message, None, None
+
+    retorno = parse_autorizacao(response.response or response.response_xml)
+    if retorno.autorizado:
+        proc = build_nfe_proc_xml(signed_xml, retorno.prot_nfe_xml) if signed_xml else retorno.prot_nfe_xml
+        return FiscalDocumentStatus.AUTHORIZED, None, None, proc, retorno.n_prot
+
+    if retorno.em_processamento:
+        if not retorno.n_rec:
+            return FiscalDocumentStatus.FAILED, retorno.c_stat_lote, retorno.x_motivo_lote, None, None
+        if follow_receipt:
+            ret_response = client.ret_autorizacao(_build_recibo_xml(retorno.n_rec, tp_amb))
+            if ret_response.success or ret_response.response:
+                ret = parse_autorizacao(ret_response.response or ret_response.response_xml)
+                if ret.autorizado:
+                    proc = build_nfe_proc_xml(signed_xml, ret.prot_nfe_xml) if signed_xml else ret.prot_nfe_xml
+                    return FiscalDocumentStatus.AUTHORIZED, None, None, proc, ret.n_prot
+                if ret.prot_nfe_xml is not None:
+                    return FiscalDocumentStatus.REJECTED, ret.c_stat, ret.x_motivo, None, retorno.n_rec
+        return FiscalDocumentStatus.PROCESSING, None, None, None, retorno.n_rec
+
+    if retorno.c_stat in CSTAT_DUPLICIDADE and access_key:
+        situacao_response = client.consulta_protocolo(build_cons_sit_xml(access_key, tp_amb))
+        situacao = parse_consulta_situacao(situacao_response.response or situacao_response.response_xml)
+        if situacao.autorizado:
+            proc = (
+                build_nfe_proc_xml(signed_xml, situacao.prot_nfe_xml)
+                if signed_xml and situacao.prot_nfe_xml
+                else situacao.prot_nfe_xml
+            )
+            return FiscalDocumentStatus.AUTHORIZED, None, None, proc, situacao.n_prot
+
+    message = retorno.x_motivo
+    if retorno.denegado:
+        message = f"Uso denegado: {retorno.x_motivo or retorno.c_stat}"
+    return FiscalDocumentStatus.REJECTED, retorno.c_stat, message, None, None
+
+
+def _sync_by_access_key(
+    document: FiscalDocument,
+    certificate: FiscalCertificate,
+    env: str,
+    tp_amb: str,
+) -> FiscalDocument:
+    """Consulta a chave na SEFAZ quando não há recibo para acompanhar."""
+    client = _build_sefaz_client(certificate, env)
+    response = client.consulta_protocolo(build_cons_sit_xml(document.access_key, tp_amb))
+    situacao = parse_consulta_situacao(response.response or response.response_xml)
+    if situacao.autorizado:
+        document.status = FiscalDocumentStatus.AUTHORIZED
+        document.protocol = situacao.n_prot
+        document.error_code = None
+        document.error_message = None
+        if situacao.prot_nfe_xml:
+            document.xml_authorized = (
+                build_nfe_proc_xml(document.xml_signed, situacao.prot_nfe_xml)
+                if document.xml_signed
+                else situacao.prot_nfe_xml
+            )
+        document.authorized_at = now_in_brazil()
+    elif situacao.c_stat == "217":
+        # 217: a chave não consta na SEFAZ. Volta para o reprocessamento.
+        document.status = FiscalDocumentStatus.FAILED
+        document.error_code = situacao.c_stat
+        document.error_message = situacao.x_motivo
+    _log_event(
+        document,
+        "consulta_chave",
+        document.status.value,
+        request_xml=_redact_xml(response.request_xml),
+        response_xml=_redact_xml(response.response_xml),
+        protocol=document.protocol,
+        error_message=None if situacao.autorizado else (situacao.x_motivo or response.error_message),
+    )
+    db.session.add(document)
+    db.session.commit()
+    return document
 
 
 def _build_recibo_xml(recibo: str, tp_amb: str) -> str:
@@ -637,18 +757,29 @@ def _build_recibo_xml(recibo: str, tp_amb: str) -> str:
     return etree.tostring(cons, encoding="unicode")
 
 
-def _generate_access_key(emitter: FiscalEmitter, document: FiscalDocument) -> tuple[str, str, str]:
-    c_uf = _cuf_for_emitter(emitter)
-    data = datetime.now().strftime("%y%m")
-    cnpj = _only_digits(emitter.cnpj).zfill(14)
-    modelo = "55"
-    serie = str(document.series).zfill(3)
-    numero = str(document.number).zfill(9)
-    tp_emis = "1"
-    c_nf = str(int(datetime.utcnow().timestamp()))[-8:]
-    base = f"{c_uf}{data}{cnpj}{modelo}{serie}{numero}{tp_emis}{c_nf}"
-    dv = _mod11(base)
-    return f"{base}{dv}", str(dv), c_nf
+def _generate_access_key(
+    emitter: FiscalEmitter,
+    document: FiscalDocument,
+    dh_emi: str | None = None,
+) -> tuple[str, str, str]:
+    """Chave da nota; reaproveita a já gravada para reenvios da mesma nota.
+
+    O AAMM sai do ``dhEmi`` (antes saía do relógio do servidor em UTC e
+    divergia da data de emissão perto da virada do mês) e o ``cNF`` é
+    aleatório, diferente do número da nota.
+    """
+    existing = _only_digits(document.access_key or "")
+    if len(existing) == 44:
+        return existing, existing[-1], existing[35:43]
+    chave = montar_chave(
+        c_uf=_cuf_for_emitter(emitter),
+        dh_emi=dh_emi or format_dh(),
+        cnpj=emitter.cnpj,
+        modelo="55",
+        serie=document.series or "1",
+        numero=document.number or 0,
+    )
+    return chave.chave, chave.c_dv, chave.c_nf
 
 
 def _cuf_for_emitter(emitter: FiscalEmitter) -> str:

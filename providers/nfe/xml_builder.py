@@ -1,11 +1,18 @@
 """Builder XML NF-e (modelo 55, versão 4.00)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from lxml import etree
+
+
+NFE_NS = "http://www.portalfiscal.inf.br/nfe"
+BRASILIA = ZoneInfo("America/Sao_Paulo")
+_XML_DECLARATION = re.compile(r"^\s*<\?xml[^>]*\?>\s*")
 
 
 UF_TO_CUF = {
@@ -82,7 +89,7 @@ def build_cancel_event_xml(
         "infEvento",
         Id=f"ID110111{chave}{seq}",
     )
-    dh_evento = (data_evento or datetime.utcnow()).isoformat()
+    dh_evento = format_dh(data_evento)
     etree.SubElement(inf_evento, "cOrgao").text = chave[:2]
     etree.SubElement(inf_evento, "tpAmb").text = tp_amb
     etree.SubElement(inf_evento, "CNPJ").text = _only_digits(emitter_cnpj)
@@ -96,6 +103,95 @@ def build_cancel_event_xml(
     etree.SubElement(det_evento, "nProt").text = protocolo
     etree.SubElement(det_evento, "xJust").text = motivo
     return etree.tostring(env_evento, encoding="unicode")
+
+
+def format_dh(value: datetime | None = None) -> str:
+    """Data/hora no formato do leiaute (AAAA-MM-DDThh:mm:ss-03:00).
+
+    O tipo ``TDateTimeUTC`` não aceita fração de segundo nem data sem fuso.
+    Datas sem fuso são tratadas como UTC (era o que o código gerava antes).
+    """
+    if value is None:
+        value = datetime.now(timezone.utc)
+    elif value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(BRASILIA).replace(microsecond=0).isoformat()
+
+
+def build_envi_nfe_xml(signed_nfe_xml: str, id_lote: int | str, ind_sinc: str = "1") -> str:
+    """Lote ``enviNFe`` com UMA nota assinada e resposta síncrona.
+
+    Desde a NT 2025.001 a SEFAZ recusa resposta assíncrona para lote com uma
+    nota (rejeição 452). A nota entra por concatenação para não reserializar
+    o conteúdo assinado.
+    """
+    nfe = _XML_DECLARATION.sub("", signed_nfe_xml or "", count=1)
+    lote = str(id_lote).strip()
+    if not lote.isdigit() or len(lote) > 15:
+        raise ValueError("idLote deve ter de 1 a 15 dígitos.")
+    return (
+        f'<enviNFe xmlns="{NFE_NS}" versao="4.00">'
+        f"<idLote>{lote}</idLote>"
+        f"<indSinc>{ind_sinc}</indSinc>"
+        f"{nfe}"
+        "</enviNFe>"
+    )
+
+
+def build_nfe_proc_xml(signed_nfe_xml: str, prot_nfe_xml: str) -> str:
+    """``nfeProc``: a nota assinada + o protocolo de autorização (XML de guarda)."""
+    nfe = _XML_DECLARATION.sub("", signed_nfe_xml or "", count=1)
+    prot = _XML_DECLARATION.sub("", prot_nfe_xml or "", count=1)
+    return f'<nfeProc xmlns="{NFE_NS}" versao="4.00">{nfe}{prot}</nfeProc>'
+
+
+def build_cons_sit_xml(chave: str, tp_amb: str) -> str:
+    """Consulta da situação atual de uma chave (``consSitNFe``)."""
+    root = etree.Element("consSitNFe", nsmap={None: NFE_NS})
+    root.set("versao", "4.00")
+    etree.SubElement(root, "tpAmb").text = str(tp_amb)
+    etree.SubElement(root, "xServ").text = "CONSULTAR"
+    etree.SubElement(root, "chNFe").text = _only_digits(chave)
+    return etree.tostring(root, encoding="unicode")
+
+
+def build_inut_xml(
+    *,
+    c_uf: str,
+    tp_amb: str,
+    ano: int,
+    cnpj: str,
+    modelo: str,
+    serie: int | str,
+    numero_inicial: int,
+    numero_final: int,
+    justificativa: str,
+) -> str:
+    """Pedido de inutilização de numeração (``inutNFe``), ainda sem assinatura."""
+    cnpj_digits = _only_digits(cnpj).zfill(14)
+    serie_txt = str(int(serie))
+    ano_txt = f"{int(ano) % 100:02d}"
+    inut_id = (
+        f"ID{c_uf}{ano_txt}{cnpj_digits}{modelo}"
+        f"{int(serie):03d}{int(numero_inicial):09d}{int(numero_final):09d}"
+    )
+    just = " ".join((justificativa or "").split())
+    if len(just) < 15:
+        raise ValueError("Justificativa da inutilização precisa de ao menos 15 caracteres.")
+    root = etree.Element("inutNFe", nsmap={None: NFE_NS})
+    root.set("versao", "4.00")
+    inf = etree.SubElement(root, "infInut", Id=inut_id)
+    etree.SubElement(inf, "tpAmb").text = str(tp_amb)
+    etree.SubElement(inf, "xServ").text = "INUTILIZAR"
+    etree.SubElement(inf, "cUF").text = str(c_uf)
+    etree.SubElement(inf, "ano").text = ano_txt
+    etree.SubElement(inf, "CNPJ").text = cnpj_digits
+    etree.SubElement(inf, "mod").text = str(modelo)
+    etree.SubElement(inf, "serie").text = serie_txt
+    etree.SubElement(inf, "nNFIni").text = str(int(numero_inicial))
+    etree.SubElement(inf, "nNFFin").text = str(int(numero_final))
+    etree.SubElement(inf, "xJust").text = just[:255]
+    return etree.tostring(root, encoding="unicode")
 
 
 def _append_ide(parent: etree._Element, ide_data: dict[str, Any]) -> None:
@@ -178,6 +274,13 @@ def _append_det(parent: etree._Element, item: dict[str, Any]) -> None:
         etree.SubElement(icms_tag, "pICMS").text = _format_decimal(item.get("aliquota_icms") or Decimal("0"))
         etree.SubElement(icms_tag, "vICMS").text = _format_decimal(item.get("vICMS") or Decimal("0"))
 
+    if item.get("csosn"):
+        # Simples Nacional: PIS/COFINS recolhidos no DAS, sem destaque na nota
+        # (grupo "Outras operações", CST 99 por padrão, valores zerados).
+        _append_pis_cofins_outr(imposto, "PIS", item.get("pis_cst") or "99")
+        _append_pis_cofins_outr(imposto, "COFINS", item.get("cofins_cst") or "99")
+        return
+
     pis = etree.SubElement(imposto, "PIS")
     pis_tag = etree.SubElement(pis, "PISAliq")
     etree.SubElement(pis_tag, "CST").text = str(item.get("pis_cst") or "01")
@@ -191,6 +294,15 @@ def _append_det(parent: etree._Element, item: dict[str, Any]) -> None:
     etree.SubElement(cofins_tag, "vBC").text = str(item["vProd"])
     etree.SubElement(cofins_tag, "pCOFINS").text = _format_decimal(item.get("aliquota_cofins") or Decimal("0"))
     etree.SubElement(cofins_tag, "vCOFINS").text = _format_decimal(item.get("vCOFINS") or Decimal("0"))
+
+
+def _append_pis_cofins_outr(imposto: etree._Element, tributo: str, cst: str) -> None:
+    grupo = etree.SubElement(imposto, tributo)
+    outr = etree.SubElement(grupo, f"{tributo}Outr")
+    etree.SubElement(outr, "CST").text = str(cst)
+    etree.SubElement(outr, "vBC").text = "0.00"
+    etree.SubElement(outr, f"p{tributo}").text = "0.00"
+    etree.SubElement(outr, f"v{tributo}").text = "0.00"
 
 
 def _append_total(parent: etree._Element, totals: dict[str, Any]) -> None:
