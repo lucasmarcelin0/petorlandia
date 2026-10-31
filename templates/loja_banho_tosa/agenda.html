@@ -90,6 +90,14 @@
             </form>
             {% endfor %}
             {% endif %}
+            {% if s.status == 'realizado' and s.animal.owner %}
+            {% set aviso_tutor = whatsapp_chat_url(s.animal.owner.phone, 'Olá, ' ~ s.animal.owner.name ~ '! ' ~ s.animal.name ~ ' já está ' ~ ('pronta' if s.animal.sex == 'Fêmea' else 'pronto') ~ ' para buscar na ' ~ casa.nome ~ '.') %}
+            {% if aviso_tutor %}
+            <a class="btn btn-sm btn-outline-success" href="{{ aviso_tutor }}" target="_blank" rel="noopener" title="Abrir conversa no WhatsApp com a mensagem pronta">
+              <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i> Avisar o tutor
+            </a>
+            {% endif %}
+            {% endif %}
             {% if caixa and not s.subscription_id and s.status in ['agendado', 'realizado'] and not (s.venda and s.venda.status == 'concluida') %}
             <form method="post" action="{{ url_for('loja_banho_tosa_cobrar', casa_id=casa.id, sessao_id=s.id) }}" class="d-flex gap-1 align-items-center ms-auto">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
