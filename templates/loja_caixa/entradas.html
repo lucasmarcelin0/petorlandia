@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block page_title %}Entradas por nota · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Estoque
+    </a>
+    <h1 class="h4 fw-bold mb-0 me-auto">Entrada de mercadoria pelo XML da nota</h1>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <p class="mb-2">Envie o <strong>XML</strong> da NF-e de compra que o fornecedor mandou (ou um <strong>.zip</strong> com vários). O PetOrlândia lê os itens, reconhece os produtos pelo código de barras ou pelo código do fornecedor e você confere antes de lançar no estoque.</p>
+      <form method="post" action="{{ url_for('loja_entradas_importar', casa_id=casa.id) }}" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="visually-hidden" for="arquivos">Arquivos XML ou ZIP</label>
+        <input class="form-control" style="max-width: 28rem" type="file" id="arquivos" name="arquivos" accept=".xml,.zip,application/xml,text/xml,application/zip" multiple required>
+        <button class="btn btn-primary" type="submit">Importar</button>
+      </form>
+      <p class="small text-muted mt-2 mb-0">Nada entra no estoque até você clicar em <em>Lançar no estoque</em>. Produtos novos entram fora da loja online.</p>
+    </div>
+  </div>
+
+  {% if entradas %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th scope="col">Nota</th><th scope="col">Fornecedor</th><th scope="col">Emissão</th><th scope="col" class="text-end">Valor</th><th scope="col">Situação</th><th scope="col"></th></tr></thead>
+      <tbody>
+        {% for e in entradas %}
+        <tr>
+          <td>{{ e.numero }}{% if e.serie %}-{{ e.serie }}{% endif %}</td>
+          <td>{{ e.fornecedor_nome }}</td>
+          <td>{{ e.dh_emi|data_br(False) if e.dh_emi else '' }}</td>
+          <td class="text-end">{{ e.valor_total|currency_br }}</td>
+          <td><span class="badge {{ 'text-bg-success' if e.status == 'lancada' else ('text-bg-secondary' if e.status == 'estornada' else 'text-bg-warning') }}">{{ e.status_label }}</span></td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('loja_entrada', casa_id=casa.id, entrada_id=e.id) }}">{{ 'Conferir' if e.status == 'rascunho' else 'Abrir' }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">Nenhuma nota importada ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}

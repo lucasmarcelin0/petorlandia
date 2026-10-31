@@ -1,0 +1,139 @@
+{% extends "layout.html" %}
+{% block page_title %}NF {{ entrada.numero }} · Entrada · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block head %}
+<style>
+  .entrada-resultados { position: absolute; z-index: 20; left: 0; right: 0; max-height: 260px; overflow-y: auto; }
+  .entrada-resultados .list-group-item { cursor: pointer; }
+  .entrada-item td { vertical-align: top; }
+</style>
+{% endblock %}
+{% block main %}
+{% set rascunho = entrada.status == 'rascunho' %}
+<div class="container-fluid px-3 px-lg-4 mt-4 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('loja_entradas', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Entradas
+    </a>
+    <a href="{{ url_for('loja_entrada_xml', casa_id=casa.id, entrada_id=entrada.id) }}" class="btn btn-outline-secondary btn-sm ms-auto">Baixar XML</a>
+  </div>
+  <h1 class="h4 fw-bold mb-1">NF {{ entrada.numero }}{% if entrada.serie %}-{{ entrada.serie }}{% endif %} · {{ entrada.fornecedor_nome }}</h1>
+  <p class="text-muted small mb-3">
+    {{ entrada.dh_emi|data_br(False) if entrada.dh_emi else '' }} · {{ entrada.valor_total|currency_br }} ·
+    <span class="badge {{ 'text-bg-success' if entrada.status == 'lancada' else ('text-bg-secondary' if entrada.status == 'estornada' else 'text-bg-warning') }}">{{ entrada.status_label }}</span>
+    {% if not entrada.autorizada %}<span class="badge text-bg-danger">XML sem protocolo de autorização</span>{% endif %}
+    <br><span class="font-monospace">{{ entrada.chave }}</span>
+  </p>
+
+  {% if rascunho %}
+  <div class="alert alert-info small">
+    Para cada item, escolha: <strong>vincular</strong> a um produto que a loja já tem, <strong>criar</strong> um produto novo ou <strong>ignorar</strong>.
+    O <strong>fator</strong> é quantas unidades de venda vêm em cada unidade da nota (caixa com 12 sachês → 12; saco de 15 kg vendido a granel em KG → 15).
+    Os vínculos ficam gravados: a próxima nota deste fornecedor já vem conferida.
+  </div>
+  {% endif %}
+
+  <form method="post" id="entrada-form" data-busca-url="{{ url_for('loja_caixa_produtos', casa_id=casa.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Item da nota</th>
+            <th scope="col" class="text-end">Qtd na nota</th>
+            <th scope="col" class="text-end">Custo do item</th>
+            <th scope="col">O que fazer</th>
+            <th scope="col" style="min-width: 7rem">Fator</th>
+            <th scope="col" class="text-end">Entra no estoque</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in entrada.itens %}
+          {% set p = 'item_' ~ item.id ~ '_' %}
+          <tr class="entrada-item" data-item="{{ item.id }}" data-quantidade="{{ item.quantidade_compra }}" data-total="{{ item.valor_total }}">
+            <td>
+              <div class="fw-semibold">{{ item.descricao }}</div>
+              <div class="small text-muted">
+                cód. {{ item.codigo_fornecedor }}{% if item.gtin %} · GTIN {{ item.gtin }}{% endif %}{% if item.gtin_trib and item.gtin_trib != item.gtin %} · GTIN un. {{ item.gtin_trib }}{% endif %}{% if item.ncm %} · NCM {{ item.ncm }}{% endif %}
+              </div>
+            </td>
+            <td class="text-end text-nowrap">{{ ('%.4f'|format(item.quantidade_compra)).rstrip('0').rstrip('.').replace('.', ',') }} {{ item.unidade_compra }}</td>
+            <td class="text-end text-nowrap">{{ item.valor_total|currency_br }}</td>
+            <td style="min-width: 18rem">
+              {% if rascunho %}
+              <select class="form-select form-select-sm mb-1" name="{{ p }}acao" data-acao aria-label="O que fazer com o item {{ item.n_item }}">
+                <option value="vincular" {{ 'selected' if item.acao == 'vincular' }}>Vincular a produto da loja</option>
+                <option value="criar" {{ 'selected' if item.acao == 'criar' }}>Criar produto novo</option>
+                <option value="ignorar" {{ 'selected' if item.acao == 'ignorar' }}>Ignorar (não entra no estoque)</option>
+              </select>
+              <div data-campos="vincular" class="position-relative {{ '' if item.acao == 'vincular' else 'd-none' }}">
+                <input type="hidden" name="{{ p }}product_id" value="{{ item.product_id or '' }}" data-product>
+                <input type="hidden" name="{{ p }}variant_id" value="{{ item.variant_id or '' }}" data-variant>
+                <div class="small mb-1" data-escolhido>
+                  {% if item.product %}<span class="text-success">✓ {{ item.product.name }}{% if item.variant and item.product.active_variants|length > 1 %} — {{ item.variant.display_name }}{% endif %}</span>
+                  {% if item.sugestao == 'fornecedor' %}<span class="text-muted">(vínculo deste fornecedor)</span>{% elif item.sugestao == 'codigo_barras' %}<span class="text-muted">(pelo código de barras)</span>{% endif %}
+                  {% else %}<span class="text-danger">Escolha o produto</span>{% endif %}
+                </div>
+                <input class="form-control form-control-sm" type="search" placeholder="Buscar produto da loja" data-busca autocomplete="off" aria-label="Buscar produto para o item {{ item.n_item }}">
+                <div class="list-group entrada-resultados shadow d-none" data-resultados></div>
+              </div>
+              <div data-campos="criar" class="{{ '' if item.acao == 'criar' else 'd-none' }}">
+                <input class="form-control form-control-sm mb-1" name="{{ p }}nome" value="{{ item.descricao }}" maxlength="120" aria-label="Nome do produto novo">
+                <div class="d-flex gap-1">
+                  {% set preco_txt = ('%.2f'|format(item.preco_venda)).replace('.', ',') if item.preco_venda else '' %}
+                  <input class="form-control form-control-sm" name="{{ p }}preco_venda" inputmode="decimal" value="{{ preco_txt }}" data-preco data-sugerido="{{ preco_txt }}" placeholder="Preço de venda" aria-label="Preço de venda">
+                  <select class="form-select form-select-sm" name="{{ p }}unidade_venda" aria-label="Unidade de venda" style="max-width: 6rem">
+                    {% for u in unidades %}<option value="{{ u }}" {{ 'selected' if (item.unidade_venda or 'UN') == u }}>{{ u }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="small text-muted mt-1">Preço sugerido com 50% sobre o custo; ajuste à vontade.</div>
+                <div class="small text-danger fw-semibold d-none" data-abaixo>Preço abaixo do custo.</div>
+              </div>
+              {% else %}
+                {% if item.acao == 'ignorar' %}<span class="text-muted">Ignorado</span>
+                {% elif item.product %}<a href="{{ url_for('loja_estoque_produto', casa_id=casa.id, product_id=item.product_id) }}">{{ item.product.name }}</a>
+                {% else %}—{% endif %}
+              {% endif %}
+            </td>
+            <td>
+              {% if rascunho %}
+              <input class="form-control form-control-sm" name="{{ p }}fator" inputmode="decimal" value="{{ ('%.4f'|format(item.fator)).rstrip('0').rstrip('.').replace('.', ',') }}" data-fator aria-label="Fator do item {{ item.n_item }}">
+              {% else %}{{ ('%.4f'|format(item.fator)).rstrip('0').rstrip('.').replace('.', ',') }}{% endif %}
+            </td>
+            <td class="text-end small" data-resumo>
+              {{ ('%.4f'|format(item.quantidade_estoque)).rstrip('0').rstrip('.').replace('.', ',') }} un.<br>
+              custo {{ item.custo_unitario|currency_br }}/un.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if rascunho %}
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-primary" type="submit" name="acao_tela" value="salvar">Salvar conferência</button>
+      <button class="btn btn-success" type="submit" name="acao_tela" value="lancar">Lançar no estoque</button>
+    </div>
+    {% endif %}
+  </form>
+
+  {% if rascunho %}
+  <form method="post" action="{{ url_for('loja_entrada_excluir', casa_id=casa.id, entrada_id=entrada.id) }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-link btn-sm text-danger p-0" type="submit">Descartar esta nota</button>
+  </form>
+  {% elif entrada.status == 'lancada' %}
+  <details class="mt-4">
+    <summary class="text-danger small">Estornar esta entrada</summary>
+    <form method="post" action="{{ url_for('loja_entrada_estornar', casa_id=casa.id, entrada_id=entrada.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="small text-muted">Tira do estoque as quantidades que esta nota colocou (para nota lançada por engano). Os produtos criados continuam cadastrados.</p>
+      <button class="btn btn-outline-danger btn-sm" type="submit">Estornar entrada</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+{% if entrada.status == 'rascunho' %}<script src="{{ url_for('static', filename='js/loja_entrada.js', v='20261031') }}"></script>{% endif %}
+{% endblock %}

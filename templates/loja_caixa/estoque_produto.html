@@ -58,7 +58,7 @@
             {% for l in linhas %}
             {% set sufixo = l.variant.id if l.variant else 'produto' %}
             <tr>
-              <td>{{ l.variant.display_name if l.variant else product.name }}<div class="small text-muted">{{ l.preco|currency_br }}</div></td>
+              <td>{{ l.variant.display_name if l.variant else product.name }}<div class="small text-muted">{{ l.preco|currency_br }}{% if l.variant and l.variant.custo %} · custo {{ l.variant.custo|currency_br }}{% endif %}</div></td>
               <td>{% if l.variant %}<input class="form-control form-control-sm" name="codigo_barras_{{ sufixo }}" value="{{ l.variant.barcode or '' }}" aria-label="Código de barras">{% else %}<span class="small text-muted">—</span>{% endif %}</td>
               <td>{% if l.variant %}<input class="form-control form-control-sm" name="sku_{{ sufixo }}" value="{{ l.variant.sku or '' }}" aria-label="SKU">{% endif %}</td>
               <td class="text-end">{{ l.saldo_texto }} {{ l.unidade }}</td>
@@ -96,7 +96,11 @@
           <td>{{ tipos.get(m.tipo, m.tipo) }}{% if m.observacao %}<div class="small text-muted">{{ m.observacao }}</div>{% endif %}</td>
           <td class="text-end {{ 'text-danger' if m.quantidade < 0 else 'text-success' }}">{{ ('%+.3f'|format(m.quantidade)).rstrip('0').rstrip('.').replace('.', ',') }}</td>
           <td class="text-end">{{ ('%.3f'|format(m.saldo_apos or 0)).rstrip('0').rstrip('.').replace('.', ',') }}</td>
-          <td>{% if m.referencia_tipo == 'venda' and m.referencia_id %}<a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=m.referencia_id) }}">venda #{{ m.referencia_id }}</a>{% endif %}</td>
+          <td>
+            {% if m.referencia_tipo == 'venda' and m.referencia_id %}<a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=m.referencia_id) }}">venda #{{ m.referencia_id }}</a>
+            {% elif m.referencia_tipo == 'entrada' and m.referencia_id %}<a href="{{ url_for('loja_entrada', casa_id=casa.id, entrada_id=m.referencia_id) }}">nota de entrada</a>{% if m.custo_unitario %} · custo {{ m.custo_unitario|currency_br }}{% endif %}
+            {% elif m.referencia_tipo == 'pedido' and m.referencia_id %}pedido online #{{ m.referencia_id }}{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

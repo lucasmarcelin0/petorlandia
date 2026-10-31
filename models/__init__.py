@@ -70,6 +70,11 @@ from .loja_caixa import (  # noqa: F401
     VendaBalcaoItem,
     VendaBalcaoPagamento,
 )
+from .loja_entrada import (  # noqa: F401
+    LojaEntradaItem,
+    LojaEntradaNota,
+    LojaFornecedorProduto,
+)
 from .sfa import (
     SfaAuditoria,
     SfaInstrumentReview,
@@ -231,4 +236,7 @@ __all__ = [
     "VendaBalcaoItem",
     "VendaBalcaoPagamento",
     "EstoqueMovimento",
+    "LojaEntradaNota",
+    "LojaEntradaItem",
+    "LojaFornecedorProduto",
 ]

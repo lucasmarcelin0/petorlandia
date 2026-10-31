@@ -11,6 +11,7 @@ from decimal import Decimal
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -30,7 +31,9 @@ from models import (
 )
 from models.loja_caixa import FORMAS_PAGAMENTO_CAIXA, UNIDADES_FRACIONADAS
 from providers.nfe.chave import only_digits
+from services.loja_caixa import entrada as entrada_service
 from services.loja_caixa import estoque, pdv
+from services.loja_caixa.entrada import EntradaError
 from services.loja_caixa.estoque import TIPOS_MOVIMENTO, EstoqueError
 from services.loja_caixa.pdv import CaixaError, VendaRepetida
 from time_utils import BR_TZ, now_in_brazil
@@ -566,3 +569,126 @@ def loja_estoque_produto(casa_id, product_id):
         origens=ORIGENS,
         csosn_opcoes=CSOSN_OPCOES,
     )
+
+
+# ------------------------------------------------------- entrada por XML
+
+MAX_UPLOAD_ENTRADA = 20 * 1024 * 1024  # .zip com várias notas
+
+
+def _entrada_da_loja(casa, entrada_id: int):
+    from models import LojaEntradaNota
+
+    entrada = LojaEntradaNota.query.filter_by(id=entrada_id, casa_de_racao_id=casa.id).first()
+    if entrada is None:
+        abort(404)
+    return entrada
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas", methods=["GET"])
+@login_required
+def loja_entradas(casa_id):
+    from models import LojaEntradaNota
+
+    casa = ensure_loja_access(casa_id)
+    entradas = (
+        LojaEntradaNota.query.filter_by(casa_de_racao_id=casa.id)
+        .order_by(LojaEntradaNota.id.desc())
+        .limit(100)
+        .all()
+    )
+    return render_template("loja_caixa/entradas.html", casa=casa, entradas=entradas)
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/importar", methods=["POST"])
+@login_required
+def loja_entradas_importar(casa_id):
+    casa = ensure_loja_access(casa_id)
+    arquivos = []
+    for arquivo in request.files.getlist("arquivos"):
+        if not arquivo or not arquivo.filename:
+            continue
+        conteudo = arquivo.read(MAX_UPLOAD_ENTRADA + 1)
+        if len(conteudo) > MAX_UPLOAD_ENTRADA:
+            flash(f"{arquivo.filename}: arquivo grande demais (máximo 20 MB).", "warning")
+            continue
+        arquivos.append((arquivo.filename, conteudo))
+    if not arquivos:
+        flash("Escolha o XML da nota (ou um .zip com vários XMLs).", "warning")
+        return redirect(url_for("loja_entradas", casa_id=casa.id))
+    resultado = entrada_service.importar_arquivos(casa, arquivos, usuario_id=_usuario_id())
+    for erro in resultado["erros"][:10]:
+        flash(erro, "warning")
+    importadas = resultado["importadas"]
+    if len(importadas) == 1:
+        flash("Nota importada. Confira os itens e lance no estoque.", "success")
+        return redirect(url_for("loja_entrada", casa_id=casa.id, entrada_id=importadas[0].id))
+    if importadas:
+        flash(f"{len(importadas)} notas importadas. Confira cada uma e lance no estoque.", "success")
+    return redirect(url_for("loja_entradas", casa_id=casa.id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>", methods=["GET", "POST"])
+@login_required
+def loja_entrada(casa_id, entrada_id):
+    casa = ensure_loja_access(casa_id)
+    entrada = _entrada_da_loja(casa, entrada_id)
+    if request.method == "POST":
+        try:
+            avisos = entrada_service.salvar_conferencia(entrada, request.form.to_dict())
+            for aviso in avisos:
+                flash(aviso, "warning")
+            if request.form.get("acao_tela") == "lancar":
+                entrada_service.lancar_entrada(entrada, usuario_id=_usuario_id())
+                flash("Nota lançada: estoque e custos atualizados.", "success")
+            else:
+                flash("Conferência salva.", "success")
+        except EntradaError as exc:
+            flash(str(exc), "warning")
+        return redirect(url_for("loja_entrada", casa_id=casa.id, entrada_id=entrada_id))
+    return render_template(
+        "loja_caixa/entrada.html",
+        casa=casa,
+        entrada=entrada,
+        unidades=entrada_service.UNIDADES_VENDA,
+    )
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/estornar", methods=["POST"])
+@login_required
+def loja_entrada_estornar(casa_id, entrada_id):
+    casa = ensure_loja_access(casa_id)
+    entrada = _entrada_da_loja(casa, entrada_id)
+    try:
+        entrada_service.estornar_entrada(entrada, usuario_id=_usuario_id())
+        flash("Entrada estornada: o estoque voltou ao que era.", "success")
+    except (EntradaError, EstoqueError) as exc:
+        db.session.rollback()
+        flash(str(exc), "warning")
+    return redirect(url_for("loja_entrada", casa_id=casa.id, entrada_id=entrada_id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/excluir", methods=["POST"])
+@login_required
+def loja_entrada_excluir(casa_id, entrada_id):
+    casa = ensure_loja_access(casa_id)
+    entrada = _entrada_da_loja(casa, entrada_id)
+    try:
+        entrada_service.excluir_rascunho(entrada)
+        flash("Nota descartada.", "success")
+    except EntradaError as exc:
+        flash(str(exc), "warning")
+        return redirect(url_for("loja_entrada", casa_id=casa.id, entrada_id=entrada_id))
+    return redirect(url_for("loja_entradas", casa_id=casa.id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/xml", methods=["GET"])
+@login_required
+def loja_entrada_xml(casa_id, entrada_id):
+    casa = ensure_loja_access(casa_id)
+    entrada = _entrada_da_loja(casa, entrada_id)
+    if not entrada.xml:
+        abort(404)
+    resposta = current_app.response_class(entrada.xml, mimetype="application/xml")
+    resposta.headers["Content-Disposition"] = f'attachment; filename="{entrada.chave}-nfe.xml"'
+    return resposta
