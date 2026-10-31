@@ -80,6 +80,14 @@ def test_imprimir_orcamento_includes_printing_user_details(app):
         resp = client.get(f'/imprimir_orcamento/{consulta_id}')
         assert resp.status_code == 200
 
+        pdf_resp = client.get(f'/imprimir_orcamento/{consulta_id}?pdf=inline')
+        assert pdf_resp.status_code == 200
+        assert pdf_resp.mimetype == 'application/pdf'
+        assert pdf_resp.headers['Content-Disposition'].startswith('inline;')
+        assert 'no-store' in pdf_resp.headers['Cache-Control']
+        assert pdf_resp.data.startswith(b'%PDF-')
+        assert client.get(f'/imprimir_orcamento/{consulta_id}?pdf=download').headers['Content-Disposition'].startswith('attachment;')
+
         html = resp.get_data(as_text=True)
         assert 'Impresso por:' in html
         assert 'Vet' in html
