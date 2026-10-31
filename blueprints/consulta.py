@@ -4266,6 +4266,16 @@ def imprimir_orcamento(consulta_id):
     clinica = consulta.clinica or (
         veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
     )
+    if request.args.get('pdf') in ('inline', 'download'):
+        from services.orcamento_pdf import gerar_pdf_orcamento
+        pdf = gerar_pdf_orcamento(itens=consulta.orcamento_items, total=consulta.total_orcamento, clinica=clinica,
+                                  veterinario=veterinario, printing_user=pessoa_no_documento(current_user),
+                                  printed_at=datetime.now(BR_TZ), animal=animal, tutor=tutor)
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args['pdf'] == 'inline' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="orcamento.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
     return render_template(
         'orcamentos/imprimir_orcamento.html',
         itens=consulta.orcamento_items,
@@ -4295,6 +4305,16 @@ def imprimir_bloco_orcamento(bloco_id):
         fallback=pessoa_no_documento(current_user) if can_act_as_veterinarian(current_user) else None,
     )
     clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
+    if request.args.get('pdf') in ('inline', 'download'):
+        from services.orcamento_pdf import gerar_pdf_orcamento
+        pdf = gerar_pdf_orcamento(itens=bloco.itens, total=bloco.total, clinica=clinica,
+                                  veterinario=veterinario, printing_user=pessoa_no_documento(current_user),
+                                  printed_at=datetime.now(BR_TZ), animal=animal, tutor=tutor)
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args['pdf'] == 'inline' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="orcamento.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
     return render_template(
         'orcamentos/imprimir_orcamento.html',
         itens=bloco.itens,
@@ -4315,6 +4335,16 @@ def imprimir_orcamento_padrao(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
     if not can_view_budget(current_user, orcamento.clinica_id, orcamento.consulta_id):
         abort(404)
+    if request.args.get('pdf') in ('inline', 'download'):
+        from services.orcamento_pdf import gerar_pdf_orcamento
+        pdf = gerar_pdf_orcamento(itens=orcamento.items, total=orcamento.total, clinica=orcamento.clinica,
+                                  veterinario=current_user, printing_user=pessoa_no_documento(current_user),
+                                  printed_at=datetime.now(BR_TZ), padrao=True)
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args['pdf'] == 'inline' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="orcamento.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
     return render_template(
         'orcamentos/imprimir_orcamento_padrao.html',
         itens=orcamento.items,

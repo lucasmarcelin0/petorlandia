@@ -10,7 +10,8 @@
 <body>
 <div class="no-print print-toolbar" role="region" aria-label="Ações do documento">
   <div class="print-toolbar__row">
-  <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+  <a class="print-action" href="?pdf=inline" target="_blank" rel="noopener">Imprimir PDF</a>
+  <a class="print-action" href="?pdf=download">Baixar PDF</a>
   <a class="print-action print-action--ghost print-toolbar__back" href="{{ url_for('clinic_detail', clinica_id=orcamento.clinica_id) }}#orcamento">Voltar</a>
   </div>
 </div>
