@@ -3728,12 +3728,26 @@ def imprimir_bloco_exames(bloco_id):
             clinica = vet.clinica
     if not clinica:
         clinica = getattr(animal, 'clinica', None)
+    clinica_vinculada = bool(clinica)
     if not clinica:
         clinica_id = request.args.get('clinica_id', type=int)
         if clinica_id:
             clinica = Clinica.query.get_or_404(clinica_id)
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
+
+    if request.args.get('format') == 'pdf':
+        if not (has_token_access or _current_user_owns_animal(animal)
+                or (clinica_vinculada and can_view_clinic(current_user, clinica.id))
+                or _is_global_admin(current_user)):
+            abort(403)
+        from services.exames_pdf import gerar_pdf_exames
+        pdf = gerar_pdf_exames(bloco, animal, tutor, clinica, veterinario)
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args.get('inline') == '1' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="exames-{bloco.id}.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
 
     ofertas_exames = _build_exame_offers(bloco, clinica)
     total_contratavel = sum(o['price'] for o in ofertas_exames if not o['is_paid'])

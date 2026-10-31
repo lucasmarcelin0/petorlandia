@@ -54,6 +54,27 @@ def test_imprimir_bloco_exames_requer_clinica(app):
         assert 'Ultrassom SID,Rosa.pdf' in html
         assert 'Fornecido com tecnologia <strong>PetOrlândia</strong>' in html
         assert html.index('Pet Clinic') < html.index('Fornecido com tecnologia')
+        assert 'Imprimir PDF' in html and 'Baixar PDF' in html
+        for suffix, disposition in [('', 'attachment;'), ('&inline=1', 'inline;')]:
+            pdf = client.get(f'/imprimir_bloco_exames/{bloco_id}?clinica_id={clinica_id}&format=pdf{suffix}')
+            assert pdf.status_code == 200
+            assert pdf.mimetype == 'application/pdf'
+            assert pdf.headers['Content-Disposition'].startswith(disposition)
+            assert 'no-store' in pdf.headers['Cache-Control']
+            assert pdf.data.startswith(b'%PDF-')
+            import base64, re, zlib
+            conteudo = ''
+            for bruto in re.findall(rb'stream\r?\n(.*?)endstream', pdf.data, re.S):
+                dados = bruto.strip()
+                try:
+                    if dados.endswith(b'~>'):
+                        dados = base64.a85decode(dados[:-2])
+                    conteudo += zlib.decompress(dados).decode('latin-1', 'ignore')
+                except (ValueError, zlib.error):
+                    continue
+            for valor in ('Rex', 'Tutor', 'Ultrassonografia abdominal', 'Cistite e hiperplasia prostatica.', 'Ultrassom SID,Rosa.pdf'):
+                assert valor in conteudo
+
 
     with app.app_context():
         db.drop_all()
