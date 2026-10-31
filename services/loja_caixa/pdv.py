@@ -349,6 +349,80 @@ def venda_por_chave(casa_id: int, chave) -> Optional[VendaBalcao]:
     return VendaBalcao.query.filter_by(casa_de_racao_id=casa_id, chave_cliente=chave).first()
 
 
+def _validar_pagamentos(pagamentos: list[dict[str, Any]], total: Decimal) -> tuple[list[tuple[str, Decimal, str | None]], Decimal]:
+    """Confere as formas e os valores pagos; devolve os pagamentos e o troco."""
+    pagos: list[tuple[str, Decimal, str | None]] = []
+    for pagamento in pagamentos:
+        t_pag = str(pagamento.get("t_pag") or "").strip()
+        if t_pag not in FORMAS_PAGAMENTO_CAIXA:
+            raise CaixaError("Forma de pagamento inválida.")
+        valor = _moeda(_numero(pagamento.get("valor"), "o valor pago"))
+        if valor <= 0:
+            continue
+        autorizacao = " ".join(str(pagamento.get("autorizacao") or "").split())[:40] or None
+        pagos.append((t_pag, valor, autorizacao))
+    if not pagos:
+        raise CaixaError("Informe como o cliente pagou.")
+    total_pago = sum((valor for _, valor, _ in pagos), ZERO)
+    if total_pago < total:
+        raise CaixaError(f"Faltam R$ {total - total_pago:.2f} para fechar a venda.".replace(".", ","))
+    troco = total_pago - total
+    dinheiro = sum((valor for t_pag, valor, _ in pagos if t_pag == "01"), ZERO)
+    if troco > dinheiro:
+        raise CaixaError("Só pagamento em dinheiro pode gerar troco.")
+    return pagos, troco
+
+
+def registrar_servico(
+    casa_id: int,
+    sessao: Optional[CaixaSessao],
+    *,
+    codigo: str,
+    descricao: str,
+    valor,
+    pagamentos: Iterable[dict[str, Any]],
+    usuario_id: int | None = None,
+) -> VendaBalcao:
+    """Recebe um serviço (ex.: banho) no caixa.
+
+    Serviço não entra em NFC-e (é ISS, nota de serviço) e não mexe no
+    estoque; a venda aparece no caixa e no fechamento como as outras.
+    """
+    sessao = _exigir_aberto(sessao, casa_id)
+    total = _moeda(_numero(valor, "o valor"))
+    if total <= 0:
+        raise CaixaError("Informe o valor do serviço.")
+    pagos, troco = _validar_pagamentos(list(pagamentos or []), total)
+    venda = VendaBalcao(
+        casa_de_racao_id=casa_id,
+        sessao_id=sessao.id,
+        status="concluida",
+        subtotal=total,
+        desconto=ZERO,
+        total=total,
+        troco=troco,
+        emitir_nfce=False,
+        created_by_id=usuario_id,
+        created_at=now_in_brazil(),
+    )
+    venda.itens.append(
+        VendaBalcaoItem(
+            codigo=(codigo or "SERVICO")[:60],
+            descricao=" ".join((descricao or "Serviço").split())[:160],
+            unidade="UN",
+            quantidade=Decimal("1"),
+            preco_unitario=total,
+            desconto=ZERO,
+            total=total,
+        )
+    )
+    for t_pag, quantia, autorizacao in pagos:
+        venda.pagamentos.append(VendaBalcaoPagamento(t_pag=t_pag, valor=quantia, autorizacao=autorizacao))
+    db.session.add(venda)
+    db.session.flush()
+    return venda
+
+
 def registrar_venda(
     casa_id: int,
     sessao: Optional[CaixaSessao],
@@ -422,25 +496,7 @@ def registrar_venda(
     if total <= 0:
         raise CaixaError("O total da venda precisa ser maior que zero.")
 
-    pagos: list[tuple[str, Decimal, str | None]] = []
-    for pagamento in pagamentos:
-        t_pag = str(pagamento.get("t_pag") or "").strip()
-        if t_pag not in FORMAS_PAGAMENTO_CAIXA:
-            raise CaixaError("Forma de pagamento inválida.")
-        valor = _moeda(_numero(pagamento.get("valor"), "o valor pago"))
-        if valor <= 0:
-            continue
-        autorizacao = " ".join(str(pagamento.get("autorizacao") or "").split())[:40] or None
-        pagos.append((t_pag, valor, autorizacao))
-    if not pagos:
-        raise CaixaError("Informe como o cliente pagou.")
-    total_pago = sum((valor for _, valor, _ in pagos), ZERO)
-    if total_pago < total:
-        raise CaixaError(f"Faltam R$ {total - total_pago:.2f} para fechar a venda.".replace(".", ","))
-    troco = total_pago - total
-    dinheiro = sum((valor for t_pag, valor, _ in pagos if t_pag == "01"), ZERO)
-    if troco > dinheiro:
-        raise CaixaError("Só pagamento em dinheiro pode gerar troco.")
+    pagos, troco = _validar_pagamentos(pagamentos, total)
 
     venda = VendaBalcao(
         casa_de_racao_id=casa_id,
@@ -583,6 +639,8 @@ def emitir_nfce_venda(
 
     if venda.status != "concluida":
         raise CaixaError("Só vendas concluídas recebem NFC-e.")
+    if not any(item.product_id for item in venda.itens):
+        raise CaixaError("Serviço (banho, tosa) não vai em NFC-e: a nota de serviço é a NFS-e.")
     config = config_fiscal(venda.casa_de_racao_id)
     if config is None or not config.ativo:
         raise CaixaError("A emissão de NFC-e está desligada. Ligue em Notas fiscais (NFC-e).")

@@ -115,7 +115,20 @@ class GroomingPlanForm(FlaskForm):
         validators=[DataRequired(), NumberRange(min=1, max=31)],
         default=1,
     )
+    # Opcionais (lojas): porte pela faixa de peso e cobrança por sessão.
+    cobranca = SelectField(
+        'Cobrança',
+        choices=[('mensal', 'Plano mensal (assinatura)'), ('avulso', 'Avulso (preço por sessão)')],
+        default='mensal',
+        validators=[Optional()],
+    )
+    peso_min_kg = DecimalField('Peso a partir de (kg)', places=2, validators=[Optional(), NumberRange(min=0, max=200)])
+    peso_max_kg = DecimalField('Peso até (kg)', places=2, validators=[Optional(), NumberRange(min=0, max=200)])
     submit = SubmitField('Salvar plano')
+
+    def validate_peso_max_kg(self, field):
+        if field.data is not None and self.peso_min_kg.data is not None and field.data < self.peso_min_kg.data:
+            raise ValidationError('O peso máximo precisa ser maior que o mínimo.')
 
 
 class GroomingSubscribeForm(FlaskForm):

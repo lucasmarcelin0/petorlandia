@@ -250,6 +250,11 @@ class GroomingPlan(db.Model):
     sessions_per_month = db.Column(db.Integer, nullable=False, default=1)
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    # Porte atendido pela faixa de peso (vazio = qualquer peso).
+    peso_min_kg = db.Column(db.Numeric(6, 2), nullable=True)
+    peso_max_kg = db.Column(db.Numeric(6, 2), nullable=True)
+    # 'mensal' = assinatura com N sessões por mês; 'avulso' = preço por sessão.
+    cobranca = db.Column(db.String(10), nullable=False, default='mensal', server_default='mensal')
 
     clinica = db.relationship('Clinica', backref=db.backref('grooming_plans', lazy='dynamic'))
     casa_de_racao = db.relationship('CasaDeRacao', backref=db.backref('grooming_plans', lazy='dynamic'))
@@ -263,6 +268,40 @@ class GroomingPlan(db.Model):
     @property
     def service_label(self):
         return GROOMING_SERVICE_LABELS.get(self.service_type, self.service_type)
+
+    @property
+    def avulso(self) -> bool:
+        return self.cobranca == 'avulso'
+
+    @property
+    def porte_label(self) -> str:
+        """Faixa de peso em texto: "Até 10 kg", "De 20 a 30 kg", "Acima de 40 kg"."""
+        def _kg(valor):
+            texto = f"{Decimal(str(valor)).normalize():f}"
+            return texto.replace('.', ',')
+
+        minimo, maximo = self.peso_min_kg, self.peso_max_kg
+        if minimo is None and maximo is None:
+            return 'Qualquer porte'
+        if minimo is None:
+            return f'Até {_kg(maximo)} kg'
+        if maximo is None:
+            return f'Acima de {_kg(minimo)} kg'
+        return f'De {_kg(minimo)} a {_kg(maximo)} kg'
+
+    def atende_peso(self, peso) -> bool:
+        """O animal com este peso cabe na faixa do plano? Sem peso, todos cabem."""
+        if peso is None or peso == '':
+            return True
+        try:
+            valor = Decimal(str(peso))
+        except Exception:  # noqa: BLE001 - peso digitado de forma estranha
+            return True
+        if self.peso_min_kg is not None and valor < Decimal(str(self.peso_min_kg)):
+            return False
+        if self.peso_max_kg is not None and valor > Decimal(str(self.peso_max_kg)):
+            return False
+        return True
 
     @property
     def active_subscriptions_count(self):

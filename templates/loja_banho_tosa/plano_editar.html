@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ plan.name }} · Banho e tosa · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5" style="max-width: 640px">
+  <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm mb-3">
+    <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Tabela de banho e tosa
+  </a>
+  <h1 class="h4 fw-bold">Editar: {{ plan.name }}</h1>
+  <form method="post" class="card shadow-sm" novalidate>
+    <div class="card-body">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.name.label(class="form-label fw-semibold") }}
+        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+        {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="mb-3">
+        {{ form.description.label(class="form-label fw-semibold") }}
+        {{ form.description(class="form-control", rows=2) }}
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+          {{ form.service_type.label(class="form-label fw-semibold") }}
+          {{ form.service_type(class="form-select") }}
+        </div>
+        <div class="col-sm-6">
+          {{ form.cobranca.label(class="form-label fw-semibold") }}
+          {{ form.cobranca(class="form-select") }}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Porte (faixa de peso)</label>
+        <div class="input-group">
+          {{ form.peso_min_kg(class="form-control" + (" is-invalid" if form.peso_min_kg.errors else ""), placeholder="de") }}
+          <span class="input-group-text">a</span>
+          {{ form.peso_max_kg(class="form-control" + (" is-invalid" if form.peso_max_kg.errors else ""), placeholder="até") }}
+          <span class="input-group-text">kg</span>
+        </div>
+        {% for e in form.peso_min_kg.errors + form.peso_max_kg.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold" for="{{ form.price.id }}">Preço (R$)</label>
+          {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else "")) }}
+          {% for e in form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="col-sm-6">
+          {{ form.sessions_per_month.label(class="form-label fw-semibold") }}
+          {{ form.sessions_per_month(class="form-control" + (" is-invalid" if form.sessions_per_month.errors else "")) }}
+          <div class="form-text">Só no plano mensal.</div>
+        </div>
+      </div>
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+</div>
+{% endblock %}

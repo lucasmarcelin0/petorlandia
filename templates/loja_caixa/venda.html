@@ -60,11 +60,13 @@
       {% if venda.nfce.status != 'autorizada' and venda.nfce.x_motivo %}<p class="small text-danger mb-2">{{ venda.nfce.c_stat or '' }} {{ venda.nfce.x_motivo }}</p>{% endif %}
       {% elif venda.emitir_nfce %}
       <p class="text-danger small mb-2">Não emitida. {{ venda.nfce_erro or '' }}</p>
+      {% elif not venda.itens|selectattr('product_id')|list %}
+      <p class="text-muted small mb-2">Serviço recebido no caixa (serviço não vai em NFC-e).</p>
       {% else %}
       <p class="text-muted small mb-2">Venda registrada sem NFC-e.</p>
       {% endif %}
 
-      {% if venda.status == 'concluida' and nfce_ligada and (not venda.nfce or venda.nfce.status in ['pendente', 'erro', 'rejeitada', 'cancelada', 'inutilizada']) %}
+      {% if venda.status == 'concluida' and nfce_ligada and venda.itens|selectattr('product_id')|list and (not venda.nfce or venda.nfce.status in ['pendente', 'erro', 'rejeitada', 'cancelada', 'inutilizada']) %}
       <form method="post" action="{{ url_for('loja_caixa_venda_nfce', casa_id=casa.id, venda_id=venda.id) }}" class="d-flex gap-2 flex-wrap align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if not venda.nfce or venda.nfce.status in ['cancelada', 'inutilizada'] %}

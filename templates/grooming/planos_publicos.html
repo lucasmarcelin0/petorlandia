@@ -174,8 +174,29 @@
           {% if p.description %}
           <p class="text-muted small mb-3">{{ p.description }}</p>
           {% endif %}
+          {% if p.peso_min_kg is not none or p.peso_max_kg is not none %}
+          <p class="small mb-2"><span class="badge text-bg-light border">{{ p.porte_label }}</span>
+            {% for a in meus_animais if a.peso and p.atende_peso(a.peso) %}{% if loop.first %}<span class="text-success">· serve para {% endif %}{{ a.name }}{% if not loop.last %}, {% else %}</span>{% endif %}{% endfor %}
+          </p>
+          {% endif %}
 
           <div class="mt-auto">
+            {% if p.avulso %}
+            <p class="h3 fw-bold text-success mb-0">
+              R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}
+              <span class="text-muted fs-6 fw-normal">/sessão</span>
+            </p>
+            <p class="text-muted small mb-3">Serviço avulso, pago na loja.</p>
+            {% set telefone = p.casa_de_racao.telefone if p.casa_de_racao else None %}
+            {% set link_whats = whatsapp_chat_url(telefone, 'Olá! Quero agendar: ' ~ p.name) if telefone else None %}
+            {% if link_whats %}
+            <a href="{{ link_whats }}" class="btn btn-success w-100" target="_blank" rel="noopener">
+              <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i> Agendar pelo WhatsApp
+            </a>
+            {% else %}
+            <p class="small text-muted mb-0">Agende direto com {{ p.provider_name }}.</p>
+            {% endif %}
+            {% else %}
             <p class="h3 fw-bold text-success mb-0">
               R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}
               <span class="text-muted fs-6 fw-normal">/mês</span>
@@ -193,6 +214,7 @@
                  class="btn btn-primary w-100">
                 <i class="fa-solid fa-heart me-1"></i> Assinar plano
               </a>
+            {% endif %}
             {% endif %}
           </div>
         </div>

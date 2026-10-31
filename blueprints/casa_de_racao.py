@@ -944,13 +944,17 @@ def casa_de_racao_grooming_planos(casa_id):
     casa = _casa_loja_access(casa_id)
     form = GroomingPlanForm()
     if form.validate_on_submit():
+        cobranca = form.cobranca.data if form.cobranca.data in ('mensal', 'avulso') else 'mensal'
         plan = GroomingPlan(
             casa_de_racao_id=casa.id,
             name=form.name.data,
             description=form.description.data or None,
             service_type=form.service_type.data,
             price=form.price.data,
-            sessions_per_month=form.sessions_per_month.data,
+            sessions_per_month=1 if cobranca == 'avulso' else form.sessions_per_month.data,
+            cobranca=cobranca,
+            peso_min_kg=form.peso_min_kg.data,
+            peso_max_kg=form.peso_max_kg.data,
         )
         db.session.add(plan)
         db.session.commit()

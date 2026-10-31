@@ -1,0 +1,114 @@
+{% extends "layout.html" %}
+{% block page_title %}Banho e tosa · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Painel da loja
+    </a>
+    <h1 class="h4 fw-bold mb-0 me-auto">Banho e tosa · agenda</h1>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a>
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <label class="small text-muted" for="dia">Dia</label>
+      <input class="form-control form-control-sm" type="date" id="dia" name="dia" value="{{ dia.isoformat() }}">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Ver</button>
+    </form>
+  </div>
+
+  {% if not planos %}
+  <div class="alert alert-info">Cadastre a tabela de banho e tosa (preço por porte e planos mensais) em <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a> para agendar.</div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h2 class="h6 fw-bold">Agendar</h2>
+          <form method="post" action="{{ url_for('loja_banho_tosa_agendar', casa_id=casa.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label small" for="animal_id">Animal</label>
+            <select class="form-select mb-2" id="animal_id" name="animal_id" required>
+              <option value="">Escolha…</option>
+              {% for a in animais %}
+              <option value="{{ a.id }}">{{ a.name }}{% if a.owner %} — {{ a.owner.name }}{% endif %}{% if a.peso %} ({{ ('%.1f'|format(a.peso)).replace('.0', '').replace('.', ',') }} kg){% endif %}</option>
+              {% endfor %}
+            </select>
+            {% if not animais %}<p class="small text-muted">Cadastre tutores e animais na aba <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}">Animais</a>.</p>{% endif %}
+            <label class="form-label small" for="plan_id">Serviço</label>
+            <select class="form-select mb-2" id="plan_id" name="plan_id" required>
+              {% for p in planos %}
+              <option value="{{ p.id }}">{{ p.name }} · {{ p.porte_label }} · {% if p.avulso %}R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}{% else %}plano mensal{% endif %}</option>
+              {% endfor %}
+            </select>
+            <div class="d-flex gap-2 mb-2">
+              <div class="flex-grow-1">
+                <label class="form-label small" for="data">Data</label>
+                <input class="form-control" type="date" id="data" name="data" value="{{ dia.isoformat() }}" required>
+              </div>
+              <div>
+                <label class="form-label small" for="hora">Hora</label>
+                <input class="form-control" type="time" id="hora" name="hora" value="09:00" required>
+              </div>
+            </div>
+            <label class="form-label small" for="observacao">Observação</label>
+            <input class="form-control mb-3" id="observacao" name="observacao" maxlength="255" placeholder="Ex.: tosa higiênica, buscar em casa">
+            <button class="btn btn-primary w-100" type="submit" {{ '' if planos and animais else 'disabled' }}>Agendar</button>
+          </form>
+          <p class="small text-muted mt-2 mb-0">O serviço precisa servir para o peso do animal. Plano mensal desconta do pacote do mês.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <h2 class="h6 fw-bold">{{ dia|data_br }} · {{ sessoes|length }} atendimento(s)</h2>
+      {% if not caixa %}<p class="small text-muted">Para cobrar serviços avulsos, <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}">abra o caixa</a>.</p>{% endif %}
+      {% if sessoes %}
+      <div class="list-group">
+        {% for s in sessoes %}
+        <div class="list-group-item">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <strong class="me-2">{{ s.agendado_para|data_br }}</strong>
+            <span>{{ s.animal.name }}{% if s.animal.owner %} <span class="text-muted small">({{ s.animal.owner.name }})</span>{% endif %}</span>
+            <span class="badge {{ 'text-bg-success' if s.status == 'realizado' else ('text-bg-secondary' if s.status in ['cancelado', 'faltou'] else 'text-bg-primary') }} ms-auto">{{ s.status_label }}</span>
+          </div>
+          <div class="small text-muted">
+            {% if s.plan %}{{ s.plan.name }} · {{ s.plan.porte_label }}{% endif %}
+            {% if s.subscription_id and saldos.get(s.subscription_id) %} · plano mensal: {{ saldos[s.subscription_id][0] }} de {{ saldos[s.subscription_id][1] }} no mês{% endif %}
+            {% if s.valor %} · {{ s.valor|currency_br }}{% endif %}
+            {% if s.venda and s.venda.status == 'concluida' %} · <a href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=s.venda_id) }}">pago (venda #{{ s.venda_id }})</a>{% endif %}
+            {% if s.observacao %}<br>{{ s.observacao }}{% endif %}
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            {% if s.status == 'agendado' %}
+            {% for status, rotulo in [('realizado', 'Feito'), ('faltou', 'Não veio'), ('cancelado', 'Cancelar')] %}
+            <form method="post" action="{{ url_for('loja_banho_tosa_status', casa_id=casa.id, sessao_id=s.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="status" value="{{ status }}">
+              <input type="hidden" name="dia" value="{{ dia.isoformat() }}">
+              <button class="btn btn-sm {{ 'btn-success' if status == 'realizado' else 'btn-outline-secondary' }}" type="submit">{{ rotulo }}</button>
+            </form>
+            {% endfor %}
+            {% endif %}
+            {% if caixa and not s.subscription_id and s.status in ['agendado', 'realizado'] and not (s.venda and s.venda.status == 'concluida') %}
+            <form method="post" action="{{ url_for('loja_banho_tosa_cobrar', casa_id=casa.id, sessao_id=s.id) }}" class="d-flex gap-1 align-items-center ms-auto">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="dia" value="{{ dia.isoformat() }}">
+              <select class="form-select form-select-sm" name="t_pag" aria-label="Forma de pagamento">
+                {% for codigo, rotulo in formas.items() %}<option value="{{ codigo }}">{{ rotulo }}</option>{% endfor %}
+              </select>
+              <input class="form-control form-control-sm" style="max-width: 6.5rem" name="valor" inputmode="decimal" value="{{ ('%.2f'|format(s.valor or 0)).replace('.', ',') }}" aria-label="Valor recebido">
+              <button class="btn btn-sm btn-primary text-nowrap" type="submit">Receber no caixa</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted">Nenhum atendimento neste dia.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
