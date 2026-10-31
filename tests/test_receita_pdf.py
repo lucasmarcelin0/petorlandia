@@ -160,8 +160,8 @@ def test_tela_da_receita_mostra_botao_baixar_pdf(app):
 
     assert 'Baixar PDF' in html
     assert f'/bloco_prescricao/{bloco_id}/pdf' in html
-    # O caminho antigo continua disponível.
-    assert 'window.print()' in html
+    assert 'Imprimir PDF' in html
+    assert f'/bloco_prescricao/{bloco_id}/pdf?inline=1' in html
 
 
 def test_tutor_pelo_link_com_token_baixa_o_pdf(app):
@@ -325,3 +325,18 @@ def test_macro_de_titulo_omite_partes_vazias(app):
         assert render_template_string(modelo, doc='Exames', animal=animal, clinica=clinica) == '[Exames de Rex | Clínica X]'
         assert render_template_string(modelo, doc='Exames', animal=animal, clinica=None) == '[Exames de Rex]'
         assert render_template_string(modelo, doc='Exames', animal=SimpleNamespace(name=None), clinica=clinica) == '[Exames | Clínica X]'
+
+
+def test_pdf_para_impressao_e_inline_e_mantem_acesso_protegido(app):
+    with app.app_context():
+        bloco_id = _criar_receita()
+    client = app.test_client()
+    assert client.get(f'/bloco_prescricao/{bloco_id}/pdf?inline=1').status_code == 302
+    with client:
+        _login(client, 'vet@example.com', 'pw-vet')
+        resp = client.get(f'/bloco_prescricao/{bloco_id}/pdf?inline=1')
+    assert resp.status_code == 200
+    assert resp.mimetype == 'application/pdf'
+    assert resp.headers['Content-Disposition'].startswith('inline;')
+    assert 'no-store' in resp.headers['Cache-Control']
+    assert 'Amoxicilina 250mg' in _texto_do_pdf(resp.data)

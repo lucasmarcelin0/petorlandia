@@ -16,7 +16,7 @@
 
 <div class="no-print print-toolbar" aria-label="Ações da receita">
   <div class="print-toolbar__row">
-    <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+    <a class="print-action" href="{{ print_pdf_url }}" target="_blank" rel="noopener">Imprimir PDF</a>
     {# PDF gerado no servidor: no celular, o "Salvar como PDF" do Imprimir pode
        gravar um arquivo vazio, que não abre nem é aceito pelo assinador gov.br. #}
     {% if pdf_url %}
