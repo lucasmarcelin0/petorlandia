@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Cupom NFC-e {{ documento.serie }}-{{ documento.numero }}</title>
+  <style>
+    @page { size: {{ largura }}mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: #000; font: 11px/1.3 "Courier New", Courier, monospace; }
+    .cupom { width: {{ '72mm' if largura == '80' else '48mm' }}; margin: 0 auto; padding: 3mm 0; }
+    .c { text-align: center; }
+    .b { font-weight: bold; }
+    .sep { border-top: 1px dashed #000; margin: 2mm 0; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { padding: 0; vertical-align: top; font-size: 10px; }
+    th { text-align: left; font-weight: bold; }
+    .r { text-align: right; }
+    .qr { display: block; margin: 2mm auto; width: 30mm; height: 30mm; image-rendering: pixelated; }
+    .aviso { font-weight: bold; text-align: center; margin: 1mm 0; }
+    .acoes { text-align: center; margin: 4mm 0; font-family: system-ui, sans-serif; }
+    .acoes button, .acoes a { font-size: 14px; padding: 6px 14px; margin: 0 4px; }
+    @media print { .acoes { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="acoes">
+    <button type="button" onclick="window.print()">Imprimir</button>
+    <a href="?largura={{ '58' if largura == '80' else '80' }}">Bobina de {{ '58' if largura == '80' else '80' }} mm</a>
+  </div>
+  <div class="cupom">
+    {% if homologacao %}<div class="aviso">EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO – SEM VALOR FISCAL</div><div class="sep"></div>{% endif %}
+    {% if contingencia %}<div class="aviso">EMITIDA EM CONTINGÊNCIA<br>Pendente de autorização</div><div class="sep"></div>{% endif %}
+
+    <div class="c b">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
+    <div class="c">{{ emitente.razao_social }}</div>
+    <div class="c">CNPJ: {{ emitente.cnpj }} IE: {{ emitente.ie }}</div>
+    <div class="c">{{ emitente.endereco }}</div>
+    <div class="sep"></div>
+    <div class="c b">Documento Auxiliar da Nota Fiscal de Consumidor Eletrônica</div>
+    <div class="sep"></div>
+
+    <table>
+      <thead><tr><th>Cód</th><th>Descrição</th><th class="r">Qtd</th><th class="r">Un</th><th class="r">Vl Unit</th><th class="r">Vl Total</th></tr></thead>
+      <tbody>
+        {% for item in itens %}
+        <tr><td>{{ item.codigo }}</td><td colspan="5">{{ item.descricao }}</td></tr>
+        <tr><td></td><td></td><td class="r">{{ item.quantidade }}</td><td class="r">{{ item.unidade }}</td><td class="r">{{ item.valor_unitario }}</td><td class="r">{{ item.valor_bruto }}</td></tr>
+        {% if item.desconto and item.desconto != '0.00' %}<tr><td></td><td colspan="4">Desconto</td><td class="r">-{{ item.desconto }}</td></tr>{% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="sep"></div>
+    <table>
+      <tr><td>Qtde. total de itens</td><td class="r">{{ quantidade_itens }}</td></tr>
+      <tr><td>Valor total R$</td><td class="r">{{ total_produtos }}</td></tr>
+      {% if total_desconto and total_desconto != '0.00' %}<tr><td>Desconto R$</td><td class="r">{{ total_desconto }}</td></tr>{% endif %}
+      <tr><td class="b">Valor a pagar R$</td><td class="r b">{{ total_nota }}</td></tr>
+      <tr><td>FORMA PAGAMENTO</td><td class="r">VALOR PAGO R$</td></tr>
+      {% for p in pagamentos %}<tr><td>{{ p.forma }}</td><td class="r">{{ p.valor }}</td></tr>{% endfor %}
+      {% if troco and troco != '0.00' %}<tr><td>Troco R$</td><td class="r">{{ troco }}</td></tr>{% endif %}
+    </table>
+    {% if tributos %}<div class="c">Tributos totais incidentes (Lei Federal 12.741/2012): R$ {{ tributos }}</div>{% endif %}
+    <div class="sep"></div>
+
+    <div class="c b">Consulte pela Chave de Acesso em</div>
+    <div class="c">{{ url_chave }}</div>
+    <div class="c">{{ chave_blocos }}</div>
+    <div class="sep"></div>
+    <div class="c">{{ consumidor }}</div>
+    <div class="sep"></div>
+    <div class="c b">NFC-e nº {{ documento.numero }} Série {{ documento.serie }} {{ data_emissao }}</div>
+    {% if documento.protocolo and not contingencia %}
+    <div class="c">Protocolo de autorização: {{ documento.protocolo }}</div>
+    {% if data_autorizacao %}<div class="c">Data de autorização: {{ data_autorizacao }}</div>{% endif %}
+    {% endif %}
+    {% if documento.status == 'cancelada' %}<div class="aviso">NOTA CANCELADA</div>{% endif %}
+    {% if qrcode_img %}<img class="qr" src="{{ qrcode_img }}" alt="QR Code da NFC-e">{% endif %}
+    {% if contingencia %}<div class="aviso">EMITIDA EM CONTINGÊNCIA<br>Pendente de autorização</div>{% endif %}
+    {% if homologacao %}<div class="aviso">EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO – SEM VALOR FISCAL</div>{% endif %}
+    {% if mensagem %}<div class="sep"></div><div class="c">{{ mensagem }}</div>{% endif %}
+  </div>
+</body>
+</html>

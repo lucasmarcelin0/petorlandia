@@ -73,6 +73,12 @@ def register_domain_blueprints(app):
     if not _is_blueprint_registered(app, casa_de_racao_bp):
         _register_with_alias(app, casa_de_racao_bp)
 
+    from blueprints import loja_fiscal
+
+    loja_fiscal_bp = loja_fiscal.get_blueprint()
+    if not _is_blueprint_registered(app, loja_fiscal_bp):
+        _register_with_alias(app, loja_fiscal_bp)
+
     clinica_bp = clinica.get_blueprint()
     if not _is_blueprint_registered(app, clinica_bp):
         _register_with_alias(app, clinica_bp)

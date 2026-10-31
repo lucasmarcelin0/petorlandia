@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block page_title %}NFC-e emitidas · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Configuração fiscal
+    </a>
+    <div>
+      <h1 class="h3 fw-bold mb-0">NFC-e emitidas</h1>
+      <p class="text-muted small mb-0">{{ casa.nome }}{% if fiscal %} · {{ 'Produção' if fiscal.em_producao else 'Homologação' }}{% endif %}</p>
+    </div>
+    <form method="get" action="{{ url_for('loja_nfce_xmls_mes', casa_id=casa.id) }}" class="ms-auto d-flex gap-2 align-items-center">
+      <label class="small text-muted" for="mes">XMLs do mês para o contador</label>
+      <input class="form-control form-control-sm" type="month" id="mes" name="mes" required>
+      <button class="btn btn-sm btn-outline-primary" type="submit">Baixar ZIP</button>
+    </form>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    <a class="btn btn-sm {{ 'btn-dark' if not status else 'btn-outline-dark' }}" href="{{ url_for('loja_nfce_lista', casa_id=casa.id) }}">Todas</a>
+    {% for codigo, rotulo in status_labels.items() %}
+    <a class="btn btn-sm {{ 'btn-dark' if status == codigo else 'btn-outline-dark' }}" href="{{ url_for('loja_nfce_lista', casa_id=casa.id, status=codigo) }}">{{ rotulo }}</a>
+    {% endfor %}
+  </div>
+
+  {% if documentos %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th scope="col">Nº</th><th scope="col">Emissão</th><th scope="col">Ambiente</th><th scope="col">Valor</th><th scope="col">Situação</th><th scope="col"></th></tr></thead>
+      <tbody>
+        {% for d in documentos %}
+        <tr>
+          <td>{{ d.serie }}-{{ d.numero }}</td>
+          <td>{{ d.dh_emi[8:10] ~ '/' ~ d.dh_emi[5:7] ~ ' ' ~ d.dh_emi[11:16] if d.dh_emi else '' }}</td>
+          <td>{{ 'Produção' if d.ambiente == 'producao' else 'Homologação' }}</td>
+          <td>{{ 'R$ %.2f'|format(d.valor_total or 0) }}</td>
+          <td><span class="badge {{ 'bg-success' if d.status == 'autorizada' else ('bg-secondary' if d.status in ['cancelada', 'inutilizada'] else 'bg-danger') }}">{{ d.status_label }}</span>
+            {% if d.c_stat and d.status != 'autorizada' %}<div class="small text-muted">{{ d.c_stat }} · {{ d.x_motivo }}</div>{% endif %}</td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('loja_nfce_detalhe', casa_id=casa.id, doc_id=d.id) }}">Abrir</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">Nenhuma nota por aqui ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,288 @@
+{% extends "layout.html" %}
+{% block page_title %}Notas fiscais da loja · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+{% set f = fiscal %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Voltar
+    </a>
+    <div>
+      <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-receipt me-2 text-primary" aria-hidden="true"></i>Notas fiscais (NFC-e)</h1>
+      <p class="text-muted small mb-0">{{ casa.nome }} · emissão própria, direto na SEFAZ-SP</p>
+    </div>
+    {% if f %}
+    <a href="{{ url_for('loja_nfce_lista', casa_id=casa.id) }}" class="btn btn-outline-primary btn-sm ms-auto">
+      <i class="fa-solid fa-list me-1" aria-hidden="true"></i> Notas emitidas
+    </a>
+    {% endif %}
+  </div>
+
+  {% if f %}
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Ambiente</div>
+        {% if f.em_producao %}
+        <div class="fw-bold text-success">Produção</div><div class="small text-muted">Notas com valor fiscal</div>
+        {% else %}
+        <div class="fw-bold text-warning">Homologação</div><div class="small text-muted">Testes, sem valor fiscal</div>
+        {% endif %}
+      </div></div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Certificado A1</div>
+        {% if f.tem_certificado %}
+        <div class="fw-bold">Enviado</div>
+        <div class="small text-muted">{% if f.certificado_validade %}Válido até {{ f.certificado_validade.strftime('%d/%m/%Y') }}{% endif %}</div>
+        {% else %}
+        <div class="fw-bold text-danger">Pendente</div><div class="small text-muted">Necessário para emitir</div>
+        {% endif %}
+      </div></div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Numeração</div>
+        <div class="fw-bold">Série {{ f.serie }}</div>
+        <div class="small text-muted">Último nº: {{ f.ultimo_numero_producao if f.em_producao else f.ultimo_numero_homologacao }}</div>
+      </div></div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Emissão no caixa</div>
+        <div class="fw-bold {{ 'text-success' if f.ativo else 'text-secondary' }}">{{ 'Ligada' if f.ativo else 'Desligada' }}</div>
+        <div class="small text-muted">{{ 'Vendas do caixa geram NFC-e' if f.ativo else 'Nada muda até ligar' }}</div>
+      </div></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-3">Dados fiscais da loja</h2>
+          <form method="post" action="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="cnpj">CNPJ</label>
+              <input class="form-control" id="cnpj" name="cnpj" required inputmode="numeric" value="{{ f.cnpj if f else sugestao.cnpj }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="inscricao_estadual">Inscrição estadual</label>
+              <input class="form-control" id="inscricao_estadual" name="inscricao_estadual" required inputmode="numeric" value="{{ f.inscricao_estadual if f else '' }}">
+            </div>
+            <div class="col-md-7">
+              <label class="form-label fw-semibold" for="razao_social">Razão social</label>
+              <input class="form-control" id="razao_social" name="razao_social" required maxlength="200" value="{{ f.razao_social if f else sugestao.razao_social }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" for="nome_fantasia">Nome fantasia</label>
+              <input class="form-control" id="nome_fantasia" name="nome_fantasia" maxlength="200" value="{{ (f.nome_fantasia or '') if f else sugestao.nome_fantasia }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="crt">Regime</label>
+              <select class="form-select" id="crt" name="crt">
+                <option value="1" {% if not f or f.crt != '4' %}selected{% endif %}>Simples Nacional</option>
+                <option value="4" {% if f and f.crt == '4' %}selected{% endif %}>Simples Nacional — MEI</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="telefone">Telefone</label>
+              <input class="form-control" id="telefone" name="telefone" inputmode="tel" value="{{ (f.telefone or '') if f else sugestao.telefone }}">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold" for="logradouro">Rua</label>
+              <input class="form-control" id="logradouro" name="logradouro" required maxlength="120" value="{{ f.logradouro if f else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="numero">Número</label>
+              <input class="form-control" id="numero" name="numero" maxlength="20" value="{{ f.numero if f else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="bairro">Bairro</label>
+              <input class="form-control" id="bairro" name="bairro" required maxlength="80" value="{{ f.bairro if f else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="complemento">Complemento</label>
+              <input class="form-control" id="complemento" name="complemento" maxlength="60" value="{{ (f.complemento or '') if f else '' }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" for="municipio">Município</label>
+              <input class="form-control" id="municipio" name="municipio" required value="{{ f.municipio if f else 'Orlândia' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="codigo_municipio">Código IBGE</label>
+              <input class="form-control" id="codigo_municipio" name="codigo_municipio" required inputmode="numeric" value="{{ f.codigo_municipio if f else '3534302' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" for="cep">CEP</label>
+              <input class="form-control" id="cep" name="cep" inputmode="numeric" value="{{ (f.cep or '') if f else '14620000' }}">
+            </div>
+
+            <div class="col-12"><hr class="my-1"><h3 class="h6 fw-bold mt-2 mb-0">Emissão</h3></div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="serie">Série da NFC-e</label>
+              <input class="form-control" id="serie" name="serie" type="number" min="1" max="889" value="{{ f.serie if f else 2 }}">
+              <div class="form-text">Use uma série diferente da do sistema antigo durante o teste lado a lado.</div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold" for="csosn_padrao">CSOSN padrão dos produtos</label>
+              <select class="form-select" id="csosn_padrao" name="csosn_padrao">
+                {% for codigo, rotulo in csosn_opcoes.items() %}
+                <option value="{{ codigo }}" {% if (f.csosn_padrao if f else '102') == codigo %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Confirme com o contador; cada produto pode ter o seu.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" for="pis_cst">CST PIS</label>
+              <input class="form-control" id="pis_cst" name="pis_cst" maxlength="2" value="{{ f.pis_cst if f else '99' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" for="cofins_cst">CST COFINS</label>
+              <input class="form-control" id="cofins_cst" name="cofins_cst" maxlength="2" value="{{ f.cofins_cst if f else '99' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="percentual_tributos">Tributos aproximados (%)</label>
+              <input class="form-control" id="percentual_tributos" name="percentual_tributos" inputmode="decimal" value="{{ (f.percentual_tributos or '') if f else '' }}" placeholder="Ex.: 12,50">
+              <div class="form-text">Lei 12.741/2012. Informe a média indicada pelo contador.</div>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label fw-semibold" for="credenciadora_cnpj">CNPJ da maquininha (credenciadora)</label>
+              <input class="form-control" id="credenciadora_cnpj" name="credenciadora_cnpj" inputmode="numeric" value="{{ (f.credenciadora_cnpj or '') if f else '' }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" for="tp_integra">Maquininha</label>
+              <select class="form-select" id="tp_integra" name="tp_integra">
+                <option value="2" {% if not f or f.tp_integra != '1' %}selected{% endif %}>Separada do sistema (POS)</option>
+                <option value="1" {% if f and f.tp_integra == '1' %}selected{% endif %}>Integrada (TEF)</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="mensagem_cupom">Mensagem no cupom</label>
+              <input class="form-control" id="mensagem_cupom" name="mensagem_cupom" maxlength="500" value="{{ (f.mensagem_cupom or '') if f else '' }}" placeholder="Ex.: Obrigado pela preferência!">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="qrcode_versao">QR Code</label>
+              <select class="form-select" id="qrcode_versao" name="qrcode_versao">
+                <option value="3" {% if not f or f.qrcode_versao != '2' %}selected{% endif %}>Versão 3 (sem CSC)</option>
+                <option value="2" {% if f and f.qrcode_versao == '2' %}selected{% endif %}>Versão 2 (com CSC)</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" for="csc_id">ID do CSC</label>
+              <input class="form-control" id="csc_id" name="csc_id" maxlength="6" value="{{ (f.csc_id or '') if f else '' }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" for="csc_token">CSC</label>
+              <input class="form-control" id="csc_token" name="csc_token" type="password" autocomplete="off" placeholder="{{ 'guardado; preencha para trocar' if f and f.csc_id else 'Só para a versão 2' }}">
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="ativo" name="ativo" value="1" {% if f and f.ativo %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="ativo">Ligar emissão de NFC-e nas vendas do caixa</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-success">Salvar dados fiscais</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-2">Certificado digital A1</h2>
+          <p class="small text-muted">Arquivo .pfx ou .p12 do e-CNPJ da loja. Fica guardado cifrado e só é usado para assinar as notas.</p>
+          {% if f %}
+          <form method="post" enctype="multipart/form-data" action="{{ url_for('loja_fiscal_certificado', casa_id=casa.id) }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-12"><input class="form-control" type="file" name="certificado" accept=".pfx,.p12" required aria-label="Arquivo do certificado"></div>
+            <div class="col-12"><input class="form-control" type="password" name="senha" required autocomplete="off" placeholder="Senha do certificado" aria-label="Senha do certificado"></div>
+            <div class="col-12"><button class="btn btn-primary w-100" type="submit">{{ 'Trocar certificado' if f.tem_certificado else 'Enviar certificado' }}</button></div>
+          </form>
+          {% else %}
+          <p class="small mb-0">Salve os dados fiscais primeiro.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if f %}
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-3">Testes com a SEFAZ</h2>
+          <form method="post" action="{{ url_for('loja_fiscal_status', casa_id=casa.id) }}" class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-primary w-100" type="submit" {% if not f.tem_certificado %}disabled{% endif %}>Consultar status da SEFAZ-SP</button>
+          </form>
+          {% if not f.em_producao %}
+          <form method="post" action="{{ url_for('loja_fiscal_nota_teste', casa_id=casa.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-success w-100" type="submit" {% if not f.tem_certificado %}disabled{% endif %}>Emitir NFC-e de teste (R$ 1,00)</button>
+          </form>
+          <p class="small text-muted mt-2 mb-0">{{ 'Teste autorizado: já é possível ir para a produção.' if teste_autorizado else 'Emita um teste autorizado antes de ir para a produção.' }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-3">Ambiente</h2>
+          {% if f.em_producao %}
+          <form method="post" action="{{ url_for('loja_fiscal_ambiente', casa_id=casa.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ambiente" value="homologacao">
+            <button class="btn btn-outline-warning w-100" type="submit">Voltar para homologação</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('loja_fiscal_ambiente', casa_id=casa.id) }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ambiente" value="producao">
+            <div class="col-12"><input class="form-control" name="confirmacao" placeholder="Digite PRODUCAO para confirmar" aria-label="Confirmação" {% if not teste_autorizado %}disabled{% endif %}></div>
+            <div class="col-12"><button class="btn btn-danger w-100" type="submit" {% if not teste_autorizado %}disabled{% endif %}>Ir para produção</button></div>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-2">Inutilizar números</h2>
+          <p class="small text-muted">Para números reservados que não viraram nota autorizada.</p>
+          <form method="post" action="{{ url_for('loja_nfce_inutilizar', casa_id=casa.id) }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-6"><input class="form-control" type="number" min="1" name="numero_inicial" required placeholder="Do nº" aria-label="Número inicial"></div>
+            <div class="col-6"><input class="form-control" type="number" min="1" name="numero_final" placeholder="Até o nº" aria-label="Número final"></div>
+            <div class="col-12"><input class="form-control" name="justificativa" minlength="15" required placeholder="Motivo (mínimo 15 caracteres)" aria-label="Justificativa"></div>
+            <div class="col-12"><button class="btn btn-outline-secondary w-100" type="submit" {% if not f.tem_certificado %}disabled{% endif %}>Inutilizar na SEFAZ</button></div>
+          </form>
+        </div>
+      </div>
+
+      {% if eventos %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h2 class="h6 fw-bold mb-2">Últimas comunicações</h2>
+          <ul class="list-unstyled small mb-0">
+            {% for e in eventos %}
+            <li class="py-1 border-bottom">
+              <span class="text-muted">{{ e.created_at.strftime('%d/%m %H:%M') if e.created_at else '' }}</span>
+              · {{ e.tipo|replace('_', ' ') }} · <strong>{{ e.status }}</strong>
+              {% if e.c_stat %}· {{ e.c_stat }}{% endif %}
+              {% if e.x_motivo or e.detalhe %}<div class="text-muted">{{ e.x_motivo or e.detalhe }}</div>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
