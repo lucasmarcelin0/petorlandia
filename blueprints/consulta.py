@@ -2959,6 +2959,12 @@ def imprimir_bloco_prescricao(bloco_id):
         pode_ativar_acompanhamento=pode_ativar_acompanhamento,
         pode_enviar_assinatura=pode_enviar_assinatura,
         tratamento_first_access_url=tratamento_first_access_url,
+        print_pdf_url=url_for(
+            'consulta_routes.baixar_pdf_bloco_prescricao',
+            bloco_id=bloco.id,
+            token=request.args.get('token') or None,
+            inline=1,
+        ),
         pdf_url=url_for(
             'consulta_routes.baixar_pdf_bloco_prescricao',
             bloco_id=bloco.id,
@@ -2989,7 +2995,8 @@ def baixar_pdf_bloco_prescricao(bloco_id):
         printed_at=datetime.now(BR_TZ),
     )
     response = current_app.response_class(pdf, mimetype='application/pdf')
-    response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo_receita(bloco)}"'
+    disposition = 'inline' if request.args.get('inline') == '1' else 'attachment'
+    response.headers['Content-Disposition'] = f'{disposition}; filename="{nome_arquivo_receita(bloco)}"'
     response.headers['Content-Length'] = str(len(pdf))
     # Documento clínico: não fica em cache compartilhado.
     response.headers['Cache-Control'] = 'private, no-store'
