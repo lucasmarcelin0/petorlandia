@@ -105,6 +105,43 @@ def build_cancel_event_xml(
     return etree.tostring(env_evento, encoding="unicode")
 
 
+def build_cancel_substituicao_xml(
+    chave: str,
+    emitter_cnpj: str,
+    protocolo: str,
+    motivo: str,
+    chave_substituta: str,
+    tp_amb: str = "2",
+    data_evento: datetime | None = None,
+    ver_aplic: str = "PetOrlandia 1.0",
+) -> str:
+    """Evento 110112 (NFC-e): cancela a nota normal autorizada que foi
+    substituída por outra emitida em contingência para a mesma venda."""
+    ns = "http://www.portalfiscal.inf.br/nfe"
+    env_evento = etree.Element("envEvento", nsmap={None: ns})
+    env_evento.set("versao", "1.00")
+    etree.SubElement(env_evento, "idLote").text = "1"
+    evento = etree.SubElement(env_evento, "evento", versao="1.00")
+    inf_evento = etree.SubElement(evento, "infEvento", Id=f"ID110112{chave}01")
+    etree.SubElement(inf_evento, "cOrgao").text = chave[:2]
+    etree.SubElement(inf_evento, "tpAmb").text = tp_amb
+    etree.SubElement(inf_evento, "CNPJ").text = _only_digits(emitter_cnpj)
+    etree.SubElement(inf_evento, "chNFe").text = chave
+    etree.SubElement(inf_evento, "dhEvento").text = format_dh(data_evento)
+    etree.SubElement(inf_evento, "tpEvento").text = "110112"
+    etree.SubElement(inf_evento, "nSeqEvento").text = "1"
+    etree.SubElement(inf_evento, "verEvento").text = "1.00"
+    det_evento = etree.SubElement(inf_evento, "detEvento", versao="1.00")
+    etree.SubElement(det_evento, "descEvento").text = "Cancelamento por substituicao"
+    etree.SubElement(det_evento, "cOrgaoAutor").text = chave[:2]
+    etree.SubElement(det_evento, "tpAutor").text = "1"
+    etree.SubElement(det_evento, "verAplic").text = ver_aplic[:20]
+    etree.SubElement(det_evento, "nProt").text = protocolo
+    etree.SubElement(det_evento, "xJust").text = " ".join(motivo.split())[:255]
+    etree.SubElement(det_evento, "chNFeRef").text = chave_substituta
+    return etree.tostring(env_evento, encoding="unicode")
+
+
 def format_dh(value: datetime | None = None) -> str:
     """Data/hora no formato do leiaute (AAAA-MM-DDThh:mm:ss-03:00).
 

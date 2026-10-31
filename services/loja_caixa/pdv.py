@@ -654,6 +654,8 @@ def emitir_nfce_venda(
         raise CaixaError("Esta venda já tem NFC-e autorizada.")
     if documento is not None and documento.status == "denegada":
         raise CaixaError("A NFC-e desta venda foi denegada pela SEFAZ. Fale com o contador.")
+    if documento is not None and documento.status == "contingencia":
+        raise CaixaError("A NFC-e desta venda está em contingência e vai para a SEFAZ automaticamente.")
     try:
         if documento is not None and documento.status in nfce_service.STATUS_REENVIAVEIS:
             documento = nfce_service.reenviar_nfce(
@@ -685,13 +687,43 @@ def emitir_nfce_venda(
         db.session.commit()
         raise CaixaError(venda.nfce_erro) from exc
 
+    if documento.status == "erro" and config.contingencia_automatica:
+        # SEFAZ sem resposta: o cliente sai com o cupom em contingência e a
+        # nota vai para a SEFAZ depois (a normal é cancelada ou inutilizada).
+        try:
+            documento = nfce_service.contingencia_da_nota(documento, usuario_id=usuario_id)
+        except NfceServiceError as exc:
+            logger.warning("Contingência automática da venda %s falhou: %s", venda_id, exc)
+
     venda = db.session.get(VendaBalcao, venda_id)
     venda.nfce_documento_id = documento.id
     if documento.status == "autorizada":
         venda.nfce_erro = None
+    elif documento.status == "contingencia":
+        venda.nfce_erro = "NFC-e em contingência: o cupom vale; o envio à SEFAZ é automático."
     else:
         motivo = " · ".join(filter(None, [documento.c_stat, documento.x_motivo])) or documento.status_label
         venda.nfce_erro = f"NFC-e {documento.status_label.lower()}: {motivo}"[:255]
+    db.session.commit()
+    return documento
+
+
+def emitir_contingencia_venda(venda: VendaBalcao, *, usuario_id: int | None = None) -> NfceDocumento:
+    """Botão da venda: a NFC-e ficou sem resposta → emite em contingência."""
+    from services.loja_fiscal import nfce_service
+    from services.loja_fiscal.nfce_service import NfceServiceError
+
+    documento = venda.nfce
+    if venda.status != "concluida" or documento is None or documento.status != "erro":
+        raise CaixaError("Só a venda com NFC-e sem resposta da SEFAZ vai para a contingência.")
+    venda_id = venda.id
+    try:
+        documento = nfce_service.contingencia_da_nota(documento, usuario_id=usuario_id)
+    except NfceServiceError as exc:
+        raise CaixaError(str(exc)) from exc
+    venda = db.session.get(VendaBalcao, venda_id)
+    venda.nfce_documento_id = documento.id
+    venda.nfce_erro = "NFC-e em contingência: o cupom vale; o envio à SEFAZ é automático."
     db.session.commit()
     return documento
 
@@ -719,6 +751,11 @@ def cancelar_venda(venda: VendaBalcao, *, motivo: str, usuario_id: int | None) -
             raise CaixaError(
                 "A NFC-e desta venda ainda não tem resposta da SEFAZ. Reenvie a nota "
                 "para saber se foi autorizada antes de cancelar a venda."
+            )
+        elif documento.status == "contingencia":
+            raise CaixaError(
+                "A NFC-e desta venda está em contingência e ainda não foi enviada à SEFAZ. "
+                "Envie a nota (ou aguarde o envio automático) antes de cancelar a venda."
             )
 
     venda = db.session.get(VendaBalcao, venda.id)

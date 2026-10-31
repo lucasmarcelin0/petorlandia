@@ -135,6 +135,7 @@ class FakeSefaz:
         return SefazSoapResponse(True, ret, "<req/>", f"<env>{ret}</env>")
 
     def recepcao_evento(self, xml):
+        self.eventos = getattr(self, "eventos", []) + [xml]
         ret = (
             f'<retEnvEvento xmlns="{NFE}" versao="1.00"><idLote>1</idLote><cStat>128</cStat>'
             "<xMotivo>Lote de Evento Processado</xMotivo>"
