@@ -25,6 +25,7 @@ EXPECTED_JOB_IDS = {
     'snapshot-financeiro',
     'mercadopago-oauth-renewal',
     'loja-dfe-sefaz',
+    'loja-nfce-contingencia',
 }
 
 

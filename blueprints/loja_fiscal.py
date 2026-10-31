@@ -184,6 +184,7 @@ def loja_fiscal_config(casa_id):
             flash("A chave de cifra fiscal do servidor não está configurada.", "danger")
             return redirect(url_for("loja_fiscal_config", casa_id=casa.id))
         config.ativo = bool(request.form.get("ativo")) and config.tem_certificado
+        config.contingencia_automatica = bool(request.form.get("contingencia_automatica"))
         if request.form.get("ativo") and not config.tem_certificado:
             flash("Envie o certificado A1 antes de ligar a emissão.", "warning")
         db.session.commit()
@@ -389,6 +390,24 @@ def loja_nfce_reenviar(casa_id, doc_id):
         flash(str(exc), "danger")
     else:
         _flash_resultado(documento)
+    return redirect(url_for("loja_nfce_detalhe", casa_id=casa.id, doc_id=documento.id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/nfce/<int:doc_id>/transmitir", methods=["POST"])
+@login_required
+def loja_nfce_transmitir(casa_id, doc_id):
+    """Envia agora uma NFC-e emitida em contingência off-line."""
+    casa = ensure_loja_access(casa_id)
+    documento = _documento_da_loja(casa, doc_id)
+    try:
+        documento = nfce_service.transmitir_contingencia(documento)
+    except NfceServiceError as exc:
+        flash(str(exc), "danger")
+    else:
+        if documento.status == "contingencia":
+            flash("A SEFAZ ainda não respondeu. A nota continua em contingência e será enviada de novo.", "warning")
+        else:
+            _flash_resultado(documento)
     return redirect(url_for("loja_nfce_detalhe", casa_id=casa.id, doc_id=documento.id))
 
 

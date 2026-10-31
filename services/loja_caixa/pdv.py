@@ -349,6 +349,80 @@ def venda_por_chave(casa_id: int, chave) -> Optional[VendaBalcao]:
     return VendaBalcao.query.filter_by(casa_de_racao_id=casa_id, chave_cliente=chave).first()
 
 
+def _validar_pagamentos(pagamentos: list[dict[str, Any]], total: Decimal) -> tuple[list[tuple[str, Decimal, str | None]], Decimal]:
+    """Confere as formas e os valores pagos; devolve os pagamentos e o troco."""
+    pagos: list[tuple[str, Decimal, str | None]] = []
+    for pagamento in pagamentos:
+        t_pag = str(pagamento.get("t_pag") or "").strip()
+        if t_pag not in FORMAS_PAGAMENTO_CAIXA:
+            raise CaixaError("Forma de pagamento inválida.")
+        valor = _moeda(_numero(pagamento.get("valor"), "o valor pago"))
+        if valor <= 0:
+            continue
+        autorizacao = " ".join(str(pagamento.get("autorizacao") or "").split())[:40] or None
+        pagos.append((t_pag, valor, autorizacao))
+    if not pagos:
+        raise CaixaError("Informe como o cliente pagou.")
+    total_pago = sum((valor for _, valor, _ in pagos), ZERO)
+    if total_pago < total:
+        raise CaixaError(f"Faltam R$ {total - total_pago:.2f} para fechar a venda.".replace(".", ","))
+    troco = total_pago - total
+    dinheiro = sum((valor for t_pag, valor, _ in pagos if t_pag == "01"), ZERO)
+    if troco > dinheiro:
+        raise CaixaError("Só pagamento em dinheiro pode gerar troco.")
+    return pagos, troco
+
+
+def registrar_servico(
+    casa_id: int,
+    sessao: Optional[CaixaSessao],
+    *,
+    codigo: str,
+    descricao: str,
+    valor,
+    pagamentos: Iterable[dict[str, Any]],
+    usuario_id: int | None = None,
+) -> VendaBalcao:
+    """Recebe um serviço (ex.: banho) no caixa.
+
+    Serviço não entra em NFC-e (é ISS, nota de serviço) e não mexe no
+    estoque; a venda aparece no caixa e no fechamento como as outras.
+    """
+    sessao = _exigir_aberto(sessao, casa_id)
+    total = _moeda(_numero(valor, "o valor"))
+    if total <= 0:
+        raise CaixaError("Informe o valor do serviço.")
+    pagos, troco = _validar_pagamentos(list(pagamentos or []), total)
+    venda = VendaBalcao(
+        casa_de_racao_id=casa_id,
+        sessao_id=sessao.id,
+        status="concluida",
+        subtotal=total,
+        desconto=ZERO,
+        total=total,
+        troco=troco,
+        emitir_nfce=False,
+        created_by_id=usuario_id,
+        created_at=now_in_brazil(),
+    )
+    venda.itens.append(
+        VendaBalcaoItem(
+            codigo=(codigo or "SERVICO")[:60],
+            descricao=" ".join((descricao or "Serviço").split())[:160],
+            unidade="UN",
+            quantidade=Decimal("1"),
+            preco_unitario=total,
+            desconto=ZERO,
+            total=total,
+        )
+    )
+    for t_pag, quantia, autorizacao in pagos:
+        venda.pagamentos.append(VendaBalcaoPagamento(t_pag=t_pag, valor=quantia, autorizacao=autorizacao))
+    db.session.add(venda)
+    db.session.flush()
+    return venda
+
+
 def registrar_venda(
     casa_id: int,
     sessao: Optional[CaixaSessao],
@@ -422,25 +496,7 @@ def registrar_venda(
     if total <= 0:
         raise CaixaError("O total da venda precisa ser maior que zero.")
 
-    pagos: list[tuple[str, Decimal, str | None]] = []
-    for pagamento in pagamentos:
-        t_pag = str(pagamento.get("t_pag") or "").strip()
-        if t_pag not in FORMAS_PAGAMENTO_CAIXA:
-            raise CaixaError("Forma de pagamento inválida.")
-        valor = _moeda(_numero(pagamento.get("valor"), "o valor pago"))
-        if valor <= 0:
-            continue
-        autorizacao = " ".join(str(pagamento.get("autorizacao") or "").split())[:40] or None
-        pagos.append((t_pag, valor, autorizacao))
-    if not pagos:
-        raise CaixaError("Informe como o cliente pagou.")
-    total_pago = sum((valor for _, valor, _ in pagos), ZERO)
-    if total_pago < total:
-        raise CaixaError(f"Faltam R$ {total - total_pago:.2f} para fechar a venda.".replace(".", ","))
-    troco = total_pago - total
-    dinheiro = sum((valor for t_pag, valor, _ in pagos if t_pag == "01"), ZERO)
-    if troco > dinheiro:
-        raise CaixaError("Só pagamento em dinheiro pode gerar troco.")
+    pagos, troco = _validar_pagamentos(pagamentos, total)
 
     venda = VendaBalcao(
         casa_de_racao_id=casa_id,
@@ -583,6 +639,8 @@ def emitir_nfce_venda(
 
     if venda.status != "concluida":
         raise CaixaError("Só vendas concluídas recebem NFC-e.")
+    if not any(item.product_id for item in venda.itens):
+        raise CaixaError("Serviço (banho, tosa) não vai em NFC-e: a nota de serviço é a NFS-e.")
     config = config_fiscal(venda.casa_de_racao_id)
     if config is None or not config.ativo:
         raise CaixaError("A emissão de NFC-e está desligada. Ligue em Notas fiscais (NFC-e).")
@@ -596,6 +654,8 @@ def emitir_nfce_venda(
         raise CaixaError("Esta venda já tem NFC-e autorizada.")
     if documento is not None and documento.status == "denegada":
         raise CaixaError("A NFC-e desta venda foi denegada pela SEFAZ. Fale com o contador.")
+    if documento is not None and documento.status == "contingencia":
+        raise CaixaError("A NFC-e desta venda está em contingência e vai para a SEFAZ automaticamente.")
     try:
         if documento is not None and documento.status in nfce_service.STATUS_REENVIAVEIS:
             documento = nfce_service.reenviar_nfce(
@@ -627,13 +687,43 @@ def emitir_nfce_venda(
         db.session.commit()
         raise CaixaError(venda.nfce_erro) from exc
 
+    if documento.status == "erro" and config.contingencia_automatica:
+        # SEFAZ sem resposta: o cliente sai com o cupom em contingência e a
+        # nota vai para a SEFAZ depois (a normal é cancelada ou inutilizada).
+        try:
+            documento = nfce_service.contingencia_da_nota(documento, usuario_id=usuario_id)
+        except NfceServiceError as exc:
+            logger.warning("Contingência automática da venda %s falhou: %s", venda_id, exc)
+
     venda = db.session.get(VendaBalcao, venda_id)
     venda.nfce_documento_id = documento.id
     if documento.status == "autorizada":
         venda.nfce_erro = None
+    elif documento.status == "contingencia":
+        venda.nfce_erro = "NFC-e em contingência: o cupom vale; o envio à SEFAZ é automático."
     else:
         motivo = " · ".join(filter(None, [documento.c_stat, documento.x_motivo])) or documento.status_label
         venda.nfce_erro = f"NFC-e {documento.status_label.lower()}: {motivo}"[:255]
+    db.session.commit()
+    return documento
+
+
+def emitir_contingencia_venda(venda: VendaBalcao, *, usuario_id: int | None = None) -> NfceDocumento:
+    """Botão da venda: a NFC-e ficou sem resposta → emite em contingência."""
+    from services.loja_fiscal import nfce_service
+    from services.loja_fiscal.nfce_service import NfceServiceError
+
+    documento = venda.nfce
+    if venda.status != "concluida" or documento is None or documento.status != "erro":
+        raise CaixaError("Só a venda com NFC-e sem resposta da SEFAZ vai para a contingência.")
+    venda_id = venda.id
+    try:
+        documento = nfce_service.contingencia_da_nota(documento, usuario_id=usuario_id)
+    except NfceServiceError as exc:
+        raise CaixaError(str(exc)) from exc
+    venda = db.session.get(VendaBalcao, venda_id)
+    venda.nfce_documento_id = documento.id
+    venda.nfce_erro = "NFC-e em contingência: o cupom vale; o envio à SEFAZ é automático."
     db.session.commit()
     return documento
 
@@ -661,6 +751,11 @@ def cancelar_venda(venda: VendaBalcao, *, motivo: str, usuario_id: int | None) -
             raise CaixaError(
                 "A NFC-e desta venda ainda não tem resposta da SEFAZ. Reenvie a nota "
                 "para saber se foi autorizada antes de cancelar a venda."
+            )
+        elif documento.status == "contingencia":
+            raise CaixaError(
+                "A NFC-e desta venda está em contingência e ainda não foi enviada à SEFAZ. "
+                "Envie a nota (ou aguarde o envio automático) antes de cancelar a venda."
             )
 
     venda = db.session.get(VendaBalcao, venda.id)

@@ -7,10 +7,13 @@
       <i class="fa-solid fa-arrow-left me-1"></i> Voltar
     </a>
     <div>
-      <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Planos de Banho e Tosa</h1>
+      <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Tabela de Banho e Tosa</h1>
       <p class="text-muted small mb-0">{{ casa.nome }}</p>
     </div>
-    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-primary btn-sm ms-auto">
+    <a href="{{ url_for('loja_banho_tosa_agenda', casa_id=casa.id) }}" class="btn btn-primary btn-sm ms-auto">
+      <i class="fa-solid fa-calendar-days me-1"></i> Agenda de banho e tosa
+    </a>
+    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-primary btn-sm">
       <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Ver página pública
     </a>
   </div>
@@ -40,7 +43,25 @@
             </div>
 
             <div class="mb-3">
-              {{ form.price.label(class="form-label fw-semibold") }}
+              {{ form.cobranca.label(class="form-label fw-semibold") }}
+              {{ form.cobranca(class="form-select") }}
+              <div class="form-text">Avulso: preço de cada banho, cobrado no caixa. Mensal: pacote com sessões no mês, pago pelo Mercado Pago.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Porte (faixa de peso)</label>
+              <div class="input-group">
+                {{ form.peso_min_kg(class="form-control" + (" is-invalid" if form.peso_min_kg.errors else ""), placeholder="de") }}
+                <span class="input-group-text">a</span>
+                {{ form.peso_max_kg(class="form-control" + (" is-invalid" if form.peso_max_kg.errors else ""), placeholder="até") }}
+                <span class="input-group-text">kg</span>
+              </div>
+              {% for e in form.peso_min_kg.errors + form.peso_max_kg.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              <div class="form-text">Deixe em branco para qualquer porte. Ex.: até 10 kg (pequeno), de 20 a 30 kg, acima de 40 kg.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="{{ form.price.id }}">Preço (R$) — por sessão ou mensalidade</label>
               <div class="input-group">
                 <span class="input-group-text">R$</span>
                 {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else ""), placeholder="0,00") }}
@@ -49,7 +70,7 @@
             </div>
 
             <div class="mb-3">
-              {{ form.sessions_per_month.label(class="form-label fw-semibold") }}
+              {{ form.sessions_per_month.label(class="form-label fw-semibold") }} <span class="small text-muted">(só no plano mensal)</span>
               <div class="input-group">
                 {{ form.sessions_per_month(class="form-control" + (" is-invalid" if form.sessions_per_month.errors else ""), placeholder="1") }}
                 <span class="input-group-text">sessão(ões)/mês</span>
@@ -83,10 +104,16 @@
               {% if p.description %}
               <p class="text-muted small mb-2">{{ p.description|truncate(90) }}</p>
               {% endif %}
+              <p class="small mb-1"><span class="badge text-bg-light border">{{ p.porte_label }}</span></p>
+              {% if p.avulso %}
+              <p class="h5 text-success fw-bold mb-3">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}<span class="text-muted fs-6 fw-normal">/sessão</span></p>
+              {% else %}
               <p class="h5 text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}<span class="text-muted fs-6 fw-normal">/mês</span></p>
               <p class="small text-muted mb-3">
                 <i class="fa-solid fa-calendar-check me-1"></i>{{ p.sessions_per_month }} sessão(ões)/mês
               </p>
+              {% endif %}
+              <a class="btn btn-sm btn-outline-primary mb-2" href="{{ url_for('loja_banho_tosa_plano_editar', casa_id=casa.id, plan_id=p.id) }}">Editar</a>
 
               <form method="post" action="{{ url_for('casa_de_racao_grooming_plano_toggle', casa_id=casa.id, plan_id=p.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

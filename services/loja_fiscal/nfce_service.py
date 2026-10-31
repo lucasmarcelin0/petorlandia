@@ -22,7 +22,7 @@ from extensions import db
 from models import LojaFiscalConfig, NfceDocumento, NfceEvento
 from models.loja_fiscal import AMBIENTE_HOMOLOGACAO, AMBIENTE_PRODUCAO
 from providers.fiscal.xml_signature import load_pfx
-from providers.nfce.qrcode import URLS_SP, qrcode_v2_online, qrcode_v3_online
+from providers.nfce.qrcode import URLS_SP, qrcode_v2_online, qrcode_v3_offline, qrcode_v3_online
 from providers.nfce.xml_builder import (
     EmitenteNfce,
     ItemNfce,
@@ -43,6 +43,7 @@ from providers.nfe.sefaz_sp.client import SefazSpNfeClient, get_sefaz_sp_nfce_co
 from providers.nfe.xml_builder import (
     UF_TO_CUF,
     build_cancel_event_xml,
+    build_cancel_substituicao_xml,
     build_cons_sit_xml,
     build_envi_nfe_xml,
     build_inut_xml,
@@ -226,6 +227,26 @@ def _qrcode(config: LojaFiscalConfig, chave: str, tp_amb: str) -> tuple[str, str
     return qrcode_v3_online(urls["qrcode"], chave, tp_amb), urls["chave"]
 
 
+def _qrcode_contingencia(config: LojaFiscalConfig, dados: NfceDados, tp_amb: str) -> tuple[str, str]:
+    """QR Code v3 off-line: sete parâmetros assinados com a chave do A1."""
+    if config.qrcode_versao == "2":
+        raise NfceServiceError("A contingência off-line usa o QR Code versão 3. Ajuste a versão na configuração fiscal.")
+    urls = URLS_SP[tp_amb]
+    chave_privada, _certificado = load_pfx(config.certificado_pfx(), config.certificado_senha())
+    cpf = only_digits(dados.cpf_consumidor)
+    qrcode = qrcode_v3_offline(
+        urls["qrcode"],
+        dados.chave.chave,
+        tp_amb,
+        dados.dh_emi,
+        dados.total_nota,
+        chave_privada,
+        dest_tipo="2" if cpf else None,
+        dest_id=cpf or None,
+    )
+    return qrcode, urls["chave"]
+
+
 def _serializar(objeto) -> dict[str, Any]:
     return {chave: (str(valor) if isinstance(valor, Decimal) else valor) for chave, valor in asdict(objeto).items()}
 
@@ -298,9 +319,13 @@ def _montar_e_assinar(
     pagamentos: list[PagamentoNfce],
     cpf: str | None,
     nome: str | None,
+    *,
+    justificativa_contingencia: str | None = None,
 ) -> str:
+    """Monta e assina. Com ``justificativa_contingencia`` sai em tpEmis=9."""
     dh_emi = format_dh(now_in_brazil())
     tp_amb = _tp_amb(documento.ambiente)
+    tp_emis = "9" if justificativa_contingencia else "1"
     chave = montar_chave(
         c_uf=_c_uf(config),
         dh_emi=dh_emi,
@@ -308,7 +333,7 @@ def _montar_e_assinar(
         modelo="65",
         serie=documento.serie,
         numero=documento.numero,
-        tp_emis="1",
+        tp_emis=tp_emis,
     )
     dados = NfceDados(
         emitente=_emitente(config),
@@ -323,14 +348,20 @@ def _montar_e_assinar(
         nome_consumidor=nome,
         inf_cpl=config.mensagem_cupom,
         percentual_tributos=config.percentual_tributos,
+        tp_emis=tp_emis,
+        dh_cont=dh_emi if justificativa_contingencia else None,
+        x_just=justificativa_contingencia,
     )
-    qrcode, url_chave = _qrcode(config, chave.chave, tp_amb)
+    if justificativa_contingencia:
+        qrcode, url_chave = _qrcode_contingencia(config, dados, tp_amb)
+    else:
+        qrcode, url_chave = _qrcode(config, chave.chave, tp_amb)
     xml = build_nfce_xml(dados, qrcode=qrcode, url_chave=url_chave)
     signed = sign_nfe_xml(xml, config.certificado_pfx(), config.certificado_senha())
 
     documento.chave = chave.chave
     documento.dh_emi = dh_emi
-    documento.tp_emis = "1"
+    documento.tp_emis = tp_emis
     documento.qrcode = qrcode
     documento.url_chave = url_chave
     documento.valor_total = dados.total_nota
@@ -600,6 +631,234 @@ def emitir_nota_teste(config: LojaFiscalConfig, usuario_id: int | None = None) -
         origem="teste",
         usuario_id=usuario_id,
     )
+
+
+# ------------------------------------------------------------- contingência
+
+JUSTIFICATIVA_CONTINGENCIA = (
+    "SEFAZ sem resposta no momento da venda; NFC-e emitida em contingencia off-line"
+)
+
+
+def emitir_em_contingencia(
+    config: LojaFiscalConfig,
+    *,
+    itens: Iterable[ItemNfce],
+    pagamentos: Iterable[PagamentoNfce],
+    cpf: str | None = None,
+    justificativa: str | None = None,
+    origem: str = "venda_balcao",
+    origem_id: int | None = None,
+    usuario_id: int | None = None,
+    substitui: Optional[NfceDocumento] = None,
+) -> NfceDocumento:
+    """NFC-e off-line (tpEmis=9): número novo, cupom impresso na hora, envio depois.
+
+    Nada é transmitido aqui. ``transmitir_contingencia`` (ou o job de 10 em 10
+    minutos) envia quando a SEFAZ responder; a nota normal substituída é
+    cancelada por substituição (110112) ou inutilizada.
+    """
+    if not config.tem_certificado:
+        raise NfceServiceError("Envie o certificado digital A1 da loja antes de emitir.")
+    texto = " ".join((justificativa or JUSTIFICATIVA_CONTINGENCIA).split())[:256]
+    if len(texto) < 15:
+        raise NfceServiceError("A justificativa da contingência precisa de pelo menos 15 caracteres.")
+    itens = list(itens)
+    pagamentos = list(pagamentos)
+    config, numero = reservar_numero(config.id)
+    documento = NfceDocumento(
+        casa_de_racao_id=config.casa_de_racao_id,
+        config_id=config.id,
+        origem=origem,
+        origem_id=origem_id,
+        ambiente=config.ambiente,
+        serie=int(config.serie or 1),
+        numero=numero,
+        status="contingencia",
+        tp_emis="9",
+        substitui_id=substitui.id if substitui is not None else None,
+        created_by_id=usuario_id,
+    )
+    db.session.add(documento)
+    db.session.flush()
+    try:
+        _montar_e_assinar(config, documento, itens, pagamentos, cpf, None, justificativa_contingencia=texto)
+    except NfceValidationError as exc:
+        db.session.rollback()
+        raise NfceServiceError(str(exc)) from exc
+    except NfceServiceError:
+        db.session.rollback()
+        raise
+    except Exception as exc:  # noqa: BLE001 - certificado/chave mestra
+        db.session.rollback()
+        logger.exception("Falha ao assinar NFC-e em contingência da loja %s", config.casa_de_racao_id)
+        raise NfceServiceError(
+            "Não foi possível assinar a nota com o certificado da loja. Reenvie o certificado A1."
+        ) from exc
+    documento.status = "contingencia"
+    documento.x_motivo = "Emitida em contingência off-line; vai para a SEFAZ quando ela responder."
+    _registrar(config, documento, "contingencia", "emitida", detalhe=texto)
+    db.session.commit()
+    return documento
+
+
+def contingencia_da_nota(
+    documento: NfceDocumento, *, justificativa: str | None = None, usuario_id: int | None = None
+) -> NfceDocumento:
+    """Emite em contingência a venda de uma nota normal que ficou sem resposta."""
+    if documento.status != "erro":
+        raise NfceServiceError("Só a nota sem resposta da SEFAZ vai para a contingência.")
+    payload = documento.payload_json or {}
+    itens = _itens_de(payload)
+    pagamentos = _pagamentos_de(payload)
+    if not itens or not pagamentos:
+        raise NfceServiceError("Não há dados para emitir em contingência. Refaça a venda.")
+    return emitir_em_contingencia(
+        documento.config,
+        itens=itens,
+        pagamentos=pagamentos,
+        cpf=_cpf_do_xml(documento),
+        justificativa=justificativa,
+        origem=documento.origem,
+        origem_id=documento.origem_id,
+        usuario_id=usuario_id,
+        substitui=documento,
+    )
+
+
+def transmitir_contingencia(documento: NfceDocumento) -> NfceDocumento:
+    """Envia a nota off-line. Sem resposta, ela continua em contingência."""
+    if documento.status != "contingencia":
+        raise NfceServiceError("Esta nota não está em contingência.")
+    documento = _transmitir(documento.config, documento, documento.xml_assinado)
+    if documento.status == "erro":
+        documento.status = "contingencia"
+        db.session.commit()
+    elif documento.status == "autorizada" and documento.substitui_id:
+        try:
+            resolver_substituida(documento)
+        except NfceServiceError:
+            logger.warning("Nota substituída %s ainda sem solução", documento.substitui_id)
+    return documento
+
+
+def resolver_substituida(contingencia: NfceDocumento) -> Optional[str]:
+    """Com a contingência autorizada, resolve a nota normal que ficou sem resposta:
+    cancelada por substituição se a SEFAZ a autorizou; inutilizada se não consta."""
+    original = contingencia.substitui
+    if original is None or original.status in {"cancelada", "inutilizada"}:
+        return None
+    config = original.config
+    if original.status != "autorizada":
+        client = _cliente(config, original.ambiente)
+        _, situacao = _consultar_chave(config, client, original)
+        if situacao.autorizado:
+            _aplicar_situacao_autorizada(original, situacao.prot_nfe_xml, situacao.n_prot)
+            db.session.commit()
+        elif situacao.nao_consta and original.ambiente == config.ambiente:
+            inutilizar_numeros(
+                config,
+                original.numero,
+                original.numero,
+                "Numero substituido por NFC-e emitida em contingencia off-line",
+            )
+            return "inutilizada"
+        else:
+            db.session.commit()
+            return None
+    cancelar_por_substituicao(original, contingencia)
+    return "cancelada"
+
+
+def cancelar_por_substituicao(original: NfceDocumento, substituta: NfceDocumento) -> NfceDocumento:
+    """Evento 110112: cancela a nota normal autorizada que a contingência substituiu."""
+    if original.status != "autorizada" or not original.protocolo:
+        raise NfceServiceError("Só nota autorizada pode ser cancelada por substituição.")
+    config = original.config
+    client = _cliente(config, original.ambiente)
+    motivo = "NFC-e substituida por outra emitida em contingencia off-line para a mesma venda"
+    xml_evento = build_cancel_substituicao_xml(
+        chave=original.chave,
+        emitter_cnpj=config.cnpj,
+        protocolo=original.protocolo,
+        motivo=motivo,
+        chave_substituta=substituta.chave,
+        tp_amb=_tp_amb(original.ambiente),
+        data_evento=now_in_brazil(),
+    )
+    signed = sign_event_xml(xml_evento, config.certificado_pfx(), config.certificado_senha())
+    response = client.recepcao_evento(signed)
+    retorno = parse_evento(response.response or response.response_xml)
+    if retorno.registrado:
+        original.status = "cancelada"
+        original.cancel_protocolo = retorno.n_prot
+        original.cancel_motivo = motivo
+        original.cancelada_em = now_in_brazil()
+        original.xml_cancelamento = _proc_evento(signed, retorno.ret_evento_xml)
+    _registrar(
+        config,
+        original,
+        "cancelamento_substituicao",
+        "cancelada" if retorno.registrado else "recusado",
+        c_stat=retorno.c_stat,
+        x_motivo=retorno.x_motivo or response.error_message,
+        protocolo=retorno.n_prot,
+        request_xml=response.request_xml,
+        response_xml=response.response_xml,
+    )
+    db.session.commit()
+    if not retorno.registrado:
+        raise NfceServiceError(
+            f"A SEFAZ não aceitou o cancelamento por substituição: {retorno.x_motivo or response.error_message or 'sem resposta'}."
+        )
+    return original
+
+
+def rotina_contingencia(limite: int = 50) -> dict[str, int]:
+    """Job: envia as notas em contingência e resolve as notas substituídas."""
+    resumo = {"enviadas": 0, "autorizadas": 0, "pendentes": 0, "resolvidas": 0, "erros": 0}
+    ids = [
+        doc_id
+        for (doc_id,) in db.session.query(NfceDocumento.id)
+        .filter(NfceDocumento.status == "contingencia")
+        .order_by(NfceDocumento.id)
+        .limit(limite)
+        .all()
+    ]
+    for doc_id in ids:
+        documento = db.session.get(NfceDocumento, doc_id)
+        try:
+            documento = transmitir_contingencia(documento)
+            resumo["enviadas"] += 1
+            if documento.status == "autorizada":
+                resumo["autorizadas"] += 1
+            elif documento.status == "contingencia":
+                resumo["pendentes"] += 1
+        except Exception:  # noqa: BLE001 - uma nota com problema não para as outras
+            db.session.rollback()
+            resumo["erros"] += 1
+            logger.exception("Falha ao enviar NFC-e em contingência %s", doc_id)
+    substitutas = (
+        NfceDocumento.query.filter(
+            NfceDocumento.substitui_id.isnot(None),
+            NfceDocumento.status == "autorizada",
+        )
+        .order_by(NfceDocumento.id)
+        .limit(limite)
+        .all()
+    )
+    for documento in substitutas:
+        original = documento.substitui
+        if original is None or original.status in {"cancelada", "inutilizada"}:
+            continue
+        try:
+            if resolver_substituida(documento):
+                resumo["resolvidas"] += 1
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            resumo["erros"] += 1
+            logger.exception("Falha ao resolver a nota substituída %s", documento.substitui_id)
+    return resumo
 
 
 # ------------------------------------------------------- cancelamento e inutilização

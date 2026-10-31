@@ -187,6 +187,13 @@
               </div>
             </div>
             <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="contingencia_automatica" name="contingencia_automatica" value="1" {% if f and f.contingencia_automatica %}checked{% endif %}>
+                <label class="form-check-label" for="contingencia_automatica">Se a SEFAZ não responder, emitir em contingência off-line</label>
+              </div>
+              <div class="form-text">O cliente sai com o cupom (marcado "emitida em contingência"); o PetOrlândia envia a nota quando a SEFAZ voltar e cancela ou inutiliza a tentativa que ficou sem resposta.</div>
+            </div>
+            <div class="col-12">
               <button type="submit" class="btn btn-success">Salvar dados fiscais</button>
             </div>
           </form>

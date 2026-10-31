@@ -39,6 +39,7 @@ NFCE_STATUS_LABELS = {
     "cancelada": "Cancelada",
     "erro": "Falha de comunicação",
     "inutilizada": "Número inutilizado",
+    "contingencia": "Em contingência (falta enviar)",
 }
 
 
@@ -99,6 +100,9 @@ class LojaFiscalConfig(db.Model):
 
     # Liga a emissão no caixa da loja. Desligado, nada muda para a loja.
     ativo = db.Column(db.Boolean, nullable=False, default=False)
+    # Sem resposta da SEFAZ na venda: emite em contingência off-line (tpEmis=9)
+    # para o cliente sair com o cupom; o envio acontece quando a SEFAZ voltar.
+    contingencia_automatica = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     updated_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, onupdate=now_in_brazil)
 
@@ -193,12 +197,15 @@ class NfceDocumento(db.Model):
     cancel_protocolo = db.Column(db.String(20), nullable=True)
     cancel_motivo = db.Column(db.String(255), nullable=True)
     cancelada_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    # NFC-e em contingência: a nota normal (sem resposta) que ela substitui.
+    substitui_id = db.Column(db.Integer, db.ForeignKey("nfce_documento.id", ondelete="SET NULL"), nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     updated_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, onupdate=now_in_brazil)
 
     config = db.relationship("LojaFiscalConfig", backref=db.backref("documentos", lazy="dynamic"))
     casa_de_racao = db.relationship("CasaDeRacao")
+    substitui = db.relationship("NfceDocumento", remote_side=[id], foreign_keys=[substitui_id])
 
     @property
     def status_label(self) -> str:

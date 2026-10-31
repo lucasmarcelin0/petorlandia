@@ -79,6 +79,7 @@ from .loja_dfe import (  # noqa: F401
     LojaDfeControle,
     LojaDfeDocumento,
 )
+from .loja_banho_tosa import GroomingSessao  # noqa: F401
 from .sfa import (
     SfaAuditoria,
     SfaInstrumentReview,
@@ -245,4 +246,5 @@ __all__ = [
     "LojaFornecedorProduto",
     "LojaDfeControle",
     "LojaDfeDocumento",
+    "GroomingSessao",
 ]

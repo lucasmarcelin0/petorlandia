@@ -498,9 +498,17 @@ def grooming_planos_publicos():
     elif minha_casa_de_racao:
         grooming_planos = minha_casa_de_racao.grooming_plans.order_by(GroomingPlan.name).all()
 
+    from models import Animal
+    meus_animais = (
+        Animal.query.filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
     return render_template(
         'grooming/planos_publicos.html',
         planos=planos,
+        meus_animais=meus_animais,
         minhas_ids=minhas_ids,
         minha_clinica=minha_clinica,
         minha_casa_de_racao=minha_casa_de_racao,
@@ -515,6 +523,9 @@ def grooming_assinar(plan_id):
     from models import GroomingPlan, GroomingSubscription, Animal
     from forms import GroomingSubscribeForm
     plan = GroomingPlan.query.filter_by(id=plan_id, active=True).first_or_404()
+    if plan.avulso:
+        flash('Este serviço é avulso: agende direto com a loja.', 'info')
+        return redirect(url_for('grooming_planos_publicos'))
 
     # Verifica se já possui assinatura ativa neste plano
     if GroomingSubscription.query.filter_by(user_id=current_user.id, plan_id=plan.id, active=True).first():
@@ -540,7 +551,7 @@ def grooming_assinar(plan_id):
         db.session.commit()
 
         preapproval_data = {
-            "reason": f"{plan.name} — {animal.name} ({plan.clinica.nome})",
+            "reason": f"{plan.name} — {animal.name} ({plan.provider_name})",
             "back_url": url_for('grooming_minhas_assinaturas', _external=True),
             "payer_email": current_user.email,
             "auto_recurring": {

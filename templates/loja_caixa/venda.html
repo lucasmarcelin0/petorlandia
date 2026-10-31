@@ -9,7 +9,7 @@
     </a>
     <a href="{{ url_for('loja_caixa_vendas', casa_id=casa.id, dia=dia_venda) }}" class="btn btn-outline-secondary btn-sm">Vendas do dia</a>
     <a href="{{ url_for('loja_caixa_comprovante', casa_id=casa.id, venda_id=venda.id) }}" class="btn btn-outline-primary btn-sm ms-auto" target="_blank" rel="noopener">Comprovante</a>
-    {% if venda.nfce and venda.nfce.status in ['autorizada', 'cancelada'] %}
+    {% if venda.nfce and venda.nfce.status in ['autorizada', 'cancelada', 'contingencia'] %}
     <a href="{{ url_for('loja_nfce_cupom', casa_id=casa.id, doc_id=venda.nfce.id) }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener">Cupom NFC-e</a>
     {% endif %}
   </div>
@@ -57,14 +57,18 @@
         {% if venda.nfce.ambiente != 'producao' %}<span class="badge text-bg-warning">homologação</span>{% endif %}
         · <a href="{{ url_for('loja_nfce_detalhe', casa_id=casa.id, doc_id=venda.nfce.id) }}">detalhes da nota</a>
       </p>
-      {% if venda.nfce.status != 'autorizada' and venda.nfce.x_motivo %}<p class="small text-danger mb-2">{{ venda.nfce.c_stat or '' }} {{ venda.nfce.x_motivo }}</p>{% endif %}
+      {% if venda.nfce.status == 'contingencia' %}
+      <p class="small text-muted mb-2">Em contingência: o cupom vale e o envio à SEFAZ é automático (a cada 10 minutos). Para enviar agora, abra os <a href="{{ url_for('loja_nfce_detalhe', casa_id=casa.id, doc_id=venda.nfce.id) }}">detalhes da nota</a>.</p>
+      {% elif venda.nfce.status != 'autorizada' and venda.nfce.x_motivo %}<p class="small text-danger mb-2">{{ venda.nfce.c_stat or '' }} {{ venda.nfce.x_motivo }}</p>{% endif %}
       {% elif venda.emitir_nfce %}
       <p class="text-danger small mb-2">Não emitida. {{ venda.nfce_erro or '' }}</p>
+      {% elif not venda.itens|selectattr('product_id')|list %}
+      <p class="text-muted small mb-2">Serviço recebido no caixa (serviço não vai em NFC-e).</p>
       {% else %}
       <p class="text-muted small mb-2">Venda registrada sem NFC-e.</p>
       {% endif %}
 
-      {% if venda.status == 'concluida' and nfce_ligada and (not venda.nfce or venda.nfce.status in ['pendente', 'erro', 'rejeitada', 'cancelada', 'inutilizada']) %}
+      {% if venda.status == 'concluida' and nfce_ligada and venda.itens|selectattr('product_id')|list and (not venda.nfce or venda.nfce.status in ['pendente', 'erro', 'rejeitada', 'cancelada', 'inutilizada']) %}
       <form method="post" action="{{ url_for('loja_caixa_venda_nfce', casa_id=casa.id, venda_id=venda.id) }}" class="d-flex gap-2 flex-wrap align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if not venda.nfce or venda.nfce.status in ['cancelada', 'inutilizada'] %}
@@ -77,6 +81,13 @@
           {{ 'Emitir nova NFC-e' if venda.nfce and venda.nfce.status in ['cancelada', 'inutilizada'] else ('Reenviar NFC-e' if venda.nfce else 'Emitir NFC-e') }}
         </button>
       </form>
+      {% if venda.nfce and venda.nfce.status == 'erro' %}
+      <form method="post" action="{{ url_for('loja_caixa_venda_contingencia', casa_id=casa.id, venda_id=venda.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-warning btn-sm" type="submit">SEFAZ fora do ar? Emitir em contingência</button>
+        <div class="small text-muted mt-1">Sai um cupom válido agora, com outro número; a nota vai para a SEFAZ quando ela responder e a nota sem resposta é cancelada ou inutilizada sozinha.</div>
+      </form>
+      {% endif %}
       {% if venda.nfce and venda.nfce.status == 'rejeitada' %}
       <p class="small text-muted mt-2 mb-0">Se a rejeição for de cadastro (ex.: NCM), corrija o produto em <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}">Estoque</a> e reenvie: a nota é remontada com os dados atuais.</p>
       {% endif %}

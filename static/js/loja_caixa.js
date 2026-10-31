@@ -527,6 +527,11 @@
         caixaNfce.textContent = 'NFC-e autorizada.';
         cupom.href = dados.nfce.cupom_url;
         cupom.classList.remove('d-none');
+      } else if (dados.nfce.contingencia) {
+        caixaNfce.classList.add('alert-info');
+        caixaNfce.textContent = 'SEFAZ sem resposta: NFC-e emitida em contingência. Imprima o cupom — o envio à SEFAZ é automático.';
+        cupom.href = dados.nfce.cupom_url;
+        cupom.classList.remove('d-none');
       } else {
         caixaNfce.classList.add('alert-warning');
         caixaNfce.textContent = 'NFC-e não autorizada: ' + (dados.nfce.mensagem || dados.nfce.rotulo) + '. A venda está registrada; emita a nota de novo em "Ver venda".';

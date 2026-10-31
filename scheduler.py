@@ -239,6 +239,20 @@ def _run_loja_dfe() -> None:
             current_app.logger.info("[Scheduler] DF-e das lojas: %s", resumo)
 
 
+def _run_loja_nfce_contingencia() -> None:
+    """Envia as NFC-e emitidas em contingência off-line quando a SEFAZ volta."""
+    with app.app_context():
+        from services.loja_fiscal.nfce_service import rotina_contingencia
+
+        try:
+            resumo = rotina_contingencia()
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha ao enviar NFC-e em contingência.")
+            return
+        if resumo.get("enviadas") or resumo.get("resolvidas") or resumo.get("erros"):
+            current_app.logger.info("[Scheduler] NFC-e em contingência: %s", resumo)
+
+
 def _scheduler_timezone() -> str:
     return os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
 
@@ -322,6 +336,14 @@ def register_jobs(scheduler) -> None:
         _memory_bounded_job(_run_loja_dfe),
         _interval(60),
         id='loja-dfe-sefaz',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _memory_bounded_job(_run_loja_nfce_contingencia),
+        _interval(10),
+        id='loja-nfce-contingencia',
         replace_existing=True,
         max_instances=1,
         coalesce=True,

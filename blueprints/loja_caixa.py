@@ -243,6 +243,7 @@ def _resposta_venda(casa, venda: VendaBalcao, erro_nfce: str | None = None) -> d
             "status": documento.status,
             "rotulo": documento.status_label,
             "autorizada": documento.status == "autorizada",
+            "contingencia": documento.status == "contingencia",
             "mensagem": venda.nfce_erro or documento.x_motivo,
             "cupom_url": url_for("loja_nfce_cupom", casa_id=casa.id, doc_id=documento.id),
         }
@@ -385,6 +386,19 @@ def loja_caixa_venda_nfce(casa_id, venda_id):
             flash("NFC-e autorizada.", "success")
         else:
             flash(f"NFC-e {documento.status_label.lower()}: {documento.x_motivo or ''}", "warning")
+    except CaixaError as exc:
+        flash(str(exc), "warning")
+    return redirect(url_for("loja_caixa_venda_detalhe", casa_id=casa.id, venda_id=venda_id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>/contingencia", methods=["POST"])
+@login_required
+def loja_caixa_venda_contingencia(casa_id, venda_id):
+    casa = ensure_loja_access(casa_id)
+    venda = _venda_da_loja(casa, venda_id)
+    try:
+        pdv.emitir_contingencia_venda(venda, usuario_id=_usuario_id())
+        flash("NFC-e emitida em contingência: imprima o cupom; o envio à SEFAZ é automático.", "success")
     except CaixaError as exc:
         flash(str(exc), "warning")
     return redirect(url_for("loja_caixa_venda_detalhe", casa_id=casa.id, venda_id=venda_id))
