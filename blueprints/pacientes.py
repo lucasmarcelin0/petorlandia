@@ -3473,6 +3473,14 @@ def imprimir_vacinas(animal_id):
             veterinario = pmo_vet
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
+    if request.args.get('pdf') in ('inline', 'download'):
+        from services.vacinas_pdf import gerar_pdf_carteira
+        pdf = gerar_pdf_carteira(animal, clinica, veterinario)
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args.get('pdf') == 'inline' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="carteira-vacinacao-{animal.id}.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
     return render_template("orcamentos/imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
 
 
