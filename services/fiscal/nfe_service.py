@@ -24,7 +24,7 @@ from models import (
     Order,
 )
 from providers.nfe.chave import montar_chave
-from providers.nfe.retorno import parse_autorizacao, parse_consulta_situacao, parse_evento
+from providers.nfe.retorno import CSTAT_DENEGADO, parse_autorizacao, parse_consulta_situacao, parse_evento
 from providers.nfe.sefaz_sp.client import SefazSpNfeClient, get_sefaz_sp_wsdl_config
 from providers.nfe.xml_builder import (
     UF_TO_CUF,
@@ -700,6 +700,20 @@ def _handle_autorizacao_response(
                 else situacao.prot_nfe_xml
             )
             return FiscalDocumentStatus.AUTHORIZED, None, None, proc, situacao.n_prot
+        if situacao.cancelado:
+            return FiscalDocumentStatus.CANCELED, situacao.c_stat, situacao.x_motivo, None, situacao.n_prot
+        if situacao.c_stat not in CSTAT_DENEGADO:
+            # Consulta sem resposta ou inconclusiva: a nota pode estar
+            # autorizada. FAILED mantém a MESMA chave no reprocessamento, que
+            # consulta de novo, em vez de virar rejeição definitiva.
+            motivo = situacao.x_motivo or situacao_response.error_message or "sem resposta da consulta"
+            return (
+                FiscalDocumentStatus.FAILED,
+                retorno.c_stat,
+                f"Duplicidade na SEFAZ sem confirmação da situação ({motivo}).",
+                None,
+                None,
+            )
 
     message = retorno.x_motivo
     if retorno.denegado:
@@ -729,6 +743,12 @@ def _sync_by_access_key(
                 else situacao.prot_nfe_xml
             )
         document.authorized_at = now_in_brazil()
+    elif situacao.cancelado:
+        # A SEFAZ informa a situação atual: a nota existe e está cancelada.
+        document.status = FiscalDocumentStatus.CANCELED
+        document.protocol = document.protocol or situacao.n_prot
+        document.error_code = situacao.c_stat
+        document.error_message = situacao.x_motivo
     elif situacao.c_stat == "217":
         # 217: a chave não consta na SEFAZ. Volta para o reprocessamento.
         document.status = FiscalDocumentStatus.FAILED

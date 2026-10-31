@@ -184,6 +184,31 @@ def test_consulta_situacao_autorizada():
     assert situacao.n_prot == "135260000012345"
 
 
+def test_consulta_de_nota_cancelada_mantem_a_situacao_atual():
+    """cStat 101 com o protNFe original (100): cancelada, não autorizada."""
+    xml = (
+        f'<retConsSitNFe xmlns="{NFE}" versao="4.00"><tpAmb>2</tpAmb><cStat>101</cStat>'
+        "<xMotivo>Cancelamento de NF-e homologado</xMotivo>"
+        f'<protNFe versao="4.00"><infProt><chNFe>{CHAVE}</chNFe><nProt>135260000012345</nProt>'
+        "<cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe></retConsSitNFe>"
+    )
+    situacao = parse_consulta_situacao(xml)
+    assert not situacao.autorizado
+    assert situacao.cancelado
+    assert situacao.c_stat == "101" and situacao.prot_c_stat == "100"
+    assert situacao.n_prot == "135260000012345"
+    assert situacao.prot_nfe_xml is not None
+
+
+def test_consulta_nao_consta_e_sem_resposta():
+    nao_consta = parse_consulta_situacao(
+        f'<retConsSitNFe xmlns="{NFE}" versao="4.00"><cStat>217</cStat><xMotivo>NF-e nao consta</xMotivo></retConsSitNFe>'
+    )
+    assert nao_consta.nao_consta and not nao_consta.autorizado
+    sem_resposta = parse_consulta_situacao(None)
+    assert sem_resposta.c_stat is None and not sem_resposta.nao_consta
+
+
 def test_inutilizacao_homologada():
     xml = (
         f'<retInutNFe xmlns="{NFE}" versao="4.00"><infInut><tpAmb>2</tpAmb><cStat>102</cStat>'

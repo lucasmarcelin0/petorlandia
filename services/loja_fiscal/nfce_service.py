@@ -33,6 +33,7 @@ from providers.nfce.xml_builder import (
 )
 from providers.nfe.chave import montar_chave, only_digits
 from providers.nfe.retorno import (
+    CSTAT_DENEGADO,
     parse_autorizacao,
     parse_consulta_situacao,
     parse_evento,
@@ -94,19 +95,32 @@ def salvar_certificado(config: LojaFiscalConfig, pfx_bytes: bytes, senha: str) -
     return {"validade": validade, "cnpj": cnpj_certificado}
 
 
+def _env_do_ambiente(ambiente: str | None) -> str:
+    return "prod" if ambiente == AMBIENTE_PRODUCAO else "homolog"
+
+
+def _tp_amb(ambiente: str | None) -> str:
+    return "1" if ambiente == AMBIENTE_PRODUCAO else "2"
+
+
 def _env(config: LojaFiscalConfig) -> str:
-    return "prod" if config.ambiente == AMBIENTE_PRODUCAO else "homolog"
+    return _env_do_ambiente(config.ambiente)
 
 
 def _c_uf(config: LojaFiscalConfig) -> str:
     return UF_TO_CUF.get((config.uf or "SP").upper(), "35")
 
 
-def _cliente(config: LojaFiscalConfig) -> SefazSpNfeClient:
+def _cliente(config: LojaFiscalConfig, ambiente: str | None = None) -> SefazSpNfeClient:
+    """Cliente da SEFAZ no ambiente pedido (o da nota) ou no atual da loja.
+
+    Uma nota sempre é operada no ambiente em que nasceu: trocar a loja para
+    produção não pode mandar uma nota de teste para a SEFAZ de produção.
+    """
     if not config.tem_certificado:
         raise NfceServiceError("Envie o certificado digital A1 da loja antes de emitir.")
     return SefazSpNfeClient(
-        get_sefaz_sp_nfce_config(_env(config)),
+        get_sefaz_sp_nfce_config(_env_do_ambiente(ambiente or config.ambiente)),
         pfx_bytes=config.certificado_pfx(),
         pfx_password=config.certificado_senha(),
     )
@@ -202,14 +216,14 @@ def reservar_numero(config_id: int) -> tuple[LojaFiscalConfig, int]:
 
 # --------------------------------------------------------------------- emissão
 
-def _qrcode(config: LojaFiscalConfig, chave: str) -> tuple[str, str]:
-    urls = URLS_SP[config.tp_amb]
+def _qrcode(config: LojaFiscalConfig, chave: str, tp_amb: str) -> tuple[str, str]:
+    urls = URLS_SP[tp_amb]
     if config.qrcode_versao == "2":
         token = config.csc_token()
         if not (config.csc_id and token):
             raise NfceServiceError("QR Code versão 2 exige o CSC (identificador e código) da SEFAZ.")
-        return qrcode_v2_online(urls["qrcode"], chave, config.tp_amb, config.csc_id, token), urls["chave"]
-    return qrcode_v3_online(urls["qrcode"], chave, config.tp_amb), urls["chave"]
+        return qrcode_v2_online(urls["qrcode"], chave, tp_amb, config.csc_id, token), urls["chave"]
+    return qrcode_v3_online(urls["qrcode"], chave, tp_amb), urls["chave"]
 
 
 def _serializar(objeto) -> dict[str, Any]:
@@ -286,6 +300,7 @@ def _montar_e_assinar(
     nome: str | None,
 ) -> str:
     dh_emi = format_dh(now_in_brazil())
+    tp_amb = _tp_amb(documento.ambiente)
     chave = montar_chave(
         c_uf=_c_uf(config),
         dh_emi=dh_emi,
@@ -303,13 +318,13 @@ def _montar_e_assinar(
         serie=documento.serie,
         numero=documento.numero,
         dh_emi=dh_emi,
-        tp_amb=config.tp_amb,
+        tp_amb=tp_amb,
         cpf_consumidor=cpf,
         nome_consumidor=nome,
         inf_cpl=config.mensagem_cupom,
         percentual_tributos=config.percentual_tributos,
     )
-    qrcode, url_chave = _qrcode(config, chave.chave)
+    qrcode, url_chave = _qrcode(config, chave.chave, tp_amb)
     xml = build_nfce_xml(dados, qrcode=qrcode, url_chave=url_chave)
     signed = sign_nfe_xml(xml, config.certificado_pfx(), config.certificado_senha())
 
@@ -337,8 +352,23 @@ def _aplicar_situacao_autorizada(documento: NfceDocumento, prot_nfe_xml: str | N
         documento.xml_autorizado = build_nfe_proc_xml(documento.xml_assinado, prot_nfe_xml)
 
 
+def _aplicar_situacao_final(documento: NfceDocumento, situacao) -> bool:
+    """Nota que a SEFAZ diz cancelada ou denegada: registra e devolve True."""
+    if situacao.cancelado:
+        documento.status = "cancelada"
+    elif situacao.c_stat in CSTAT_DENEGADO:
+        documento.status = "denegada"
+    else:
+        return False
+    documento.c_stat = situacao.c_stat
+    documento.x_motivo = (situacao.x_motivo or "")[:255] or None
+    if situacao.n_prot and not documento.protocolo:
+        documento.protocolo = situacao.n_prot
+    return True
+
+
 def _consultar_chave(config: LojaFiscalConfig, client: SefazSpNfeClient, documento: NfceDocumento):
-    response = client.consulta_protocolo(build_cons_sit_xml(documento.chave, config.tp_amb))
+    response = client.consulta_protocolo(build_cons_sit_xml(documento.chave, _tp_amb(documento.ambiente)))
     situacao = parse_consulta_situacao(response.response or response.response_xml)
     _registrar(
         config,
@@ -355,7 +385,7 @@ def _consultar_chave(config: LojaFiscalConfig, client: SefazSpNfeClient, documen
 
 
 def _transmitir(config: LojaFiscalConfig, documento: NfceDocumento, signed_xml: str) -> NfceDocumento:
-    client = _cliente(config)
+    client = _cliente(config, documento.ambiente)
     response = client.autorizacao(build_envi_nfe_xml(signed_xml, id_lote=documento.id))
 
     if not response.success and not response.response:
@@ -367,7 +397,7 @@ def _transmitir(config: LojaFiscalConfig, documento: NfceDocumento, signed_xml: 
         consulta, situacao = _consultar_chave(config, client, documento)
         if situacao.autorizado:
             _aplicar_situacao_autorizada(documento, situacao.prot_nfe_xml, situacao.n_prot)
-        else:
+        elif not _aplicar_situacao_final(documento, situacao):
             documento.status = "erro"
             documento.x_motivo = (response.error_message or "Sem resposta da SEFAZ.")[:255]
         db.session.commit()
@@ -383,10 +413,14 @@ def _transmitir(config: LojaFiscalConfig, documento: NfceDocumento, signed_xml: 
         _, situacao = _consultar_chave(config, client, documento)
         if situacao.autorizado:
             _aplicar_situacao_autorizada(documento, situacao.prot_nfe_xml, situacao.n_prot)
-        else:
-            documento.status = "rejeitada"
+        elif not _aplicar_situacao_final(documento, situacao):
+            # Duplicidade sem confirmação: a chave pode estar autorizada.
+            # "erro" faz o reenvio consultar a MESMA chave antes de tudo.
+            documento.status = "erro"
             documento.c_stat = retorno.c_stat
-            documento.x_motivo = (retorno.x_motivo or "")[:255]
+            documento.x_motivo = (
+                f"Duplicidade na SEFAZ sem confirmação da situação: {retorno.x_motivo or ''}"
+            )[:255]
     elif retorno.denegado:
         documento.status = "denegada"
         documento.c_stat = retorno.c_stat
@@ -487,20 +521,33 @@ def reenviar_nfce(
     """Reenvia uma nota pendente, com falha de comunicação ou rejeitada.
 
     1. Se a chave já consta autorizada na SEFAZ, só registra a autorização.
-    2. Dentro da janela de 5 minutos, reenvia o mesmo XML assinado.
-    3. Fora dela, ou se rejeitada, monta de novo: mesmo número, nova data e
+    2. Só segue se a SEFAZ responder que a chave não existe (217): sem essa
+       certeza, nada muda (a chave original pode ter sido autorizada).
+    3. Dentro da janela de 5 minutos, reenvia o mesmo XML assinado.
+    4. Fora dela, ou se rejeitada, monta de novo: mesmo número, nova data e
        nova chave, com os itens informados (ou os da montagem anterior).
+
+    A nota é sempre operada no ambiente em que nasceu.
     """
     if documento.status not in STATUS_REENVIAVEIS:
         raise NfceServiceError("Esta nota não pode ser reenviada.")
     config = documento.config
-    client = _cliente(config)
+    client = _cliente(config, documento.ambiente)
     if documento.chave and documento.status in {"pendente", "erro"}:
         _, situacao = _consultar_chave(config, client, documento)
         if situacao.autorizado:
             _aplicar_situacao_autorizada(documento, situacao.prot_nfe_xml, situacao.n_prot)
             db.session.commit()
             return documento
+        if _aplicar_situacao_final(documento, situacao):
+            db.session.commit()
+            return documento
+        if not situacao.nao_consta:
+            db.session.commit()  # guarda o registro da consulta
+            raise NfceServiceError(
+                "A SEFAZ não confirmou a situação desta nota agora. Nada foi alterado: "
+                "tente reenviar de novo em alguns instantes."
+            )
 
     signed = documento.xml_assinado
     emitida_em = _parse_dh(documento.dh_emi)
@@ -565,13 +612,13 @@ def cancelar_nfce(documento: NfceDocumento, motivo: str) -> NfceDocumento:
     if len(justificativa) < 15:
         raise NfceServiceError("Descreva o motivo do cancelamento com pelo menos 15 caracteres.")
     config = documento.config
-    client = _cliente(config)
+    client = _cliente(config, documento.ambiente)
     xml_evento = build_cancel_event_xml(
         chave=documento.chave,
         emitter_cnpj=config.cnpj,
         protocolo=documento.protocolo,
         motivo=justificativa[:255],
-        tp_amb=config.tp_amb,
+        tp_amb=_tp_amb(documento.ambiente),
         data_evento=now_in_brazil(),
     )
     signed = sign_event_xml(xml_evento, config.certificado_pfx(), config.certificado_senha())
