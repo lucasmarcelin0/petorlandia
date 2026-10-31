@@ -1,13 +1,9 @@
-"""Assinatura XML NF-e (modelo 55)."""
+"""Assinatura XML NF-e/NFC-e (modelos 55 e 65) e de seus eventos."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cryptography.hazmat.primitives.serialization import pkcs12
-from lxml import etree
-from signxml import XMLSigner
-
-from security.xml_safe import safe_lxml_fromstring
+from providers.fiscal.xml_signature import load_pfx, sign_fiscal_xml
 
 
 @dataclass
@@ -17,52 +13,19 @@ class SignedXmlResult:
 
 
 def _load_pfx(pfx_bytes: bytes, password: str | None):
-    password_bytes = password.encode("utf-8") if password else None
-    private_key, certificate, _additional = pkcs12.load_key_and_certificates(
-        pfx_bytes,
-        password_bytes,
-    )
-    if certificate is None or private_key is None:
-        raise ValueError("Certificado A1 inválido para assinatura XML.")
-    return private_key, certificate
+    return load_pfx(pfx_bytes, password)
 
 
 def sign_nfe_xml(xml: str, pfx_bytes: bytes, password: str | None) -> str:
-    return _sign_xml_node(xml, pfx_bytes, password, "infNFe")
+    """Assina ``infNFe``; a ``Signature`` fica dentro de ``NFe``, após ``infNFe``."""
+    return sign_fiscal_xml(xml, pfx_bytes=pfx_bytes, password=password, node_tag="infNFe")
 
 
 def sign_event_xml(xml: str, pfx_bytes: bytes, password: str | None) -> str:
-    return _sign_xml_node(xml, pfx_bytes, password, "infEvento")
+    """Assina ``infEvento``; a ``Signature`` fica dentro de ``evento``."""
+    return sign_fiscal_xml(xml, pfx_bytes=pfx_bytes, password=password, node_tag="infEvento")
 
 
-def _sign_xml_node(xml: str, pfx_bytes: bytes, password: str | None, node_tag: str) -> str:
-    private_key, certificate = _load_pfx(pfx_bytes, password)
-    xml_root = safe_lxml_fromstring(xml)
-    signature_target = xml_root.find(f".//{{http://www.portalfiscal.inf.br/nfe}}{node_tag}")
-    if signature_target is None:
-        signature_target = xml_root.find(f".//{node_tag}")
-    if signature_target is None:
-        raise ValueError(f"Nó {node_tag} não encontrado para assinatura.")
-
-    signature_id = signature_target.get("Id")
-    if not signature_id:
-        raise ValueError(f"Nó {node_tag} não possui atributo Id para assinatura.")
-
-    signer = XMLSigner(
-        method="enveloped",
-        signature_algorithm="rsa-sha1",
-        digest_algorithm="sha1",
-    )
-    signed_node = signer.sign(
-        signature_target,
-        key=private_key,
-        cert=certificate,
-        reference_uri=f"#{signature_id}",
-    )
-
-    parent = signature_target.getparent()
-    if parent is None:
-        return etree.tostring(signed_node, encoding="unicode")
-
-    parent.replace(signature_target, signed_node)
-    return etree.tostring(xml_root, encoding="unicode")
+def sign_inutilizacao_xml(xml: str, pfx_bytes: bytes, password: str | None) -> str:
+    """Assina ``infInut``; a ``Signature`` fica dentro de ``inutNFe``."""
+    return sign_fiscal_xml(xml, pfx_bytes=pfx_bytes, password=password, node_tag="infInut")
