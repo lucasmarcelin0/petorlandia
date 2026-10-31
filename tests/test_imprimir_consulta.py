@@ -43,7 +43,7 @@ def test_imprimir_consulta_displays_printing_and_recorded_veterinarian(app):
         db.session.add_all([tutor, animal])
         db.session.flush()
 
-        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress')
+        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress', queixa_principal='Dor abdominal', historico_clinico='Há dois dias', exame_fisico='Abdome sensível', conduta='Retornar amanhã')
         db.session.add(consulta)
         db.session.commit()
         consulta_id = consulta.id
@@ -65,6 +65,20 @@ def test_imprimir_consulta_displays_printing_and_recorded_veterinarian(app):
         assert 'Vet2' in html
         assert 'CRMV SP-456' in html
         assert 'Profissional responsável registrado: Vet1' in html
+
+        assert 'Imprimir página' in html and 'Imprimir PDF' in html and 'Baixar PDF' in html
+        for option, disposition in [('inline', 'inline;'), ('download', 'attachment;')]:
+            pdf = client.get(f'/imprimir_consulta/{consulta_id}?pdf={option}')
+            assert pdf.status_code == 200
+            assert pdf.mimetype == 'application/pdf'
+            assert pdf.headers['Content-Disposition'].startswith(disposition)
+            assert 'no-store' in pdf.headers['Cache-Control']
+            assert pdf.data.startswith(b'%PDF-')
+            from test_receita_pdf import _texto_do_pdf
+            content = _texto_do_pdf(pdf.data)
+            for value in ('Rex', 'Tutor', 'Vet1', 'Vet2', 'Dor abdominal', 'Abdome sens', 'Retornar amanh'):
+                assert value in content
+
 
     with app.app_context():
         db.drop_all()

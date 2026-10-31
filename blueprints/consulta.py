@@ -1546,6 +1546,20 @@ def imprimir_consulta(consulta_id):
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
 
+    if request.args.get('pdf') in ('inline', 'download'):
+        from services.consulta_pdf import gerar_pdf_consulta
+
+        pdf = gerar_pdf_consulta(
+            consulta=consulta, animal=animal, tutor=tutor, clinica=clinica,
+            veterinario=veterinario, printing_user=pessoa_no_documento(current_user),
+            printed_at=datetime.now(BR_TZ),
+        )
+        response = current_app.response_class(pdf, mimetype='application/pdf')
+        disposition = 'inline' if request.args['pdf'] == 'inline' else 'attachment'
+        response.headers['Content-Disposition'] = f'{disposition}; filename="consulta-{consulta.id}.pdf"'
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+
     return render_template(
         'orcamentos/imprimir_consulta.html',
         consulta=consulta,
