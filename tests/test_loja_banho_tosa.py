@@ -199,6 +199,27 @@ def test_agenda_da_loja(loja, client, monkeypatch):
     assert client.post(f"/casa-de-racao/{casa_id}/banho-tosa/{outra.id}/status", data={"status": "realizado"}).status_code == 404
 
 
+def test_agenda_avisa_o_tutor_quando_fica_pronto(loja, client, monkeypatch):
+    _login(monkeypatch, loja["owner"])
+    casa_id = loja["casa"].id
+    loja["tutor"].phone = "(16) 99111-2233"
+    loja["mel"].sex = "Fêmea"
+    db.session.commit()
+    sessao = banho_tosa.agendar(loja["casa"], animal_id=loja["mel"].id, plan_id=loja["pequeno"].id, quando=_quando())
+    url = f"/casa-de-racao/{casa_id}/banho-tosa?dia=2026-11-05"
+    assert "Avisar o tutor" not in client.get(url).get_data(as_text=True)  # só depois de feito
+
+    banho_tosa.mudar_status(sessao, "realizado")
+    pagina = client.get(url).get_data(as_text=True)
+    assert "Avisar o tutor" in pagina
+    assert "https://wa.me/5516991112233?text=" in pagina
+    assert "Mel+j%C3%A1+est%C3%A1+pronta+para+buscar+na+Cat+Dog." in pagina
+
+    loja["tutor"].phone = None  # sem telefone, sem botão
+    db.session.commit()
+    assert "Avisar o tutor" not in client.get(url).get_data(as_text=True)
+
+
 def test_pagina_publica_mostra_porte_e_avulso(loja, client, monkeypatch):
     _login(monkeypatch, loja["tutor"])
     pagina = client.get("/planos/tosa").get_data(as_text=True)
