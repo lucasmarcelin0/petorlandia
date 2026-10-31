@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block page_title %}Fechar caixa · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5" style="max-width: 720px">
+  <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm mb-3">
+    <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Voltar ao caixa
+  </a>
+  <h1 class="h3 fw-bold">Fechar caixa</h1>
+  <p class="text-muted">Aberto em {{ sessao.aberto_em|data_br }}. Conte o dinheiro da gaveta e informe abaixo.</p>
+
+  {% include "loja_caixa/_resumo.html" %}
+
+  {% if resumo.notas_pendentes %}
+  <div class="alert alert-warning">{{ resumo.notas_pendentes }} venda(s) deste caixa estão sem NFC-e autorizada. Emita antes de fechar em <a href="{{ url_for('loja_caixa_vendas', casa_id=casa.id) }}">Vendas</a> — ou feche assim e emita depois.</div>
+  {% endif %}
+
+  <form method="post" class="card shadow-sm">
+    <div class="card-body">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label fw-semibold" for="valor_contado">Dinheiro contado na gaveta (R$)</label>
+      <input class="form-control form-control-lg mb-3" id="valor_contado" name="valor_contado" inputmode="decimal" placeholder="0,00" required autofocus>
+      <label class="form-label" for="observacao">Observação (opcional)</label>
+      <input class="form-control mb-3" id="observacao" name="observacao" maxlength="255">
+      <button class="btn btn-danger btn-lg w-100" type="submit">Fechar caixa</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

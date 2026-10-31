@@ -62,6 +62,14 @@ from .loja_fiscal import (  # noqa: F401
     NfceDocumento,
     NfceEvento,
 )
+from .loja_caixa import (  # noqa: F401
+    CaixaMovimento,
+    CaixaSessao,
+    EstoqueMovimento,
+    VendaBalcao,
+    VendaBalcaoItem,
+    VendaBalcaoPagamento,
+)
 from .sfa import (
     SfaAuditoria,
     SfaInstrumentReview,
@@ -217,4 +225,10 @@ __all__ = [
     "LojaFiscalConfig",
     "NfceDocumento",
     "NfceEvento",
+    "CaixaSessao",
+    "CaixaMovimento",
+    "VendaBalcao",
+    "VendaBalcaoItem",
+    "VendaBalcaoPagamento",
+    "EstoqueMovimento",
 ]

@@ -1,0 +1,203 @@
+{% extends "layout.html" %}
+{% block page_title %}Caixa · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block head %}
+<style>
+  .pdv-busca { font-size: 1.25rem; padding: .75rem 1rem; }
+  .pdv-resultados { position: absolute; z-index: 30; left: 0; right: 0; max-height: 360px; overflow-y: auto; }
+  .pdv-resultados .list-group-item { cursor: pointer; }
+  .pdv-resultados .list-group-item.active-item { background: var(--bs-primary-bg-subtle, #e7f1ff); }
+  .pdv-carrinho td, .pdv-carrinho th { vertical-align: middle; }
+  .pdv-carrinho input { max-width: 110px; }
+  .pdv-total { font-size: 2.2rem; font-weight: 800; line-height: 1.1; }
+  .pdv-formas .btn { min-width: 6.5rem; }
+  .pdv-atalho { font-size: .7rem; opacity: .7; }
+  .pdv-vazio { color: var(--bs-secondary-color, #6c757d); text-align: center; padding: 2.5rem 1rem; }
+  @media (max-width: 991.98px) { .pdv-total { font-size: 1.8rem; } }
+</style>
+{% endblock %}
+{% block main %}
+<div class="container-fluid px-3 px-lg-4 mt-3 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Painel da loja
+    </a>
+    <h1 class="h4 fw-bold mb-0 me-auto">Caixa · {{ casa.nome }}</h1>
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_caixa_vendas', casa_id=casa.id) }}"><i class="fa-solid fa-list me-1" aria-hidden="true"></i>Vendas</a>
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_estoque', casa_id=casa.id) }}"><i class="fa-solid fa-boxes-stacked me-1" aria-hidden="true"></i>Estoque</a>
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}"><i class="fa-solid fa-receipt me-1" aria-hidden="true"></i>NFC-e</a>
+  </div>
+
+  {% if not sessao %}
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h2 class="h5 fw-bold">Abrir o caixa</h2>
+          <p class="text-muted small">Informe o dinheiro que fica na gaveta para troco. No fim do dia, o fechamento compara o previsto com o contado.</p>
+          <form method="post" action="{{ url_for('loja_caixa_abrir', casa_id=casa.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label" for="valor_abertura">Troco inicial (R$)</label>
+            <input class="form-control form-control-lg mb-3" id="valor_abertura" name="valor_abertura" inputmode="decimal" placeholder="0,00" autofocus>
+            <button class="btn btn-primary btn-lg w-100" type="submit">Abrir caixa</button>
+          </form>
+        </div>
+      </div>
+      {% if not nfce_ligada %}
+      <p class="small text-muted mt-3">A emissão de NFC-e está desligada: as vendas ficam registradas com comprovante não fiscal. <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Configurar NFC-e</a>.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+
+  {# data-destructive-confirmation: tirar um item do carrinho não apaga nada
+     gravado, então o botão fica visível (sem o menu "⋯" das exclusões). #}
+  <div id="pdv" class="row g-3" data-destructive-confirmation="carrinho"
+       data-busca-url="{{ url_for('loja_caixa_produtos', casa_id=casa.id) }}"
+       data-venda-url="{{ url_for('loja_caixa_venda', casa_id=casa.id) }}"
+       data-vincular-url="{{ url_for('loja_caixa_vincular_codigo', casa_id=casa.id) }}"
+       data-casa="{{ casa.id }}"
+       data-nfce="{{ '1' if nfce_ligada else '0' }}">
+    <div class="col-lg-8">
+      <div class="position-relative mb-3">
+        <label class="visually-hidden" for="pdv-busca">Código de barras ou nome do produto</label>
+        <input id="pdv-busca" class="form-control pdv-busca" type="search" autocomplete="off" autofocus
+               placeholder="Código de barras ou nome do produto" aria-describedby="pdv-busca-dica">
+        <div id="pdv-resultados" class="list-group pdv-resultados shadow d-none" role="listbox" aria-label="Produtos encontrados"></div>
+        <div id="pdv-busca-dica" class="form-text">Leitor de código de barras funciona direto aqui. Para várias unidades: <kbd>3*</kbd> antes do código. <kbd>F2</kbd> volta para a busca, <kbd>F9</kbd> finaliza.</div>
+      </div>
+      <div id="pdv-aviso-codigo" class="alert alert-warning d-none" role="status">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span>Código <strong id="pdv-codigo-lido"></strong> não cadastrado. Busque o produto pelo nome e clique em <em>Vincular</em> para gravar este código nele.</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="pdv-cancelar-vinculo">Cancelar</button>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 pdv-carrinho">
+            <thead class="table-light">
+              <tr><th scope="col">Produto</th><th scope="col" class="text-end">Qtd</th><th scope="col" class="text-end">Preço</th><th scope="col" class="text-end">Desconto</th><th scope="col" class="text-end">Total</th><th scope="col"><span class="visually-hidden">Remover</span></th></tr>
+            </thead>
+            <tbody id="pdv-itens"></tbody>
+          </table>
+        </div>
+        <div id="pdv-vazio" class="pdv-vazio">Nenhum produto na venda. Leia um código de barras ou busque pelo nome.</div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between small text-muted"><span>Subtotal</span><span id="pdv-subtotal">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between align-items-center small text-muted mt-1">
+            <label for="pdv-desconto">Desconto na venda (R$)</label>
+            <input id="pdv-desconto" class="form-control form-control-sm text-end" style="max-width: 7rem" inputmode="decimal" placeholder="0,00">
+          </div>
+          <div class="d-flex justify-content-between align-items-end mt-2">
+            <span class="fw-semibold">Total</span>
+            <span class="pdv-total" id="pdv-total">R$ 0,00</span>
+          </div>
+          <hr>
+          <div class="small fw-semibold mb-1">Pagamento</div>
+          <div class="d-flex flex-wrap gap-1 pdv-formas mb-2">
+            {% for codigo, rotulo in formas.items() %}
+            <button type="button" class="btn btn-sm btn-outline-primary" data-forma="{{ codigo }}">{{ rotulo }}</button>
+            {% endfor %}
+          </div>
+          <div id="pdv-pagamentos"></div>
+          <div class="d-flex justify-content-between mt-2"><span>Recebido</span><strong id="pdv-recebido">R$ 0,00</strong></div>
+          <div class="d-flex justify-content-between"><span id="pdv-troco-rotulo">Troco</span><strong id="pdv-troco">R$ 0,00</strong></div>
+          {% if nfce_ligada %}
+          <hr>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="pdv-emitir" checked>
+            <label class="form-check-label" for="pdv-emitir">Emitir NFC-e{% if fiscal and not fiscal.em_producao %} <span class="badge text-bg-warning">homologação</span>{% endif %}</label>
+          </div>
+          <label class="form-label small mt-2 mb-1" for="pdv-cpf">CPF na nota (opcional)</label>
+          <input id="pdv-cpf" class="form-control form-control-sm" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
+          {% endif %}
+          <div id="pdv-erro" class="alert alert-danger small mt-3 mb-0 d-none" role="alert"></div>
+          <button id="pdv-finalizar" type="button" class="btn btn-success btn-lg w-100 mt-3" disabled>
+            Finalizar venda <span class="pdv-atalho">F9</span>
+          </button>
+          <button id="pdv-limpar" type="button" class="btn btn-link btn-sm w-100 text-danger mt-1">Limpar venda</button>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body small">
+          <div class="d-flex justify-content-between"><span>Caixa aberto em</span><span>{{ sessao.aberto_em|data_br }}</span></div>
+          <div class="d-flex justify-content-between"><span>Vendas</span><span>{{ resumo.quantidade_vendas }} · {{ resumo.total_vendas|currency_br }}</span></div>
+          <div class="d-flex justify-content-between"><span>Dinheiro previsto na gaveta</span><strong>{{ resumo.dinheiro_esperado|currency_br }}</strong></div>
+          {% if resumo.notas_pendentes %}
+          <div class="alert alert-warning py-1 px-2 mt-2 mb-0">{{ resumo.notas_pendentes }} venda(s) sem NFC-e autorizada. <a href="{{ url_for('loja_caixa_vendas', casa_id=casa.id) }}">Ver vendas</a></div>
+          {% endif %}
+          <details class="mt-2">
+            <summary>Retirada (sangria) ou reforço de troco</summary>
+            <form method="post" action="{{ url_for('loja_caixa_movimento', casa_id=casa.id) }}" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="d-flex gap-2 mb-2">
+                <select class="form-select form-select-sm" name="tipo" aria-label="Tipo de movimento">
+                  <option value="sangria">Retirada (sangria)</option>
+                  <option value="suprimento">Reforço de troco</option>
+                </select>
+                <input class="form-control form-control-sm" name="valor" inputmode="decimal" placeholder="R$" aria-label="Valor" required>
+              </div>
+              <input class="form-control form-control-sm mb-2" name="motivo" placeholder="Motivo (opcional)" aria-label="Motivo">
+              <button class="btn btn-sm btn-outline-secondary w-100" type="submit">Registrar</button>
+            </form>
+          </details>
+          <a class="btn btn-outline-danger btn-sm w-100 mt-3" href="{{ url_for('loja_caixa_fechar', casa_id=casa.id) }}">Fechar caixa</a>
+        </div>
+      </div>
+
+      {% if ultimas %}
+      <div class="card shadow-sm mt-3">
+        <div class="card-body small">
+          <div class="fw-semibold mb-1">Últimas vendas</div>
+          {% for v in ultimas %}
+          <a class="d-flex justify-content-between text-decoration-none py-1 border-bottom" href="{{ url_for('loja_caixa_venda_detalhe', casa_id=casa.id, venda_id=v.id) }}">
+            <span>#{{ v.id }} · {{ v.created_at|data_br }}</span>
+            <span>
+              {% if v.status == 'cancelada' %}<span class="badge text-bg-secondary">cancelada</span>
+              {% elif v.nfce and v.nfce.status == 'autorizada' %}<span class="badge text-bg-success">NFC-e</span>
+              {% elif v.emitir_nfce %}<span class="badge text-bg-danger">sem NFC-e</span>{% endif %}
+              {{ v.total|currency_br }}
+            </span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="modal fade" id="pdv-modal" tabindex="-1" aria-labelledby="pdv-modal-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="pdv-modal-titulo">Venda registrada</h2>
+        </div>
+        <div class="modal-body">
+          <p class="mb-1" id="pdv-modal-total"></p>
+          <p class="display-6 fw-bold mb-2" id="pdv-modal-troco"></p>
+          <div id="pdv-modal-nfce" class="alert d-none mb-0"></div>
+        </div>
+        <div class="modal-footer flex-wrap">
+          <a id="pdv-modal-cupom" class="btn btn-primary d-none" target="_blank" rel="noopener">Imprimir cupom NFC-e</a>
+          <a id="pdv-modal-comprovante" class="btn btn-outline-primary" target="_blank" rel="noopener">Comprovante</a>
+          <a id="pdv-modal-venda" class="btn btn-outline-secondary">Ver venda</a>
+          <button id="pdv-nova" type="button" class="btn btn-success">Nova venda <span class="pdv-atalho">Enter</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+{% if sessao %}
+<script src="{{ url_for('static', filename='js/loja_caixa.js', v='20261031') }}"></script>
+{% endif %}
+{% endblock %}

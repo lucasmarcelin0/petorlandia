@@ -160,6 +160,36 @@ def _order_customer_totals(order):
     return products_total, shipping_total, total_paid
 
 
+def _baixar_apresentacao_venda_online(prod, order_item, order) -> None:
+    """Baixa também a apresentação vendida e registra no histórico da loja.
+
+    ``product.stock`` continua sendo baixado como antes; o caixa da loja lê o
+    saldo da apresentação, então ela precisa refletir a venda online.
+    """
+    from models import EstoqueMovimento
+    from services.loja_caixa import estoque as estoque_loja
+
+    quantidade = int(order_item.quantity or 0)
+    variant = order_item.variant
+    if variant is not None and variant.product_id == prod.id:
+        saldo_apos = max(Decimal('0'), estoque_loja.saldo(prod, variant) - quantidade)
+        variant.stock = max(0, int(variant.stock or 0) - quantidade)
+    else:
+        variant = None
+        saldo_apos = estoque_loja.saldo(prod, None)  # product.stock já baixado
+    db.session.add(EstoqueMovimento(
+        casa_de_racao_id=prod.casa_de_racao_id,
+        product_id=prod.id,
+        variant_id=variant.id if variant is not None else None,
+        tipo='venda_online',
+        quantidade=-quantidade,
+        saldo_apos=saldo_apos,
+        referencia_tipo='pedido',
+        referencia_id=order.id,
+        observacao=f'Pedido {getattr(order, "public_reference", None) or order.id}'[:255],
+    ))
+
+
 def _order_paid_admin_body(order, payment) -> str:
     """Operational purchase summary for admins, including private financial data."""
     buyer = order.user
@@ -2677,6 +2707,7 @@ def notificacoes_mercado_pago():
                             # Decrementa estoque simples de casas de ração
                             if prod and prod.casa_de_racao_id:
                                 prod.stock = max(0, prod.stock - oi.quantity)
+                                _baixar_apresentacao_venda_online(prod, oi, order)
 
             normalized_status = _normalize_external_payment_status(status)
 

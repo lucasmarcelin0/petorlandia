@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block page_title %}Venda #{{ venda.id }} · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5" style="max-width: 900px">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Caixa
+    </a>
+    <a href="{{ url_for('loja_caixa_vendas', casa_id=casa.id, dia=dia_venda) }}" class="btn btn-outline-secondary btn-sm">Vendas do dia</a>
+    <a href="{{ url_for('loja_caixa_comprovante', casa_id=casa.id, venda_id=venda.id) }}" class="btn btn-outline-primary btn-sm ms-auto" target="_blank" rel="noopener">Comprovante</a>
+    {% if venda.nfce and venda.nfce.status in ['autorizada', 'cancelada'] %}
+    <a href="{{ url_for('loja_nfce_cupom', casa_id=casa.id, doc_id=venda.nfce.id) }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener">Cupom NFC-e</a>
+    {% endif %}
+  </div>
+
+  <h1 class="h3 fw-bold mb-1">Venda #{{ venda.id }}</h1>
+  <p class="text-muted">
+    {{ venda.created_at|data_br }} ·
+    {% if venda.status == 'cancelada' %}<span class="badge text-bg-secondary">cancelada</span> {{ venda.cancelada_em|data_br }} — {{ venda.cancel_motivo }}
+    {% else %}<span class="badge text-bg-success">concluída</span>{% endif %}
+    {% if venda.sessao %} · <a href="{{ url_for('loja_caixa_sessao', casa_id=casa.id, sessao_id=venda.sessao_id) }}">caixa #{{ venda.sessao_id }}</a>{% endif %}
+  </p>
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th scope="col">Produto</th><th scope="col" class="text-end">Qtd</th><th scope="col" class="text-end">Preço</th><th scope="col" class="text-end">Desconto</th><th scope="col" class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for item in venda.itens %}
+        <tr>
+          <td>{{ item.descricao }}<div class="small text-muted">{{ item.codigo }}{% if item.ncm %} · NCM {{ item.ncm }}{% endif %}</div></td>
+          <td class="text-end">{{ ('%.3f'|format(item.quantidade)).rstrip('0').rstrip('.').replace('.', ',') }} {{ item.unidade }}</td>
+          <td class="text-end">{{ item.preco_unitario|currency_br }}</td>
+          <td class="text-end">{{ item.desconto|currency_br if item.desconto else '' }}</td>
+          <td class="text-end">{{ item.total|currency_br }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        {% if venda.desconto %}<tr><td colspan="4" class="text-end">Descontos</td><td class="text-end">− {{ venda.desconto|currency_br }}</td></tr>{% endif %}
+        <tr class="fw-bold"><td colspan="4" class="text-end">Total</td><td class="text-end">{{ venda.total|currency_br }}</td></tr>
+        {% for p in venda.pagamentos %}
+        <tr><td colspan="4" class="text-end">{{ p.forma }}</td><td class="text-end">{{ p.valor|currency_br }}</td></tr>
+        {% endfor %}
+        {% if venda.troco %}<tr><td colspan="4" class="text-end">Troco</td><td class="text-end">{{ venda.troco|currency_br }}</td></tr>{% endif %}
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <h2 class="h6 fw-bold">NFC-e</h2>
+      {% if venda.nfce %}
+      <p class="mb-2">
+        Nº {{ venda.nfce.serie }}-{{ venda.nfce.numero }} ·
+        <span class="badge {{ 'text-bg-success' if venda.nfce.status == 'autorizada' else ('text-bg-secondary' if venda.nfce.status in ['cancelada', 'inutilizada'] else 'text-bg-danger') }}">{{ venda.nfce.status_label }}</span>
+        {% if venda.nfce.ambiente != 'producao' %}<span class="badge text-bg-warning">homologação</span>{% endif %}
+        · <a href="{{ url_for('loja_nfce_detalhe', casa_id=casa.id, doc_id=venda.nfce.id) }}">detalhes da nota</a>
+      </p>
+      {% if venda.nfce.status != 'autorizada' and venda.nfce.x_motivo %}<p class="small text-danger mb-2">{{ venda.nfce.c_stat or '' }} {{ venda.nfce.x_motivo }}</p>{% endif %}
+      {% elif venda.emitir_nfce %}
+      <p class="text-danger small mb-2">Não emitida. {{ venda.nfce_erro or '' }}</p>
+      {% else %}
+      <p class="text-muted small mb-2">Venda registrada sem NFC-e.</p>
+      {% endif %}
+
+      {% if venda.status == 'concluida' and nfce_ligada and (not venda.nfce or venda.nfce.status in ['pendente', 'erro', 'rejeitada', 'cancelada', 'inutilizada']) %}
+      <form method="post" action="{{ url_for('loja_caixa_venda_nfce', casa_id=casa.id, venda_id=venda.id) }}" class="d-flex gap-2 flex-wrap align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if not venda.nfce or venda.nfce.status in ['cancelada', 'inutilizada'] %}
+        <div>
+          <label class="form-label small mb-1" for="cpf">CPF na nota (opcional)</label>
+          <input class="form-control form-control-sm" id="cpf" name="cpf" inputmode="numeric" autocomplete="off">
+        </div>
+        {% endif %}
+        <button class="btn btn-primary btn-sm" type="submit">
+          {{ 'Emitir nova NFC-e' if venda.nfce and venda.nfce.status in ['cancelada', 'inutilizada'] else ('Reenviar NFC-e' if venda.nfce else 'Emitir NFC-e') }}
+        </button>
+      </form>
+      {% if venda.nfce and venda.nfce.status == 'rejeitada' %}
+      <p class="small text-muted mt-2 mb-0">Se a rejeição for de cadastro (ex.: NCM), corrija o produto em <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}">Estoque</a> e reenvie: a nota é remontada com os dados atuais.</p>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if venda.status == 'concluida' %}
+  <details class="card shadow-sm">
+    <summary class="card-body py-2 text-danger">Cancelar venda</summary>
+    <div class="card-body pt-0">
+      <p class="small text-muted">O estoque volta para a loja.{% if venda.nfce and venda.nfce.status == 'autorizada' %} A NFC-e autorizada é cancelada na SEFAZ antes (só é aceito dentro do prazo legal de cancelamento).{% endif %}</p>
+      <form method="post" action="{{ url_for('loja_caixa_venda_cancelar', casa_id=casa.id, venda_id=venda.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label small" for="motivo">Motivo (mínimo 15 caracteres)</label>
+        <input class="form-control mb-2" id="motivo" name="motivo" minlength="15" maxlength="255" required>
+        <button class="btn btn-outline-danger" type="submit">Cancelar venda</button>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}

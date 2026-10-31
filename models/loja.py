@@ -230,6 +230,8 @@ class Product(db.Model):
     csosn = db.Column(db.String(5))
     origem = db.Column(db.String(2))
     unidade = db.Column(db.String(10))
+    # Código Especificador da Substituição Tributária (NFC-e de itens com ST).
+    cest = db.Column(db.String(7), nullable=True)
     aliquota_icms = db.Column(db.Numeric(10, 4))
     aliquota_pis = db.Column(db.Numeric(10, 4))
     aliquota_cofins = db.Column(db.Numeric(10, 4))
