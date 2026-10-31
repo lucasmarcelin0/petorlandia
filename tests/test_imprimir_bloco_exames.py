@@ -55,6 +55,7 @@ def test_imprimir_bloco_exames_requer_clinica(app):
         assert 'Fornecido com tecnologia <strong>PetOrlândia</strong>' in html
         assert html.index('Pet Clinic') < html.index('Fornecido com tecnologia')
         assert 'Imprimir PDF' in html and 'Baixar PDF' in html
+        assert 'window.print()' in html
         for suffix, disposition in [('', 'attachment;'), ('&inline=1', 'inline;')]:
             pdf = client.get(f'/imprimir_bloco_exames/{bloco_id}?clinica_id={clinica_id}&format=pdf{suffix}')
             assert pdf.status_code == 200
