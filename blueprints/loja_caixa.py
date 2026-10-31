@@ -31,8 +31,10 @@ from models import (
 )
 from models.loja_caixa import FORMAS_PAGAMENTO_CAIXA, UNIDADES_FRACIONADAS
 from providers.nfe.chave import only_digits
+from services.loja_caixa import dfe as dfe_service
 from services.loja_caixa import entrada as entrada_service
 from services.loja_caixa import estoque, pdv
+from services.loja_caixa.dfe import DfeError
 from services.loja_caixa.entrada import EntradaError
 from services.loja_caixa.estoque import TIPOS_MOVIMENTO, EstoqueError
 from services.loja_caixa.pdv import CaixaError, VendaRepetida
@@ -588,7 +590,7 @@ def _entrada_da_loja(casa, entrada_id: int):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas", methods=["GET"])
 @login_required
 def loja_entradas(casa_id):
-    from models import LojaEntradaNota
+    from models import LojaDfeControle, LojaDfeDocumento, LojaEntradaNota
 
     casa = ensure_loja_access(casa_id)
     entradas = (
@@ -597,7 +599,76 @@ def loja_entradas(casa_id):
         .limit(100)
         .all()
     )
-    return render_template("loja_caixa/entradas.html", casa=casa, entradas=entradas)
+    config = pdv.config_fiscal(casa.id)
+    dfe_ctl = LojaDfeControle.query.filter_by(casa_de_racao_id=casa.id).first()
+    dfe_docs = (
+        LojaDfeDocumento.query.filter_by(casa_de_racao_id=casa.id)
+        .order_by(LojaDfeDocumento.id.desc())
+        .limit(50)
+        .all()
+    )
+    return render_template(
+        "loja_caixa/entradas.html",
+        casa=casa,
+        entradas=entradas,
+        dfe_pronto=bool(config and config.tem_certificado),
+        dfe_producao=bool(config and config.em_producao),
+        dfe_ctl=dfe_ctl,
+        dfe_docs=dfe_docs,
+        dfe_pode_consultar=dfe_ctl is None or dfe_service.pode_consultar(dfe_ctl),
+    )
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/sefaz/buscar", methods=["POST"])
+@login_required
+def loja_dfe_buscar(casa_id):
+    casa = ensure_loja_access(casa_id)
+    try:
+        resultado = dfe_service.buscar_notas(casa)
+        if resultado["novas"]:
+            flash(f"{resultado['novas']} nota(s) nova(s) encontrada(s) na SEFAZ.", "success")
+        else:
+            flash(f"Nenhuma nota nova na SEFAZ. {resultado['mensagem'] or ''}".strip(), "info")
+    except DfeError as exc:
+        flash(str(exc), "warning")
+    return redirect(url_for("loja_entradas", casa_id=casa.id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/sefaz/automatico", methods=["POST"])
+@login_required
+def loja_dfe_automatico(casa_id):
+    casa = ensure_loja_access(casa_id)
+    ctl = dfe_service.controle(casa)
+    ctl.ciencia_automatica = bool(request.form.get("ciencia_automatica"))
+    db.session.commit()
+    flash(
+        "Pronto: de hora em hora o PetOrlândia dá ciência e baixa o XML das notas novas."
+        if ctl.ciencia_automatica
+        else "Download automático desligado.",
+        "success",
+    )
+    return redirect(url_for("loja_entradas", casa_id=casa.id))
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/sefaz/<int:doc_id>/baixar", methods=["POST"])
+@login_required
+def loja_dfe_baixar(casa_id, doc_id):
+    from models import LojaDfeDocumento
+
+    casa = ensure_loja_access(casa_id)
+    doc = LojaDfeDocumento.query.filter_by(id=doc_id, casa_de_racao_id=casa.id).first()
+    if doc is None:
+        abort(404)
+    try:
+        doc = dfe_service.baixar_nota(casa, doc)
+    except DfeError as exc:
+        flash(str(exc), "warning")
+        return redirect(url_for("loja_entradas", casa_id=casa.id))
+    if doc.entrada_id:
+        flash("XML baixado da SEFAZ. Confira os itens e lance no estoque.", "success")
+        return redirect(url_for("loja_entrada", casa_id=casa.id, entrada_id=doc.entrada_id))
+    flash(doc.erro or "XML baixado.", "info")
+    return redirect(url_for("loja_entradas", casa_id=casa.id))
 
 
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/importar", methods=["POST"])

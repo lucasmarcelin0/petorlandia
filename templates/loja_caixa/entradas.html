@@ -23,6 +23,62 @@
     </div>
   </div>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h6 fw-bold mb-0 me-auto">Notas emitidas para o CNPJ da loja (direto da SEFAZ)</h2>
+        {% if dfe_pronto %}
+        <form method="post" action="{{ url_for('loja_dfe_buscar', casa_id=casa.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-primary" type="submit" {{ '' if dfe_pode_consultar else 'disabled' }}>Buscar notas agora</button>
+        </form>
+        {% endif %}
+      </div>
+      {% if not dfe_pronto %}
+      <p class="small text-muted mb-0">Com o certificado A1 da loja em <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Notas fiscais (NFC-e)</a>, o PetOrlândia busca na SEFAZ as notas que os fornecedores emitem para o seu CNPJ — sem precisar pedir o XML a ninguém.</p>
+      {% else %}
+      <p class="small text-muted mb-2">
+        {% if not dfe_producao %}<span class="badge text-bg-warning">homologação</span> só traz notas de teste. {% endif %}
+        {% if dfe_ctl and dfe_ctl.ultima_consulta %}Última consulta: {{ dfe_ctl.ultima_consulta|data_br }}{% if dfe_ctl.ultimo_x_motivo %} — {{ dfe_ctl.ultimo_x_motivo }}{% endif %}.{% endif %}
+        {% if not dfe_pode_consultar %}A SEFAZ aceita uma consulta por hora: próxima a partir de {{ dfe_ctl.proxima_consulta|data_br }}.{% endif %}
+      </p>
+      <form method="post" action="{{ url_for('loja_dfe_automatico', casa_id=casa.id) }}" class="form-check form-switch mb-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="form-check-input" type="checkbox" role="switch" id="ciencia_automatica" name="ciencia_automatica" value="1" {{ 'checked' if dfe_ctl and dfe_ctl.ciencia_automatica }} onchange="this.form.submit()">
+        <label class="form-check-label small" for="ciencia_automatica">Dar ciência e baixar o XML automaticamente (de hora em hora)</label>
+      </form>
+      {% if dfe_docs %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th scope="col">Fornecedor</th><th scope="col">Emissão</th><th scope="col" class="text-end">Valor</th><th scope="col">Situação</th><th scope="col"></th></tr></thead>
+          <tbody>
+            {% for d in dfe_docs %}
+            <tr>
+              <td>{{ d.emitente_nome or d.emitente_cnpj or '—' }}{% if d.erro %}<div class="small text-danger">{{ d.erro }}</div>{% endif %}</td>
+              <td>{{ d.dh_emi|data_br(False) if d.dh_emi else '' }}</td>
+              <td class="text-end">{{ d.valor|currency_br if d.valor is not none else '' }}</td>
+              <td class="small">{{ d.situacao_label }}</td>
+              <td class="text-end">
+                {% if d.entrada_id %}
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('loja_entrada', casa_id=casa.id, entrada_id=d.entrada_id) }}">Abrir entrada</a>
+                {% elif d.situacao != '3' %}
+                <form method="post" action="{{ url_for('loja_dfe_baixar', casa_id=casa.id, doc_id=d.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-primary" type="submit">{{ 'Importar' if d.xml_completo else 'Baixar XML' }}</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="small text-muted mt-2 mb-0">"Baixar XML" registra a Ciência da Operação na SEFAZ (só informa que a loja tomou conhecimento da nota) e traz o XML para conferência.</p>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
   {% if entradas %}
   <div class="table-responsive">
     <table class="table table-sm align-middle">
