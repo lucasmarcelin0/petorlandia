@@ -48,18 +48,49 @@
           {% if current_user.id == clinica.owner_id %}
           <div class="card shadow-sm mb-4">
             <div class="card-body">
-              <h5 class="card-title d-flex align-items-center gap-2 mb-3">
-                <i class="bi bi-envelope-plus text-primary"></i>
-                Convidar funcionário interno
+              <h5 class="card-title d-flex align-items-center gap-2 mb-1">
+                <i class="bi bi-person-plus text-primary"></i>
+                Cadastrar funcionário
               </h5>
-              <form method="post" id="add-staff-form">
-                {{ staff_form.hidden_tag() }}
-                <input type="hidden" name="clinic_form_name" value="add_staff">
-                <div class="input-group">
-                  {{ staff_form.email(class="form-control", placeholder="Email do usuário") }}
-                  {{ staff_form.submit(class="btn btn-primary") }}
+              <p class="text-muted small mb-3">Recepção, auxiliares e administrativo. A pessoa recebe por e-mail o link para criar a própria senha.</p>
+              <form method="post" action="{{ url_for('create_clinic_staff_member', clinica_id=clinica.id) }}" id="create-staff-form" class="row g-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-6">
+                  <label for="staff-new-name" class="form-label small fw-semibold mb-1">Nome</label>
+                  <input type="text" id="staff-new-name" name="name" class="form-control" autocomplete="off" required>
+                </div>
+                <div class="col-md-6">
+                  <label for="staff-new-funcao" class="form-label small fw-semibold mb-1">Função</label>
+                  <select id="staff-new-funcao" name="funcao" class="form-select">
+                    {% for key, preset in staff_role_presets.items() %}
+                    <option value="{{ key }}">{{ preset[0] }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="staff-new-email" class="form-label small fw-semibold mb-1">E-mail</label>
+                  <input type="email" id="staff-new-email" name="email" class="form-control" autocomplete="off" required>
+                </div>
+                <div class="col-md-6">
+                  <label for="staff-new-phone" class="form-label small fw-semibold mb-1">Celular (com DDD)</label>
+                  <input type="tel" id="staff-new-phone" name="phone" class="form-control" inputmode="tel" placeholder="(16) 99123-4567" required>
+                </div>
+                <div class="col-12">
+                  <div class="form-text mb-2">A função só preenche as permissões iniciais; ajuste depois em "Gerenciar".</div>
+                  <button type="submit" class="btn btn-primary">Cadastrar e enviar acesso</button>
                 </div>
               </form>
+              <details class="mt-3">
+                <summary class="small text-muted">Já usa o PetOrlândia com outro acesso? Adicionar pelo e-mail da conta</summary>
+                <form method="post" id="add-staff-form" class="mt-2">
+                  {{ staff_form.hidden_tag() }}
+                  <input type="hidden" name="clinic_form_name" value="add_staff">
+                  <div class="input-group">
+                    {{ staff_form.email(class="form-control", placeholder="E-mail da conta") }}
+                    {{ staff_form.submit(class="btn btn-outline-primary") }}
+                  </div>
+                </form>
+              </details>
             </div>
           </div>
           {% endif %}

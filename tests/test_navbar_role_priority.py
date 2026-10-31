@@ -90,7 +90,7 @@ def test_admin_nav_uses_wide_breakpoint_and_flexible_shell(client, app):
     page = client.get('/').get_data(as_text=True)
 
     assert 'navbar-expand-xxl navbar--admin' in page
-    assert 'clinic.css?v=20260802-mobile-navbar2' in page
+    assert 'clinic.css?v=20261030-clinica-setup' in page
 
 
 def test_authenticated_navbar_keeps_mobile_logout_at_top_of_account_menu(client, app):

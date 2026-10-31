@@ -244,6 +244,9 @@ class ClinicHours(db.Model):
     dia_semana = db.Column(db.String(20), nullable=False)
     hora_abertura = db.Column(db.Time, nullable=False)
     hora_fechamento = db.Column(db.Time, nullable=False)
+    # Pausa opcional no meio do dia (almoço).
+    intervalo_inicio = db.Column(db.Time, nullable=True)
+    intervalo_fim = db.Column(db.Time, nullable=True)
 
     clinica = db.relationship(
         'Clinica',

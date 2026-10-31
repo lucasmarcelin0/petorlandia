@@ -33,7 +33,7 @@
       {% for step in activation_steps %}
       <li class="{% if step.done %}is-done{% endif %}">
         <i class="fa-solid {{ 'fa-circle-check' if step.done else 'fa-circle' }}" aria-hidden="true"></i>
-        <span>{{ step.label }}{% if step.optional %} <small>(recomendado antes do fim do teste)</small>{% endif %}</span>
+        <span>{{ step.label }}{% if step.optional %} <small>({{ step.optional_hint or 'opcional' }})</small>{% endif %}</span>
         {% if not step.done and loop.first == false %}
         <a href="{{ step.url }}" data-cta="onboarding_next_step">{{ step.cta }}</a>
         {% endif %}
@@ -44,6 +44,57 @@
   {% endif %}
 
   <div class="onboarding-grid">
+
+    {% if tem_clinica and clinica_principal %}
+    {# Quem já tem clínica vê os passos da clínica; as opções de tutor ficam num
+       atalho discreto logo abaixo, para quem também cuida de um pet. #}
+    <article class="onboarding-card onboarding-card--primary">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-hospital"></i>
+      </div>
+      <h2>Configurar a clínica</h2>
+      <p>
+        Dados, horários de atendimento e logo. É o que aparece para a equipe e
+        para os tutores na hora de agendar.
+      </p>
+      <a href="{{ url_for('clinic_detail', clinica_id=clinica_principal.id) }}#clinica" class="onboarding-cta"
+         data-cta="onboarding_clinica">
+        Abrir minha clínica
+      </a>
+      <span class="onboarding-done"><i class="fa-solid fa-circle-check me-1"></i>Clínica cadastrada</span>
+    </article>
+
+    <article class="onboarding-card">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-user-group"></i>
+      </div>
+      <h2>Trazer a equipe</h2>
+      <p>
+        Cadastre recepção, auxiliares e outros veterinários. Cada pessoa recebe
+        o próprio acesso e você escolhe o que ela pode fazer.
+      </p>
+      <a href="{{ url_for('clinic_detail', clinica_id=clinica_principal.id) }}#veterinarios" class="onboarding-cta onboarding-cta--outline"
+         data-cta="onboarding_equipe">
+        Cadastrar equipe
+      </a>
+    </article>
+
+    <article class="onboarding-card">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-file-import"></i>
+      </div>
+      <h2>Trazer clientes e pacientes</h2>
+      <p>
+        Já tem uma lista em planilha? Importe tutores e animais de uma vez, sem
+        digitar um por um.
+      </p>
+      <a href="{{ url_for('importar_clientes', clinica_id=clinica_principal.id) }}" class="onboarding-cta onboarding-cta--outline"
+         data-cta="onboarding_importar">
+        Importar planilha
+      </a>
+    </article>
+
+    {% else %}
 
     <article class="onboarding-card onboarding-card--primary">
       <div class="onboarding-card__icon" aria-hidden="true">
@@ -96,7 +147,18 @@
       </a>
     </article>
 
+  {% endif %}
+
   </div>
+
+
+  {% if tem_clinica and clinica_principal %}
+  <p class="onboarding-tutor-link">
+    Também cuida de um pet?
+    <a href="{{ url_for('add_animal') }}" data-cta="onboarding_pet">Cadastrar meu pet</a> ·
+    <a href="{{ url_for('servicos') }}" data-cta="onboarding_servicos">Ver serviços</a>
+  </p>
+  {% endif %}
 
   {% if e_veterinario %}
   <section class="onboarding-note">

@@ -207,3 +207,49 @@
   text-transform: lowercase;
   vertical-align: middle;
 }
+
+/* === Menu numa linha só em notebooks ===
+   A partir de `lg` os itens precisavam de ~1.070px e o espaço disponível ia de
+   ~650px (992px de tela) a ~1.140px (1.536px): "Criar conta grátis" caía para
+   uma segunda linha justo na largura de notebook mais comum. Os ícones e o
+   espaçamento cedem primeiro; o texto continua igual. */
+@media (min-width: 992px) {
+  .public-navbar-nav .nav-link--auth {
+    min-width: 0;
+    padding-left: .85rem !important;
+    padding-right: .85rem !important;
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1799.98px) {
+  .navbar--public .public-navbar-nav .nav-link {
+    font-size: 15px;
+    padding-left: .5rem !important;
+    padding-right: .5rem !important;
+  }
+
+  .navbar--public .public-navbar-nav .nav-link > i:first-child {
+    display: none;
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1279.98px) {
+  .navbar--public .public-navbar-nav .nav-link {
+    font-size: 14px;
+    padding-left: .4rem !important;
+    padding-right: .4rem !important;
+  }
+
+  .navbar--public .navbar-brand {
+    font-size: 1.1rem;
+  }
+
+  .navbar--public .navbar-brand img {
+    height: 36px;
+    width: 36px;
+  }
+
+  .navbar--public .nav-badge-free {
+    display: none;
+  }
+}

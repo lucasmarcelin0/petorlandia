@@ -1,65 +1,4 @@
 <!-- partials/clinic_info.html -->
-{% from 'components/logo.html' import clinic_logo %}
-{% set theme = clinic_theme or {} %}
-<section class="clinic-hero mb-4"
-         style="--clinic-primary: {{ theme.primary_color|default('#6f6df4') }};
-                --clinic-secondary: {{ theme.secondary_color|default('#46c4d3') }};
-                --clinic-text-color: {{ theme.text_color|default('#ffffff') }};
-                --clinic-subtitle-color: {{ theme.subtitle_color|default('rgba(255,255,255,0.85)') }};
-                --clinic-eyebrow-color: {{ theme.eyebrow_color|default('rgba(255,255,255,0.8)') }};
-                --clinic-chip-bg: {{ theme.chip_bg_color|default('rgba(255,255,255,0.15)') }};
-                --clinic-chip-border: {{ theme.chip_border_color|default('rgba(255,255,255,0.25)') }};
-                --clinic-chip-text: {{ theme.chip_text_color|default('#ffffff') }};
-                --clinic-logo-frame-bg: {{ theme.logo_frame_bg|default('#ffffff') }};
-                --clinic-logo-frame-shadow: {{ theme.logo_frame_shadow|default('rgba(0,0,0,0.12)') }};
-                --clinic-logo-frame-border: {{ theme.logo_frame_border|default('rgba(255,255,255,0.35)') }};
-                --clinic-avatar-bg: {{ theme.avatar_bg|default('rgba(255,255,255,0.1)') }};
-                --clinic-avatar-text: {{ theme.avatar_text_color|default('#ffffff') }};">
-  <div class="clinic-hero__inner row g-4 align-items-center">
-    <div class="col-lg-7">
-      <p class="clinic-hero__eyebrow mb-1">Clínica parceira</p>
-      <h1 class="clinic-hero__title mb-3">{{ clinica.nome }}</h1>
-      <p class="clinic-hero__subtitle mb-4">{{ clinic_subtitle }}</p>
-      <div class="clinic-hero__chips mb-4">
-        {% if clinica.endereco %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-location-dot"></i>{{ clinica.endereco }}</span>
-        {% endif %}
-        {% if clinica.telefone %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-phone"></i>{{ clinica.telefone }}</span>
-        {% endif %}
-        {% if clinica.email %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-envelope"></i>{{ clinica.email }}</span>
-        {% endif %}
-      </div>
-      <div class="clinic-hero__actions d-flex flex-wrap gap-2">
-        {% if pode_editar %}
-          <button type="button" class="btn btn-light btn-lg d-inline-flex align-items-center gap-2"
-                  onclick="toggleEditInfo(); document.getElementById('edit-info').scrollIntoView({behavior: 'smooth'});">
-            <i class="fa-solid fa-pen-to-square"></i>
-            Editar dados
-          </button>
-          <a href="{{ url_for('clinica_routes.export_clinic_data', clinica_id=clinica.id) }}"
-             class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2">
-            <i class="fa-solid fa-file-export"></i>
-            Exportar dados
-          </a>
-        {% endif %}
-      </div>
-    </div>
-    <div class="col-lg-5">
-      <div class="clinic-hero__brand text-center text-lg-end">
-        <div class="clinic-hero__logo-frame {{ 'clinic-hero__logo-frame--has-logo' if clinica.logotipo }}">
-          {% if clinica.logotipo %}
-            {{ clinic_logo(clinica, alt_text='Logotipo da clínica') }}
-          {% else %}
-            <span class="clinic-hero__avatar" aria-hidden="true">{{ clinic_initials }}</span>
-            <span class="visually-hidden">Avatar gerado automaticamente com as iniciais da clínica</span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
 
 {% if pode_editar %}
   <div id="edit-info" class="card shadow-lg border-0 rounded-3 mb-4" style="display:none;">
@@ -90,123 +29,6 @@
   </div>
 {% endif %}
 
-{% if pode_editar %}
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
-        <div>
-          <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
-          {% if payment_account and payment_account.status == 'connected' %}
-            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos usam a conta própria da clínica.</p>
-          {% elif payment_account and payment_account.status == 'error' %}
-            <p class="text-muted small mb-1"><span class="badge bg-danger me-2">Erro</span>Não foi possível conectar. Verifique suas credenciais.</p>
-          {% elif mp_platform_configured %}
-            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos processados pela conta da plataforma PetOrlândia.</p>
-          {% else %}
-            <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Informe suas credenciais para receber vendas de produtos e planos.</p>
-          {% endif %}
-          <p class="mb-0 small text-muted">
-            Frete atual: <strong>R$ {{ '%.2f'|format(clinica.valor_frete or 0)|replace('.', ',') }}</strong>
-            {% if clinica.prazo_entrega_min or clinica.prazo_entrega_max %}
-              · Prazo: {{ clinica.prazo_entrega_min or '?' }}-{{ clinica.prazo_entrega_max or '?' }} min
-            {% endif %}
-          </p>
-        </div>
-        {% if payment_account and payment_account.status == 'connected' %}
-          <form method="post" action="{{ url_for('clinic_mercadopago_oauth_disconnect', clinica_id=clinica.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
-          </form>
-        {% endif %}
-      </div>
-
-      {% if not (payment_account and payment_account.status == 'connected') and not mp_platform_configured %}
-        {% if mp_oauth_available %}
-        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_start', clinica_id=clinica.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago
-          </button>
-        </form>
-        <details class="mt-3">
-          <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
-          <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}" class="mt-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic">
-                Access Token <span class="text-danger">*</span>
-              </label>
-              <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic"
-                     name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-              <div class="form-text">
-                Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic">
-                Public Key <span class="text-muted fw-normal">(opcional)</span>
-              </label>
-              <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic"
-                     name="public_key" placeholder="APP_USR-..." autocomplete="off">
-            </div>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">
-              <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
-            </button>
-          </form>
-        </details>
-        {% else %}
-        <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic">
-              Access Token <span class="text-danger">*</span>
-            </label>
-            <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic"
-                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-            <div class="form-text">
-              Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic_fb">
-              Public Key <span class="text-muted fw-normal">(opcional)</span>
-            </label>
-            <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic_fb"
-                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
-          </button>
-        </form>
-        {% endif %}
-      {% elif payment_account and payment_account.status == 'connected' %}
-      <details class="mt-1">
-        <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
-        <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}" class="mt-2">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic_update">
-              Novo Access Token <span class="text-danger">*</span>
-            </label>
-            <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic_update"
-                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic_update">
-              Nova Public Key <span class="text-muted fw-normal">(opcional)</span>
-            </label>
-            <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic_update"
-                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-outline-primary btn-sm">
-            <i class="fa-solid fa-floppy-disk me-1"></i>Atualizar
-          </button>
-        </form>
-      </details>
-      {% endif %}
-    </div>
-  </div>
-{% endif %}
 <script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 
 {% if show_clinic_metrics %}
@@ -328,6 +150,12 @@
                   <i class="fa-solid fa-door-open"></i>
                   Aberto {{ h.hora_abertura.strftime('%H:%M') }}
                 </span>
+                {% if h.intervalo_inicio and h.intervalo_fim %}
+                <span class="clinic-hour-badge clinic-hour-badge--break">
+                  <i class="fa-solid fa-mug-saucer"></i>
+                  Intervalo {{ h.intervalo_inicio.strftime('%H:%M') }}–{{ h.intervalo_fim.strftime('%H:%M') }}
+                </span>
+                {% endif %}
                 <span class="clinic-hour-badge clinic-hour-badge--closed">
                   <i class="fa-solid fa-door-closed"></i>
                   Fecha {{ h.hora_fechamento.strftime('%H:%M') }}
@@ -360,28 +188,48 @@
     {% if pode_editar %}
       <div id="edit-hours" class="mt-4" style="display:none;">
         <div class="border rounded-3 p-3 bg-light-subtle">
-          <h6 class="fw-semibold mb-3">Adicionar/editar faixa de atendimento</h6>
+          <h6 class="fw-semibold mb-3">Definir horário de atendimento</h6>
           <form method="post" class="row g-3">
             {{ form.hidden_tag() }}
             <input type="hidden" name="clinic_form_name" value="clinic_hours">
+            {% if form.clinica_id.choices|map('first')|select('equalto', clinica.id)|list %}
+              {# Os horários são desta clínica: escolher outra aqui só confundia. #}
+              <input type="hidden" name="{{ form.clinica_id.name }}" value="{{ clinica.id }}">
+            {% else %}
             <div class="col-md-12">
               {{ form.clinica_id.label }} {{ form.clinica_id(class="form-select") }}
             </div>
-            <div class="col-md-12">
-              {{ form.dias_semana.label }} {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
-              <div class="mt-2 d-flex flex-wrap gap-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+            {% endif %}
+            <fieldset class="col-md-12">
+              <legend class="form-label fs-6 mb-2">{{ form.dias_semana.label.text }}</legend>
+              <div class="clinic-day-picker" role="group">
+                {% for value, label in form.dias_semana.choices %}
+                <input type="checkbox" class="btn-check" name="{{ form.dias_semana.name }}" value="{{ value }}"
+                       id="dia-{{ loop.index }}" autocomplete="off"
+                       {% if form.dias_semana.data and value in form.dias_semana.data %}checked{% endif %}>
+                <label class="btn btn-outline-primary btn-sm" for="dia-{{ loop.index }}">{{ label[:3] }}</label>
+                {% endfor %}
               </div>
+              <div class="mt-2 d-flex flex-wrap gap-3 clinic-day-shortcuts">
+                <button type="button" class="btn btn-sm btn-link px-0" onclick="selectDays('weekday')">Segunda a sexta</button>
+                <button type="button" class="btn btn-sm btn-link px-0" onclick="selectDays('all')">Todos</button>
+                <button type="button" class="btn btn-sm btn-link px-0" onclick="selectDays('weekend')">Fim de semana</button>
+                <button type="button" class="btn btn-sm btn-link px-0 text-muted" onclick="selectDays('clear')">Limpar</button>
+              </div>
+            </fieldset>
+            <div class="col-6 col-md-3">
+              {{ form.hora_abertura.label(class="form-label") }} {{ form.hora_abertura(class="form-control") }}
             </div>
-            <div class="col-md-6">
-              {{ form.hora_abertura.label }} {{ form.hora_abertura(class="form-control") }}
+            <div class="col-6 col-md-3">
+              {{ form.hora_fechamento.label(class="form-label") }} {{ form.hora_fechamento(class="form-control") }}
             </div>
-            <div class="col-md-6">
-              {{ form.hora_fechamento.label }} {{ form.hora_fechamento(class="form-control") }}
+            <div class="col-6 col-md-3">
+              {{ form.intervalo_inicio.label(class="form-label") }} {{ form.intervalo_inicio(class="form-control") }}
             </div>
+            <div class="col-6 col-md-3">
+              {{ form.intervalo_fim.label(class="form-label") }} {{ form.intervalo_fim(class="form-control") }}
+            </div>
+            <div class="col-12 form-text mt-1">Intervalo é opcional (ex.: almoço). Salvar de novo um dia substitui o horário dele.</div>
             <div class="col-12">
               {{ form.submit(class="btn btn-primary") }}
             </div>
@@ -391,3 +239,136 @@
     {% endif %}
   </div>
 </div>
+
+{% if pode_editar %}
+  {# Pagamentos e loja ficam por último e recolhidos: no primeiro dia uma clínica
+     configura horários e equipe; token do Mercado Pago só interessa a quem vende
+     produtos ou planos pela plataforma. #}
+  <details class="clinic-payments-section mb-4"{% if payment_account and payment_account.status == 'error' %} open{% endif %}>
+    <summary class="clinic-payments-section__summary">
+      <span><i class="fa-solid fa-credit-card me-2 text-primary" aria-hidden="true"></i>Pagamentos e loja <small class="text-muted fw-normal">(opcional)</small></span>
+      {% if payment_account and payment_account.status == 'connected' %}
+        <span class="badge bg-success">Conectado</span>
+      {% elif payment_account and payment_account.status == 'error' %}
+        <span class="badge bg-danger">Erro</span>
+      {% else %}
+        <span class="small text-muted fw-normal">Para vender produtos e planos pelo PetOrlândia</span>
+      {% endif %}
+    </summary>
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+        <div>
+          <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
+          {% if payment_account and payment_account.status == 'connected' %}
+            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos usam a conta própria da clínica.</p>
+          {% elif payment_account and payment_account.status == 'error' %}
+            <p class="text-muted small mb-1"><span class="badge bg-danger me-2">Erro</span>Não foi possível conectar. Verifique suas credenciais.</p>
+          {% elif mp_platform_configured %}
+            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos processados pela conta da plataforma PetOrlândia.</p>
+          {% else %}
+            <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Informe suas credenciais para receber vendas de produtos e planos.</p>
+          {% endif %}
+          <p class="mb-0 small text-muted">
+            Frete atual: <strong>R$ {{ '%.2f'|format(clinica.valor_frete or 0)|replace('.', ',') }}</strong>
+            {% if clinica.prazo_entrega_min or clinica.prazo_entrega_max %}
+              · Prazo: {{ clinica.prazo_entrega_min or '?' }}-{{ clinica.prazo_entrega_max or '?' }} min
+            {% endif %}
+          </p>
+        </div>
+        {% if payment_account and payment_account.status == 'connected' %}
+          <form method="post" action="{{ url_for('clinic_mercadopago_oauth_disconnect', clinica_id=clinica.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {% if not (payment_account and payment_account.status == 'connected') and not mp_platform_configured %}
+        {% if mp_oauth_available %}
+        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_start', clinica_id=clinica.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago
+          </button>
+        </form>
+        <details class="mt-3">
+          <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
+          <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic">
+                Access Token <span class="text-danger">*</span>
+              </label>
+              <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic"
+                     name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
+              <div class="form-text">
+                Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic">
+                Public Key <span class="text-muted fw-normal">(opcional)</span>
+              </label>
+              <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic"
+                     name="public_key" placeholder="APP_USR-..." autocomplete="off">
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+              <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
+            </button>
+          </form>
+        </details>
+        {% else %}
+        <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic">
+              Access Token <span class="text-danger">*</span>
+            </label>
+            <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic"
+                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
+            <div class="form-text">
+              Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic_fb">
+              Public Key <span class="text-muted fw-normal">(opcional)</span>
+            </label>
+            <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic_fb"
+                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
+          </button>
+        </form>
+        {% endif %}
+      {% elif payment_account and payment_account.status == 'connected' %}
+      <details class="mt-1">
+        <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
+        <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic_update">
+              Novo Access Token <span class="text-danger">*</span>
+            </label>
+            <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic_update"
+                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic_update">
+              Nova Public Key <span class="text-muted fw-normal">(opcional)</span>
+            </label>
+            <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic_update"
+                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Atualizar
+          </button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  </details>
+{% endif %}

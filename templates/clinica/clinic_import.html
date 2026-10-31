@@ -1,0 +1,151 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Importar clientes — {{ clinica.nome }}{% endblock %}
+
+{% block main %}
+<div class="container py-4 clinic-import">
+  <nav aria-label="Navegação" class="mb-3">
+    <a href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#tutores" class="small text-decoration-none">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>{{ clinica.nome }}
+    </a>
+  </nav>
+
+  <header class="mb-4">
+    <h1 class="h3 fw-bold mb-1">Importar clientes e pacientes</h1>
+    <p class="text-muted mb-0">
+      Traga a lista de tutores e animais de uma planilha. Você vê o resultado de cada linha
+      antes de gravar, e quem já está cadastrado não é duplicado.
+    </p>
+  </header>
+
+  {% if not plano %}
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold">1. Prepare a planilha</h2>
+          <p class="mb-2">
+            Uma linha por animal. O tutor com mais de um animal aparece em mais de uma linha;
+            tutor sem animal pode ter as colunas do animal em branco.
+          </p>
+          <a href="{{ url_for('importar_clientes_modelo', clinica_id=clinica.id) }}" class="btn btn-outline-primary btn-sm mb-3"
+             data-cta="clinic_import_template">
+            <i class="fa-solid fa-download me-1" aria-hidden="true"></i>Baixar planilha modelo
+          </a>
+          <p class="small text-muted mb-0">
+            Usa Excel? Preencha o modelo e salve em <strong>Arquivo &gt; Salvar como &gt; CSV (separado por vírgulas)</strong>.
+            Planilhas do Google: <strong>Arquivo &gt; Fazer download &gt; CSV</strong>.
+          </p>
+
+          <h2 class="h5 fw-semibold mt-4">2. Envie o arquivo</h2>
+          <form method="post" enctype="multipart/form-data" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="acao" value="previsualizar">
+            <label for="arquivo-planilha" class="form-label">Planilha (.csv, até 2.000 linhas)</label>
+            <input type="file" id="arquivo-planilha" name="arquivo" accept=".csv,text/csv" class="form-control mb-3" required>
+            <button type="submit" class="btn btn-primary">Ver prévia</button>
+            <span class="small text-muted ms-2">Nada é gravado nesta etapa.</span>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card border-0 bg-light-subtle">
+        <div class="card-body small">
+          <h2 class="h6 fw-semibold">Colunas aceitas</h2>
+          <ul class="mb-2 ps-3">
+            <li><strong>tutor_nome</strong> (obrigatória)</li>
+            <li>tutor_celular, tutor_email, tutor_cpf</li>
+            <li>animal_nome, especie (Cachorro, Gato…), raca, sexo (Macho/Fêmea)</li>
+            <li>nascimento (dd/mm/aaaa), peso (kg), castrado (sim/não), microchip</li>
+          </ul>
+          <p class="mb-0 text-muted">
+            Os títulos podem variar ("Telefone", "E-mail", "Pet"...). Tutor que já é da clínica
+            (mesmo CPF, e-mail ou celular) é reaproveitado.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap align-items-center gap-3 justify-content-between">
+      <div>
+        <h2 class="h5 fw-semibold mb-1">Prévia: {{ totais.linhas }} linha(s)</h2>
+        <p class="mb-0 small">
+          <span class="badge bg-success-subtle text-success-emphasis">{{ totais.tutores_novos }} tutor(es) novo(s)</span>
+          <span class="badge bg-success-subtle text-success-emphasis">{{ totais.animais_novos }} animal(is) novo(s)</span>
+          {% if totais.tutores_existentes or totais.animais_existentes %}
+          <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ totais.tutores_existentes }} tutor(es) e {{ totais.animais_existentes }} animal(is) já cadastrados</span>
+          {% endif %}
+          {% if totais.com_erro %}
+          <span class="badge bg-danger-subtle text-danger-emphasis">{{ totais.com_erro }} linha(s) com erro serão ignoradas</span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('importar_clientes', clinica_id=clinica.id) }}" class="btn btn-outline-secondary">Enviar outra planilha</a>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="confirmar">
+          <textarea name="linhas_json" hidden>{{ linhas_json }}</textarea>
+          <button type="submit" class="btn btn-primary"{% if not (totais.tutores_novos or totais.animais_novos) %} disabled{% endif %}>
+            Importar agora
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive card border-0 shadow-sm">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Linha</th>
+          <th scope="col">Tutor</th>
+          <th scope="col">Animal</th>
+          <th scope="col">Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in plano %}
+        <tr class="{{ 'table-danger' if not item.ok }}">
+          <td class="text-muted">{{ item.numero }}</td>
+          <td>
+            {{ item.tutor_nome or '—' }}
+            {% if item.ok %}
+            <span class="badge {{ 'bg-success' if item.tutor_acao == 'novo' else 'bg-secondary' }}">
+              {{ {'novo': 'novo', 'existente': 'já cadastrado', 'repetido': 'mesmo tutor acima'}[item.tutor_acao] }}
+            </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.animal_nome %}
+              {{ item.animal_nome }}
+              {% if item.ok %}
+              <span class="badge {{ 'bg-success' if item.animal_acao == 'novo' else 'bg-secondary' }}">
+                {{ 'novo' if item.animal_acao == 'novo' else 'já cadastrado' }}
+              </span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">sem animal</span>
+            {% endif %}
+          </td>
+          <td class="small">
+            {% if item.erros %}
+              <strong class="text-danger">Não será importada:</strong> {{ item.erros|join('; ') }}
+            {% elif item.avisos %}
+              <span class="text-warning-emphasis">{{ item.avisos|join('; ') }}</span>
+            {% else %}
+              <span class="text-success">ok</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
