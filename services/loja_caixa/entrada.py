@@ -218,7 +218,8 @@ def _decimal(valor, padrao: Optional[Decimal] = None) -> Optional[Decimal]:
 
 
 def salvar_conferencia(entrada: LojaEntradaNota, dados: dict[str, Any]) -> list[str]:
-    """Grava o que a loja escolheu para cada item. Devolve avisos (sem gravar nada se houver)."""
+    """Grava o que a loja escolheu para cada item. Devolve avisos dos campos
+    inválidos, que ficam com o valor anterior; com aviso, não lance a nota."""
     if entrada.status != "rascunho":
         raise EntradaError("Esta nota já foi lançada.")
     avisos: list[str] = []
@@ -228,9 +229,11 @@ def salvar_conferencia(entrada: LojaEntradaNota, dados: dict[str, Any]) -> list[
         if acao not in {"vincular", "criar", "ignorar"}:
             acao = item.acao
         item.acao = acao
-        fator = _decimal(dados.get(prefixo + "fator"), Decimal(item.fator or 1))
+        bruto = dados.get(prefixo + "fator")
+        fator = _decimal(bruto) if bruto not in (None, "") else Decimal(item.fator or 1)
         if fator is None or fator <= 0:
-            avisos.append(f"Item {item.n_item}: fator inválido.")
+            # Mantém o fator anterior e avisa: o lançamento fica bloqueado até corrigir.
+            avisos.append(f"Item {item.n_item}: fator inválido ({bruto}). Use um número maior que zero.")
             fator = Decimal(item.fator or 1)
         item.fator = fator
         if acao == "vincular":
@@ -306,7 +309,17 @@ def _criar_produto(entrada: LojaEntradaNota, item: LojaEntradaItem) -> tuple[Pro
     return product, variant
 
 
+def _travar_nota(entrada: LojaEntradaNota) -> LojaEntradaNota:
+    """Bloqueia a nota e os saldos dos produtos dela até o commit: um clique
+    duplo não lança duas vezes e duas notas do mesmo produto não se apagam."""
+    entrada = LojaEntradaNota.query.filter_by(id=entrada.id).with_for_update().populate_existing().one()
+    itens = [item for item in entrada.itens if item.acao != "ignorar"]
+    estoque.travar_saldos((item.product_id for item in itens), (item.variant_id for item in itens))
+    return entrada
+
+
 def lancar_entrada(entrada: LojaEntradaNota, *, usuario_id: int | None = None) -> LojaEntradaNota:
+    entrada = _travar_nota(entrada)
     if entrada.status != "rascunho":
         raise EntradaError("Esta nota já foi lançada.")
     erros = _validar(entrada)
@@ -381,6 +394,7 @@ def _gravar_vinculo(entrada: LojaEntradaNota, item: LojaEntradaItem) -> None:
 
 
 def estornar_entrada(entrada: LojaEntradaNota, *, usuario_id: int | None = None) -> LojaEntradaNota:
+    entrada = _travar_nota(entrada)
     if entrada.status != "lancada":
         raise EntradaError("Só notas lançadas podem ser estornadas.")
     for item in entrada.itens:

@@ -97,6 +97,55 @@ def test_nota_sem_resposta_que_foi_autorizada_e_cancelada_por_substituicao(loja,
     assert evento.find(f".//{{{NFE}}}infEvento").get("Id") == f"ID110112{original.chave}01"
 
 
+def test_contingencia_rejeitada_e_reenviada_com_a_mesma_chave(loja, sefaz):
+    """O cupom off-line já está com o cliente: corrigir e reenviar não pode trocar a chave."""
+    config = loja["config"]
+    original = _emitir_sem_resposta(config, sefaz)
+    contingencia = nfce_service.contingencia_da_nota(original)
+    chave, qrcode = contingencia.chave, contingencia.qrcode
+    dh_cont = etree.fromstring(contingencia.xml_assinado.encode()).find(f".//{{{NFE}}}ide/{{{NFE}}}dhCont").text
+
+    sefaz.modo = "rejeita"
+    contingencia = nfce_service.transmitir_contingencia(contingencia)
+    assert contingencia.status == "rejeitada" and contingencia.tp_emis == "9"
+
+    # Reenvio sem resposta: volta para a contingência (o job tenta de novo), não para "erro".
+    sefaz.modo = "timeout"
+    contingencia = nfce_service.reenviar_nfce(contingencia)
+    assert contingencia.status == "contingencia"
+
+    sefaz.modo = "autoriza"
+    sefaz.consulta = "217"
+    documento = nfce_service.transmitir_contingencia(contingencia)
+    assert documento.status == "autorizada"
+    assert documento.chave == chave and documento.qrcode == qrcode
+    ide = etree.fromstring(sefaz.lotes[-1].encode()).find(f".//{{{NFE}}}ide")
+    assert ide.find(f"{{{NFE}}}tpEmis").text == "9" and ide.find(f"{{{NFE}}}dhCont").text == dh_cont
+    assert db.session.get(NfceDocumento, original.id).status == "inutilizada"
+
+
+def test_job_nao_trava_nas_substituicoes_ja_resolvidas(loja, sefaz):
+    config = loja["config"]
+    primeira = _emitir_sem_resposta(config, sefaz)
+    substituta_1 = nfce_service.contingencia_da_nota(primeira)
+    segunda = _emitir_sem_resposta(config, sefaz)
+    substituta_2 = nfce_service.contingencia_da_nota(segunda)
+
+    sefaz.modo = "autoriza"
+    sefaz.consulta = "217"
+    nfce_service.transmitir_contingencia(substituta_1)
+    assert db.session.get(NfceDocumento, primeira.id).status == "inutilizada"
+    sefaz.consulta = "timeout"  # a segunda fica sem solução nesta passada
+    nfce_service.transmitir_contingencia(substituta_2)
+    assert db.session.get(NfceDocumento, substituta_2.id).status == "autorizada"
+    assert db.session.get(NfceDocumento, segunda.id).status == "erro"
+
+    sefaz.consulta = "217"
+    resumo = nfce_service.rotina_contingencia(limite=1)
+    assert resumo["resolvidas"] == 1
+    assert db.session.get(NfceDocumento, segunda.id).status == "inutilizada"
+
+
 def test_caixa_entra_em_contingencia_sozinho_quando_ligado(loja, sefaz, client, monkeypatch):
     casa, config = loja["casa"], loja["config"]
     config.ativo = True

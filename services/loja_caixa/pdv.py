@@ -14,7 +14,7 @@ import re
 from typing import Any, Iterable, Optional
 import unicodedata
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
@@ -515,8 +515,6 @@ def registrar_venda(
     for linha in linhas:
         product: Product = linha["product"]
         variant: Optional[ProductVariant] = linha["variant"]
-        codigo_barras = (variant.barcode if variant is not None else None) or None
-        csosn = (product.csosn or "").strip() or None
         venda.itens.append(
             VendaBalcaoItem(
                 product_id=product.id,
@@ -533,12 +531,7 @@ def registrar_venda(
                 preco_unitario=linha["preco"],
                 desconto=linha["desconto"],
                 total=linha["bruto"] - linha["desconto"],
-                gtin=codigo_barras if gtin_valido(codigo_barras) else None,
-                ncm=only_digits(product.ncm)[:8] or None,
-                cest=only_digits(product.cest)[:7] or None,
-                cfop=only_digits(product.cfop)[:4] or None,
-                csosn=csosn[:3] if csosn else None,
-                origem=(product.origem or "").strip()[:1] or None,
+                **_dados_fiscais(product, variant),
             )
         )
     for t_pag, valor, autorizacao in pagos:
@@ -572,6 +565,61 @@ def registrar_venda(
 
 
 # ------------------------------------------------------------------- NFC-e
+
+def _dados_fiscais(product: Product, variant: Optional[ProductVariant]) -> dict[str, Any]:
+    """Dados fiscais do item como estão no cadastro agora (gravados na venda)."""
+    codigo_barras = (variant.barcode if variant is not None else None) or None
+    csosn = (product.csosn or "").strip() or None
+    return {
+        "gtin": codigo_barras if gtin_valido(codigo_barras) else None,
+        "ncm": only_digits(product.ncm)[:8] or None,
+        "cest": only_digits(product.cest)[:7] or None,
+        "cfop": only_digits(product.cfop)[:4] or None,
+        "csosn": csosn[:3] if csosn else None,
+        "origem": (product.origem or "").strip()[:1] or None,
+    }
+
+
+def _atualizar_dados_fiscais(venda: VendaBalcao) -> None:
+    """Nota rejeitada: o operador corrige o cadastro (NCM, CEST...) e reenvia.
+    Os dados fiscais da venda passam a ser os do cadastro atual; preço,
+    quantidade e desconto continuam os da venda."""
+    for item in venda.itens:
+        if item.product is not None:
+            for campo, valor in _dados_fiscais(item.product, item.variant).items():
+                setattr(item, campo, valor)
+
+
+STATUS_NFCE_ENCERRADA = ("cancelada", "inutilizada")
+
+
+def _vincular_nfce_orfa(venda: VendaBalcao) -> Optional[NfceDocumento]:
+    """Devolve a NFC-e da venda, ligando a que ficou sem vínculo.
+
+    ``emitir_nfce`` grava a nota antes de transmitir e o vínculo só é salvo na
+    volta: se o processo cair no meio, a nota existe (talvez autorizada) e a
+    venda não sabe dela. Antes de emitir outra ou cancelar a venda, liga a
+    nota viva mais recente da venda (a autorizada, se houver).
+    """
+    atual = venda.nfce
+    if atual is not None and atual.status not in STATUS_NFCE_ENCERRADA:
+        return atual
+    consulta = NfceDocumento.query.filter(
+        NfceDocumento.casa_de_racao_id == venda.casa_de_racao_id,
+        NfceDocumento.origem == "venda_balcao",
+        NfceDocumento.origem_id == venda.id,
+        NfceDocumento.status.notin_(STATUS_NFCE_ENCERRADA),
+    )
+    orfa = consulta.order_by(
+        case((NfceDocumento.status == "autorizada", 0), else_=1), NfceDocumento.id.desc()
+    ).first()
+    if orfa is None:
+        return atual
+    logger.warning("NFC-e %s da venda %s estava sem vínculo; ligada agora", orfa.id, venda.id)
+    venda.nfce_documento_id = orfa.id
+    db.session.commit()
+    return orfa
+
 
 def config_fiscal(casa_id: int) -> Optional[LojaFiscalConfig]:
     return LojaFiscalConfig.query.filter_by(casa_de_racao_id=casa_id).first()
@@ -648,7 +696,7 @@ def emitir_nfce_venda(
     if cpf and len(cpf_digitos) != 11:
         raise CaixaError("CPF inválido.")
 
-    documento = venda.nfce
+    documento = _vincular_nfce_orfa(venda)
     venda_id = venda.id
     if documento is not None and documento.status == "autorizada":
         raise CaixaError("Esta venda já tem NFC-e autorizada.")
@@ -658,10 +706,13 @@ def emitir_nfce_venda(
         raise CaixaError("A NFC-e desta venda está em contingência e vai para a SEFAZ automaticamente.")
     try:
         if documento is not None and documento.status in nfce_service.STATUS_REENVIAVEIS:
+            rejeitada = documento.status == "rejeitada"
+            if rejeitada:
+                _atualizar_dados_fiscais(venda)  # vale o cadastro corrigido
             documento = nfce_service.reenviar_nfce(
                 documento,
-                itens=itens_nfce(venda, config) if documento.status == "rejeitada" else None,
-                pagamentos=pagamentos_nfce(venda, config) if documento.status == "rejeitada" else None,
+                itens=itens_nfce(venda, config) if rejeitada else None,
+                pagamentos=pagamentos_nfce(venda, config) if rejeitada else None,
             )
         else:
             # Sem nota, ou a anterior foi cancelada/inutilizada: nota nova.
@@ -687,7 +738,7 @@ def emitir_nfce_venda(
         db.session.commit()
         raise CaixaError(venda.nfce_erro) from exc
 
-    if documento.status == "erro" and config.contingencia_automatica:
+    if documento.status == "erro" and config.contingencia_automatica and documento.tp_emis != "9":
         # SEFAZ sem resposta: o cliente sai com o cupom em contingência e a
         # nota vai para a SEFAZ depois (a normal é cancelada ou inutilizada).
         try:
@@ -713,8 +764,13 @@ def emitir_contingencia_venda(venda: VendaBalcao, *, usuario_id: int | None = No
     from services.loja_fiscal import nfce_service
     from services.loja_fiscal.nfce_service import NfceServiceError
 
-    documento = venda.nfce
-    if venda.status != "concluida" or documento is None or documento.status != "erro":
+    documento = _vincular_nfce_orfa(venda)
+    if (
+        venda.status != "concluida"
+        or documento is None
+        or documento.status != "erro"
+        or documento.tp_emis == "9"
+    ):
         raise CaixaError("Só a venda com NFC-e sem resposta da SEFAZ vai para a contingência.")
     venda_id = venda.id
     try:
@@ -730,17 +786,23 @@ def emitir_contingencia_venda(venda: VendaBalcao, *, usuario_id: int | None = No
 
 # ------------------------------------------------------------- cancelamento
 
+def _travar_venda(venda_id: int) -> VendaBalcao:
+    """Relê a venda bloqueada (SELECT ... FOR UPDATE) até o próximo commit."""
+    return VendaBalcao.query.filter_by(id=venda_id).with_for_update().populate_existing().one()
+
+
 def cancelar_venda(venda: VendaBalcao, *, motivo: str, usuario_id: int | None) -> VendaBalcao:
     """Cancela a NFC-e autorizada (se houver), devolve o estoque e marca a venda."""
     from services.loja_fiscal import nfce_service
     from services.loja_fiscal.nfce_service import NfceServiceError
 
-    if venda.status != "concluida":
-        raise CaixaError("Esta venda já foi cancelada.")
     justificativa = " ".join((motivo or "").split())
     if len(justificativa) < 15:
         raise CaixaError("Descreva o motivo do cancelamento com pelo menos 15 caracteres.")
-    documento = venda.nfce
+    venda = _travar_venda(venda.id)
+    if venda.status != "concluida":
+        raise CaixaError("Esta venda já foi cancelada.")
+    documento = _vincular_nfce_orfa(venda)
     if documento is not None:
         if documento.status == "autorizada":
             try:
@@ -758,7 +820,12 @@ def cancelar_venda(venda: VendaBalcao, *, motivo: str, usuario_id: int | None) -
                 "Envie a nota (ou aguarde o envio automático) antes de cancelar a venda."
             )
 
-    venda = db.session.get(VendaBalcao, venda.id)
+    # O cancelamento da nota grava (e solta o bloqueio): trava de novo para
+    # que um segundo clique não devolva o estoque duas vezes.
+    venda = _travar_venda(venda.id)
+    if venda.status != "concluida":
+        raise CaixaError("Esta venda já foi cancelada.")
+    estoque.travar_saldos((item.product_id for item in venda.itens), (item.variant_id for item in venda.itens))
     for item in venda.itens:
         product = db.session.get(Product, item.product_id) if item.product_id else None
         if product is None:

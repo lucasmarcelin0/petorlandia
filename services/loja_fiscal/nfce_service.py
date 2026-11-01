@@ -18,6 +18,8 @@ from decimal import Decimal
 import logging
 from typing import Any, Iterable, Optional
 
+from sqlalchemy.orm import aliased
+
 from extensions import db
 from models import LojaFiscalConfig, NfceDocumento, NfceEvento
 from models.loja_fiscal import AMBIENTE_HOMOLOGACAO, AMBIENTE_PRODUCAO
@@ -321,11 +323,19 @@ def _montar_e_assinar(
     nome: str | None,
     *,
     justificativa_contingencia: str | None = None,
+    manter_chave: bool = False,
+    dh_cont: str | None = None,
 ) -> str:
-    """Monta e assina. Com ``justificativa_contingencia`` sai em tpEmis=9."""
-    dh_emi = format_dh(now_in_brazil())
+    """Monta e assina. Com ``justificativa_contingencia`` sai em tpEmis=9.
+
+    ``manter_chave`` remonta com a mesma data de emissão e o mesmo código
+    numérico, ou seja, a mesma chave (contingência rejeitada: o cupom com essa
+    chave já está com o cliente).
+    """
     tp_amb = _tp_amb(documento.ambiente)
     tp_emis = "9" if justificativa_contingencia else "1"
+    manter = bool(manter_chave and documento.chave and documento.dh_emi)
+    dh_emi = documento.dh_emi if manter else format_dh(now_in_brazil())
     chave = montar_chave(
         c_uf=_c_uf(config),
         dh_emi=dh_emi,
@@ -334,7 +344,12 @@ def _montar_e_assinar(
         serie=documento.serie,
         numero=documento.numero,
         tp_emis=tp_emis,
+        c_nf=documento.chave[35:43] if manter else None,
     )
+    if manter and chave.chave != documento.chave:
+        raise NfceServiceError(
+            "Não foi possível remontar a nota com a mesma chave (o CNPJ ou a UF da loja mudou)."
+        )
     dados = NfceDados(
         emitente=_emitente(config),
         itens=itens,
@@ -349,7 +364,7 @@ def _montar_e_assinar(
         inf_cpl=config.mensagem_cupom,
         percentual_tributos=config.percentual_tributos,
         tp_emis=tp_emis,
-        dh_cont=dh_emi if justificativa_contingencia else None,
+        dh_cont=(dh_cont or dh_emi) if justificativa_contingencia else None,
         x_just=justificativa_contingencia,
     )
     if justificativa_contingencia:
@@ -591,13 +606,50 @@ def reenviar_nfce(
         if not itens or not pagamentos:
             raise NfceServiceError("Não há dados para remontar esta nota. Refaça a venda.")
         cpf = _cpf_do_xml(documento)
+        # Contingência rejeitada: corrige os dados mas mantém tpEmis=9 e a
+        # mesma chave, porque o cupom off-line já foi entregue ao cliente.
+        contingencia = documento.tp_emis == "9"
+        dh_cont, x_just = _contingencia_do_xml(documento) if contingencia else (None, None)
         try:
-            signed = _montar_e_assinar(config, documento, itens, pagamentos, cpf, None)
+            signed = _montar_e_assinar(
+                config,
+                documento,
+                itens,
+                pagamentos,
+                cpf,
+                None,
+                justificativa_contingencia=(x_just or JUSTIFICATIVA_CONTINGENCIA) if contingencia else None,
+                manter_chave=contingencia,
+                dh_cont=dh_cont,
+            )
         except NfceValidationError as exc:
             db.session.rollback()
             raise NfceServiceError(str(exc)) from exc
         db.session.commit()
-    return _transmitir(config, documento, signed)
+    documento = _transmitir(config, documento, signed)
+    if documento.tp_emis == "9":
+        documento = _apos_envio_contingencia(documento)
+    return documento
+
+
+def _contingencia_do_xml(documento: NfceDocumento) -> tuple[str | None, str | None]:
+    """dhCont e xJust da nota em contingência, como foram para o cupom."""
+    xml = documento.xml_assinado
+    if not xml:
+        return None, None
+    from security.xml_safe import safe_lxml_fromstring
+
+    try:
+        root = safe_lxml_fromstring(xml.encode("utf-8"))
+    except Exception:  # noqa: BLE001
+        return None, None
+    ns = "{http://www.portalfiscal.inf.br/nfe}"
+    dh_cont = root.find(f".//{ns}ide/{ns}dhCont")
+    x_just = root.find(f".//{ns}ide/{ns}xJust")
+    return (
+        dh_cont.text if dh_cont is not None else None,
+        x_just.text if x_just is not None else None,
+    )
 
 
 def _parse_dh(value: str | None) -> datetime | None:
@@ -731,6 +783,12 @@ def transmitir_contingencia(documento: NfceDocumento) -> NfceDocumento:
     if documento.status != "contingencia":
         raise NfceServiceError("Esta nota não está em contingência.")
     documento = _transmitir(documento.config, documento, documento.xml_assinado)
+    return _apos_envio_contingencia(documento)
+
+
+def _apos_envio_contingencia(documento: NfceDocumento) -> NfceDocumento:
+    """Sem resposta, a nota off-line continua em contingência (o job reenvia);
+    autorizada, resolve a nota normal que ela substituiu."""
     if documento.status == "erro":
         documento.status = "contingencia"
         db.session.commit()
@@ -838,10 +896,14 @@ def rotina_contingencia(limite: int = 50) -> dict[str, int]:
             db.session.rollback()
             resumo["erros"] += 1
             logger.exception("Falha ao enviar NFC-e em contingência %s", doc_id)
+    # As já resolvidas saem na consulta, antes do limite: senão as primeiras
+    # ocupariam todas as vagas e as pendentes nunca seriam tentadas de novo.
+    original = aliased(NfceDocumento)
     substitutas = (
-        NfceDocumento.query.filter(
-            NfceDocumento.substitui_id.isnot(None),
+        NfceDocumento.query.join(original, NfceDocumento.substitui_id == original.id)
+        .filter(
             NfceDocumento.status == "autorizada",
+            original.status.notin_(("cancelada", "inutilizada")),
         )
         .order_by(NfceDocumento.id)
         .limit(limite)
