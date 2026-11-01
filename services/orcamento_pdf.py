@@ -1,55 +1,38 @@
 """PDF de orçamento gerado a partir dos mesmos dados autorizados da impressão."""
 from io import BytesIO
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from services.receita_pdf import _texto, _valor_crmv, _membership_ativa, _carregar_logo
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from services.receita_pdf import _texto, _valor_crmv, _membership_ativa
+from services.documento_pdf import BASE, TITULO, LARGURA, cabecalho, fichas, montar
 from template_filters import format_datetime_brazil
-from document_utils import format_cnpj
 
 
 def gerar_pdf_orcamento(*, itens, total, clinica, veterinario, printing_user, printed_at, animal=None, tutor=None, padrao=False):
-    estilos = getSampleStyleSheet()
-    normal = estilos['BodyText']
-    title = estilos['Title']
+    normal = BASE
     conteudo = []
     def linha(label, value):
         if value is not None and value != '':
             conteudo.append(Paragraph(f'<b>{_texto(label)}:</b> {_texto(value)}', normal))
             conteudo.append(Spacer(1, 3))
-    if clinica:
-        logo = _carregar_logo(clinica)
-        if logo:
-            dados, largura, altura = logo
-            dimensao = 1.9 * cm / max(largura, altura)
-            conteudo.append(Image(BytesIO(dados), width=largura * dimensao, height=altura * dimensao))
-        conteudo.append(Paragraph(_texto(clinica.nome), title))
-        for label, value in [('Endereço', clinica.endereco), ('Telefone', clinica.telefone),
-                             ('E-mail', clinica.email), ('CNPJ', format_cnpj(clinica.cnpj) if clinica.cnpj else None)]:
-            linha(label, value)
-    conteudo.append(Spacer(1, 8))
-    conteudo.append(Paragraph('Orçamento' if padrao else 'Orçamento da Consulta', estilos['Heading1']))
+    conteudo.extend(cabecalho(clinica))
+    conteudo.append(Paragraph('Orçamento' if padrao else 'Orçamento da Consulta', TITULO))
     assinatura = (printing_user or veterinario) if padrao else (veterinario or printing_user)
     linha('Impresso por', getattr(printing_user, 'name', '—') if printing_user else '—')
     linha('Data/Hora', format_datetime_brazil(printed_at, '%d/%m/%Y %H:%M'))
-    linha('Profissional responsável', getattr(veterinario, 'name', '—') if veterinario else '—')
-    linha('CRMV', _valor_crmv(veterinario))
+    grupos = [('Profissional responsável', [('Nome', getattr(veterinario, 'name', '—') if veterinario else '—'), ('CRMV', _valor_crmv(veterinario))])]
     if animal:
-        for label, value in [('Paciente', animal.name), ('Espécie', animal.species), ('Raça', animal.breed),
-                             ('Sexo', animal.sex), ('Peso (kg)', animal.peso), ('Microchip', animal.microchip_number)]:
-            linha(label, value)
+        grupos.append(('Paciente', [('Nome', animal.name), ('Espécie', animal.species), ('Raça', animal.breed),
+                                   ('Sexo', animal.sex), ('Peso (kg)', animal.peso), ('Microchip', animal.microchip_number)]))
     if tutor:
-        for label, value in [('Responsável', tutor.name), ('CPF', tutor.cpf),
-                             ('Contato', tutor.phone), ('Endereço', tutor.address)]:
-            linha(label, value)
+        grupos.append(('Responsável', [('Nome', tutor.name), ('CPF', tutor.cpf), ('Contato', tutor.phone), ('Endereço', tutor.address)]))
+    conteudo.append(fichas(grupos))
     conteudo.append(Spacer(1, 10))
     dados = [[Paragraph('<b>Descrição</b>', normal), Paragraph('<b>Valor (R$)</b>', normal)]]
     for item in itens:
         dados.append([Paragraph(_texto(item.descricao), normal), Paragraph(f'{float(item.valor):.2f}', normal)])
     dados.append([Paragraph('<b>Total</b>', normal), Paragraph(f'<b>{float(total):.2f}</b>', normal)])
-    tabela = Table(dados, colWidths=[12.4 * cm, 3.2 * cm], repeatRows=1)
+    tabela = Table(dados, colWidths=[LARGURA * .8, LARGURA * .2], repeatRows=1)
     tabela.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), .5, colors.HexColor('#d9e2ec')),
                                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eef3f9'))]))
@@ -64,5 +47,5 @@ def gerar_pdf_orcamento(*, itens, total, clinica, veterinario, printing_user, pr
     if _membership_ativa(assinatura):
         linha('CRMV da assinatura', _valor_crmv(assinatura))
     output = BytesIO()
-    SimpleDocTemplate(output, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm).build(conteudo)
+    montar(output, conteudo, clinica, 'Orçamento' if padrao else 'Orçamento da Consulta')
     return output.getvalue()
