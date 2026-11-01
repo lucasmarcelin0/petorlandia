@@ -174,15 +174,15 @@ def test_outra_pessoa_na_linha_nao_herda_a_vacina(app):
     assert guardada.animals[0].status == "vacinado"
 
 
-def test_linha_sem_trabalho_de_campo_continua_sendo_reaproveitada(app):
-    """Comportamento antigo preservado quando não há vacina a proteger."""
+def test_outra_pessoa_nao_reaproveita_visita_sem_trabalho_de_campo(app):
+    """O token e os vínculos também pertencem à pessoa original."""
     _gravar([_linha(4, *MARIA)])
     visita_id = _visita_de("Maria Clara")[0].id
 
     _gravar([_linha(4, *CARLA)])
 
-    assert _visita_de("Carla Dias")[0].id == visita_id
-    assert _visita_de("Maria Clara") == []
+    assert _visita_de("Carla Dias")[0].id != visita_id
+    assert db.session.get(PmoVaccinationVisit, visita_id).source_row < 0
 
 
 def test_nome_corrigido_na_mesma_linha_mantem_o_registro(app):
@@ -216,15 +216,15 @@ def test_pessoa_que_volta_para_a_aba_recupera_o_registro_estacionado(app):
     assert linha["animals"][0]["status"] == "vacinado"
 
 
-def test_aba_mestre_continua_casando_pela_linha(app):
-    """A aba mestre tem conciliação própria; o sync não mexe na ordem dela."""
+def test_aba_mestre_acompanha_a_pessoa_ao_trocar_linhas(app):
+    """A aba mestre também precisa preservar a identidade nas trocas."""
     mestre = servico.PMO_MASTER_SHEET_TITLE
     _gravar([_linha(4, *ANA), _linha(5, *BRUNO)], sheet_gid="mestre", sheet_title=mestre)
     linha_4 = PmoVaccinationVisit.query.filter_by(sheet_gid="mestre", source_row=4).one().id
 
     _gravar([_linha(4, *BRUNO), _linha(5, *ANA)], sheet_gid="mestre", sheet_title=mestre)
 
-    assert PmoVaccinationVisit.query.filter_by(sheet_gid="mestre", source_row=4).one().id == linha_4
+    assert PmoVaccinationVisit.query.filter_by(sheet_gid="mestre", source_row=5).one().id == linha_4
 
 
 def _login_admin(client):
@@ -292,3 +292,90 @@ def test_casa_com_texto_de_totais_nos_nomes_ou_na_observacao_continua_na_lista(c
 ])
 def test_linhas_de_totais_e_cabecalho_continuam_fora(linha):
     assert servico._is_summary_or_header(linha)
+
+
+def test_troca_tutor_mesmo_telefone_e_endereco_nao_herda_conta(app):
+    telefone = "5516991110001"
+    _gravar([_linha(4, "Maria Silva", telefone, "Rua A, 10", "Rex")])
+    original = _visita_de("Maria Silva")[0]
+    original_id, dono_id = original.id, original.tutor_user_id
+    _gravar([_linha(4, "Joana Silva", telefone, "Rua A, 10", "Mimi", "gato")])
+    nova = _visita_de("Joana Silva")[0]
+    assert nova.id != original_id
+    assert nova.tutor_user_id != dono_id
+    assert nova.animals[0].animal.user_id == nova.tutor_user_id
+    assert db.session.get(PmoVaccinationVisit, original_id).source_row < 0
+
+
+def test_homonimos_mesma_linha_com_telefone_e_endereco_diferentes(app):
+    _gravar([_linha(4, "Ana Souza", "5516991110001", "Rua A, 10", "Rex")])
+    original = _visita_de("Ana Souza")[0].id
+    _gravar([_linha(4, "Ana Souza", "5516991110002", "Rua B, 20", "Mel")])
+    assert PmoVaccinationVisit.query.filter_by(sheet_gid=ABA_GID, source_row=4).one().id != original
+    assert db.session.get(PmoVaccinationVisit, original).source_row < 0
+
+
+@pytest.mark.parametrize("writer", ["write_note_to_sheet", "write_vaccinated_counts_to_sheet", "write_animal_names_to_sheet", "write_animal_counts_to_sheet", "write_attended_by_to_sheet", "write_tutor_name_color_to_sheet"])
+def test_gravacao_recusa_linha_que_mudou(app, monkeypatch, writer):
+    from unittest.mock import MagicMock
+    _gravar([_linha(4, *MARIA)])
+    visita = _visita_de("Maria Clara")[0]
+    service = MagicMock()
+    service.spreadsheets().values().get().execute.return_value = {"values": [["Outra Pessoa", "Rua X", "1", "", "Centro", "16999999999"]]}
+    service.reset_mock()
+    monkeypatch.setattr(servico, "_get_sheets_service_rw", lambda: service)
+    assert getattr(servico, writer)(visita) is False
+    service.spreadsheets().values().update.assert_not_called()
+    service.spreadsheets().batchUpdate.assert_not_called()
+
+
+def test_gravacao_confere_identidade_e_permite_linha_correta(app, monkeypatch):
+    from unittest.mock import MagicMock
+    _gravar([_linha(4, *MARIA)])
+    visita = _visita_de("Maria Clara")[0]
+    service = MagicMock()
+    service.spreadsheets().values().get().execute.return_value = {"values": [["Maria Clara", "Rua B", "20", "", "Centro", MARIA[1]]]}
+    monkeypatch.setattr(servico, "_get_sheets_service_rw", lambda: service)
+    assert servico.write_note_to_sheet(visita) is True
+    service.spreadsheets().values().update.assert_called_once()
+
+
+def test_animal_removido_nao_e_reaproveitado(app):
+    from models import Animal
+    from time_utils import utcnow
+    _gravar([_linha(4, *MARIA)])
+    visita = _visita_de("Maria Clara")[0]
+    original = visita.animals[0].animal
+    original.removido_em = utcnow()
+    visita.animals[0].animal = None
+    db.session.flush()
+    servico._ensure_real_animal(visita.animals[0])
+    db.session.flush()
+    assert visita.animals[0].animal.id != original.id
+    assert db.session.get(Animal, original.id).removido_em is not None
+
+
+def test_visita_pendente_sai_e_volta_sem_perder_token(app):
+    _gravar([_linha(3, *ANA), _linha(4, *MARIA)])
+    visita = _visita_de("Maria Clara")[0]
+    visita_id, token = visita.id, visita.public_token
+    _gravar([_linha(3, *ANA)], prune_orphans=True)
+    assert db.session.get(PmoVaccinationVisit, visita_id).source_row < 0
+    _gravar([_linha(3, *ANA), _linha(8, *MARIA)], prune_orphans=True)
+    volta = db.session.get(PmoVaccinationVisit, visita_id)
+    assert volta.source_row == 8
+    assert volta.public_token == token
+
+
+def test_sync_sem_identificador_de_aba_falha_com_seguranca(app):
+    with pytest.raises(ValueError, match="identificar a aba"):
+        _gravar([_linha(4, *ANA)], sheet_gid="")
+    assert PmoVaccinationVisit.query.count() == 0
+
+
+def test_resolve_gid_pelo_nome_da_aba(monkeypatch):
+    from unittest.mock import MagicMock
+    service = MagicMock()
+    service.spreadsheets().get().execute.return_value = {"sheets": [{"properties": {"title": "09/09/2026", "sheetId": 42}}]}
+    result = servico._resolve_sheet_target(service, "https://docs.google.com/spreadsheets/d/planilha123/edit", "A:T", sheet_title="09/09/2026")
+    assert result[2:] == ("42", "09/09/2026")

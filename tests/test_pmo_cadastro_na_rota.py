@@ -10,6 +10,7 @@ numero de linha que o Sheets devolveu.
 from __future__ import annotations
 
 import pytest
+import re
 
 from extensions import db
 from models import PmoVaccinationVisit
@@ -66,12 +67,27 @@ class _SheetsFalso:
         return self
 
     def get(self, **kwargs):
-        self._resposta = {"values": [list(linha) for linha in self.valores]}
+        requested = kwargs.get("range", "")
+        match = re.search(r"!A(\d+):H\1$", requested)
+        if match:
+            index = int(match.group(1)) - 1
+            self._resposta = {"values": [self.valores[index][:8]] if index < len(self.valores) else []}
+        else:
+            self._resposta = {"values": [list(linha) for linha in self.valores]}
         return self
 
     def update(self, *, spreadsheetId, range, valueInputOption, body):
         if self.falha:
             raise self.falha
+        match = re.search(r"!A(\d+):K\1$", range)
+        if match:
+            index = int(match.group(1)) - 1
+            while len(self.valores) <= index:
+                self.valores.append([])
+            row = list(self.valores[index])
+            row.extend([""] * max(0, 18 - len(row)))
+            row[:11] = body["values"][0]
+            self.valores[index] = row
         self.updates.append({
             "spreadsheetId": spreadsheetId, "range": range,
             "valueInputOption": valueInputOption, "body": body,

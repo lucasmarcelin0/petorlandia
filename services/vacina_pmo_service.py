@@ -1644,6 +1644,7 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     # cadastro mais antigo, que é o que acumula histórico.
     candidates = (
         Animal.query.filter_by(user_id=visit.tutor_user_id)
+        .filter(Animal.removido_em.is_(None), Animal.species_id == _species_id(pmo_animal.species))
         .filter(func.lower(Animal.name) == pmo_animal.name.lower())
         .order_by(
             case((Animal.image.isnot(None), 0), else_=1),
@@ -2000,11 +2001,12 @@ def _visit_identity_changed(
         for value in (phone1, phone2)
         if _normalize_login_phone(value)
     }
-    if old_phones and new_phones:
-        return old_phones.isdisjoint(new_phones)
     old_name = _strip_accents(visit.tutor_name or "").casefold().strip()
     new_name = _strip_accents(tutor_name or "").casefold().strip()
-    return bool(old_name and new_name and old_name != new_name)
+    if old_name and new_name and not _same_person_name(old_name, new_name):
+        if not _pmo_close_slugs(_pmo_animal_slug(old_name), _pmo_animal_slug(new_name)):
+            return True
+    return bool(old_phones and new_phones and old_phones.isdisjoint(new_phones))
 
 
 def _pmo_animal_identity_changed(
@@ -2166,7 +2168,7 @@ def _resolve_sheet_target(
 
     title = sheet_title or os.getenv("PMO_VACCINE_SHEET_TITLE", "")
     if title:
-        gid = sheet_gid or ""
+        gid = sheet_gid or _get_sheet_gid(service, spreadsheet_id, title)
         return spreadsheet_id, f"{_quote_sheet_title(title)}!{range_value}", gid, title
     gid = sheet_gid or os.getenv("PMO_VACCINE_SHEET_GID", "") or _extract_gid(sheet_url)
     if gid:
@@ -3218,7 +3220,11 @@ def _pmo_name_key(name: Any) -> tuple[str, str] | None:
 
 
 def _pmo_same_row_signal(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
-    """Na mesma linha, telefone ou endereço em comum: é o nome que foi redigitado."""
+    """Aceita pequena correção de nome somente com outro dado em comum."""
+    old = _pmo_animal_slug(visit.tutor_name)
+    new = _pmo_animal_slug(identity.tutor_name)
+    if not (_same_person_name(visit.tutor_name, identity.tutor_name) or _pmo_close_slugs(old, new)):
+        return False
     if _pmo_visit_phones(visit) & _pmo_visit_phones(identity):
         return True
     address = _pmo_address_slug(visit.address)
@@ -3241,9 +3247,7 @@ def _pmo_plan_sheet_visits(
     2. a pessoa mudou de linha: o registro vai junto (inclusive um que tinha
        sido estacionado quando a linha dela sumiu);
     3. mesma linha com o nome redigitado (telefone ou endereço iguais): fica;
-    4. outra pessoa na linha: o registro antigo só é reaproveitado se não
-       guarda trabalho de campo — vacina aplicada pertence à casa que a
-       recebeu, não ao vizinho que herdou a linha.
+    4. outra pessoa na linha: preserva o registro antigo e cria uma visita nova.
 
     ``None`` no plano significa visita nova.
     """
@@ -3263,7 +3267,12 @@ def _pmo_plan_sheet_visits(
 
     for row in order:
         visit = unclaimed_at(row)
-        if visit is not None and _same_person_name(visit.tutor_name, identities[row].tutor_name):
+        if visit is None or not _same_person_name(visit.tutor_name, identities[row].tutor_name):
+            continue
+        identity = identities[row]
+        no_contacts = not (_pmo_visit_phones(visit) or _pmo_visit_phones(identity)
+                           or _pmo_address_slug(visit.address) or _pmo_address_slug(identity.address))
+        if no_contacts or _pmo_same_household(visit, identity):
             claim(row, visit)
 
     by_name: dict[tuple[str, str], list[PmoVaccinationVisit]] = {}
@@ -3304,11 +3313,7 @@ def _pmo_plan_sheet_visits(
     for row in order:
         if row in plan:
             continue
-        visit = unclaimed_at(row)
-        if visit is not None and not _pmo_visit_has_field_record(visit):
-            claim(row, visit)
-        else:
-            plan[row] = None
+        plan[row] = None
     return plan
 
 
@@ -3359,18 +3364,18 @@ def persist_vacina_pmo_rows(
 ) -> list[dict[str, Any]]:
     """Grava as linhas lidas da aba e devolve as visitas serializadas.
 
-    ``prune_orphans`` apaga as visitas cujas linhas saíram da aba (as que têm
-    trabalho de campo só são estacionadas). ``park_orphans`` é a versão que
-    nunca apaga: estaciona todas, e elas voltam se a pessoa reaparecer na aba.
+    ``prune_orphans`` e ``park_orphans`` estacionam visitas ausentes, sem
+    apagar vínculos; elas voltam se a pessoa reaparecer na aba.
     """
+    if not str(sheet_gid or "").strip():
+        raise ValueError("Não foi possível identificar a aba da planilha. Selecione a aba e sincronize novamente.")
     now = utcnow()
     saved: list[PmoVaccinationVisit] = []
 
-    # A aba mestre tem conciliação própria (scripts/sync_pmo_master_status_notes)
-    # e, sem gid, a consulta misturaria abas diferentes: nesses casos segue o
-    # casamento antigo, só pelo número da linha.
+    # Mesmo na aba mestre a identidade deve acompanhar a pessoa, não a linha.
+    # Sem gid não é seguro conciliar entre abas.
     plan: dict[int, PmoVaccinationVisit | None] | None = None
-    if sheet_gid and not _pmo_is_master_sheet(sheet_title):
+    if sheet_gid:
         rows_by_source: dict[int, dict[str, Any]] = {}
         for row in rows:
             source_row = int(row.get("sourceRow") or 0)
@@ -3495,15 +3500,9 @@ def persist_vacina_pmo_rows(
                 .all()
             )
             for stale_visit in stale:
-                if not prune_orphans or _pmo_visit_has_field_record(stale_visit):
-                    # Aqui houve trabalho de campo: animal vacinado ou
-                    # dispensado por imunidade. Uma linha que mudou de lugar na
-                    # planilha não pode apagar isso — junto iriam o status, a
-                    # carteirinha do tutor e o vínculo com a foto do animal.
-                    # Some da lista do dia, mas o registro fica.
-                    stale_visit.source_row = -abs(stale_visit.id)
-                    continue
-                db.session.delete(stale_visit)
+                # Uma linha pode estar temporariamente vazia durante recortar e
+                # colar. Preserva também visitas pendentes e suas carteirinhas.
+                stale_visit.source_row = -abs(stale_visit.id)
 
     db.session.commit()
     imunidade = build_previous_immunity_index(saved)
@@ -3517,9 +3516,35 @@ def _count_vaccinated_by_species(visit: PmoVaccinationVisit) -> tuple[int, int]:
     return dogs, cats
 
 
+def _pmo_sheet_row_matches_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
+    """Confere a linha atual antes de gravar; nunca adivinha outro destino."""
+    if not title or not visit.source_row or visit.source_row < 1:
+        return False
+    result = service.spreadsheets().values().get(
+        spreadsheetId=visit.spreadsheet_id,
+        range=f"{_quote_sheet_title(title)}!A{visit.source_row}:H{visit.source_row}",
+    ).execute()
+    values = result.get("values") or []
+    if not values:
+        return False
+    row = values[0]
+    offset = _row_column_offset(row)
+    address = ", ".join(_cell(row, i + offset) for i in range(1, 5) if _cell(row, i + offset))
+    identity = SimpleNamespace(
+        tutor_name=_cell(row, offset), address=address,
+        phone1=_cell(row, 5 + offset), phone2=_cell(row, 6 + offset),
+    )
+    matches = (_same_person_name(visit.tutor_name, identity.tutor_name)
+               and _pmo_same_household(visit, identity))
+    if not matches:
+        current_app.logger.warning("PMO: linha %s da aba %s mudou; sincronize antes de gravar (visita %s)",
+                                   visit.source_row, title, visit.id)
+    return matches
+
+
 def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve as quantidades vacinadas (M=cães, N=gatos) na linha de origem do tutor."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
@@ -3544,7 +3569,7 @@ def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
         title = visit.sheet_title
         if not title and visit.sheet_gid:
             title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
-        if not title:
+        if not title or not _pmo_sheet_row_matches_visit(service, visit, title):
             return False
         range_value = (
             f"{_quote_sheet_title(title)}!"
@@ -3571,7 +3596,7 @@ def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
 
 def write_note_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve a observação acumulada na célula K da linha de origem do tutor."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
@@ -3594,7 +3619,7 @@ def write_note_to_sheet(visit: PmoVaccinationVisit) -> bool:
         title = visit.sheet_title
         if not title and visit.sheet_gid:
             title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
-        if not title:
+        if not title or not _pmo_sheet_row_matches_visit(service, visit, title):
             return False
         range_value = f"{_quote_sheet_title(title)}!{PMO_NOTE_COLUMN}{visit.source_row}"
         service.spreadsheets().values().update(
@@ -3640,7 +3665,7 @@ def _visit_status_color_key(visit: PmoVaccinationVisit) -> str | None:
 
 def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Pinta a célula do nome do tutor (coluna A) conforme o status da visita."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_gid:
         return False
@@ -3668,6 +3693,9 @@ def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
     color = PMO_STATUS_COLORS.get(color_key) if color_key else PMO_STATUS_CLEAR_COLOR
 
     try:
+        title = visit.sheet_title or _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not _pmo_sheet_row_matches_visit(service, visit, title):
+            return False
         service.spreadsheets().batchUpdate(
             spreadsheetId=visit.spreadsheet_id,
             body={
@@ -3704,7 +3732,7 @@ def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
 
 def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve os nomes dos animais (coluna J) na linha de origem do tutor."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
@@ -3729,7 +3757,7 @@ def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
         title = visit.sheet_title
         if not title and visit.sheet_gid:
             title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
-        if not title:
+        if not title or not _pmo_sheet_row_matches_visit(service, visit, title):
             return False
         range_value = f"{_quote_sheet_title(title)}!{PMO_ANIMAL_NAMES_COLUMN}{visit.source_row}"
         service.spreadsheets().values().update(
@@ -3752,7 +3780,7 @@ def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
 
 def write_animal_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve quantos cães (H) e gatos (I) a casa tem na linha de origem do tutor."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
@@ -3775,7 +3803,7 @@ def write_animal_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
         title = visit.sheet_title
         if not title and visit.sheet_gid:
             title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
-        if not title:
+        if not title or not _pmo_sheet_row_matches_visit(service, visit, title):
             return False
         range_value = (
             f"{_quote_sheet_title(title)}!"
@@ -3937,7 +3965,7 @@ def _attended_by_sheet_value(visit: PmoVaccinationVisit) -> str:
 
 def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve o nome de quem atendeu (coluna O) na linha de origem do tutor."""
-    if not visit.spreadsheet_id or not visit.source_row:
+    if not visit.spreadsheet_id or not visit.source_row or visit.source_row < 1:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
@@ -3960,7 +3988,7 @@ def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
         title = visit.sheet_title
         if not title and visit.sheet_gid:
             title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
-        if not title:
+        if not title or not _pmo_sheet_row_matches_visit(service, visit, title):
             return False
         range_value = (
             f"{_quote_sheet_title(title)}!"
