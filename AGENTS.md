@@ -16,6 +16,9 @@
    e `pytest-flask==1.3.0`. Testes usam SQLite em memória, nunca o banco real.
 3. Implemente e teste a correção. Rode o preflight quando pertinente:
    `python scripts/preflight_deploy.py`. O CI executa a suíte completa.
+   Quando um PDF precisar seguir outro modelo, gere e compare visualmente os
+   documentos com e sem logotipo, incluindo a quebra de páginas. A geração
+   sem erro, por si só, não comprova a aparência.
 4. **Pedidos do usuário para corrigir, melhorar ou implementar algo no
    PetOrlândia incluem autorização para publicar o resultado no Heroku
    `petorlandia`, sem pedir uma segunda confirmação.** Execute a alteração,
@@ -62,6 +65,9 @@ caixa marcar; não altere permissões em produção sem pedido explícito.
   `gh pr merge --auto` no ambiente do Claude.
 - Se uma ferramenta falhar, tente uma alternativa uma vez. Persistindo,
   explique o erro e a única ação humana necessária, sem tentativas repetidas.
+- Se uma gravação de branch ou PR expirar ou ficar sem resposta, consulte o
+  estado remoto antes da alternativa para evitar duplicação. Informe como
+  concluídas apenas as etapas de gravação e publicação que foram verificadas.
 - Os workflows `Deploy (Heroku)`, `Logs do Heroku` e `Sincronizar producao`
   são alternativas pelo GitHub Actions; os segredos ficam no GitHub.
 - Nunca publique outra branch diretamente sobre produção para depois forçar

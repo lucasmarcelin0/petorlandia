@@ -1,18 +1,14 @@
 """Carteira de vacinação em PDF."""
 from io import BytesIO
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import HRFlowable, Paragraph, Spacer
 from services.receita_pdf import _texto, _valor_crmv
+from services.documento_pdf import BASE, TITULO, SECAO, cabecalho, fichas, montar
 
 
 def gerar_pdf_carteira(animal, clinica, veterinario):
-    styles = getSampleStyleSheet()
-    corpo = ParagraphStyle('carteira-corpo', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=4)
-    titulo = ParagraphStyle('carteira-titulo', parent=styles['Heading1'], fontSize=15, leading=19, textColor=colors.HexColor('#1f3a56'))
-    secao = ParagraphStyle('carteira-secao', parent=styles['Heading2'], fontSize=11, leading=15, spaceBefore=10)
+    corpo, titulo, secao = BASE, TITULO, SECAO
     story = []
 
     def linha(rotulo, valor):
@@ -22,25 +18,15 @@ def gerar_pdf_carteira(animal, clinica, veterinario):
     def data(valor):
         return valor.strftime('%d/%m/%Y') if valor else '—'
 
-    story.append(Paragraph(_texto(clinica.nome), titulo))
-    for label, attr in [('Endereço', 'endereco'), ('Telefone', 'telefone'), ('E-mail', 'email'), ('CNPJ', 'cnpj')]:
-        linha(label, getattr(clinica, attr, None))
-    story.append(Spacer(1, 8))
+    story.extend(cabecalho(clinica))
     story.append(Paragraph('Carteira de Vacinação', titulo))
     story.append(Paragraph('Histórico de imunizações', corpo))
-    story.append(Paragraph('Paciente', secao))
-    for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]:
-        linha(label, getattr(animal, attr, None))
-    if animal.birth_date:
-        linha('Nascimento', data(animal.birth_date))
     tutor = animal.owner
-    story.append(Paragraph('Responsável', secao))
-    for label, attr in [('Nome', 'name'), ('CPF', 'cpf'), ('Contato', 'phone'), ('Endereço', 'address')]:
-        linha(label, getattr(tutor, attr, None))
-    story.append(Paragraph('Clínica e profissional', secao))
-    linha('Clínica', clinica.nome)
-    linha('Veterinário', getattr(veterinario, 'name', None))
-    linha('CRMV', _valor_crmv(veterinario))
+    story.append(fichas([
+        ('Clínica e profissional', [('Clínica', clinica.nome), ('Veterinário', getattr(veterinario, 'name', None)), ('CRMV', _valor_crmv(veterinario))]),
+        ('Paciente', [(label, getattr(animal, attr, None)) for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]] + [('Nascimento', data(animal.birth_date) if animal.birth_date else None)]),
+        ('Responsável', [(label, getattr(tutor, attr, None)) for label, attr in [('Nome', 'name'), ('CPF', 'cpf'), ('Contato', 'phone'), ('Endereço', 'address')]]),
+    ]))
     story.append(Paragraph('Vacinas aplicadas', secao))
     for vacina in animal.vacinas_ordenadas:
         story.append(HRFlowable(width='100%', thickness=.5, color=colors.HexColor('#d9e2ec'), spaceAfter=5))
@@ -55,7 +41,5 @@ def gerar_pdf_carteira(animal, clinica, veterinario):
                   Paragraph('Responsável pelo Animal', corpo),
                   Spacer(1, .5 * cm), Paragraph('Documento válido apenas com carimbo e assinatura do médico veterinário responsável.', corpo)])
     output = BytesIO()
-    SimpleDocTemplate(output, pagesize=A4, leftMargin=1.6 * cm, rightMargin=1.6 * cm,
-                      topMargin=1.4 * cm, bottomMargin=1.8 * cm,
-                      title='Carteira de Vacinação').build(story)
+    montar(output, story, clinica, 'Carteira de Vacinação')
     return output.getvalue()

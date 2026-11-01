@@ -2,22 +2,16 @@
 from io import BytesIO
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import HRFlowable, Paragraph, Spacer
 
 from services.receita_pdf import _texto, _valor_crmv
+from services.documento_pdf import BASE, TITULO, SECAO, CENTRO, cabecalho, fichas, montar
 from template_filters import format_datetime_brazil
 
 
 def gerar_pdf_exames(bloco, animal, tutor, clinica, veterinario):
-    styles = getSampleStyleSheet()
-    body = ParagraphStyle('exame-corpo', parent=styles['Normal'], fontSize=9.5, leading=14, spaceAfter=4)
-    title = ParagraphStyle('exame-titulo', parent=styles['Heading1'], fontSize=15, leading=19, textColor=colors.HexColor('#1f3a56'))
-    heading = ParagraphStyle('exame-secao', parent=styles['Heading2'], fontSize=11, leading=15, textColor=colors.HexColor('#1f3a56'), spaceBefore=12)
-    centered = ParagraphStyle('exame-assinatura', parent=body, alignment=TA_CENTER)
+    body, title, heading, centered = BASE, TITULO, SECAO, CENTRO
     story = []
 
     def line(label, value):
@@ -28,23 +22,15 @@ def gerar_pdf_exames(bloco, animal, tutor, clinica, veterinario):
         story.append(Paragraph(_texto(label), heading))
         story.append(HRFlowable(width='100%', thickness=.5, color=colors.HexColor('#d9e2ec'), spaceAfter=5))
 
-    story.append(Paragraph(_texto(clinica.nome), title))
-    for label, value in [('Endereço', clinica.endereco), ('Telefone', clinica.telefone), ('Email', clinica.email), ('CNPJ', clinica.cnpj)]:
-        line(label, value)
-    story.append(Spacer(1, 10))
+    story.extend(cabecalho(clinica))
     story.append(Paragraph('Requisição de Exames Complementares', title))
     if bloco.data_criacao:
         line('Solicitado em', format_datetime_brazil(bloco.data_criacao, '%d/%m/%Y %H:%M'))
-    section('Profissional Responsável')
-    line('Nome', getattr(veterinario, 'name', None))
-    line('CRMV', _valor_crmv(veterinario))
-    section('Paciente')
-    for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]:
-        line(label, getattr(animal, attr, None))
-    if tutor:
-        section('Responsável')
-        for label, attr in [('Nome', 'name'), ('CPF', 'cpf'), ('Contato', 'phone'), ('Endereço', 'address')]:
-            line(label, getattr(tutor, attr, None))
+    story.append(fichas([
+        ('Profissional Responsável', [('Nome', getattr(veterinario, 'name', None)), ('CRMV', _valor_crmv(veterinario))]),
+        ('Paciente', [(label, getattr(animal, attr, None)) for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]]),
+        ('Responsável', [(label, getattr(tutor, attr, None)) for label, attr in [('Nome', 'name'), ('CPF', 'cpf'), ('Contato', 'phone'), ('Endereço', 'address')]]),
+    ]))
     section('Exames Solicitados')
     for exame in bloco.exames:
         story.append(Paragraph(f'<b>{_texto(exame.nome)}</b>', body))
@@ -62,7 +48,5 @@ def gerar_pdf_exames(bloco, animal, tutor, clinica, veterinario):
                   Paragraph(_texto(getattr(veterinario, 'name', None) or ' '), centered),
                   Paragraph(_texto(_valor_crmv(veterinario)), centered)])
     output = BytesIO()
-    SimpleDocTemplate(output, pagesize=A4, leftMargin=1.6 * cm, rightMargin=1.6 * cm,
-                      topMargin=1.4 * cm, bottomMargin=1.8 * cm,
-                      title='Requisição de Exames Complementares').build(story)
+    montar(output, story, clinica, 'Requisição de Exames Complementares')
     return output.getvalue()
