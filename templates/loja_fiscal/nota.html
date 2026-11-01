@@ -57,7 +57,7 @@
     {% endif %}
   </div>
 
-  {% if documento.status == 'autorizada' %}
+  {% if documento.status == 'autorizada' and pode_gerir_loja(casa) %}
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
       <h2 class="h6 fw-bold">Cancelar esta nota</h2>

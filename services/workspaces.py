@@ -35,7 +35,7 @@ class Experience:
 
 
 def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False,
-                       sinan=False):
+                       sinan=False, loja_operada=None):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -77,6 +77,13 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
              action('Produtos', 'casa_de_racao_produtos', 'fa-box-open', casa_id=store.id),
              action('Vendas', 'casa_de_racao_vendas', 'fa-chart-line', casa_id=store.id),
              action('Entregas', 'casa_de_racao_entregas', 'fa-truck', casa_id=store.id))
+    if loja_operada and not (store and store.id == loja_operada.id):
+        # Operador da loja (equipe): o dia a dia, sem o painel do dono.
+        area('store_operator', loja_operada.nome, 'fa-cash-register',
+             action('Caixa', 'loja_caixa', 'fa-cash-register', casa_id=loja_operada.id),
+             action('Banho e tosa', 'loja_banho_tosa_agenda', 'fa-scissors', casa_id=loja_operada.id),
+             action('Estoque', 'loja_estoque', 'fa-boxes-stacked', casa_id=loja_operada.id),
+             action('Produtos', 'casa_de_racao_produtos', 'fa-box-open', casa_id=loja_operada.id))
     if worker == 'delivery' or admin:
         area('delivery', 'Área de Entregas', 'fa-truck',
              action('Solicitações', 'list_delivery_requests', 'fa-truck'))
@@ -135,7 +142,7 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
 
 def current_experience():
     if 'user_experience' not in g:
-        from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao
+        from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao, loja_operada_do_usuario
         from helpers import _user_can_access_accounting, is_veterinarian
         from services.entomologia_acesso import membro_equipe
         from services.sfa_notificacao import pode_acessar as pode_acessar_sinan
@@ -148,6 +155,7 @@ def current_experience():
             clinic_access=inject_has_clinic_access()['has_clinic_access'],
             dengue=membro_equipe(current_user),
             sinan=pode_acessar_sinan(current_user),
+            loja_operada=loja_operada_do_usuario(),
         )
     return g.user_experience
 

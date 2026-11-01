@@ -56,6 +56,13 @@ def ensure_loja_access(casa_id: int):
     return app_module._casa_loja_access(casa_id)
 
 
+def ensure_loja_operacao(casa_id: int):
+    """Dono/admin ou operador ativo da loja (dia a dia); os demais recebem 403."""
+    import app as app_module
+
+    return app_module.ensure_loja_operacao(casa_id)
+
+
 def _config_da_loja(casa) -> LojaFiscalConfig | None:
     return LojaFiscalConfig.query.filter_by(casa_de_racao_id=casa.id).first()
 
@@ -311,7 +318,7 @@ def loja_fiscal_ambiente(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/nfce", methods=["GET"])
 @login_required
 def loja_nfce_lista(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     config = _config_da_loja(casa)
     status = request.args.get("status") or ""
     query = NfceDocumento.query.filter_by(casa_de_racao_id=casa.id)
@@ -331,7 +338,7 @@ def loja_nfce_lista(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/nfce/<int:doc_id>", methods=["GET"])
 @login_required
 def loja_nfce_detalhe(casa_id, doc_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     documento = _documento_da_loja(casa, doc_id)
     eventos = documento.eventos.order_by(NfceEvento.id.desc()).all()
     return render_template("loja_fiscal/nota.html", casa=casa, documento=documento, eventos=eventos)
@@ -340,7 +347,7 @@ def loja_nfce_detalhe(casa_id, doc_id):
 @bp.route("/casa-de-racao/<int:casa_id>/nfce/<int:doc_id>/cupom", methods=["GET"])
 @login_required
 def loja_nfce_cupom(casa_id, doc_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     documento = _documento_da_loja(casa, doc_id)
     if not documento.chave:
         abort(404)
@@ -351,7 +358,7 @@ def loja_nfce_cupom(casa_id, doc_id):
 @bp.route("/casa-de-racao/<int:casa_id>/nfce/<int:doc_id>/xml", methods=["GET"])
 @login_required
 def loja_nfce_xml(casa_id, doc_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     documento = _documento_da_loja(casa, doc_id)
     xml = documento.xml_autorizado or documento.xml_assinado
     if not xml:
@@ -382,7 +389,7 @@ def loja_nfce_cancelar(casa_id, doc_id):
 @bp.route("/casa-de-racao/<int:casa_id>/nfce/<int:doc_id>/reenviar", methods=["POST"])
 @login_required
 def loja_nfce_reenviar(casa_id, doc_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     documento = _documento_da_loja(casa, doc_id)
     try:
         documento = nfce_service.reenviar_nfce(documento)
@@ -397,7 +404,7 @@ def loja_nfce_reenviar(casa_id, doc_id):
 @login_required
 def loja_nfce_transmitir(casa_id, doc_id):
     """Envia agora uma NFC-e emitida em contingência off-line."""
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     documento = _documento_da_loja(casa, doc_id)
     try:
         documento = nfce_service.transmitir_contingencia(documento)

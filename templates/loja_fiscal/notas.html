@@ -4,18 +4,26 @@
 {% block main %}
 <div class="container mt-4 mb-5">
   <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    {% if pode_gerir_loja(casa) %}
     <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
       <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Configuração fiscal
     </a>
+    {% else %}
+    <a href="{{ url_for('loja_caixa', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Caixa
+    </a>
+    {% endif %}
     <div>
       <h1 class="h3 fw-bold mb-0">NFC-e emitidas</h1>
       <p class="text-muted small mb-0">{{ casa.nome }}{% if fiscal %} · {{ 'Produção' if fiscal.em_producao else 'Homologação' }}{% endif %}</p>
     </div>
+    {% if pode_gerir_loja(casa) %}
     <form method="get" action="{{ url_for('loja_nfce_xmls_mes', casa_id=casa.id) }}" class="ms-auto d-flex gap-2 align-items-center">
       <label class="small text-muted" for="mes">XMLs do mês para o contador</label>
       <input class="form-control form-control-sm" type="month" id="mes" name="mes" required>
       <button class="btn btn-sm btn-outline-primary" type="submit">Baixar ZIP</button>
     </form>
+    {% endif %}
   </div>
 
   <div class="d-flex gap-2 flex-wrap mb-3">

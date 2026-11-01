@@ -382,6 +382,29 @@ def inject_minha_casa_de_racao():
     return dict(minha_casa_de_racao=None)
 
 
+def loja_operada_do_usuario():
+    """Loja em que o usuário logado é operador ativo (menu do caixa); None se nenhuma."""
+    from models import CasaDeRacao, LojaMembro
+
+    if not getattr(current_user, "is_authenticated", False):
+        return None
+    cached = _get_cached_context(current_user.id, 'loja_operada')
+    if cached is not None:
+        return SimpleNamespace(**cached) if cached else None
+    casa = (
+        CasaDeRacao.query.join(LojaMembro, LojaMembro.casa_de_racao_id == CasaDeRacao.id)
+        .filter(LojaMembro.user_id == current_user.id, LojaMembro.ativo.is_(True))
+        .order_by(LojaMembro.id)
+        .first()
+    )
+    if casa:
+        valor = {'id': casa.id, 'nome': casa.nome}
+        _set_cached_context(current_user.id, 'loja_operada', valor)
+        return SimpleNamespace(**valor)
+    _set_cached_context(current_user.id, 'loja_operada', False)
+    return None
+
+
 def inject_current_app():
     """Make current_app available in templates for view_functions checks."""
     return dict(current_app=current_app)

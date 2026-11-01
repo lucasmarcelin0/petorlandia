@@ -33,6 +33,13 @@ def ensure_loja_access(casa_id: int):
     return app_module._casa_loja_access(casa_id)
 
 
+def ensure_loja_operacao(casa_id: int):
+    """Dono/admin ou operador ativo da loja (dia a dia); os demais recebem 403."""
+    import app as app_module
+
+    return app_module.ensure_loja_operacao(casa_id)
+
+
 def _dia(texto: str | None) -> date:
     try:
         return datetime.strptime(texto, "%Y-%m-%d").date() if texto else now_in_brazil().date()
@@ -57,7 +64,7 @@ def _voltar(casa, sessao=None):
 @bp.route("/casa-de-racao/<int:casa_id>/banho-tosa", methods=["GET"])
 @login_required
 def loja_banho_tosa_agenda(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     dia = _dia(request.args.get("dia"))
     planos = banho_tosa.planos_da_loja(casa.id)
     sessoes = banho_tosa.agenda_do_dia(casa.id, dia)
@@ -82,7 +89,7 @@ def loja_banho_tosa_agenda(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/banho-tosa/agendar", methods=["POST"])
 @login_required
 def loja_banho_tosa_agendar(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     try:
         quando = datetime.strptime(
             f"{request.form.get('data')} {request.form.get('hora') or '09:00'}", "%Y-%m-%d %H:%M"
@@ -106,7 +113,7 @@ def loja_banho_tosa_agendar(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/banho-tosa/<int:sessao_id>/status", methods=["POST"])
 @login_required
 def loja_banho_tosa_status(casa_id, sessao_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = _sessao_da_loja(casa, sessao_id)
     try:
         banho_tosa.mudar_status(sessao, request.form.get("status") or "")
@@ -119,7 +126,7 @@ def loja_banho_tosa_status(casa_id, sessao_id):
 @bp.route("/casa-de-racao/<int:casa_id>/banho-tosa/<int:sessao_id>/cobrar", methods=["POST"])
 @login_required
 def loja_banho_tosa_cobrar(casa_id, sessao_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = _sessao_da_loja(casa, sessao_id)
     try:
         venda = banho_tosa.cobrar_no_caixa(

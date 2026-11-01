@@ -35,18 +35,20 @@
         {% endif %}
       </div>
       {% if not dfe_pronto %}
-      <p class="small text-muted mb-0">Com o certificado A1 da loja em <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Notas fiscais (NFC-e)</a>, o PetOrlândia busca na SEFAZ as notas que os fornecedores emitem para o seu CNPJ — sem precisar pedir o XML a ninguém.</p>
+      <p class="small text-muted mb-0">Com o certificado A1 da loja em {% if pode_gerir_loja(casa) %}<a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Notas fiscais (NFC-e)</a>{% else %}Notas fiscais (configuração do dono){% endif %}, o PetOrlândia busca na SEFAZ as notas que os fornecedores emitem para o seu CNPJ — sem precisar pedir o XML a ninguém.</p>
       {% else %}
       <p class="small text-muted mb-2">
         {% if not dfe_producao %}<span class="badge text-bg-warning">homologação</span> só traz notas de teste. {% endif %}
         {% if dfe_ctl and dfe_ctl.ultima_consulta %}Última consulta: {{ dfe_ctl.ultima_consulta|data_br }}{% if dfe_ctl.ultimo_x_motivo %} — {{ dfe_ctl.ultimo_x_motivo }}{% endif %}.{% endif %}
         {% if not dfe_pode_consultar %}A SEFAZ aceita uma consulta por hora: próxima a partir de {{ dfe_ctl.proxima_consulta|data_br }}.{% endif %}
       </p>
+      {% if pode_gerir_loja(casa) %}
       <form method="post" action="{{ url_for('loja_dfe_automatico', casa_id=casa.id) }}" class="form-check form-switch mb-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input class="form-check-input" type="checkbox" role="switch" id="ciencia_automatica" name="ciencia_automatica" value="1" {{ 'checked' if dfe_ctl and dfe_ctl.ciencia_automatica }} onchange="this.form.submit()">
         <label class="form-check-label small" for="ciencia_automatica">Dar ciência e baixar o XML automaticamente (de hora em hora)</label>
       </form>
+      {% endif %}
       {% if dfe_docs %}
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">

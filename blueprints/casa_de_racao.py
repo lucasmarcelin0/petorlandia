@@ -56,6 +56,8 @@ from app import (
     _canonicalize_racao_brand,
     _casa_de_racao_product_onboarding_target,
     _casa_loja_access,
+    _painel_da_loja_url,
+    ensure_loja_operacao,
     _concluir_entrega_efeitos,
     _create_initial_variant,
     _geocode_endereco,
@@ -689,7 +691,7 @@ def mercadopago_direct_save(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/produtos", methods=["GET", "POST"])
 @login_required
 def casa_de_racao_produtos(casa_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     form = CasaDeRacaoProductForm()
     if form.validate_on_submit():
         image_url = None
@@ -726,7 +728,7 @@ def casa_de_racao_produtos(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/produto/<int:product_id>/editar", methods=["GET", "POST"])
 @login_required
 def casa_produto_editar(casa_id, product_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
 
     form = CasaDeRacaoProductEditForm(obj=product)
@@ -756,7 +758,7 @@ def casa_produto_editar(casa_id, product_id):
 @bp.route("/casa-de-racao/<int:casa_id>/produto/<int:product_id>/toggle", methods=["POST"])
 @login_required
 def casa_produto_toggle(casa_id, product_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
     if product.status != 'active' and casa.status != 'ativa':
         flash('O produto está salvo. A publicação fica disponível quando a loja estiver ativa.', 'warning')
@@ -841,7 +843,7 @@ def admin_suspender_casa_de_racao(casa_id):
 @login_required
 def casa_de_racao_vendas(casa_id):
     """Dashboard de vendas: pedidos que contêm produtos da casa de ração."""
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
 
     # Only confirmed payments are sales; open carts are not revenue.
     from sqlalchemy import func
@@ -904,10 +906,10 @@ def casa_de_racao_vendas(casa_id):
 @login_required
 def casa_de_racao_entregas(casa_id):
     """Lista de entregas próprias para a casa de ração gerenciar."""
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     if casa.modo_entrega != 'propria' and not _is_admin():
         flash('Sua loja usa entregadores da plataforma — não há entregas próprias para gerenciar.', 'info')
-        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+        return redirect(_painel_da_loja_url(casa))
 
     pendentes = (
         DeliveryRequest.query
@@ -992,7 +994,7 @@ def casa_de_racao_grooming_plano_toggle(casa_id, plan_id):
 @bp.route("/casa-de-racao/<int:casa_id>/tutores", methods=["GET", "POST"])
 @login_required
 def casa_de_racao_tutores(casa_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     if request.method == 'POST':
         from_dashboard = bool(request.form.get('_from_dashboard'))
         _back = (url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#tutores') if from_dashboard else url_for('casa_de_racao_tutores', casa_id=casa.id)
@@ -1111,7 +1113,7 @@ def casa_de_racao_tutores(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/animais", methods=["GET", "POST"])
 @login_required
 def casa_de_racao_animais(casa_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     tutores = (
         User.query
         .filter_by(casa_de_racao_id=casa.id)
@@ -1201,7 +1203,7 @@ def casa_de_racao_animais(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/animal/<int:animal_id>/racoes", methods=["GET", "POST"])
 @login_required
 def casa_de_racao_animal_racoes(casa_id, animal_id):
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     animal = Animal.query.filter_by(id=animal_id, casa_de_racao_id=casa.id).first_or_404()
     if request.method == 'POST':
         marca = _canonicalize_racao_brand(request.form.get('marca') or '')
@@ -1252,7 +1254,7 @@ def casa_de_racao_animal_racoes(casa_id, animal_id):
 @login_required
 def casa_entrega_atualizar_status(casa_id, dr_id):
     """Vendedor atualiza o status de uma entrega própria."""
-    casa = _casa_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     dr = DeliveryRequest.query.filter_by(
         id=dr_id,
         casa_de_racao_id=casa.id,

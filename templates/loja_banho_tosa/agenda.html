@@ -4,11 +4,11 @@
 {% block main %}
 <div class="container mt-4 mb-5">
   <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
-      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Painel da loja
+    <a href="{{ painel_da_loja_url(casa) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> {{ 'Painel da loja' if pode_gerir_loja(casa) else 'Caixa' }}
     </a>
     <h1 class="h4 fw-bold mb-0 me-auto">Banho e tosa · agenda</h1>
-    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a>
+    {% if pode_gerir_loja(casa) %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a>{% endif %}
     <form method="get" class="d-flex gap-2 align-items-center">
       <label class="small text-muted" for="dia">Dia</label>
       <input class="form-control form-control-sm" type="date" id="dia" name="dia" value="{{ dia.isoformat() }}">
@@ -17,7 +17,7 @@
   </div>
 
   {% if not planos %}
-  <div class="alert alert-info">Cadastre a tabela de banho e tosa (preço por porte e planos mensais) em <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a> para agendar.</div>
+  <div class="alert alert-info">{% if pode_gerir_loja(casa) %}Cadastre a tabela de banho e tosa (preço por porte e planos mensais) em <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}">Tabela de preços e planos</a> para agendar.{% else %}A tabela de banho e tosa ainda não foi cadastrada pelo dono da loja.{% endif %}</div>
   {% endif %}
 
   <div class="row g-4">
