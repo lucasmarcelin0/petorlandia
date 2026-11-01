@@ -51,7 +51,7 @@
       <form method="post" class="d-flex gap-2 flex-wrap">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="acao" value="confirmar">
-        <input type="hidden" name="linhas_json" value="{{ linhas_json }}">
+        <input type="hidden" name="previa" value="{{ previa }}">
         {% if atualizar_precos %}<input type="hidden" name="atualizar_precos" value="1">{% endif %}
         {% if ajustar_estoque %}<input type="hidden" name="ajustar_estoque" value="1">{% endif %}
         <button class="btn btn-primary" type="submit" {{ '' if totais.criar or totais.atualizar else 'disabled' }}>Gravar {{ totais.criar + totais.atualizar }} produto(s)</button>

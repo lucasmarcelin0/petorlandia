@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import gzip
+import html
 import io
-import json
+import random
+import re
 
 import flask_login.utils as login_utils
 import pytest
@@ -50,6 +53,10 @@ PLANILHA_ORLASOFT = _csv(
     "7,89E+12;;Arranhador;89,90;;UN;1,5;9999;5102;102;0",
     codificacao="cp1252",
 )
+
+
+def _previa(pagina: str) -> str:
+    return html.unescape(re.search(r'name="previa" value="([^"]*)"', pagina).group(1))
 
 
 def test_le_csv_do_excel_com_titulos_comuns():
@@ -176,15 +183,65 @@ def test_telas_da_importacao(loja, client, monkeypatch):
     assert resposta.status_code == 200 and "Prévia: 6 linha(s)" in pagina and "Gravar 5 produto(s)" in pagina
     assert Product.query.filter_by(casa_de_racao_id=casa_id).count() == 2, "a prévia não grava nada"
 
-    linhas_json = json.dumps(importacao.ler_planilha(PLANILHA_ORLASOFT), ensure_ascii=False)
-    resposta = client.post(url, data={"acao": "confirmar", "linhas_json": linhas_json, "ajustar_estoque": "1"})
+    resposta = client.post(url, data={"acao": "confirmar", "previa": _previa(pagina), "ajustar_estoque": "1"})
     assert resposta.status_code == 302 and resposta.headers["Location"].endswith(f"/casa-de-racao/{casa_id}/estoque")
     assert Product.query.filter_by(casa_de_racao_id=casa_id).count() == 5
     assert loja["racao"].variants[0].stock == 8
 
-    assert client.post(url, data={"acao": "confirmar", "linhas_json": "não é json"}).status_code == 302
+    assert client.post(url, data={"acao": "confirmar", "previa": "não é a prévia"}).status_code == 302
     assert Product.query.filter_by(casa_de_racao_id=casa_id).count() == 5
 
     monkeypatch.setattr(login_utils, "_get_user", lambda: loja["outro"])
     assert client.get(url).status_code == 404
     assert client.get(url + "/modelo.csv").status_code == 404
+
+
+def test_mesmo_nome_com_outro_codigo_entra_como_produto_novo(loja):
+    """Coleira COL-G não é a Coleira COL-P da loja: não pode mexer nela."""
+    coleira = loja["coleira"]
+    coleira.name = "Coleira"
+    coleira.variants[0].barcode = "7890000000011"
+    db.session.commit()
+    linhas = importacao.ler_planilha(_csv(
+        "codigo_barras;codigo;nome;preco;estoque",
+        "7890000000028;COL-G;Coleira;45,00;6",
+        ";;Coleira;50,00;9",  # sem código: vale o nome
+    ))
+    plano = importacao.planejar(loja["casa"].id, linhas, atualizar_precos=True, ajustar_estoque=True)
+    assert plano[0].acao == "criar" and any("outro código" in a for a in plano[0].avisos)
+    assert plano[1].acao == "atualizar" and plano[1].product.id == coleira.id
+
+    importacao.aplicar(loja["casa"], linhas[:1], atualizar_precos=True, ajustar_estoque=True)
+    assert coleira.price == 30.0 and coleira.variants[0].stock == 1 and coleira.variants[0].sku == "COL-P"
+    nova = ProductVariant.query.filter_by(barcode="7890000000028").one()
+    assert nova.product_id != coleira.id and nova.sku == "COL-G" and nova.stock == 6
+
+
+def test_catalogo_grande_chega_ao_fim(loja, client, monkeypatch):
+    """3 mil produtos: a confirmação cabe no limite de formulário do Flask (500 mil bytes)."""
+    monkeypatch.setattr(login_utils, "_get_user", lambda: loja["owner"])
+    sorteio = random.Random(7)
+    linhas = ["codigo_barras;codigo;nome;preco;custo;unidade;estoque;ncm;cfop;csosn;origem"]
+    for i in range(3000):
+        barras = "789" + "".join(sorteio.choice("0123456789") for _ in range(10))
+        linhas.append(f"{barras};P{i:05d};Produto de teste número {i} sabor {sorteio.randint(1, 99)};"
+                      f"{sorteio.randint(5, 300)},90;{sorteio.randint(2, 200)},10;UN;{sorteio.randint(0, 40)};"
+                      "23091000;5102;102;0")
+    planilha = _csv(*linhas)
+    url = f"/casa-de-racao/{loja['casa'].id}/estoque/importar-produtos"
+    pagina = client.post(url, data={"arquivo": (io.BytesIO(planilha), "grande.csv")},
+                         content_type="multipart/form-data").get_data(as_text=True)
+    assert "Prévia: 3000 linha(s)" in pagina
+    previa = _previa(pagina)
+    assert len(previa) < importacao.MAX_PREVIA
+    resposta = client.post(url, data={"acao": "confirmar", "previa": previa})
+    assert resposta.status_code == 302
+    assert Product.query.filter_by(casa_de_racao_id=loja["casa"].id).count() == 3002
+
+
+def test_previa_adulterada_ou_grande_demais_e_recusada():
+    assert importacao.desempacotar(importacao.empacotar(b"nome;preco\nA;1\n")) == b"nome;preco\nA;1\n"
+    assert importacao.desempacotar("") is None
+    assert importacao.desempacotar("isto não é base64") is None
+    bomba = importacao.base64.b64encode(gzip.compress(b"0" * (importacao.MAX_BYTES + 10))).decode()
+    assert importacao.desempacotar(bomba) is None
