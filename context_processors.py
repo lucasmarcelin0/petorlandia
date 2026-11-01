@@ -398,7 +398,7 @@ def loja_operada_do_usuario():
         .first()
     )
     if casa:
-        valor = {'id': casa.id, 'nome': casa.nome}
+        valor = {'id': casa.id, 'nome': casa.nome, 'entregas_proprias': casa.modo_entrega == 'propria'}
         _set_cached_context(current_user.id, 'loja_operada', valor)
         return SimpleNamespace(**valor)
     _set_cached_context(current_user.id, 'loja_operada', False)

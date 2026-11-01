@@ -91,7 +91,9 @@ def loja_equipe_adicionar(casa_id):
         if app_module.find_users_by_phone(celular):
             flash("Este celular já está em outra conta. Use o e-mail dessa conta para liberar o acesso.", "danger")
             return destino
-        usuario = User(name=nome, email=email, phone=celular, is_private=True, added_by=current_user)
+        # A conta é da pessoa, não do dono: sem ``added_by``, o dono não ganha
+        # sobre ela os poderes de quem cadastra tutor. Quem liberou fica no LojaMembro.
+        usuario = User(name=nome, email=email, phone=celular, is_private=True)
         # Senha provisória inacessível: a pessoa cria a dela pelo link de primeiro acesso.
         usuario.set_password(uuid.uuid4().hex)
         db.session.add(usuario)

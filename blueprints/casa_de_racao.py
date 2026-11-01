@@ -57,6 +57,7 @@ from app import (
     _casa_de_racao_product_onboarding_target,
     _casa_loja_access,
     _painel_da_loja_url,
+    _pode_gerir_loja,
     ensure_loja_operacao,
     _concluir_entrega_efeitos,
     _create_initial_variant,
@@ -991,6 +992,18 @@ def casa_de_racao_grooming_plano_toggle(casa_id, plan_id):
     return redirect(url_for('casa_de_racao_grooming_planos', casa_id=casa.id))
 
 
+def _autor_cadastro_loja_id(casa):
+    """Quem assina (``added_by``) tutor e animal cadastrados pelas telas da loja.
+
+    Dono, quem cadastrou a loja e admin assinam como sempre. O operador da
+    equipe não vira autor: a autoria dá acesso por fora da loja (ficha,
+    excluir animal) que continuaria depois de o dono desligar o acesso dele.
+    """
+    if _pode_gerir_loja(casa):
+        return current_user.id
+    return casa.owner_id or casa.registered_by_id
+
+
 @bp.route("/casa-de-racao/<int:casa_id>/tutores", methods=["GET", "POST"])
 @login_required
 def casa_de_racao_tutores(casa_id):
@@ -1016,7 +1029,7 @@ def casa_de_racao_tutores(casa_id):
                 name=name,
                 email=email or f"tutor-{casa.id}-{uuid.uuid4().hex[:12]}@petorlandia.local",
                 role='adotante',
-                added_by=current_user,
+                added_by_id=_autor_cadastro_loja_id(casa),
                 casa_de_racao_id=casa.id,
                 is_private=True,
             )
@@ -1025,7 +1038,8 @@ def casa_de_racao_tutores(casa_id):
         else:
             tutor.name = name
             tutor.casa_de_racao_id = casa.id
-            tutor.added_by = tutor.added_by or current_user
+            if tutor.added_by_id is None:
+                tutor.added_by_id = _autor_cadastro_loja_id(casa)
             tutor.is_private = True
 
         tutor.phone = phone
@@ -1138,7 +1152,7 @@ def casa_de_racao_animais(casa_id):
         animal = Animal(
             name=name,
             user_id=tutor.id,
-            added_by_id=current_user.id,
+            added_by_id=_autor_cadastro_loja_id(casa),
             casa_de_racao_id=casa.id,
             age=(request.form.get('age') or '').strip() or None,
             sex=(request.form.get('sex') or '').strip() or None,

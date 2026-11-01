@@ -123,6 +123,7 @@ def test_dono_libera_desliga_e_religa(loja, client, monkeypatch):
     assert resposta.status_code == 302
     joao = User.query.filter_by(email="joao.lima@example.com").one()
     assert joao.casa_de_racao_id is None, "operador não vira cliente da loja"
+    assert joao.added_by_id is None, "a conta é da pessoa, não do dono"
     assert LojaMembro.query.filter_by(casa_de_racao_id=casa_id, user_id=joao.id, ativo=True).one()
     para, corpo = enviados[-1]
     assert para == "joao.lima@example.com"
@@ -186,14 +187,46 @@ def test_operador_novo_cria_a_senha_pelo_link_e_cai_no_caixa(loja, client, monke
     assert User.query.filter_by(email="joao@example.com").one().check_password("segredo123")
 
 
+def test_cadastro_do_operador_nao_lhe_da_acesso_por_fora_da_loja(loja, client, monkeypatch):
+    from models import Animal
+
+    casa_id = loja["casa"].id
+    _login(monkeypatch, loja["operador"])
+    client.post(f"/casa-de-racao/{casa_id}/tutores", data={"name": "Maria Cliente", "phone": "16991234567"})
+    tutor = User.query.filter_by(name="Maria Cliente").one()
+    client.post(f"/casa-de-racao/{casa_id}/animais", data={"tutor_id": tutor.id, "name": "Thor"})
+    animal = Animal.query.filter_by(name="Thor").one()
+    # A autoria fica com o dono: o operador não ganha poderes de quem cadastrou.
+    assert tutor.added_by_id == loja["owner"].id and animal.added_by_id == loja["owner"].id
+    assert client.post(f"/animal/{animal.id}/deletar").status_code in (403, 404)
+
+    loja["membro"].ativo = False
+    db.session.commit()
+    assert client.post(f"/animal/{animal.id}/deletar").status_code in (403, 404)
+    db.session.refresh(animal)
+    assert animal.removido_em is None
+
+    # O dono continua assinando o que ele mesmo cadastra.
+    _login(monkeypatch, loja["owner"])
+    client.post(f"/casa-de-racao/{casa_id}/tutores", data={"name": "Pedro Cliente"})
+    assert User.query.filter_by(name="Pedro Cliente").one().added_by_id == loja["owner"].id
+
+
 def test_menu_do_operador_leva_ao_caixa(loja, app):
     casa = loja["casa"]
     with app.test_request_context():
         experiencia = resolve_experience(loja["operador"], loja_operada=SimpleNamespace(id=casa.id, nome=casa.nome))
         area = next(w for w in experiencia.workspaces if w.key == "store_operator")
         assert area.label == "Cat Dog"
-        assert [a.label for a in area.actions] == ["Caixa", "Banho e tosa", "Estoque", "Produtos"]
+        assert [a.label for a in area.actions] == ["Caixa", "Vendas online", "Banho e tosa", "Estoque", "Produtos"]
         assert area.actions[0].url == f"/casa-de-racao/{casa.id}/caixa"
+        assert area.actions[1].url == f"/casa-de-racao/{casa.id}/vendas"
+        # Loja com entrega própria: o operador também chega às entregas.
+        propria = SimpleNamespace(id=casa.id, nome=casa.nome, entregas_proprias=True)
+        area = next(w for w in resolve_experience(loja["operador"], loja_operada=propria).workspaces
+                    if w.key == "store_operator")
+        assert [a.label for a in area.actions][:3] == ["Caixa", "Vendas online", "Entregas"]
+        assert area.actions[2].url == f"/casa-de-racao/{casa.id}/entregas"
         # O dono não ganha um segundo menu para a própria loja.
         dono = resolve_experience(loja["owner"], store=casa, loja_operada=SimpleNamespace(id=casa.id, nome=casa.nome))
         assert "store_operator" not in {w.key for w in dono.workspaces}
