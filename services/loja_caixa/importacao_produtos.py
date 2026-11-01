@@ -12,12 +12,15 @@ barras, código interno, nome, preço, custo, unidade, estoque e dados fiscais.
 """
 from __future__ import annotations
 
+import base64
 import csv
 from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, Decimal
+import gzip
 import io
 import re
 import unicodedata
+import zlib
 from typing import Any, Optional
 
 from extensions import db
@@ -30,6 +33,9 @@ from services.loja_caixa.estoque import EstoqueError
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_LINHAS = 5000
+# A planilha volta da prévia compactada num campo do formulário; o Flask
+# recusa formulários acima de 500 mil bytes (MAX_FORM_MEMORY_SIZE).
+MAX_PREVIA = 450_000
 OBSERVACAO = "Importação da planilha"
 CSOSN_VALIDOS = {"101", "102", "103", "201", "202", "203", "300", "400", "500", "900"}
 
@@ -88,6 +94,24 @@ def gerar_modelo_csv() -> str:
     escritor.writerow(MODELO_CABECALHO)
     escritor.writerows(MODELO_EXEMPLOS)
     return saida.getvalue()
+
+
+def empacotar(conteudo: bytes) -> str:
+    """Planilha da prévia, compactada para o formulário de confirmação."""
+    return base64.b64encode(gzip.compress(conteudo, 9)).decode("ascii")
+
+
+def desempacotar(texto: str | None) -> Optional[bytes]:
+    """Volta da confirmação; None se o campo veio vazio, adulterado ou grande demais."""
+    try:
+        bruto = base64.b64decode((texto or "").encode("ascii"), validate=True)
+        descompactador = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        conteudo = descompactador.decompress(bruto, MAX_BYTES + 1)
+    except (ValueError, UnicodeEncodeError, zlib.error):
+        return None
+    if not conteudo or len(conteudo) > MAX_BYTES or descompactador.unconsumed_tail:
+        return None
+    return conteudo
 
 
 def ler_planilha(conteudo: bytes) -> list[dict[str, str]]:
@@ -236,6 +260,15 @@ def _nome_normalizado(nome: str) -> str:
     return _chave(nome)
 
 
+def _codigos_conflitam(linha: LinhaPlano, product: Product) -> bool:
+    """A linha traz código de barras (ou código) e o produto já tem outro.
+
+    Se fosse o mesmo, a linha teria sido achada pelo código antes do nome."""
+    if linha.codigo_barras and any(v.barcode for v in product.variants):
+        return True
+    return bool(linha.codigo and any(v.sku for v in product.variants))
+
+
 def _variante_unica(product: Product) -> Optional[ProductVariant]:
     variantes = [v for v in product.variants if v.status == "active"] or list(product.variants)
     return variantes[0] if len(variantes) == 1 else None
@@ -305,11 +338,18 @@ def planejar(
             linha.product, linha.variant = variant.product, variant
         elif nome:
             mesmos = por_nome.get(_nome_normalizado(nome), [])
-            if len(mesmos) > 1:
+            # Pelo nome só vale produto sem código que contradiga a linha:
+            # "Coleira" COL-G não é a "Coleira" COL-P que já está na loja.
+            compativeis = [product for product in mesmos if not _codigos_conflitam(linha, product)]
+            if len(compativeis) > 1:
                 linha.erros.append("há mais de um produto com este nome na loja: informe o código de barras")
+            elif compativeis:
+                linha.product = compativeis[0]
+                linha.variant = _variante_unica(compativeis[0])
             elif mesmos:
-                linha.product = mesmos[0]
-                linha.variant = _variante_unica(mesmos[0])
+                linha.avisos.append(
+                    "já existe produto com este nome, mas com outro código: entra como produto novo"
+                )
 
         if linha.erros:
             linha.acao = "erro"

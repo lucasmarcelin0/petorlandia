@@ -504,33 +504,10 @@ def _salvar_dados_fiscais(product: Product, erros: list[str]) -> None:
     product.unidade = unidade
 
 
-def _linhas_da_previa(texto: str | None) -> list[dict] | None:
-    """Linhas que voltaram da prévia (campo oculto); são revalidadas ao gravar."""
-    import json
-
-    from services.loja_caixa import importacao_produtos as importacao
-
-    try:
-        dados = json.loads(texto or "")
-    except (TypeError, ValueError):
-        return None
-    if not isinstance(dados, list) or not dados or len(dados) > importacao.MAX_LINHAS:
-        return None
-    campos = set(importacao.COLUNAS) | {"linha"}
-    linhas = []
-    for linha in dados:
-        if not isinstance(linha, dict):
-            return None
-        linhas.append({chave: str(valor)[:300] for chave, valor in linha.items() if chave in campos})
-    return linhas
-
-
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/importar-produtos", methods=["GET", "POST"])
 @login_required
 def loja_importar_produtos(casa_id):
     """Catálogo de outro sistema (ex.: Orlasoft) por planilha CSV, com prévia antes de gravar."""
-    import json
-
     from services.loja_caixa import importacao_produtos as importacao
 
     casa = ensure_loja_access(casa_id)
@@ -539,8 +516,13 @@ def loja_importar_produtos(casa_id):
     voltar = redirect(url_for("loja_importar_produtos", casa_id=casa.id))
 
     if request.method == "POST" and request.form.get("acao") == "confirmar":
-        linhas = _linhas_da_previa(request.form.get("linhas_json"))
-        if linhas is None:
+        # A planilha volta compactada da prévia e é lida e conferida de novo.
+        conteudo = importacao.desempacotar(request.form.get("previa"))
+        try:
+            linhas = importacao.ler_planilha(conteudo) if conteudo else None
+        except importacao.PlanilhaInvalida:
+            linhas = None
+        if not linhas:
             flash("Não foi possível ler a prévia. Envie a planilha de novo.", "danger")
             return voltar
         try:
@@ -565,28 +547,36 @@ def loja_importar_produtos(casa_id):
         return redirect(url_for("loja_estoque", casa_id=casa.id))
 
     plano = totais = None
-    linhas_json = ""
+    previa = ""
     if request.method == "POST":
         arquivo = request.files.get("arquivo")
         if not arquivo or not arquivo.filename:
             flash("Escolha o arquivo da planilha (.csv).", "warning")
             return voltar
+        conteudo = arquivo.read(importacao.MAX_BYTES + 1)
         try:
-            linhas = importacao.ler_planilha(arquivo.read(importacao.MAX_BYTES + 1))
+            linhas = importacao.ler_planilha(conteudo)
         except importacao.PlanilhaInvalida as exc:
             flash(str(exc), "danger")
+            return voltar
+        previa = importacao.empacotar(conteudo)
+        if len(previa) > importacao.MAX_PREVIA:
+            flash(
+                f"A planilha tem {len(linhas)} produtos e é grande demais para gravar de uma vez. "
+                "Divida em duas ou mais partes e importe uma de cada vez.",
+                "danger",
+            )
             return voltar
         plano = importacao.planejar(
             casa.id, linhas, atualizar_precos=atualizar_precos, ajustar_estoque=ajustar_estoque
         )
         totais = importacao.resumo(plano)
-        linhas_json = json.dumps(linhas, ensure_ascii=False)
     return render_template(
         "loja_caixa/importar_produtos.html",
         casa=casa,
         plano=plano,
         totais=totais,
-        linhas_json=linhas_json,
+        previa=previa,
         atualizar_precos=atualizar_precos,
         ajustar_estoque=ajustar_estoque,
         colunas=importacao.MODELO_CABECALHO,
