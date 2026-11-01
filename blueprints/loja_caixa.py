@@ -504,6 +504,109 @@ def _salvar_dados_fiscais(product: Product, erros: list[str]) -> None:
     product.unidade = unidade
 
 
+def _linhas_da_previa(texto: str | None) -> list[dict] | None:
+    """Linhas que voltaram da prévia (campo oculto); são revalidadas ao gravar."""
+    import json
+
+    from services.loja_caixa import importacao_produtos as importacao
+
+    try:
+        dados = json.loads(texto or "")
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(dados, list) or not dados or len(dados) > importacao.MAX_LINHAS:
+        return None
+    campos = set(importacao.COLUNAS) | {"linha"}
+    linhas = []
+    for linha in dados:
+        if not isinstance(linha, dict):
+            return None
+        linhas.append({chave: str(valor)[:300] for chave, valor in linha.items() if chave in campos})
+    return linhas
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/importar-produtos", methods=["GET", "POST"])
+@login_required
+def loja_importar_produtos(casa_id):
+    """Catálogo de outro sistema (ex.: Orlasoft) por planilha CSV, com prévia antes de gravar."""
+    import json
+
+    from services.loja_caixa import importacao_produtos as importacao
+
+    casa = ensure_loja_access(casa_id)
+    atualizar_precos = request.form.get("atualizar_precos") == "1"
+    ajustar_estoque = request.form.get("ajustar_estoque") == "1"
+    voltar = redirect(url_for("loja_importar_produtos", casa_id=casa.id))
+
+    if request.method == "POST" and request.form.get("acao") == "confirmar":
+        linhas = _linhas_da_previa(request.form.get("linhas_json"))
+        if linhas is None:
+            flash("Não foi possível ler a prévia. Envie a planilha de novo.", "danger")
+            return voltar
+        try:
+            totais = importacao.aplicar(
+                casa,
+                linhas,
+                atualizar_precos=atualizar_precos,
+                ajustar_estoque=ajustar_estoque,
+                usuario_id=_usuario_id(),
+            )
+        except Exception:  # noqa: BLE001 - nada fica gravado pela metade
+            db.session.rollback()
+            current_app.logger.exception("Falha ao importar produtos na loja %s", casa.id)
+            flash("Não foi possível concluir a importação; nada foi gravado. Tente de novo.", "danger")
+            return voltar
+        partes = [f"{totais['criados']} produto(s) novo(s)", f"{totais['atualizados']} atualizado(s)"]
+        if totais["sem_mudanca"]:
+            partes.append(f"{totais['sem_mudanca']} sem mudança")
+        if totais["com_erro"]:
+            partes.append(f"{totais['com_erro']} linha(s) com erro ficaram de fora")
+        flash("Importação concluída: " + "; ".join(partes) + ".", "success")
+        return redirect(url_for("loja_estoque", casa_id=casa.id))
+
+    plano = totais = None
+    linhas_json = ""
+    if request.method == "POST":
+        arquivo = request.files.get("arquivo")
+        if not arquivo or not arquivo.filename:
+            flash("Escolha o arquivo da planilha (.csv).", "warning")
+            return voltar
+        try:
+            linhas = importacao.ler_planilha(arquivo.read(importacao.MAX_BYTES + 1))
+        except importacao.PlanilhaInvalida as exc:
+            flash(str(exc), "danger")
+            return voltar
+        plano = importacao.planejar(
+            casa.id, linhas, atualizar_precos=atualizar_precos, ajustar_estoque=ajustar_estoque
+        )
+        totais = importacao.resumo(plano)
+        linhas_json = json.dumps(linhas, ensure_ascii=False)
+    return render_template(
+        "loja_caixa/importar_produtos.html",
+        casa=casa,
+        plano=plano,
+        totais=totais,
+        linhas_json=linhas_json,
+        atualizar_precos=atualizar_precos,
+        ajustar_estoque=ajustar_estoque,
+        colunas=importacao.MODELO_CABECALHO,
+    )
+
+
+@bp.route("/casa-de-racao/<int:casa_id>/estoque/importar-produtos/modelo.csv", methods=["GET"])
+@login_required
+def loja_importar_produtos_modelo(casa_id):
+    from services.loja_caixa import importacao_produtos as importacao
+
+    ensure_loja_access(casa_id)
+    # BOM: o Excel só reconhece os acentos do CSV com ele.
+    return current_app.response_class(
+        "﻿" + importacao.gerar_modelo_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="modelo-produtos-petorlandia.csv"'},
+    )
+
+
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/produto/<int:product_id>", methods=["GET", "POST"])
 @login_required
 def loja_estoque_produto(casa_id, product_id):

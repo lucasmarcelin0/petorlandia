@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block page_title %}Importar produtos · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('loja_estoque', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Estoque
+    </a>
+    <h1 class="h4 fw-bold mb-0 me-auto">Importar produtos por planilha</h1>
+  </div>
+
+  {% if not plano %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <p class="mb-2">Traga o catálogo de outro sistema (por exemplo, a Orlasoft) numa planilha <strong>.csv</strong>. A primeira linha tem os títulos das colunas; só <strong>nome</strong> e <strong>preco</strong> são obrigatórios para produto novo.</p>
+      <p class="small text-muted mb-2">Colunas aceitas: {{ colunas|join(', ') }}. Também valem títulos comuns como "Código de barras", "Descrição", "Preço de venda" e "Estoque".</p>
+      <p class="small mb-3"><a href="{{ url_for('loja_importar_produtos_modelo', casa_id=casa.id) }}"><i class="fa-solid fa-download me-1" aria-hidden="true"></i>Baixar a planilha modelo</a></p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label fw-semibold" for="arquivo">Planilha (.csv)</label>
+        <input class="form-control mb-3" style="max-width: 28rem" type="file" id="arquivo" name="arquivo" accept=".csv,text/csv" required>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" id="atualizar_precos" name="atualizar_precos" value="1">
+          <label class="form-check-label" for="atualizar_precos">Atualizar o preço de venda dos produtos que já existem</label>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="ajustar_estoque" name="ajustar_estoque" value="1">
+          <label class="form-check-label" for="ajustar_estoque">Acertar o estoque dos produtos que já existem pelo da planilha</label>
+        </div>
+        <button class="btn btn-primary" type="submit">Ver a prévia</button>
+      </form>
+      <p class="small text-muted mt-3 mb-0">Nada é gravado antes da prévia. Produtos que já existem (achados pelo código de barras, pelo código ou pelo nome) só ganham os dados que faltam. Produtos novos entram fora da loja online, e o estoque inicial fica no histórico como inventário.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <h2 class="h6 fw-bold">Prévia: {{ totais.linhas }} linha(s)</h2>
+      <p class="mb-2">
+        <span class="badge text-bg-success">{{ totais.criar }} novo(s)</span>
+        <span class="badge text-bg-primary">{{ totais.atualizar }} a atualizar</span>
+        <span class="badge text-bg-secondary">{{ totais.nada }} sem mudança</span>
+        <span class="badge text-bg-danger">{{ totais.erro }} com erro</span>
+      </p>
+      <p class="small text-muted mb-3">
+        Preço dos que já existem: <strong>{{ 'atualizar' if atualizar_precos else 'manter' }}</strong>.
+        Estoque dos que já existem: <strong>{{ 'acertar pela planilha' if ajustar_estoque else 'manter' }}</strong>.
+        Linhas com erro ficam de fora; corrija a planilha e importe de novo se precisar.
+      </p>
+      <form method="post" class="d-flex gap-2 flex-wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="acao" value="confirmar">
+        <input type="hidden" name="linhas_json" value="{{ linhas_json }}">
+        {% if atualizar_precos %}<input type="hidden" name="atualizar_precos" value="1">{% endif %}
+        {% if ajustar_estoque %}<input type="hidden" name="ajustar_estoque" value="1">{% endif %}
+        <button class="btn btn-primary" type="submit" {{ '' if totais.criar or totais.atualizar else 'disabled' }}>Gravar {{ totais.criar + totais.atualizar }} produto(s)</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('loja_importar_produtos', casa_id=casa.id) }}">Escolher outra planilha</a>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th scope="col">Linha</th>
+          <th scope="col">Situação</th>
+          <th scope="col">Produto</th>
+          <th scope="col">Código de barras</th>
+          <th scope="col" class="text-end">Preço</th>
+          <th scope="col" class="text-end">Estoque</th>
+          <th scope="col">Detalhes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in plano %}
+        <tr>
+          <td>{{ l.numero }}</td>
+          <td>
+            {% if l.acao == 'criar' %}<span class="badge text-bg-success">novo</span>
+            {% elif l.acao == 'atualizar' %}<span class="badge text-bg-primary">atualizar</span>
+            {% elif l.acao == 'nada' %}<span class="badge text-bg-secondary">sem mudança</span>
+            {% else %}<span class="badge text-bg-danger">erro</span>{% endif %}
+          </td>
+          <td>{{ l.nome or '—' }}{% if l.existente and l.existente != l.nome %}<div class="small text-muted">na loja: {{ l.existente }}</div>{% endif %}</td>
+          <td class="small">{{ l.codigo_barras or '' }}{% if l.codigo %}<div class="text-muted">{{ l.codigo }}</div>{% endif %}</td>
+          <td class="text-end text-nowrap">{{ l.preco|currency_br if l.preco is not none else '' }}</td>
+          <td class="text-end">{{ l.estoque|string|replace('.', ',') if l.estoque is not none else '' }}</td>
+          <td class="small">
+            {% if l.erros %}<div class="text-danger">{{ l.erros|join('; ') }}</div>{% endif %}
+            {% if l.mudancas %}<div>{{ l.mudancas|join('; ') }}</div>{% endif %}
+            {% if l.avisos %}<div class="text-warning-emphasis">{{ l.avisos|join('; ') }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
