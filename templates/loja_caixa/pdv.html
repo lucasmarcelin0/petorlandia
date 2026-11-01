@@ -19,13 +19,22 @@
 {% block main %}
 <div class="container-fluid px-3 px-lg-4 mt-3 mb-5">
   <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    {% set dono_da_loja = pode_gerir_loja(casa) %}
+    {% if dono_da_loja %}
     <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
       <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Painel da loja
     </a>
+    {% endif %}
     <h1 class="h4 fw-bold mb-0 me-auto">Caixa · {{ casa.nome }}</h1>
     <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_caixa_vendas', casa_id=casa.id) }}"><i class="fa-solid fa-list me-1" aria-hidden="true"></i>Vendas</a>
     <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_estoque', casa_id=casa.id) }}"><i class="fa-solid fa-boxes-stacked me-1" aria-hidden="true"></i>Estoque</a>
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_banho_tosa_agenda', casa_id=casa.id) }}"><i class="fa-solid fa-scissors me-1" aria-hidden="true"></i>Banho e tosa</a>
+    {% if dono_da_loja %}
     <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}"><i class="fa-solid fa-receipt me-1" aria-hidden="true"></i>NFC-e</a>
+    {% else %}
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('loja_nfce_lista', casa_id=casa.id) }}"><i class="fa-solid fa-receipt me-1" aria-hidden="true"></i>Notas</a>
+    <a class="btn btn-sm btn-outline-dark" href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"><i class="fa-solid fa-box-open me-1" aria-hidden="true"></i>Produtos</a>
+    {% endif %}
   </div>
 
   {% if not sessao %}
@@ -44,7 +53,7 @@
         </div>
       </div>
       {% if not nfce_ligada %}
-      <p class="small text-muted mt-3">A emissão de NFC-e está desligada: as vendas ficam registradas com comprovante não fiscal. <a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Configurar NFC-e</a>.</p>
+      <p class="small text-muted mt-3">A emissão de NFC-e está desligada: as vendas ficam registradas com comprovante não fiscal. {% if dono_da_loja %}<a href="{{ url_for('loja_fiscal_config', casa_id=casa.id) }}">Configurar NFC-e</a>.{% else %}Quem liga é o dono da loja.{% endif %}</p>
       {% endif %}
     </div>
   </div>

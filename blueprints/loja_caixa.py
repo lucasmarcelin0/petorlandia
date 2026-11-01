@@ -76,6 +76,13 @@ def ensure_loja_access(casa_id: int):
     return app_module._casa_loja_access(casa_id)
 
 
+def ensure_loja_operacao(casa_id: int):
+    """Dono/admin ou operador ativo da loja (dia a dia); os demais recebem 403."""
+    import app as app_module
+
+    return app_module.ensure_loja_operacao(casa_id)
+
+
 def _venda_da_loja(casa, venda_id: int) -> VendaBalcao:
     venda = VendaBalcao.query.filter_by(id=venda_id, casa_de_racao_id=casa.id).first()
     if venda is None:
@@ -96,7 +103,7 @@ def _usuario_id():
 @bp.route("/casa-de-racao/<int:casa_id>/caixa", methods=["GET"])
 @login_required
 def loja_caixa(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = pdv.caixa_aberto(casa.id)
     config = pdv.config_fiscal(casa.id)
     ultimas = []
@@ -124,7 +131,7 @@ def loja_caixa(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/abrir", methods=["POST"])
 @login_required
 def loja_caixa_abrir(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     try:
         pdv.abrir_caixa(casa.id, valor_abertura=request.form.get("valor_abertura") or "0", usuario_id=_usuario_id())
         flash("Caixa aberto. Boas vendas!", "success")
@@ -136,7 +143,7 @@ def loja_caixa_abrir(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/movimento", methods=["POST"])
 @login_required
 def loja_caixa_movimento(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = pdv.caixa_aberto(casa.id)
     if sessao is None:
         flash("Abra o caixa primeiro.", "warning")
@@ -159,7 +166,7 @@ def loja_caixa_movimento(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/fechar", methods=["GET", "POST"])
 @login_required
 def loja_caixa_fechar(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = pdv.caixa_aberto(casa.id)
     if sessao is None:
         flash("Não há caixa aberto.", "info")
@@ -188,7 +195,7 @@ def loja_caixa_fechar(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/sessao/<int:sessao_id>", methods=["GET"])
 @login_required
 def loja_caixa_sessao(casa_id, sessao_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     sessao = CaixaSessao.query.filter_by(id=sessao_id, casa_de_racao_id=casa.id).first()
     if sessao is None:
         abort(404)
@@ -206,14 +213,14 @@ def loja_caixa_sessao(casa_id, sessao_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/produtos", methods=["GET"])
 @login_required
 def loja_caixa_produtos(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     return jsonify({"ok": True, "itens": pdv.buscar_itens(casa.id, request.args.get("q") or "")})
 
 
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/vincular-codigo", methods=["POST"])
 @login_required
 def loja_caixa_vincular_codigo(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     dados = request.get_json(silent=True) or {}
     try:
         variant = pdv.vincular_codigo_barras(
@@ -260,7 +267,7 @@ def _resposta_venda(casa, venda: VendaBalcao, erro_nfce: str | None = None) -> d
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda", methods=["POST"])
 @login_required
 def loja_caixa_venda(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     dados = request.get_json(silent=True) or {}
     chave = dados.get("chave")
     repetida = pdv.venda_por_chave(casa.id, chave)
@@ -315,7 +322,7 @@ def _intervalo_do_dia(texto: str | None):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/vendas", methods=["GET"])
 @login_required
 def loja_caixa_vendas(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     dia, inicio, fim = _intervalo_do_dia(request.args.get("dia"))
     vendas = (
         VendaBalcao.query.filter(
@@ -348,7 +355,7 @@ def loja_caixa_vendas(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>", methods=["GET"])
 @login_required
 def loja_caixa_venda_detalhe(casa_id, venda_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     venda = _venda_da_loja(casa, venda_id)
     return render_template(
         "loja_caixa/venda.html",
@@ -363,7 +370,7 @@ def loja_caixa_venda_detalhe(casa_id, venda_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>/comprovante", methods=["GET"])
 @login_required
 def loja_caixa_comprovante(casa_id, venda_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     venda = _venda_da_loja(casa, venda_id)
     largura = "58" if request.args.get("largura") == "58" else "80"
     return render_template(
@@ -378,7 +385,7 @@ def loja_caixa_comprovante(casa_id, venda_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>/nfce", methods=["POST"])
 @login_required
 def loja_caixa_venda_nfce(casa_id, venda_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     venda = _venda_da_loja(casa, venda_id)
     try:
         documento = pdv.emitir_nfce_venda(venda, cpf=request.form.get("cpf"), usuario_id=_usuario_id())
@@ -394,7 +401,7 @@ def loja_caixa_venda_nfce(casa_id, venda_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>/contingencia", methods=["POST"])
 @login_required
 def loja_caixa_venda_contingencia(casa_id, venda_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     venda = _venda_da_loja(casa, venda_id)
     try:
         pdv.emitir_contingencia_venda(venda, usuario_id=_usuario_id())
@@ -407,7 +414,7 @@ def loja_caixa_venda_contingencia(casa_id, venda_id):
 @bp.route("/casa-de-racao/<int:casa_id>/caixa/venda/<int:venda_id>/cancelar", methods=["POST"])
 @login_required
 def loja_caixa_venda_cancelar(casa_id, venda_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     venda = _venda_da_loja(casa, venda_id)
     try:
         pdv.cancelar_venda(venda, motivo=request.form.get("motivo") or "", usuario_id=_usuario_id())
@@ -444,7 +451,7 @@ def _linhas_estoque(produtos):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque", methods=["GET"])
 @login_required
 def loja_estoque(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     termo = " ".join((request.args.get("q") or "").split())[:80]
     filtro = request.args.get("filtro") or ""
     query = Product.query.filter(Product.casa_de_racao_id == casa.id)
@@ -600,7 +607,7 @@ def loja_importar_produtos_modelo(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/produto/<int:product_id>", methods=["GET", "POST"])
 @login_required
 def loja_estoque_produto(casa_id, product_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first()
     if product is None:
         abort(404)
@@ -699,7 +706,7 @@ def _entrada_da_loja(casa, entrada_id: int):
 def loja_entradas(casa_id):
     from models import LojaDfeControle, LojaDfeDocumento, LojaEntradaNota
 
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     entradas = (
         LojaEntradaNota.query.filter_by(casa_de_racao_id=casa.id)
         .order_by(LojaEntradaNota.id.desc())
@@ -729,7 +736,7 @@ def loja_entradas(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/sefaz/buscar", methods=["POST"])
 @login_required
 def loja_dfe_buscar(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     try:
         resultado = dfe_service.buscar_notas(casa)
         if resultado["novas"]:
@@ -762,7 +769,7 @@ def loja_dfe_automatico(casa_id):
 def loja_dfe_baixar(casa_id, doc_id):
     from models import LojaDfeDocumento
 
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     doc = LojaDfeDocumento.query.filter_by(id=doc_id, casa_de_racao_id=casa.id).first()
     if doc is None:
         abort(404)
@@ -781,7 +788,7 @@ def loja_dfe_baixar(casa_id, doc_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/importar", methods=["POST"])
 @login_required
 def loja_entradas_importar(casa_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     arquivos = []
     for arquivo in request.files.getlist("arquivos"):
         if not arquivo or not arquivo.filename:
@@ -809,7 +816,7 @@ def loja_entradas_importar(casa_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>", methods=["GET", "POST"])
 @login_required
 def loja_entrada(casa_id, entrada_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     entrada = _entrada_da_loja(casa, entrada_id)
     if request.method == "POST":
         try:
@@ -837,7 +844,7 @@ def loja_entrada(casa_id, entrada_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/estornar", methods=["POST"])
 @login_required
 def loja_entrada_estornar(casa_id, entrada_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     entrada = _entrada_da_loja(casa, entrada_id)
     try:
         entrada_service.estornar_entrada(entrada, usuario_id=_usuario_id())
@@ -851,7 +858,7 @@ def loja_entrada_estornar(casa_id, entrada_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/excluir", methods=["POST"])
 @login_required
 def loja_entrada_excluir(casa_id, entrada_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     entrada = _entrada_da_loja(casa, entrada_id)
     try:
         entrada_service.excluir_rascunho(entrada)
@@ -865,7 +872,7 @@ def loja_entrada_excluir(casa_id, entrada_id):
 @bp.route("/casa-de-racao/<int:casa_id>/estoque/entradas/<int:entrada_id>/xml", methods=["GET"])
 @login_required
 def loja_entrada_xml(casa_id, entrada_id):
-    casa = ensure_loja_access(casa_id)
+    casa = ensure_loja_operacao(casa_id)
     entrada = _entrada_da_loja(casa, entrada_id)
     if not entrada.xml:
         abort(404)

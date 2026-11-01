@@ -9,7 +9,7 @@
     </a>
     <h1 class="h4 fw-bold mb-0 me-auto">Estoque e dados fiscais</h1>
     <a class="btn btn-sm btn-primary" href="{{ url_for('loja_entradas', casa_id=casa.id) }}"><i class="fa-solid fa-file-import me-1" aria-hidden="true"></i>Entrada por XML da nota</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('loja_importar_produtos', casa_id=casa.id) }}"><i class="fa-solid fa-table me-1" aria-hidden="true"></i>Importar planilha</a>
+    {% if pode_gerir_loja(casa) %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('loja_importar_produtos', casa_id=casa.id) }}"><i class="fa-solid fa-table me-1" aria-hidden="true"></i>Importar planilha</a>{% endif %}
     <a class="btn btn-sm btn-outline-primary" href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}">Cadastrar produto</a>
   </div>
 

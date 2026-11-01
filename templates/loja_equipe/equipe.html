@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block page_title %}Equipe · {{ casa.nome }} · PetOrlândia{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block main %}
+<div class="container mt-4 mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i> Painel da loja
+    </a>
+    <h1 class="h4 fw-bold mb-0 me-auto">Equipe da loja</h1>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h2 class="h6 fw-bold">Liberar um operador</h2>
+          <p class="small text-muted">Para quem cuida da loja no seu lugar. Quem ainda não tem conta recebe por e-mail o link para criar a senha.</p>
+          <form method="post" action="{{ url_for('loja_equipe_adicionar', casa_id=casa.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label small" for="nome">Nome</label>
+            <input class="form-control mb-2" id="nome" name="nome" maxlength="120" autocomplete="off">
+            <label class="form-label small" for="email">E-mail</label>
+            <input class="form-control mb-2" id="email" name="email" type="email" required autocomplete="off">
+            <label class="form-label small" for="celular">Celular com DDD</label>
+            <input class="form-control mb-3" id="celular" name="celular" inputmode="tel" placeholder="(16) 99123-4567" autocomplete="off">
+            <button class="btn btn-primary w-100" type="submit">Liberar acesso</button>
+          </form>
+          <p class="small text-muted mt-2 mb-0">Se a pessoa já tem conta no PetOrlândia, basta o e-mail dela.</p>
+        </div>
+      </div>
+      <div class="card border-0 bg-light">
+        <div class="card-body small">
+          <h2 class="h6 fw-bold">O que o operador pode fazer</h2>
+          <ul class="mb-2 ps-3">
+            <li>Abrir e fechar o caixa, vender, emitir a NFC-e e cancelar venda</li>
+            <li>Estoque, entradas pelo XML da nota e cadastro de produtos</li>
+            <li>Agenda de banho e tosa, tutores e animais</li>
+            <li>Vendas online e entregas</li>
+          </ul>
+          <h2 class="h6 fw-bold">Só você faz</h2>
+          <ul class="mb-0 ps-3">
+            <li>Dados da loja, horários e Mercado Pago</li>
+            <li>Configuração fiscal (certificado, CSC), XMLs para o contador e inutilização</li>
+            <li>Tabela de banho e tosa, importação por planilha e a equipe</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <h2 class="h6 fw-bold">Operadores</h2>
+      {% if membros %}
+      <div class="list-group" data-destructive-confirmation>
+        {% for m in membros %}
+        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+          <div class="me-auto">
+            <div class="fw-semibold">{{ m.user.name if m.user else '—' }}
+              {% if m.ativo %}<span class="badge text-bg-success ms-1">acesso ligado</span>{% else %}<span class="badge text-bg-secondary ms-1">acesso desligado</span>{% endif %}
+            </div>
+            <div class="small text-muted">{{ m.user.email if m.user else '' }}{% if m.user and m.user.phone %} · {{ m.user.phone }}{% endif %}</div>
+            <div class="small text-muted">Liberado em {{ m.created_at|data_br(False) }}{% if m.desativado_em %} · desligado em {{ m.desativado_em|data_br(False) }}{% endif %}</div>
+          </div>
+          <form method="post" action="{{ url_for('loja_equipe_acesso', casa_id=casa.id, membro_id=m.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if m.ativo %}
+            <input type="hidden" name="ativo" value="0">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Desligar acesso</button>
+            {% else %}
+            <input type="hidden" name="ativo" value="1">
+            <button class="btn btn-sm btn-outline-success" type="submit">Religar acesso</button>
+            {% endif %}
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="small text-muted mt-2">Desligar o acesso não apaga nada: vendas, caixa e ajustes continuam com o nome de quem fez.</p>
+      {% else %}
+      <p class="text-muted">Ninguém além de você tem acesso à loja.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

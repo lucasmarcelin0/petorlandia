@@ -9885,6 +9885,43 @@ def _casa_loja_access(casa_id):
     return casa
 
 
+def _pode_gerir_loja(casa) -> bool:
+    """Dono, quem cadastrou a loja ou admin: configuração, fiscal, dinheiro e equipe."""
+    if casa is None or not getattr(current_user, 'is_authenticated', False):
+        return False
+    return bool(_is_admin() or current_user.id in (casa.owner_id, casa.registered_by_id))
+
+
+def ensure_loja_operacao(casa_id):
+    """Dono/admin ou operador ativo da loja (caixa, estoque, banho e tosa, clientes).
+
+    O que mexe na configuração da loja, no fiscal, no dinheiro ou na equipe
+    continua em ``_casa_loja_access``, só para o dono. Os demais recebem 403.
+    """
+    from models import LojaMembro
+
+    casa = CasaDeRacao.query.get_or_404(casa_id)
+    if _pode_gerir_loja(casa):
+        return casa
+    operador = LojaMembro.query.filter_by(
+        casa_de_racao_id=casa.id, user_id=current_user.id, ativo=True
+    ).first()
+    if operador is None:
+        abort(403)
+    return casa
+
+
+def _painel_da_loja_url(casa) -> str:
+    """Início da loja para quem está logado: o painel (dono) ou o caixa (operador)."""
+    if _pode_gerir_loja(casa):
+        return url_for('casa_de_racao_dashboard', casa_id=casa.id)
+    return url_for('loja_caixa', casa_id=casa.id)
+
+
+app.jinja_env.globals['pode_gerir_loja'] = _pode_gerir_loja
+app.jinja_env.globals['painel_da_loja_url'] = _painel_da_loja_url
+
+
 
 
 def _casa_de_racao_product_onboarding_target(casa):
