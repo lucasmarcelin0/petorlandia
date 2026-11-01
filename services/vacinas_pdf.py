@@ -24,7 +24,7 @@ def gerar_pdf_carteira(animal, clinica, veterinario):
     tutor = animal.owner
     story.append(fichas([
         ('Clínica e profissional', [('Clínica', clinica.nome), ('Veterinário', getattr(veterinario, 'name', None)), ('CRMV', _valor_crmv(veterinario))]),
-        ('Paciente', [(label, getattr(animal, attr, None)) for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]] + [('Nascimento', data(animal.birth_date) if animal.birth_date else None)]),
+        ('Paciente', [(label, getattr(animal, attr, None)) for label, attr in [('Nome', 'name'), ('Espécie', 'species'), ('Raça', 'breed'), ('Sexo', 'sex'), ('Microchip', 'microchip_number')]] + [('Nascimento', data(animal.date_of_birth) if animal.date_of_birth else None)]),
         ('Responsável', [(label, getattr(tutor, attr, None)) for label, attr in [('Nome', 'name'), ('CPF', 'cpf'), ('Contato', 'phone'), ('Endereço', 'address')]]),
     ]))
     story.append(Paragraph('Vacinas aplicadas', secao))

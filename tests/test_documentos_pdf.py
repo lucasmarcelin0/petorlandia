@@ -33,7 +33,7 @@ def conteudo(pdf):
 def documentos():
     tutor = Obj(name='Tutor Silva', cpf='123', phone='555', address='Rua Norte')
     vacina = Obj(nome='Antirrabica', aplicada_em=date(2026, 1, 1), tipo='Campanha', lote='LOTE123', veterinario='Dra Ana', proxima_dose=date(2027, 1, 1))
-    animal = Obj(owner=tutor, name='Rex', species='cao', breed='SRD', sex='M', peso=10, microchip_number='CHIP123', birth_date=date(2020, 1, 1), vacinas_ordenadas=[vacina])
+    animal = Obj(owner=tutor, name='Rex', species='cao', breed='SRD', sex='M', peso=10, microchip_number='CHIP123', date_of_birth=date(2020, 1, 1), vacinas_ordenadas=[vacina])
     clinica = Obj(nome='Clinica Exemplo', endereco='Rua Sul', telefone='555', email=None, cnpj=None)
     exame = Obj(nome='Hemograma', status='pendente', performed_at=None, justificativa='Avaliacao clinica', resultado=None, laudo_filename=None, laudo_url=None)
     bloco = Obj(data_criacao=None, exames=[exame], observacoes_gerais='Jejum')
@@ -65,7 +65,7 @@ def test_identidade_e_dados_dos_documentos(documentos, tem_logo, monkeypatch):
 
 def test_fichas_longas_quebram_de_pagina_sem_perder_conteudo():
     tutor = Obj(name='Tutor', cpf=None, phone=None, address=('Endereco longo ' * 700) + 'FIMENDERECO')
-    animal = Obj(owner=tutor, name='Rex', species='cao', breed='SRD', sex='M', microchip_number=None, birth_date=None, vacinas_ordenadas=[])
+    animal = Obj(owner=tutor, name='Rex', species='cao', breed='SRD', sex='M', microchip_number=None, date_of_birth=None, vacinas_ordenadas=[])
     clinica = Obj(nome='Clinica', endereco=None, telefone=None, email=None, cnpj=None)
     texto = conteudo(gerar_pdf_carteira(animal, clinica, None))
     assert b'FIMENDERECO' in texto
@@ -77,7 +77,7 @@ def test_carrega_logo_real_da_clinica(tmp_path):
     pasta.mkdir(parents=True)
     Image.new('RGBA', (100, 50), (255, 0, 0, 128)).save(pasta / 'logo.png')
     clinica = Obj(nome='Clinica', endereco=None, telefone=None, email=None, cnpj=None, logotipo='logo.png')
-    animal = Obj(owner=None, name='Rex', species='cao', breed='SRD', sex='M', microchip_number=None, birth_date=None, vacinas_ordenadas=[])
+    animal = Obj(owner=None, name='Rex', species='cao', breed='SRD', sex='M', microchip_number=None, date_of_birth=None, vacinas_ordenadas=[])
     app = Flask(__name__, static_folder=str(tmp_path))
     with app.app_context():
         texto = conteudo(gerar_pdf_carteira(animal, clinica, None))
