@@ -8,7 +8,7 @@ da coluna mais a fração registrada. Assim nada da loja online muda.
 from __future__ import annotations
 
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
-from typing import Optional
+from typing import Iterable, Optional
 
 from extensions import db
 from models import EstoqueMovimento, Product, ProductVariant
@@ -79,6 +79,27 @@ def saldo(product: Product, variant: Optional[ProductVariant] = None) -> Decimal
     anterior = Decimal(ultimo.saldo_apos)
     fracao = anterior - anterior.to_integral_value(rounding=ROUND_FLOOR)
     return base + fracao
+
+
+def travar_saldos(product_ids: Iterable[int], variant_ids: Iterable[int] = ()) -> None:
+    """Bloqueia os saldos (SELECT ... FOR UPDATE) até o commit e relê os valores.
+
+    ``movimentar`` calcula o saldo novo em Python; sem o bloqueio, duas
+    operações simultâneas no mesmo produto sobrescreveriam uma à outra.
+    Sempre na mesma ordem (por id), como a venda do caixa, para não travar.
+    """
+    ids = sorted({int(i) for i in product_ids if i})
+    if ids:
+        Product.query.filter(Product.id.in_(ids)).order_by(Product.id).with_for_update().populate_existing().all()
+    ids_variantes = sorted({int(i) for i in variant_ids if i})
+    if ids_variantes:
+        (
+            ProductVariant.query.filter(ProductVariant.id.in_(ids_variantes))
+            .order_by(ProductVariant.id)
+            .with_for_update()
+            .populate_existing()
+            .all()
+        )
 
 
 def movimentar(

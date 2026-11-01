@@ -723,7 +723,9 @@ def loja_entrada(casa_id, entrada_id):
             avisos = entrada_service.salvar_conferencia(entrada, request.form.to_dict())
             for aviso in avisos:
                 flash(aviso, "warning")
-            if request.form.get("acao_tela") == "lancar":
+            if request.form.get("acao_tela") == "lancar" and avisos:
+                flash("A nota não foi lançada: corrija os itens acima e lance de novo.", "warning")
+            elif request.form.get("acao_tela") == "lancar":
                 entrada_service.lancar_entrada(entrada, usuario_id=_usuario_id())
                 flash("Nota lançada: estoque e custos atualizados.", "success")
             else:

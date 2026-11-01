@@ -217,6 +217,37 @@ def test_conferencia_ignora_vincula_e_valida(loja):
     assert Product.query.filter_by(name="BRINQUEDO MORDEDOR").count() == 0
 
 
+@pytest.mark.parametrize("fator", ["0", "-2", "abc"])
+def test_fator_invalido_bloqueia_o_lancamento(loja, client, monkeypatch, fator):
+    monkeypatch.setattr(login_utils, "_get_user", lambda: loja["owner"])
+    casa_id = loja["casa"].id
+    entrada = entrada_service.importar_xml(loja["casa"], _nota())
+    sache = _itens(entrada)["SACH12"]
+    resposta = client.post(
+        f"/casa-de-racao/{casa_id}/estoque/entradas/{entrada.id}",
+        data={"acao_tela": "lancar", f"item_{sache.id}_acao": "criar", f"item_{sache.id}_fator": fator},
+        follow_redirects=True,
+    )
+    pagina = resposta.get_data(as_text=True)
+    assert "fator inválido" in pagina and "não foi lançada" in pagina
+    db.session.refresh(entrada)
+    assert entrada.status == "rascunho" and sache.fator == Decimal("12")  # o fator anterior fica
+    assert EstoqueMovimento.query.count() == 0
+
+
+def test_lancamento_rele_a_nota_antes_de_mexer_no_estoque(loja):
+    """Dois cliques (ou duas abas) lançando a mesma nota: só o primeiro vale."""
+    entrada = entrada_service.importar_xml(loja["casa"], _nota())
+    assert entrada.status == "rascunho"  # cópia em memória desta requisição
+    tabela = LojaEntradaNota.__table__
+    # Outra requisição lançou a nota nesse meio-tempo.
+    db.session.execute(tabela.update().where(tabela.c.id == entrada.id).values(status="lancada"))
+    with pytest.raises(EntradaError, match="já foi lançada"):
+        entrada_service.lancar_entrada(entrada)
+    assert EstoqueMovimento.query.count() == 0
+    assert loja["racao"].variants[0].stock == 3
+
+
 def test_vincular_exige_produto_da_propria_loja(loja):
     casa = loja["casa"]
     outra = CasaDeRacao(nome="Outra", owner_id=loja["outro"].id, status="ativa")

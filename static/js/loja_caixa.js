@@ -33,6 +33,7 @@
 
   var estado = { itens: [], pagamentos: [], desconto: '', chave: null };
   var encontrados = [];
+  var termoEncontrados = null; // termo que gerou a lista; Enter só escolhe nela se o termo for o mesmo
   var destaque = -1;
   var codigoPendente = null;
   var temporizador = null;
@@ -293,11 +294,13 @@
     resultados.classList.add('d-none');
     resultados.innerHTML = '';
     encontrados = [];
+    termoEncontrados = null;
     destaque = -1;
   }
 
-  function mostrarResultados(itens) {
+  function mostrarResultados(itens, termo) {
     encontrados = itens;
+    termoEncontrados = termo;
     destaque = itens.length ? 0 : -1;
     resultados.innerHTML = '';
     if (!itens.length) {
@@ -355,7 +358,9 @@
   function enviarBusca() {
     var lido = interpretar(busca.value.trim());
     if (!lido.termo) return;
-    if (!pareceCodigo(lido.termo) && destaque >= 0 && encontrados[destaque]) {
+    // A lista na tela pode ser de um termo anterior (o Enter cancela a busca
+    // que estava aguardando): nesse caso busca de novo em vez de escolher nela.
+    if (!pareceCodigo(lido.termo) && destaque >= 0 && encontrados[destaque] && termoEncontrados === lido.termo) {
       adicionar(encontrados[destaque], lido.quantidade);
       return;
     }
@@ -380,7 +385,7 @@
         adicionar(itens[0], lido.quantidade);
         return;
       }
-      mostrarResultados(itens);
+      mostrarResultados(itens, lido.termo);
     }).catch(function () {
       mostrarErro('Não foi possível buscar os produtos. Confira a internet.');
     });
@@ -409,7 +414,7 @@
       return;
     }
     temporizador = setTimeout(function () {
-      pesquisar(lido.termo).then(function (itens) { if (itens !== null) mostrarResultados(itens); }).catch(function () {});
+      pesquisar(lido.termo).then(function (itens) { if (itens !== null) mostrarResultados(itens, lido.termo); }).catch(function () {});
     }, 250);
   });
   resultados.addEventListener('click', function (evento) {

@@ -370,6 +370,86 @@ def test_cancelar_venda_cancela_nfce_e_devolve_estoque(loja, fiscal, sefaz):
         pdv.cancelar_venda(venda, motivo="Cliente desistiu da compra no balcão", usuario_id=None)
 
 
+def test_reenvio_de_rejeitada_usa_o_ncm_corrigido_no_cadastro(loja, fiscal, sefaz):
+    sessao = _abrir(loja)
+    racao = loja["racao"]
+    racao.ncm = "23099090"  # preenchido, mas errado
+    db.session.commit()
+    venda = pdv.registrar_venda(
+        loja["casa"].id, sessao,
+        itens=[_item(racao)],
+        pagamentos=[{"t_pag": "01", "valor": "150"}],
+        emitir_nfce=True,
+    )
+    sefaz.modo = "rejeita"
+    assert pdv.emitir_nfce_venda(venda).status == "rejeitada"
+
+    racao.ncm = "2309.10.00"  # o operador corrige o cadastro e reenvia
+    db.session.commit()
+    sefaz.modo = "autoriza"
+    documento = pdv.emitir_nfce_venda(db.session.get(VendaBalcao, venda.id))
+    assert documento.status == "autorizada" and NfceDocumento.query.count() == 1
+    nfe = etree.fromstring(sefaz.lotes[-1].encode())
+    assert nfe.find(f".//{{{NFE}}}det/{{{NFE}}}prod/{{{NFE}}}NCM").text == "23091000"
+    item = db.session.get(VendaBalcao, venda.id).itens[0]
+    assert item.ncm == "23091000" and item.preco_unitario == Decimal("150")  # preço da venda mantido
+
+
+def test_nfce_gravada_sem_vinculo_nao_vira_segunda_nota(loja, fiscal, sefaz, monkeypatch):
+    """O processo caiu entre gravar a NFC-e e ligá-la à venda (ex.: tempo do servidor esgotado)."""
+    sessao = _abrir(loja)
+    venda = pdv.registrar_venda(
+        loja["casa"].id, sessao,
+        itens=[_item(loja["racao"])],
+        pagamentos=[{"t_pag": "01", "valor": "150"}],
+        emitir_nfce=True,
+    )
+    transmitir = nfce_service._transmitir
+
+    def _queda(*args, **kwargs):
+        raise RuntimeError("processo reiniciado durante o envio")
+
+    monkeypatch.setattr(nfce_service, "_transmitir", _queda)
+    with pytest.raises(CaixaError):
+        pdv.emitir_nfce_venda(venda)
+    monkeypatch.setattr(nfce_service, "_transmitir", transmitir)
+    orfa = NfceDocumento.query.one()
+    assert orfa.status == "pendente" and orfa.origem_id == venda.id
+    assert db.session.get(VendaBalcao, venda.id).nfce_documento_id is None
+
+    sefaz.consulta = "100"  # a SEFAZ tinha recebido e autorizado
+    documento = pdv.emitir_nfce_venda(db.session.get(VendaBalcao, venda.id))
+    assert documento.id == orfa.id and documento.status == "autorizada"
+    assert NfceDocumento.query.count() == 1 and sefaz.lotes == [], "nenhum número novo"
+    assert db.session.get(VendaBalcao, venda.id).nfce_documento_id == orfa.id
+
+
+def test_cancelar_venda_enxerga_a_nfce_sem_vinculo(loja, fiscal, sefaz):
+    sessao = _abrir(loja)
+    racao = loja["racao"]
+    venda = pdv.registrar_venda(
+        loja["casa"].id, sessao,
+        itens=[_item(racao, "2")],
+        pagamentos=[{"t_pag": "01", "valor": "300"}],
+        emitir_nfce=True,
+    )
+    orfa = nfce_service.emitir_nfce(
+        fiscal,
+        itens=pdv.itens_nfce(venda, fiscal),
+        pagamentos=pdv.pagamentos_nfce(venda, fiscal),
+        origem="venda_balcao",
+        origem_id=venda.id,
+    )
+    assert orfa.status == "autorizada" and db.session.get(VendaBalcao, venda.id).nfce_documento_id is None
+
+    venda = pdv.cancelar_venda(
+        db.session.get(VendaBalcao, venda.id), motivo="Cliente desistiu da compra no balcão", usuario_id=None
+    )
+    assert venda.status == "cancelada"
+    assert db.session.get(NfceDocumento, orfa.id).status == "cancelada", "a nota não fica valendo sozinha"
+    assert _variante(racao).stock == 10
+
+
 def test_nao_cancela_venda_com_nfce_sem_resposta(loja, fiscal, sefaz):
     sessao = _abrir(loja)
     venda = pdv.registrar_venda(
