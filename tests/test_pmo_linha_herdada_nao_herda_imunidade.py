@@ -49,21 +49,22 @@ def _linha(*, tutor, phone, address, nomes):
 
 
 def test_outra_casa_na_linha_comeca_pendente(app, monkeypatch):
-    """Casamento só pela linha (sem gid): foi assim que o erro aconteceu."""
+    """Uma família diferente nunca herda a visita da linha."""
     _sem_efeitos_externos(monkeypatch)
     visita_id = _visita_imunizada(
-        "", tutor="Carla Fernanda Silva", phone="5516990000001",
+        "9", tutor="Carla Fernanda Silva", phone="5516990000001",
         address="Rua 3, 10", nomes=("Palhaco", "Pandora"),
     )
 
     persist_vacina_pmo_rows(
         [_linha(tutor="Agatha Crissy Luciano", phone="5516991019539",
                 address="Avenida J, 648", nomes=("Meg", "Amora"))],
-        spreadsheet_id="plan-1", sheet_gid="", sheet_title="Inscrição a agendar",
+        spreadsheet_id="plan-1", sheet_gid="9", sheet_title="Inscrição a agendar",
     )
 
-    visita = db.session.get(PmoVaccinationVisit, visita_id)
-    assert visita.tutor_name == "Agatha Crissy Luciano"
+    visita_antiga = db.session.get(PmoVaccinationVisit, visita_id)
+    assert visita_antiga.source_row < 0
+    visita = PmoVaccinationVisit.query.filter_by(tutor_name="Agatha Crissy Luciano", sheet_gid="9").one()
     for animal in visita.animals:
         assert animal.status == "pendente", animal.name
         assert animal.immune_since is None, animal.name
@@ -72,14 +73,14 @@ def test_outra_casa_na_linha_comeca_pendente(app, monkeypatch):
 def test_animal_trocado_na_mesma_casa_perde_a_data_do_anterior(app, monkeypatch):
     _sem_efeitos_externos(monkeypatch)
     visita_id = _visita_imunizada(
-        "", tutor="Carla Fernanda Silva", phone="5516990000001",
+        "9", tutor="Carla Fernanda Silva", phone="5516990000001",
         address="Rua 3, 10", nomes=("Palhaco", "Pandora"),
     )
 
     persist_vacina_pmo_rows(
         [_linha(tutor="Carla Fernanda Silva", phone="5516990000001",
                 address="Rua 3, 10", nomes=("Palhaco", "Rex"))],
-        spreadsheet_id="plan-1", sheet_gid="", sheet_title="Inscrição a agendar",
+        spreadsheet_id="plan-1", sheet_gid="9", sheet_title="Inscrição a agendar",
     )
 
     visita = db.session.get(PmoVaccinationVisit, visita_id)

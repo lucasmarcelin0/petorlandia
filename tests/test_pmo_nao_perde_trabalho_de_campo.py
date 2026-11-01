@@ -76,8 +76,8 @@ def test_visita_com_animal_atendido_sobrevive_a_poda(app, status):
     assert sobrevivente.source_row < 0, "sai da lista do dia, mas o registro fica"
 
 
-def test_visita_sem_nada_de_campo_continua_sendo_podada(app):
-    """A limpeza precisa continuar funcionando para linha realmente removida."""
+def test_visita_pendente_ausente_e_preservada(app):
+    """Uma linha pode estar vazia apenas durante a movimentação."""
     vazia = _visita(19, animais=(("Luque", "cao", "pendente"),))
     db.session.commit()
     vazia_id = vazia.id
@@ -88,7 +88,7 @@ def test_visita_sem_nada_de_campo_continua_sendo_podada(app):
         prune_orphans=True,
     )
 
-    assert db.session.get(PmoVaccinationVisit, vazia_id) is None
+    assert db.session.get(PmoVaccinationVisit, vazia_id).source_row < 0
 
 
 def test_a_trava_reconhece_os_dois_desfechos_de_campo(app):

@@ -85,6 +85,18 @@ class _FakeSheetsService:
         return {}
 
 
+@pytest.fixture(autouse=True)
+def _confirma_identidade_nos_testes_de_gravacao(monkeypatch):
+    # Este fake antigo só registra escritas e não representa as linhas lidas.
+    # A conferência real é coberta com leituras explícitas no teste de espelho.
+    original = vacina_pmo_service._pmo_sheet_row_matches_visit
+    def check(service, visit, title):
+        if isinstance(service, _FakeSheetsService) and not service.sheet_values:
+            return True
+        return original(service, visit, title)
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_sheet_row_matches_visit", check)
+
+
 class _FakeSheetsExecute:
     def __init__(self, payload):
         self.payload = payload
