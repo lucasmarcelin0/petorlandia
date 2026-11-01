@@ -79,11 +79,18 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
              action('Entregas', 'casa_de_racao_entregas', 'fa-truck', casa_id=store.id))
     if loja_operada and not (store and store.id == loja_operada.id):
         # Operador da loja (equipe): o dia a dia, sem o painel do dono.
-        area('store_operator', loja_operada.nome, 'fa-cash-register',
-             action('Caixa', 'loja_caixa', 'fa-cash-register', casa_id=loja_operada.id),
-             action('Banho e tosa', 'loja_banho_tosa_agenda', 'fa-scissors', casa_id=loja_operada.id),
-             action('Estoque', 'loja_estoque', 'fa-boxes-stacked', casa_id=loja_operada.id),
-             action('Produtos', 'casa_de_racao_produtos', 'fa-box-open', casa_id=loja_operada.id))
+        acoes_loja = [
+            action('Caixa', 'loja_caixa', 'fa-cash-register', casa_id=loja_operada.id),
+            action('Vendas online', 'casa_de_racao_vendas', 'fa-chart-line', casa_id=loja_operada.id),
+        ]
+        if getattr(loja_operada, 'entregas_proprias', False):
+            acoes_loja.append(action('Entregas', 'casa_de_racao_entregas', 'fa-truck', casa_id=loja_operada.id))
+        acoes_loja += [
+            action('Banho e tosa', 'loja_banho_tosa_agenda', 'fa-scissors', casa_id=loja_operada.id),
+            action('Estoque', 'loja_estoque', 'fa-boxes-stacked', casa_id=loja_operada.id),
+            action('Produtos', 'casa_de_racao_produtos', 'fa-box-open', casa_id=loja_operada.id),
+        ]
+        area('store_operator', loja_operada.nome, 'fa-cash-register', *acoes_loja)
     if worker == 'delivery' or admin:
         area('delivery', 'Área de Entregas', 'fa-truck',
              action('Solicitações', 'list_delivery_requests', 'fa-truck'))
