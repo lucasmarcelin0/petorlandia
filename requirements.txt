@@ -14,6 +14,10 @@ Flask-Migrate==4.1.0
 Flask-Session==0.8.0
 Flask-Limiter==3.12.0
 Flask-SocketIO==5.5.1
+# Versão em produção. A 5.18.0 mantém conectado quem é recusado no evento
+# connect (disconnect() no handler): a terceira pessoa da videochamada ficava
+# no namespace. Atualize só junto com a adaptação de app.py e test_call_room.
+python-socketio==5.17.1
 Flask-SQLAlchemy==3.1.1
 Flask-WTF==1.2.2
 WTForms==3.1.2
