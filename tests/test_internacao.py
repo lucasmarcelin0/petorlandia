@@ -360,6 +360,26 @@ def test_fim_da_prescricao_bloqueia_execucao_atual_mas_preserva_registro_histori
     assert _utc(record.registrada_em) > _utc(prescription.fim_em)
 
 
+def test_dose_pendente_de_prescricao_encerrada_pode_ser_marcada_nao_administrada(ward, monkeypatch):
+    _, prescription = _prescribe(ward)
+    dose = _doses(prescription)[0]
+    depois_do_fim = _utc(prescription.fim_em) + timedelta(days=9)
+    monkeypatch.setattr(hospital, "utcnow", lambda: depois_do_fim)
+    with pytest.raises(hospital.InternacaoConflict, match="terminou em"):
+        hospital.registrar_administracao(dose, ward.worker, {"motivo": "Lançamento tardio"})
+    record = hospital.omitir_ocorrencia(dose, ward.worker, {
+        "motivo": "Dose não aplicada; prescrição já encerrada",
+        "executada_em": depois_do_fim - timedelta(hours=2),
+    })
+    db.session.commit()
+    assert record.resultado == "omitida"
+    assert dose.status == "omitida"
+    outra = _doses(prescription)[1]
+    sem_horario = hospital.omitir_ocorrencia(outra, ward.worker, {"motivo": "Não aplicada"})
+    db.session.commit()
+    assert _utc(sem_horario.executada_em) == depois_do_fim
+
+
 def test_prn_limita_intervalo_e_quantidade_sem_criar_doses(ward, monkeypatch):
     _, prescription = _prescribe(ward, modo="prn", indicacao_prn="Avaliação clínica",
         intervalo_minimo_horas=6, max_doses_24h=2)
