@@ -965,6 +965,40 @@ a.tutor-contato:focus-visible {
   .tutor-modal .modal-content {
     border-radius: 0;
   }
+
+  /* Celular: o modal ocupa a tela inteira. A regra global de clinic.css
+   * (.modal-dialog-scrollable .modal-body { max-height: 70vh }) não vale
+   * aqui: no iPhone, "vh" mede a tela toda, inclusive o que fica atrás das
+   * barras do Safari, e o rodapé com "Salvar" era empurrado para fora da
+   * área visível. O <form> envolve cabeçalho, corpo e rodapé: vira uma
+   * coluna do tamanho do modal, e o corpo ocupa o que sobra e rola sozinho. */
+  .tutor-modal .modal-dialog-scrollable .modal-content > form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .tutor-modal .modal-dialog-scrollable .modal-header,
+  .tutor-modal .modal-dialog-scrollable .modal-footer {
+    flex-shrink: 0;
+  }
+
+  .tutor-modal .modal-dialog-scrollable .modal-body {
+    flex: 1 1 auto;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* Altura da área realmente visível (tutor_detail.js atualiza
+   * --tutor-area-visivel com window.visualViewport). Sem o script, 100dvh. */
+  @supports (height: 100dvh) {
+    .tutor-modal .modal-dialog.modal-fullscreen-sm-down {
+      height: var(--tutor-area-visivel, 100dvh);
+      margin-top: var(--tutor-area-topo, 0px);
+    }
+  }
 }
 
 /* Cadastro concluído: cadastrar outro ou concluir */

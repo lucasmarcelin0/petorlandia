@@ -53,3 +53,26 @@ def test_ficha_tutor_does_not_load_bootstrap_bundle_twice(app, client):
     assert danger.select_one('input[name="csrf_token"]') is not None
     assert "confirm(" in danger.form["onsubmit"]
     assert soup.select_one('[data-confirmar-remocao][data-destructive-confirmation]') is not None
+
+
+def test_modal_de_animal_no_celular_mantem_rodape_salvar_visivel():
+    """No celular o modal ocupa a tela: o <form> vira coluna flexível e o corpo
+    não herda o max-height: 70vh global de clinic.css, que no iPhone empurrava
+    o rodapé com "Salvar animal" para trás das barras do Safari."""
+    import re
+    from pathlib import Path
+
+    css = Path("static/css/tutor_detail.css").read_text(encoding="utf-8")
+    bloco = css[css.index("@media (max-width: 575.98px)"):]
+    form = re.search(r"\.modal-content > form\s*\{([^}]*)\}", bloco)
+    assert form and "display: flex" in form.group(1) and "flex-direction: column" in form.group(1)
+    corpo = re.search(r"\.tutor-modal \.modal-dialog-scrollable \.modal-body\s*\{([^}]*)\}", bloco)
+    assert corpo and "max-height: none" in corpo.group(1) and "overflow-y: auto" in corpo.group(1)
+    assert "var(--tutor-area-visivel, 100dvh)" in bloco
+
+    js = Path("static/js/tutor_detail.js").read_text(encoding="utf-8")
+    assert "window.visualViewport" in js
+    assert "--tutor-area-visivel" in js
+
+    html = Path("templates/animais/tutor_detail.html").read_text(encoding="utf-8")
+    assert html.count("modal-fullscreen-sm-down") >= 2
