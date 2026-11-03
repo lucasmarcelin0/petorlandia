@@ -21,6 +21,37 @@
   const cadastradosAgora = [];
   let precisaRecarregar = false;
 
+  // ------------------------------------------------- área visível no celular
+  // No celular os modais ocupam a tela inteira. No iPhone, as barras do
+  // Safari e o teclado cobrem parte da tela sem mudar a altura de layout, e o
+  // rodapé com "Salvar" ficava escondido atrás delas. A altura do modal passa
+  // a seguir a área realmente visível (tutor_detail.css usa estas variáveis).
+
+  (function acompanharAreaVisivel() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const raiz = document.documentElement;
+    let agendado = false;
+    const aplicar = () => {
+      agendado = false;
+      // Com zoom de pinça a área visível encolhe só na aparência: mantém a
+      // última medida para o modal não "pular".
+      if (vv.scale && Math.abs(vv.scale - 1) > 0.01) return;
+      raiz.style.setProperty('--tutor-area-visivel', `${Math.round(vv.height)}px`);
+      raiz.style.setProperty('--tutor-area-topo', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+    };
+    const agendar = () => {
+      if (agendado) return;
+      agendado = true;
+      window.requestAnimationFrame(aplicar);
+    };
+    aplicar();
+    vv.addEventListener('resize', agendar);
+    vv.addEventListener('scroll', agendar);
+    window.addEventListener('orientationchange', agendar);
+    document.addEventListener('shown.bs.modal', agendar);
+  })();
+
   // ---------------------------------------------------------------- utilidades
 
   function bootstrapModal(el) {
