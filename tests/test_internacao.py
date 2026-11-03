@@ -365,8 +365,8 @@ def test_dose_pendente_de_prescricao_encerrada_pode_ser_marcada_nao_administrada
     dose = _doses(prescription)[0]
     depois_do_fim = _utc(prescription.fim_em) + timedelta(days=9)
     monkeypatch.setattr(hospital, "utcnow", lambda: depois_do_fim)
-    with pytest.raises(hospital.InternacaoConflict, match="terminou em"):
-        hospital.registrar_administracao(dose, ward.worker, {"motivo": "Lançamento tardio"})
+    with pytest.raises(hospital.InternacaoError, match="terminou em"):
+        hospital.registrar_administracao(dose, ward.worker, {})
     record = hospital.omitir_ocorrencia(dose, ward.worker, {
         "motivo": "Dose não aplicada; prescrição já encerrada",
         "executada_em": depois_do_fim - timedelta(hours=2),
@@ -378,6 +378,23 @@ def test_dose_pendente_de_prescricao_encerrada_pode_ser_marcada_nao_administrada
     sem_horario = hospital.omitir_ocorrencia(outra, ward.worker, {"motivo": "Não aplicada"})
     db.session.commit()
     assert _utc(sem_horario.executada_em) == depois_do_fim
+
+
+def test_dose_programada_pode_ser_administrada_apos_o_fim_com_justificativa(ward, monkeypatch):
+    _, prescription = _prescribe(ward)
+    dose, outra = _doses(prescription)[:2]
+    cinco_horas_depois = _utc(prescription.fim_em) + timedelta(hours=5)
+    monkeypatch.setattr(hospital, "utcnow", lambda: cinco_horas_depois)
+    with pytest.raises(hospital.InternacaoError, match="terminou em"):
+        hospital.registrar_administracao(dose, ward.worker, {})
+    record = hospital.registrar_administracao(dose, ward.worker, {"motivo": "Dose atrasada aplicada após o fim"})
+    db.session.commit()
+    assert record.resultado == "administrada"
+    assert _utc(record.executada_em) == cinco_horas_depois
+    hospital.suspender_prescricao(prescription, ward.vet, "Tratamento suspenso")
+    db.session.commit()
+    with pytest.raises(hospital.InternacaoConflict):
+        hospital.registrar_administracao(outra, ward.worker, {"motivo": "Tentativa após suspensão"})
 
 
 def test_prn_limita_intervalo_e_quantidade_sem_criar_doses(ward, monkeypatch):
