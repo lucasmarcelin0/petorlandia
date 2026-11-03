@@ -358,11 +358,19 @@ def _momento_execucao(internacao, data, agora, *, omitida=False):
     return executada, motivo
 
 
-def _vigencia(prescricao, executada, *, explicit, antecipacao=None):
+def _fim_formatado(prescricao):
+    return _utc(prescricao.fim_em).astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+
+
+def _vigencia(prescricao, executada, *, explicit, antecipacao=None, dose_apos_fim=False):
     """``antecipacao``: (horário previsto, tolerância) de uma dose programada.
 
     A primeira dose pode ser antecipada dentro da janela de checagem, como as
     demais; fora dela continua valendo o início da prescrição.
+
+    ``dose_apos_fim``: a dose programada era devida dentro da vigência e pode
+    ser dada com atraso depois do fim (o chamador exige justificativa).
+    Suspensão, substituição e alta continuam bloqueando.
     """
     inicio = _utc(prescricao.inicio_em)
     if antecipacao:
@@ -372,12 +380,9 @@ def _vigencia(prescricao, executada, *, explicit, antecipacao=None):
             liberado = inicio.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
             raise InternacaoError(f'A prescrição ainda não começou: esta dose pode ser registrada a partir de {liberado}.')
         raise InternacaoError('Administração anterior ao início da prescrição.')
-    if executada >= _utc(prescricao.fim_em):
-        fim = _utc(prescricao.fim_em).astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+    if executada >= _utc(prescricao.fim_em) and not dose_apos_fim:
         raise InternacaoConflict(
-            f'Horário realizado fora da vigência da prescrição, que terminou em {fim}. '
-            'Informe em "Registrar um horário anterior" quando a dose foi dada (antes do fim) '
-            'ou marque como "Não administrada".')
+            f'Horário realizado fora da vigência da prescrição, que terminou em {_fim_formatado(prescricao)}.')
     if prescricao.suspensa_em and executada >= _utc(prescricao.suspensa_em):
         raise InternacaoConflict('Prescrição suspensa ou substituída neste horário.')
     substituicao_futura = (prescricao.status == 'substituida' and prescricao.suspensa_em
@@ -416,8 +421,12 @@ def _registrar_ocorrencia(ocorrencia, actor, data, *, omitida=False):
     # A não administração refere-se a uma dose devida dentro da vigência; ela
     # pode ser lançada depois do fim (ou do corte) da prescrição, com motivo.
     referencia = min(executada, _utc(obj.prevista_para)) if omitida else executada
+    if not omitida and executada >= _utc(prescricao.fim_em) and not motivo:
+        raise InternacaoError(
+            f'A prescrição terminou em {_fim_formatado(prescricao)}: informe a justificativa '
+            'para registrar esta dose atrasada.')
     _vigencia(prescricao, referencia, explicit=bool(data.get('executada_em')),
-              antecipacao=(obj.prevista_para, tolerancia))
+              antecipacao=(obj.prevista_para, tolerancia), dose_apos_fim=True)
     minutos = int(tolerancia.total_seconds() // 60)
     if executada < _utc(obj.prevista_para) - tolerancia and not motivo:
         raise InternacaoError(
@@ -538,8 +547,11 @@ def retificar_registro(registro, actor, data):
         raise InternacaoError('Horário da retificação fora do período permitido.')
     if resultado == 'administrada':
         dose = db.session.get(InternacaoOcorrencia, registro.ocorrencia_id) if registro.ocorrencia_id else None
+        # A retificação já exige motivo; dose programada pode ter sido dada
+        # com atraso depois do fim, como no registro original.
         _vigencia(prescricao, executada, explicit=True,
-                  antecipacao=(dose.prevista_para, tolerancia_checagem()) if dose else None)
+                  antecipacao=(dose.prevista_para, tolerancia_checagem()) if dose else None,
+                  dose_apos_fim=bool(dose))
         if prescricao.modo == 'prn':
             if executada >= _utc(prescricao.fim_em):
                 raise InternacaoError('Horário da retificação fora da vigência da prescrição.')
