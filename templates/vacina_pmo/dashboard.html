@@ -5767,7 +5767,7 @@
       ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Abrir no Waze" aria-label="Abrir no Waze"><i class="fas fa-route"></i></a>`
       : '';
     const textClass = compact ? '' : ' class="pmo-address-text"';
-    return `<div class="d-flex align-items-start gap-1 flex-wrap"><span${textClass}>${label}</span>${gpsBadge}<span class="d-flex gap-1 ms-auto ms-sm-0">${mapsLink}${wazeLink}</span></div>`;
+    return `<div class="d-flex align-items-start gap-1 flex-wrap">${mapsUrl ? `<a${textClass} href="${mapsUrl}" target="_blank" rel="noopener" aria-label="Abrir endereço no Google Maps">${label}</a>` : `<span${textClass}>${label}</span>`}${gpsBadge}<span class="d-flex gap-1 ms-auto ms-sm-0">${mapsLink}${wazeLink}</span></div>`;
   }
 
   function makePassword(seed) {

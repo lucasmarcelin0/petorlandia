@@ -569,6 +569,14 @@ def _pmo_geocode_google(address: str) -> tuple[float, float] | None:
 
 
 _PMO_VERIFIED_EXACT_COORDS: list[tuple[re.Pattern, tuple[float, float]]] = [
+    # CNEFE/IBGE 2022, nível 1: logradouro e número conferidos na base pública.
+    # Coordenadas de referência do imóvel; complementos/entrada ainda exigem conferência em campo.
+    (re.compile(r"\brua\s*(?:10|dez)\s*,\s*372\b", re.IGNORECASE), (-20.716036, -47.877456)),
+    (re.compile(r"\brua\s*(?:3|tres)\s*,\s*2117\b", re.IGNORECASE), (-20.724743, -47.902234)),
+    (re.compile(r"\b(?:av\.?|avenida)\s*(?:19|dezenove)\s*,\s*293\b", re.IGNORECASE), (-20.723626, -47.899248)),
+    (re.compile(r"\brua\s*(?:1|um)\s*,\s*1749\b", re.IGNORECASE), (-20.723346, -47.898932)),
+    (re.compile(r"\brua\s*(?:8|oito)\s*,\s*1272(?:a\b|\s*,\s*a\b)", re.IGNORECASE), (-20.716456, -47.868552)),
+    (re.compile(r"\b(?:av\.?|avenida)\s*(?:8|oito)\s*,\s*1475\b", re.IGNORECASE), (-20.712097, -47.889819)),
     (re.compile(r"\b(?:av\.?|avenida)\s+r\b[^\d]*549\b", re.IGNORECASE), (-20.7183381, -47.8633316)),
     (re.compile(r"\b(?:av\.?|avenida)\s+u\b[^\d]*640\b", re.IGNORECASE), (-20.7170402, -47.8600922)),
     (re.compile(r"\b(?:av\.?|avenida)\s+n\b[^\d]*1501\b", re.IGNORECASE), (-20.7100378, -47.8680143)),
@@ -598,14 +606,13 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     if not normalized:
         return None
     cache_key = _pmo_geocode_cache_key(normalized)
-    if cache_key in _PMO_ROUTE_COORDS_CACHE:
-        return _PMO_ROUTE_COORDS_CACHE[cache_key]
-
-    # 0. Coordenadas verificadas de alta precisão (exatas de rota / Google Maps)
+    # Referências conferidas prevalecem sobre aproximações já armazenadas.
     verified = _pmo_lookup_verified_coords(normalized)
     if verified:
         _PMO_ROUTE_COORDS_CACHE[cache_key] = verified
         return verified
+    if cache_key in _PMO_ROUTE_COORDS_CACHE:
+        return _PMO_ROUTE_COORDS_CACHE[cache_key]
 
     # 1. Google (preciso). Já filtra por Orlândia internamente.
     coords = _pmo_geocode_google(normalized)
@@ -731,6 +738,13 @@ def _pmo_geocode_visit(visit: PmoVaccinationVisit) -> tuple[float, float] | None
     cache_key = _pmo_geocode_cache_key(address)
     if not cache_key:
         return None
+
+    verified = _pmo_lookup_verified_coords(address)
+    if verified:
+        visit.geocode_lat, visit.geocode_lng = verified
+        visit.geocode_address_key = cache_key
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = verified
+        return verified
 
     # 1. In-memory cache (fast within a dyno)
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
@@ -2673,6 +2687,8 @@ def _serialize_visit(
         ),
         None,
     )
+    coords = _pmo_lookup_verified_coords(visit.address or "")
+    lat, lng = coords if coords else (visit.geocode_lat, visit.geocode_lng)
     return {
         "id": f"visit-{visit.id}",
         "visitId": visit.id,
@@ -2680,9 +2696,9 @@ def _serialize_visit(
         "status": infer_visit_status(animals),
         "tutor": visit.tutor_name,
         "address": visit.address or "",
-        "lat": visit.geocode_lat,
-        "lng": visit.geocode_lng,
-        "geocoded": bool(visit.geocode_lat is not None and visit.geocode_lng is not None),
+        "lat": lat,
+        "lng": lng,
+        "geocoded": bool(lat is not None and lng is not None),
         "phone1": visit.phone1 or "",
         "phone2": visit.phone2 or "",
         "dogs": visit.dogs or 0,
@@ -3435,8 +3451,9 @@ def persist_vacina_pmo_rows(
             visit.geocode_lng = None
             visit.geocode_address_key = None
         visit.address = new_address
-        if visit.geocode_lat is None or visit.geocode_lng is None:
-            coords = _pmo_geocode_address(new_address)
+        verified = _pmo_lookup_verified_coords(new_address)
+        if verified or visit.geocode_lat is None or visit.geocode_lng is None:
+            coords = verified or _pmo_geocode_address(new_address)
             if coords:
                 visit.geocode_lat = coords[0]
                 visit.geocode_lng = coords[1]
