@@ -16,6 +16,7 @@ EXPECTED_JOB_IDS = {
     'mercadopago-membership-reconciliation',
     'atlas-artefatos',
     'lembretes-consultas-exames-vacinas',
+    'lembretes-vacinas-atrasadas',
     'lembretes-tratamento',
     'lembretes-recebimento',
     'lembretes-adocao',
@@ -36,6 +37,7 @@ _real_stop_in_web = scheduler.stop_in_web
 def _clean_web_scheduler(monkeypatch):
     monkeypatch.delenv('SCHEDULER_IN_WEB', raising=False)
     monkeypatch.delenv('ENABLE_WEB_SCHEDULER', raising=False)
+    monkeypatch.delenv('SCHEDULER_JOBS', raising=False)
     _real_stop_in_web()
     yield
     _real_stop_in_web()
@@ -53,6 +55,13 @@ def test_register_jobs_registra_todos_os_jobs_do_dyno():
     sched = BackgroundScheduler(timezone='UTC')
     scheduler.register_jobs(sched)
     assert {job.id for job in sched.get_jobs()} == EXPECTED_JOB_IDS
+
+
+def test_scheduler_jobs_liga_so_os_jobs_listados(monkeypatch):
+    monkeypatch.setenv('SCHEDULER_JOBS', 'lembretes-vacinas-atrasadas, inexistente')
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched)
+    assert {job.id for job in sched.get_jobs()} == {'lembretes-vacinas-atrasadas'}
 
 
 def test_main_usa_o_mesmo_conjunto_de_jobs(monkeypatch):

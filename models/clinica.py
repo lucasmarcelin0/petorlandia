@@ -128,6 +128,12 @@ class Clinica(db.Model):
     _nfse_cert_password = deferred(db.Column("nfse_cert_password", db.String(120)))
     _nfse_token = deferred(db.Column("nfse_token", db.String(200)))
     fiscal_ready = deferred(db.Column(db.Boolean, default=False))
+    # Lembretes automáticos (e-mail/push) de vacinas vencidas ou próximas aos
+    # tutores (services/vacinas_atrasadas.py). Desligado por padrão: cada
+    # clínica decide quando começar a avisar os próprios clientes.
+    lembrete_vacina_automatico = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
 
     _nfse_encrypted_fields = {
         "nfse_username": "_nfse_username",

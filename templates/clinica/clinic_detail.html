@@ -71,6 +71,11 @@
       </div>
     </div>
     <div class="clinic-context-card__actions">
+      <a href="{{ url_for('clinic_vacinas_atrasadas', clinica_id=clinica.id) }}"
+         class="btn btn-outline-danger" data-cta="clinic_overdue_vaccines_open">
+        <i class="fa-solid fa-syringe" aria-hidden="true"></i>
+        Vacinas atrasadas
+      </a>
       {% if show_clinic_metrics %}
         <a href="{{ url_for('clinic_value', clinica_id=clinica.id) }}"
            class="btn btn-outline-success" data-cta="clinic_value_open">

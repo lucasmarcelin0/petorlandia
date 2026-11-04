@@ -1,0 +1,205 @@
+{% extends "layout.html" %}
+{% block page_title %}Vacinas atrasadas — {{ clinica.nome }} | PetOrlândia{% endblock %}
+{% block main %}
+<style>
+  .va-hero { background: linear-gradient(135deg, #7c2d12, #c2410c); color: #fff; border-radius: 1.25rem; }
+  .va-stat { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .va-card { border: 0; border-radius: 1rem; box-shadow: 0 .35rem 1.2rem rgba(15, 23, 42, .08); }
+  .va-dose { border-left: 4px solid #cbd5e1; padding: .35rem .75rem; margin-bottom: .4rem; background: #f8fafc; border-radius: .5rem; }
+  .va-dose--atrasada { border-left-color: #dc2626; }
+  .va-dose--hoje { border-left-color: #d97706; }
+  .va-dose--proxima { border-left-color: #2563eb; }
+  .va-note { font-size: .8rem; color: #64748b; }
+  .va-msg { white-space: pre-wrap; font-size: .85rem; background: #f1f5f9; border-radius: .5rem; padding: .6rem .75rem; }
+</style>
+<div class="container py-4" style="max-width: 1120px;">
+  <a href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="text-decoration-none small">
+    <i class="bi bi-arrow-left me-1"></i>Voltar para {{ clinica.nome }}
+  </a>
+
+  <section class="va-hero p-4 p-lg-5 mt-3 mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-end">
+      <div>
+        <span class="badge text-bg-light text-danger mb-2">Lembretes de vacina</span>
+        <h1 class="h2 mb-2">Vacinas atrasadas e próximas</h1>
+        <p class="mb-0 opacity-75">Avise os tutores pelo WhatsApp da clínica com a mensagem pronta, ou deixe o PetOrlândia enviar e-mail e notificação sozinho.</p>
+      </div>
+      <div class="d-flex gap-4">
+        <div><div class="va-stat" data-testid="total-atrasadas">{{ total_atrasadas }}</div><div class="small opacity-75">atrasadas</div></div>
+        <div><div class="va-stat">{{ total_proximas }}</div><div class="small opacity-75">vencem em {{ dias_futuros }} dias</div></div>
+        <div><div class="va-stat">{{ grupos|length }}</div><div class="small opacity-75">tutores</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="card va-card mb-4">
+    <div class="card-body d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+      <div>
+        <h2 class="h6 mb-1">
+          <i class="fa-solid fa-envelope-circle-check me-1" aria-hidden="true"></i>
+          Envio automático por e-mail e notificação:
+          {% if clinica.lembrete_vacina_automatico %}
+            <span class="badge text-bg-success" data-testid="status-automatico">Ligado</span>
+          {% else %}
+            <span class="badge text-bg-secondary" data-testid="status-automatico">Desligado</span>
+          {% endif %}
+        </h2>
+        <p class="va-note mb-0">
+          Quando ligado, cada tutor recebe um aviso 7 dias antes, no dia, 7 dias e 30 dias depois do vencimento —
+          uma vez por marco, em uma única mensagem para todos os animais. Atrasos mais antigos não disparam
+          e-mail: ficam aqui para a equipe decidir. O tutor pode se descadastrar pelo link do e-mail.
+        </p>
+      </div>
+      {% if pode_configurar %}
+      <div class="d-flex flex-wrap gap-2 flex-shrink-0">
+        <form method="post" action="{{ url_for('clinic_vacinas_atrasadas_configuracao', clinica_id=clinica.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if clinica.lembrete_vacina_automatico %}
+            <input type="hidden" name="automatico" value="0">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Desligar</button>
+          {% else %}
+            <input type="hidden" name="automatico" value="1">
+            <button type="submit" class="btn btn-success btn-sm">Ligar envio automático</button>
+          {% endif %}
+        </form>
+        {% if clinica.lembrete_vacina_automatico %}
+        <form method="post" action="{{ url_for('clinic_vacinas_atrasadas_enviar_agora', clinica_id=clinica.id) }}"
+              onsubmit="return confirm('Enviar agora os lembretes de hoje? Quem já foi avisado neste marco não recebe de novo.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-primary btn-sm">Enviar lembretes de hoje</button>
+        </form>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="va-note mb-0">Só o dono da clínica liga ou desliga o envio automático.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <span class="small text-muted me-1">Atrasadas há até:</span>
+    {% for dias in periodos %}
+      <a href="{{ url_for('clinic_vacinas_atrasadas', clinica_id=clinica.id, periodo=dias) }}"
+         class="btn btn-sm {{ 'btn-dark' if periodo == dias else 'btn-outline-dark' }}">
+        {% if dias %}{{ dias }} dias{% else %}Todas{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if not grupos %}
+    <div class="card va-card"><div class="card-body text-center py-5">
+      <i class="fa-solid fa-shield-dog fa-2x text-success mb-3" aria-hidden="true"></i>
+      <p class="mb-1 fw-semibold">Nenhuma vacina atrasada ou vencendo nos próximos {{ dias_futuros }} dias.</p>
+      <p class="va-note mb-0">A lista usa a data da próxima dose (aplicação + intervalo) e as doses agendadas e não aplicadas.</p>
+    </div></div>
+  {% endif %}
+
+  <div class="row g-3">
+    {% for grupo in grupos %}
+    {% set tutor = grupo.tutor %}
+    <div class="col-12 col-lg-6">
+      <div class="card va-card h-100" data-tutor-card="{{ tutor.id }}">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex justify-content-between gap-2 mb-2">
+            <div>
+              <h3 class="h6 mb-0">{{ tutor.name }}</h3>
+              <div class="va-note">
+                {% if tutor.phone %}<i class="fa-solid fa-phone me-1" aria-hidden="true"></i>{{ tutor.phone }}{% else %}Sem telefone cadastrado{% endif %}
+              </div>
+            </div>
+            <div class="text-end">
+              {% if grupo.bloqueado %}
+                <span class="badge text-bg-warning" title="O tutor pediu para não receber lembretes automáticos">Sem lembrete automático</span>
+              {% endif %}
+            </div>
+          </div>
+
+          {% for p in grupo.pendencias %}
+            <div class="va-dose va-dose--{{ p.situacao }}">
+              <strong>{{ p.animal.name or 'Sem nome' }}</strong> · {{ p.vacina.nome }}
+              <div class="va-note">
+                {% if p.situacao == 'atrasada' %}
+                  <span class="text-danger fw-semibold">{{ p.dias_atraso }} dia(s) de atraso</span> — venceu em {{ p.vencimento.strftime('%d/%m/%Y') }}
+                {% elif p.situacao == 'hoje' %}
+                  <span class="text-warning fw-semibold">Vence hoje</span>
+                {% else %}
+                  Vence em {{ p.vencimento.strftime('%d/%m/%Y') }} ({{ -p.dias_atraso }} dia(s))
+                {% endif %}
+                {% if p.origem == 'agendada' %} · dose agendada{% else %} · reforço{% endif %}
+                · <a href="{{ url_for('ficha_animal', animal_id=p.animal.id) }}">ficha</a>
+              </div>
+            </div>
+          {% endfor %}
+
+          <details class="mt-2">
+            <summary class="small text-muted">Ver mensagem</summary>
+            <div class="va-msg mt-2" data-msg>{{ grupo.mensagem }}</div>
+          </details>
+
+          <div class="mt-auto pt-3 d-flex flex-wrap gap-2 align-items-center">
+            {% if grupo.link_whatsapp %}
+              <a href="{{ grupo.link_whatsapp }}" target="_blank" rel="noopener"
+                 class="btn btn-success btn-sm" data-va-whatsapp
+                 data-tutor-id="{{ tutor.id }}"
+                 data-vacina-ids="{{ grupo.pendencias|map(attribute='vacina.id')|join(',') }}">
+                <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>Enviar no WhatsApp
+              </a>
+            {% else %}
+              <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Telefone ausente ou inválido">
+                <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>Sem WhatsApp
+              </button>
+            {% endif %}
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-va-copy>
+              <i class="fa-regular fa-copy me-1" aria-hidden="true"></i>Copiar mensagem
+            </button>
+            <span class="va-note" data-va-last>
+              {% if grupo.ultimo_whatsapp %}Último WhatsApp: {{ grupo.ultimo_whatsapp|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const endpoint = "{{ url_for('clinic_vacinas_atrasadas_whatsapp', clinica_id=clinica.id) }}";
+  document.querySelectorAll('[data-va-whatsapp]').forEach((link) => {
+    link.addEventListener('click', () => {
+      const card = link.closest('[data-tutor-card]');
+      fetch(endpoint, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrf },
+        body: JSON.stringify({
+          tutor_id: Number(link.dataset.tutorId),
+          vacina_ids: (link.dataset.vacinaIds || '').split(',').filter(Boolean).map(Number),
+        }),
+      }).then((resp) => {
+        if (resp.ok && card) {
+          const last = card.querySelector('[data-va-last]');
+          if (last) last.textContent = 'WhatsApp aberto agora';
+        }
+      }).catch(() => {});
+    });
+  });
+  document.querySelectorAll('[data-va-copy]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const card = button.closest('[data-tutor-card]');
+      const text = card?.querySelector('[data-msg]')?.textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = 'Copiada!';
+      } catch (e) {
+        card?.querySelector('details')?.setAttribute('open', '');
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}
