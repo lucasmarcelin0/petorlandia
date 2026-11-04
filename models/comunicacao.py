@@ -155,3 +155,49 @@ class PushSubscription(db.Model):
         backref=db.backref('push_subscriptions', lazy='dynamic', cascade='all, delete-orphan'),
     )
 
+
+
+class LembreteVacinaEnvio(db.Model):
+    """Cada aviso de vacina vencida/próxima enviado a um tutor.
+
+    Guarda tanto o envio automático (e-mail/push, ``origem='automatico'``)
+    quanto o clique da equipe no botão do WhatsApp (``origem='manual'``).
+    ``chave`` só é preenchida no automático: a unicidade impede que o mesmo
+    marco da mesma dose saia duas vezes pelo mesmo canal, mesmo que o job
+    rode de novo ou a equipe clique em "enviar agora".
+    """
+
+    __tablename__ = 'lembrete_vacina_envio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(
+        db.Integer, db.ForeignKey('clinica.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    animal_id = db.Column(
+        db.Integer, db.ForeignKey('animal.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    vacina_id = db.Column(
+        db.Integer, db.ForeignKey('vacina.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    vencimento = db.Column(db.Date, nullable=False)
+    canal = db.Column(db.String(20), nullable=False)  # email, push, whatsapp
+    origem = db.Column(db.String(20), nullable=False)  # automatico, manual
+    marco = db.Column(db.Integer, nullable=True)  # dias em relação ao vencimento
+    enviado_por_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    enviado_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    chave = db.Column(db.String(120), unique=True, nullable=True)
+
+    enviado_por = db.relationship('User', foreign_keys=[enviado_por_id])
+
+
+class LembreteVacinaBloqueio(db.Model):
+    """Tutor que pediu para não receber lembretes automáticos de vacina."""
+
+    __tablename__ = 'lembrete_vacina_bloqueio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, unique=True
+    )
+    criado_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)

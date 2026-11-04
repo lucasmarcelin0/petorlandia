@@ -223,6 +223,24 @@ def _run_adoption_reminders() -> None:
             current_app.logger.exception("[Scheduler] Falha nos lembretes de adocao.")
 
 
+def _run_vaccine_overdue_reminders() -> None:
+    """Lembretes de vacina vencida/próxima das clínicas que ligaram a opção."""
+    with app.app_context():
+        if not _env_bool("VACCINE_OVERDUE_REMINDERS_ENABLED", True):
+            current_app.logger.info(
+                "[Scheduler] Lembretes de vacinas atrasadas desativados por VACCINE_OVERDUE_REMINDERS_ENABLED."
+            )
+            return
+        from services.vacinas_atrasadas import enviar_lembretes_automaticos
+
+        try:
+            resumo = enviar_lembretes_automaticos()
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha nos lembretes de vacinas atrasadas.")
+            return
+        current_app.logger.info("[Scheduler] Lembretes de vacinas atrasadas: %s", resumo)
+
+
 def _run_loja_dfe() -> None:
     """Notas de compra emitidas contra as lojas (SEFAZ, 1 consulta por hora)."""
     with app.app_context():
@@ -268,12 +286,49 @@ def _interval(minutes: int) -> IntervalTrigger:
     return IntervalTrigger(minutes=minutes, start_date=INTERVAL_ANCHOR)
 
 
+def _allowed_job_ids() -> set[str] | None:
+    """Jobs liberados por ``SCHEDULER_JOBS`` (ids separados por vírgula).
+
+    Sem a variável (padrão) todos os jobs rodam, como sempre. Com ela, só os
+    listados: permite ligar o agendador para um job novo sem acordar de uma
+    vez todos os outros.
+    """
+    raw = (os.getenv("SCHEDULER_JOBS") or "").strip()
+    if not raw:
+        return None
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+class _OnlyAllowedJobs:
+    """Repassa ao agendador só os ``add_job`` cujo id está liberado."""
+
+    def __init__(self, scheduler, allowed: set[str]):
+        self._scheduler = scheduler
+        self._allowed = allowed
+        self.skipped: list[str] = []
+
+    def add_job(self, *args, **kwargs):
+        job_id = kwargs.get("id")
+        if job_id not in self._allowed:
+            self.skipped.append(job_id)
+            return None
+        return self._scheduler.add_job(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._scheduler, name)
+
+
 def register_jobs(scheduler) -> None:
     """Registra todos os jobs no agendador recebido.
 
     Usado pelo dyno dedicado (``main``) e pelo modo dentro do web
     (``start_in_web``): os dois rodam exatamente o mesmo conjunto de jobs.
+    ``SCHEDULER_JOBS`` restringe o conjunto (ver ``_allowed_job_ids``).
     """
+
+    allowed = _allowed_job_ids()
+    if allowed is not None:
+        scheduler = _OnlyAllowedJobs(scheduler, allowed)
 
     trigger = CronTrigger(
         day=_env_int('ACCOUNTING_BACKFILL_DAY', DEFAULT_DAY, 1, 28),
@@ -354,6 +409,8 @@ def register_jobs(scheduler) -> None:
     br_tz = 'America/Sao_Paulo'
     daily_jobs = [
         ('lembretes-consultas-exames-vacinas', verificar_datas_proximas, 8, 0),
+        # Vacinas vencidas/próximas: só clínicas com a opção ligada.
+        ('lembretes-vacinas-atrasadas', _run_vaccine_overdue_reminders, 8, 30),
         ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
         ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
         # Anúncios de adoção: pedido de foto/telefone e a pergunta mensal
@@ -378,6 +435,13 @@ def register_jobs(scheduler) -> None:
         )
 
     with app.app_context():
+        if allowed is not None:
+            current_app.logger.info(
+                '[Scheduler] SCHEDULER_JOBS ativo: %s job(s) liberado(s), %s desligado(s): %s',
+                len(allowed),
+                len(scheduler.skipped),
+                ', '.join(sorted(filter(None, scheduler.skipped))),
+            )
         current_app.logger.info(
             'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
             'Controle de doses em %s. Reconciliação de assinaturas a cada %s minuto(s).',

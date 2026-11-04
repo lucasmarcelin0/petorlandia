@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block page_title %}Lembretes de vacina | PetOrlândia{% endblock %}
+{% block main %}
+<div class="container py-5" style="max-width: 560px;">
+  <div class="card border-0 shadow-sm" style="border-radius: 1rem;">
+    <div class="card-body p-4 text-center">
+      <i class="fa-solid fa-syringe fa-2x text-primary mb-3" aria-hidden="true"></i>
+      {% if estado == 'descadastrado' %}
+        <h1 class="h4 mb-2">Pronto, você não receberá mais estes lembretes.</h1>
+        <p class="text-muted">Os e-mails e notificações automáticos de vacina foram desligados para você. A clínica ainda pode entrar em contato diretamente.</p>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="voltar">
+          <button type="submit" class="btn btn-link">Mudei de ideia: quero voltar a receber</button>
+        </form>
+      {% elif estado == 'reativado' %}
+        <h1 class="h4 mb-2">Lembretes reativados.</h1>
+        <p class="text-muted mb-0">Você voltará a receber os avisos de vacina dos seus pets.</p>
+      {% else %}
+        <h1 class="h4 mb-2">Parar de receber lembretes de vacina?</h1>
+        <p class="text-muted">Você deixará de receber os e-mails e notificações automáticos sobre vacinas vencidas ou próximas dos seus pets.</p>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="sair">
+          <button type="submit" class="btn btn-danger">Não quero mais receber</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

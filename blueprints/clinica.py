@@ -630,6 +630,152 @@ def clinic_value(clinica_id):
     )
 
 
+def _clinica_da_equipe_ou_404(clinica_id):
+    """Clínica em que o usuário trabalha (admin vê qualquer uma)."""
+    if _is_admin():
+        return Clinica.query.get_or_404(clinica_id)
+    return clinicas_do_usuario().filter(Clinica.id == clinica_id).first_or_404()
+
+
+def _pode_configurar_lembretes(clinica):
+    return _is_admin() or current_user.id == clinica.owner_id
+
+
+@bp.route("/clinica/<int:clinica_id>/vacinas-atrasadas")
+@login_required
+def clinic_vacinas_atrasadas(clinica_id):
+    """Vacinas vencidas e próximas dos pacientes, para avisar os tutores."""
+    from services import vacinas_atrasadas as va
+
+    clinica = _clinica_da_equipe_ou_404(clinica_id)
+    periodo = request.args.get("periodo", va.PERIODO_PADRAO, type=int)
+    if periodo not in va.PERIODOS_PAINEL:
+        periodo = va.PERIODO_PADRAO
+    pendencias = va.pendencias_da_clinica(clinica.id, atraso_max_dias=periodo)
+    grupos = va.agrupar_por_tutor(clinica.id, pendencias)
+    for grupo in grupos:
+        grupo.mensagem = va.mensagem_whatsapp(clinica, grupo.tutor, grupo.pendencias)
+        grupo.link_whatsapp = va.link_whatsapp(
+            grupo.tutor.phone or getattr(grupo.tutor, "phone2", None), grupo.mensagem
+        )
+    track_event("clinic_overdue_vaccines_viewed", feature="vaccine_reminders", stage=str(periodo))
+    return render_template(
+        "clinica/vacinas_atrasadas.html",
+        clinica=clinica,
+        grupos=grupos,
+        periodo=periodo,
+        periodos=va.PERIODOS_PAINEL,
+        dias_futuros=va.DIAS_FUTUROS_PAINEL,
+        total_atrasadas=sum(1 for p in pendencias if p.dias_atraso > 0),
+        total_proximas=sum(1 for p in pendencias if p.dias_atraso <= 0),
+        pode_configurar=_pode_configurar_lembretes(clinica),
+        marcos=va.MARCOS,
+    )
+
+
+@bp.route("/clinica/<int:clinica_id>/vacinas-atrasadas/whatsapp", methods=["POST"])
+@login_required
+def clinic_vacinas_atrasadas_whatsapp(clinica_id):
+    """Registra que a equipe abriu o WhatsApp para avisar o tutor."""
+    from services.vacinas_atrasadas import registrar_whatsapp_manual
+
+    clinica = _clinica_da_equipe_ou_404(clinica_id)
+    dados = request.get_json(silent=True)
+    if isinstance(dados, dict):
+        tutor_id = dados.get("tutor_id")
+        vacina_ids = dados.get("vacina_ids") or []
+    else:
+        tutor_id = request.form.get("tutor_id")
+        vacina_ids = request.form.getlist("vacina_ids")
+    if not isinstance(vacina_ids, list):
+        vacina_ids = [vacina_ids]
+    try:
+        tutor_id = int(tutor_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "erro": "tutor inválido"}), 400
+    registrados = registrar_whatsapp_manual(clinica.id, tutor_id, vacina_ids, current_user.id)
+    db.session.commit()
+    return jsonify({"ok": True, "registrados": registrados})
+
+
+@bp.route("/clinica/<int:clinica_id>/vacinas-atrasadas/configuracao", methods=["POST"])
+@login_required
+def clinic_vacinas_atrasadas_configuracao(clinica_id):
+    clinica = _clinica_da_equipe_ou_404(clinica_id)
+    if not _pode_configurar_lembretes(clinica):
+        abort(403)
+    ativar = request.form.get("automatico") == "1"
+    clinica.lembrete_vacina_automatico = ativar
+    db.session.commit()
+    track_event(
+        "clinic_vaccine_reminders_toggled",
+        feature="vaccine_reminders",
+        stage="on" if ativar else "off",
+    )
+    if ativar:
+        flash(
+            "Lembretes automáticos ligados. Os tutores recebem e-mail e notificação "
+            "7 dias antes, no dia, 7 e 30 dias depois do vencimento.",
+            "success",
+        )
+    else:
+        flash("Lembretes automáticos desligados. O painel e o botão do WhatsApp continuam disponíveis.", "info")
+    return redirect(url_for("clinic_vacinas_atrasadas", clinica_id=clinica.id))
+
+
+@bp.route("/clinica/<int:clinica_id>/vacinas-atrasadas/enviar-agora", methods=["POST"])
+@login_required
+def clinic_vacinas_atrasadas_enviar_agora(clinica_id):
+    """Roda já o envio automático de hoje desta clínica (sem repetir avisos)."""
+    from services.vacinas_atrasadas import enviar_lembretes_da_clinica
+
+    clinica = _clinica_da_equipe_ou_404(clinica_id)
+    if not _pode_configurar_lembretes(clinica):
+        abort(403)
+    if not clinica.lembrete_vacina_automatico:
+        flash("Ligue os lembretes automáticos antes de enviar.", "warning")
+        return redirect(url_for("clinic_vacinas_atrasadas", clinica_id=clinica.id))
+    resumo = enviar_lembretes_da_clinica(clinica, enviado_por_id=current_user.id)
+    db.session.commit()
+    if resumo["tutores"]:
+        flash(
+            f"Lembretes enviados a {resumo['tutores']} tutor(es): "
+            f"{resumo['emails']} e-mail(s) e {resumo['push']} notificação(ões).",
+            "success",
+        )
+    else:
+        flash(
+            "Nenhum lembrete pendente para hoje: quem estava no prazo já foi avisado "
+            "ou não tem e-mail/notificação cadastrados.",
+            "info",
+        )
+    return redirect(url_for("clinic_vacinas_atrasadas", clinica_id=clinica.id))
+
+
+@bp.route("/lembretes-vacina/sair/<string:token>", methods=["GET", "POST"])
+def lembretes_vacina_sair(token):
+    """Descadastro dos lembretes automáticos de vacina (link do e-mail).
+
+    O GET só mostra a confirmação: leitores de e-mail que abrem links
+    sozinhos não podem descadastrar ninguém.
+    """
+    from services.vacinas_atrasadas import bloquear_tutor, desbloquear_tutor, user_id_do_token
+
+    user_id = user_id_do_token(token)
+    if user_id is None or db.session.get(User, user_id) is None:
+        abort(404)
+    estado = "confirmar"
+    if request.method == "POST":
+        if request.form.get("acao") == "voltar":
+            desbloquear_tutor(user_id)
+            estado = "reativado"
+        else:
+            bloquear_tutor(user_id)
+            estado = "descadastrado"
+        db.session.commit()
+    return render_template("clinica/lembretes_vacina_sair.html", estado=estado, token=token)
+
+
 @bp.route("/clinica/<int:clinica_id>", methods=["GET", "POST"])
 @login_required
 def clinic_detail(clinica_id):

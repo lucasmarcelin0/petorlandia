@@ -4242,24 +4242,7 @@ def carteirinha_publica(token):
 
     # Public card: group commercial brands by clinical protection. A later
     # Rabisin/Raiva PM dose, for example, supersedes an older Canigen R dose.
-    def grupo_clinico(vacina):
-        raw = f'{vacina.nome or ""} {vacina.tipo or ""}'.casefold()
-        if raw.isascii():
-            normalized = raw
-        else:
-            normalized = ''.join([
-                char for char in unicodedata.normalize('NFD', raw)
-                if unicodedata.category(char) != 'Mn'
-            ])
-        if any(token in normalized for token in ('antirrab', 'raiva', 'rabisin', 'defensor', 'hertaliq', 'canigen r')):
-            return 'antirrabica'
-        if 'leish' in normalized:
-            return 'leishmaniose'
-        if 'giardia' in normalized:
-            return 'giardiase'
-        if any(token in normalized for token in ('dhppi', 'vanguard', 'nobivac canine', 'polivalente', 'multipla')):
-            return 'multipla'
-        return normalized or str(vacina.id)
+    from services.vacinas_atrasadas import grupo_clinico
 
     proximas_acoes = []
     doses_a_revisar = []

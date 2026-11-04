@@ -8992,9 +8992,22 @@ def verificar_datas_proximas() -> None:
                 except Exception as e:
                     current_app.logger.error("Erro ao enviar WhatsApp: %s", e)
 
+        # Só doses agendadas (não aplicadas): uma vacina aplicada hoje não é
+        # um compromisso de amanhã. Clínicas com o lembrete de vacinas
+        # atrasadas ligado já avisam essas doses pela régua própria
+        # (services/vacinas_atrasadas.py); avisar aqui também duplicaria.
+        from models import Animal, Clinica
+
         vacinas = (
             Vacina.query
-            .filter(Vacina.aplicada_em >= agora.date(), Vacina.aplicada_em <= limite.date())
+            .join(Animal, Vacina.animal_id == Animal.id)
+            .outerjoin(Clinica, Animal.clinica_id == Clinica.id)
+            .filter(
+                Vacina.aplicada_em >= agora.date(),
+                Vacina.aplicada_em <= limite.date(),
+                Vacina.aplicada.isnot(True),
+                or_(Clinica.id.is_(None), Clinica.lembrete_vacina_automatico.isnot(True)),
+            )
             .all()
         )
         for vac in vacinas:
