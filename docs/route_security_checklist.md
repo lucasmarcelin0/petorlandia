@@ -220,3 +220,15 @@ não concedem acesso ao prontuário hospitalar.
 |POST `/internacao/<id>/evolucoes`|Equipe operacional na clínica do episódio; autoria obtida da sessão|mesmos testes|
 |POST `/internacao/<id>/alta`|Veterinário habilitado na clínica; transação encerra programação pendente|mesmos testes|
 |GET `/internacao/<id>/imprimir`|Mesmo escopo hospitalar do episódio; período validado e resposta `private, no-store`|mesmos testes|
+
+## Vacinas atrasadas e lembretes aos tutores (`blueprints/clinica.py`)
+
+|Rota|Autorização efetiva|
+|---|---|
+|GET `/clinica/<id>/vacinas-atrasadas`|`login_required` + `clinicas_do_usuario()` (equipe da clínica) ou admin; lista só animais com `clinica_id` da clínica (fora da equipe = 404)|
+|POST `/clinica/<id>/vacinas-atrasadas/whatsapp`|Equipe da clínica; `registrar_whatsapp_manual` só aceita doses de animais da clínica **e** do tutor informado (dose de outra clínica é ignorada)|
+|POST `/clinica/<id>/vacinas-atrasadas/configuracao`|Equipe da clínica + somente dono ou admin (`abort(403)`)|
+|POST `/clinica/<id>/vacinas-atrasadas/enviar-agora`|Equipe da clínica + somente dono ou admin; exige a opção ligada; idempotente por marco/canal|
+|GET/POST `/lembretes-vacina/sair/<token>`|Sem login (link do e-mail): token assinado (`itsdangerous` + `SECRET_KEY`) com o id do tutor; GET só confirma, POST descadastra; token inválido = 404|
+
+Testes: `tests/test_vacinas_atrasadas.py` (acesso de estranho, colaborador sem permissão de configurar, dose de outra clínica, token inválido).
