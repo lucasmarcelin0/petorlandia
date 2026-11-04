@@ -4626,3 +4626,29 @@ def test_reconcile_fusao_e_idempotente(app, monkeypatch):
     # A marca de envios não se acumula a cada passagem.
     assert linhas[0][10].count("envios") == 1
     assert "2 envios" in linhas[0][10]
+
+
+@pytest.mark.parametrize("address,expected", [
+    ("Rua 10, 372, A, Jardim Boa Vista", (-20.716036, -47.877456)),
+    ("Rua 3, 2117, Jardim Recreio", (-20.724743, -47.902234)),
+    ("Avenida 19, 293, Fundo, Gruta", (-20.723626, -47.899248)),
+    ("Rua 1, 1749, Jardim Nova Orlândia", (-20.723346, -47.898932)),
+    ("Rua 8, 1272, A", (-20.716456, -47.868552)),
+    ("Avenida 8, 1475, Centro", (-20.712097, -47.889819)),
+])
+def test_morning_cnefe_reference_overrides_stale_navigation_cache(app, monkeypatch, address, expected):
+    key = vacina_pmo_service._pmo_geocode_cache_key(address)
+    monkeypatch.setattr(vacina_pmo_service, "_PMO_ROUTE_COORDS_CACHE", {key: (-20.70, -47.90)})
+    visit = PmoVaccinationVisit(address=address, geocode_lat=-20.70, geocode_lng=-47.90,
+                               geocode_address_key=key)
+    with app.app_context():
+        row = vacina_pmo_service._serialize_visit(visit)
+        assert (row["lat"], row["lng"]) == expected
+        assert vacina_pmo_service._pmo_geocode_address(address) == expected
+        assert vacina_pmo_service._pmo_geocode_visit(visit) == expected
+        assert (visit.geocode_lat, visit.geocode_lng) == expected
+
+
+def test_morning_reference_does_not_match_neighboring_house():
+    for address in ["Rua 10, 3720, Boa Vista", "Rua 3, 21170", "Rua 8, 1272, B", "Rua 8, 1272"]:
+        assert vacina_pmo_service._pmo_lookup_verified_coords(address) is None

@@ -503,3 +503,34 @@ def test_rotate_photo_zero_devolve_a_mesma_foto():
     girada = rotate_photo(foto, 270)
     assert girada is not foto
     assert Image.open(BytesIO(girada.stream.getvalue())).size == (60, 40)
+
+
+@pytest.mark.parametrize('rua,numero,complemento,bairro,coords', [
+    ('Rua 10', '372', 'A', 'Jardim Boa Vista', '-20.716036,-47.877456'),
+    ('Rua 8', '1272', 'A', '', '-20.716456,-47.868552'),
+    ('Avenida 8', '1475', '', 'Centro', '-20.712097,-47.889819'),
+    ('Rua 3', '2117', '', 'Jardim Recreio', '-20.724743,-47.902234'),
+    ('Avenida 19', '293', 'Fundo', 'Gruta', '-20.723626,-47.899248'),
+    ('Rua 1', '1749', '', 'Jardim Nova Orlândia', '-20.723346,-47.898932'),
+])
+def test_ficha_casas_manha_abre_referencia_do_imovel(client, monkeypatch, rua, numero, complemento, bairro, coords):
+    from urllib.parse import quote
+    with flask_app.app_context():
+        _preparar(monkeypatch)
+        endereco = db.session.get(User, 1).endereco
+        endereco.rua, endereco.numero = rua, numero
+        endereco.complemento, endereco.bairro = complemento, bairro
+        db.session.commit()
+        html = client.get('/ficha_tutor/1', headers=HTML).get_data(as_text=True)
+        assert f'query={quote(coords)}' in html
+
+
+def test_ficha_nao_usa_referencia_de_orlandia_em_outra_cidade(client, monkeypatch):
+    with flask_app.app_context():
+        _preparar(monkeypatch)
+        endereco = db.session.get(User, 1).endereco
+        endereco.rua, endereco.numero, endereco.cidade = 'Rua 10', '372', 'Ribeirão Preto'
+        db.session.commit()
+        html = client.get('/ficha_tutor/1', headers=HTML).get_data(as_text=True)
+        assert 'query=Rua%2010%2C%20372' in html
+        assert '-20.716036' not in html

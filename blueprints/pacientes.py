@@ -2376,7 +2376,7 @@ def _contatos_do_tutor(tutor):
         discavel = re.sub(r'[^\d+]', '', bruto)
         ligar_url = f'tel:{discavel}' if len(re.sub(r'\D', '', discavel)) >= 8 else None
 
-    linha1 = linha2 = busca = ''
+    linha1 = linha2 = busca = rua_numero = ''
     endereco = tutor.endereco
     if endereco is not None and (endereco.rua or '').strip():
         def _t(valor):
@@ -2399,6 +2399,15 @@ def _contatos_do_tutor(tutor):
     elif (tutor.address or '').strip():
         linha1 = busca = tutor.address.strip()
 
+    # Mesma referência de imóvel usada na rota PMO, inclusive ao pesquisar o tutor
+    # fora do painel. Não aplicar números de ruas de Orlândia em outras cidades.
+    if endereco is not None and (endereco.cidade or '').strip().lower() in ('orlândia', 'orlandia') and (endereco.estado or '').strip().upper() == 'SP':
+        from services.vacina_pmo_service import _pmo_lookup_verified_coords
+
+        referencia = ', '.join(p for p in (rua_numero if busca else '', (endereco.complemento or '').strip()) if p)
+        coords = _pmo_lookup_verified_coords(referencia)
+        if coords:
+            busca = f'{coords[0]},{coords[1]}'
     mapa_url = f'https://www.google.com/maps/search/?api=1&query={quote(busca)}' if busca else None
 
     email = (getattr(tutor, 'email_informado', None) or '').strip()
