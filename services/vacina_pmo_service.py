@@ -122,6 +122,9 @@ _PMO_MONTHS = [
 # Cadastros com muitos nomes em texto livre geram um "nome" gigante; truncar evita
 # estourar o banco e derrubar a sincronização inteira.
 PMO_ANIMAL_NAME_MAX = 100
+PMO_AUTO_ANIMAL_DESCRIPTION = (
+    "Cadastro criado automaticamente pela campanha de vacinação antirrábica da Prefeitura de Orlândia."
+)
 PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
@@ -1627,6 +1630,71 @@ def _species_id(species: str) -> int | None:
     return created.id
 
 
+def _animal_reference_columns() -> list:
+    """Toda coluna do banco que aponta para ``animal.id`` (consulta, vacina, foto...)."""
+    animal_id_column = Animal.__table__.c.id
+    columns = []
+    for table in db.metadata.tables.values():
+        for fk in table.foreign_keys:
+            try:
+                if fk.column is animal_id_column:
+                    columns.append(fk.parent)
+            except Exception:  # tabela-alvo fora do metadata
+                continue
+    return columns
+
+
+def _pmo_phantom_animal_ids(animal_ids) -> set[int]:
+    """Quais cadastros são só o rascunho que a campanha criou e mais nada.
+
+    Fantasma = criado automaticamente pela campanha, sem foto, sem carteirinha
+    digital emitida, sem quem o cadastrou à mão e sem NENHUMA linha no banco apontando para ele (nem visita
+    da campanha, nem consulta, vacina, documento, agendamento...). É o único
+    cadastro de animal que dá para apagar sem perder nada.
+    """
+    ids = {int(animal_id) for animal_id in animal_ids if animal_id}
+    if not ids:
+        return set()
+    candidates = {
+        animal.id
+        for animal in Animal.query.filter(Animal.id.in_(ids))
+        if (animal.description or "").startswith("Cadastro criado automaticamente pela campanha")
+        and not animal.image
+        and not animal.public_token
+        and not animal.added_by_id
+    }
+    for column in _animal_reference_columns():
+        if not candidates:
+            break
+        referenced = db.session.execute(
+            db.select(column).where(column.in_(candidates)).distinct()
+        ).scalars()
+        candidates -= set(referenced)
+    return candidates
+
+
+def _discard_pmo_phantom_animals(animal_ids) -> int:
+    """Apaga os cadastros que uma linha da planilha deixou para trás.
+
+    A sincronização cria o ``Animal`` real assim que lê a linha. Quando a linha
+    muda — nome corrigido, bicho retirado ou, pior, a planilha desalinhada
+    trazendo os animais da casa vizinha — o vínculo era só desfeito e o
+    cadastro ficava na conta do tutor para sempre. Foi assim que uma tutora
+    com um cachorro chegou a 11 animais e centenas de contas ganharam bichos
+    alheios. Só some o que não carrega dado nenhum (``_pmo_phantom_animal_ids``);
+    o resto continua, como antes.
+    """
+    db.session.flush()
+    phantoms = _pmo_phantom_animal_ids(animal_ids)
+    for animal_id in phantoms:
+        animal = db.session.get(Animal, animal_id)
+        if animal is not None:
+            db.session.delete(animal)
+    if phantoms:
+        db.session.flush()
+    return len(phantoms)
+
+
 def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     visit = pmo_animal.visit
     _ensure_tutor_account(visit)
@@ -1678,7 +1746,7 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
         species_id=_species_id(pmo_animal.species),
         status="ativo",
         modo="adotado",
-        description="Cadastro criado automaticamente pela campanha de vacinação antirrábica da Prefeitura de Orlândia.",
+        description=PMO_AUTO_ANIMAL_DESCRIPTION,
         is_alive=True,
     )
     db.session.add(animal)
@@ -1850,47 +1918,47 @@ def repair_pmo_tutor_links(dry_run: bool = True) -> dict:
     return stats
 
 
-def cleanup_pmo_orphan_animals(dry_run: bool = True) -> dict:
-    """Remove registros de animais da campanha PMO que ficaram órfãos.
+def cleanup_pmo_orphan_animals(dry_run: bool = True, tutor_id: int | None = None) -> dict:
+    """Apaga os cadastros fantasmas que a campanha deixou nas contas dos tutores.
 
-    Um órfão é um ``Animal`` criado automaticamente pela campanha que não tem
-    mais nenhuma visita apontando para ele (vínculo perdido em re-syncs durante
-    o bug de mesclagem de tutores). Esses registros ficaram em perfis errados.
+    Até a sincronização passar a descartá-los (``_discard_pmo_phantom_animals``),
+    todo animal que saía de uma linha da planilha ficava na conta do tutor. Com
+    a planilha desalinhada, cada casa herdou os bichos da vizinha a cada sync.
 
-    Só remove um órfão quando existe uma cópia **canônica** (vinculada a uma
-    visita PMO) com o mesmo nome — ou seja, é uma duplicata segura. Órfãos sem
-    cópia canônica são **preservados** e apenas contados, para revisão manual.
+    Apaga só o que ``_pmo_phantom_animal_ids`` aceita: sem foto e sem nenhum
+    registro ligado, inclusive visita da campanha. Preserva também os de
+    tutores sem nenhuma visita, porque aí não há como saber se a casa tem o
+    animal (a visita pode ter sido apagada pela poda antiga).
+
+    Em ``dry_run`` apenas lista, sem gravar nada.
     """
-    stats = {"orfaos": 0, "removidos": 0, "preservados": 0}
+    orphans = Animal.query.filter(Animal.description.like("Cadastro criado automaticamente pela campanha%"))
+    if tutor_id:
+        orphans = orphans.filter(Animal.user_id == tutor_id)
+    orphans = orphans.order_by(Animal.user_id, Animal.id).all()
+    tutors_with_visit = {
+        user_id
+        for (user_id,) in db.session.query(PmoVaccinationVisit.tutor_user_id)
+        .filter(PmoVaccinationVisit.tutor_user_id.isnot(None))
+        .distinct()
+    }
+    phantoms = _pmo_phantom_animal_ids(animal.id for animal in orphans)
 
-    linked_animal_ids = (
-        db.session.query(PmoVaccinationAnimal.animal_id)
-        .filter(PmoVaccinationAnimal.animal_id.isnot(None))
-        .subquery()
-    )
-    orphans = (
-        Animal.query
-        .filter(Animal.description.like("Cadastro criado automaticamente pela campanha%"))
-        .filter(~Animal.id.in_(db.session.query(linked_animal_ids.c.animal_id)))
-        .all()
-    )
-
+    stats = {"fantasmas": 0, "removidos": 0, "preservados_sem_visita": 0, "tutores": 0, "detalhes": []}
+    tutors = set()
     for animal in orphans:
-        stats["orfaos"] += 1
-        target_name = (animal.name or "").strip().lower()
-        has_canonical = (
-            db.session.query(PmoVaccinationAnimal.id)
-            .join(Animal, Animal.id == PmoVaccinationAnimal.animal_id)
-            .filter(PmoVaccinationAnimal.animal_id.isnot(None))
-            .filter(func.lower(func.trim(Animal.name)) == target_name)
-            .first()
-        )
-        if has_canonical:
-            stats["removidos"] += 1
-            if not dry_run:
-                db.session.delete(animal)
-        else:
-            stats["preservados"] += 1
+        if animal.id not in phantoms:
+            continue
+        stats["fantasmas"] += 1
+        if animal.user_id not in tutors_with_visit:
+            stats["preservados_sem_visita"] += 1
+            continue
+        tutors.add(animal.user_id)
+        stats["removidos"] += 1
+        stats["detalhes"].append({"animal": animal.id, "nome": animal.name, "tutor": animal.user_id})
+        if not dry_run:
+            db.session.delete(animal)
+    stats["tutores"] = len(tutors)
 
     if not dry_run:
         db.session.commit()
@@ -3387,6 +3455,7 @@ def persist_vacina_pmo_rows(
         raise ValueError("Não foi possível identificar a aba da planilha. Selecione a aba e sincronize novamente.")
     now = utcnow()
     saved: list[PmoVaccinationVisit] = []
+    released_animal_ids: set[int | None] = set()
 
     # Mesmo na aba mestre a identidade deve acompanhar a pessoa, não a linha.
     # Sem gid não é seguro conciliar entre abas.
@@ -3441,6 +3510,7 @@ def persist_vacina_pmo_rows(
         ):
             visit.tutor_user_id = None
             for pmo_animal in visit.animals:
+                released_animal_ids.add(pmo_animal.animal_id)
                 _reset_pmo_animal_outcome(pmo_animal)
 
         visit.sheet_title = sheet_title
@@ -3485,6 +3555,7 @@ def persist_vacina_pmo_rows(
                 )
                 db.session.add(animal)
             elif _pmo_animal_identity_changed(animal, name=name, species=species):
+                released_animal_ids.add(animal.animal_id)
                 _clear_pmo_animal_links(animal)
             animal.name = name
             animal.species = species
@@ -3492,6 +3563,7 @@ def persist_vacina_pmo_rows(
 
         for position, animal in list(existing_by_position.items()):
             if position not in keep_positions:
+                released_animal_ids.add(animal.animal_id)
                 db.session.delete(animal)
 
         _ensure_visit_records(visit)
@@ -3521,6 +3593,9 @@ def persist_vacina_pmo_rows(
                 # colar. Preserva também visitas pendentes e suas carteirinhas.
                 stale_visit.source_row = -abs(stale_visit.id)
 
+    # Depois do laço: um cadastro solto por uma linha pode ter sido religado
+    # por outra (o bicho mudou de posição) e aí continua.
+    _discard_pmo_phantom_animals(released_animal_ids)
     db.session.commit()
     imunidade = build_previous_immunity_index(saved)
     resolve_animals_already_immune(saved, imunidade)
@@ -7185,6 +7260,7 @@ def _repoint_visits_after_merge(
         # Duas fases: as linhas só encolhem, então mover direto faria uma
         # visita cair em cima do source_row de outra ainda não movida.
         parked: list[tuple[PmoVaccinationVisit, int]] = []
+        released_animal_ids: set[int | None] = set()
         for position, entry in enumerate(entries, start=2):
             keep_from = entry["sources"][-1]
             for source_row in entry["sources"]:
@@ -7196,6 +7272,7 @@ def _repoint_visits_after_merge(
                 elif _pmo_visit_has_field_record(visit):
                     parked.append((visit, position))
                 else:
+                    released_animal_ids.update(animal.animal_id for animal in visit.animals)
                     db.session.delete(visit)
         for visit, _destino in parked:
             visit.source_row = -abs(visit.id or 1) - 100000
@@ -7203,6 +7280,7 @@ def _repoint_visits_after_merge(
         for visit, destino in parked:
             visit.source_row = destino
             visit.sheet_title = title
+        _discard_pmo_phantom_animals(released_animal_ids)
         db.session.commit()
     except Exception:
         db.session.rollback()
