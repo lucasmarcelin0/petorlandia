@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import os
-import re
 import secrets
 from datetime import date
 from typing import Any
+
+from flask import current_app
 
 from extensions import db
 from models import Animal, PmoCastrationAnimal, PmoCastrationRequest
 from services.sfa_service import _extract_google_sheet_id
 from services.vacina_pmo_service import (
+    _append_rows_at_column_a,
+    _first_free_row,
     _get_sheet_gid,
     _get_sheets_service_rw,
     _normalize_text,
     _quote_sheet_title,
+    _updated_range_start_row,
     normalize_pmo_request_address,
     resolve_request_sheet_title,
 )
@@ -213,24 +217,32 @@ def submit_castracao_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         "Solicitado",
     ]
 
-    response = (
+    # Âncora explícita na coluna A: o append sobre a faixa A:U escrevia a partir
+    # da "última tabela" que o Sheets enxergasse, que pode começar em outra
+    # coluna (ver ``_append_rows_at_column_a``).
+    existing_rows = (
         service.spreadsheets()
         .values()
-        .append(
+        .get(
             spreadsheetId=spreadsheet_id,
             range=f"{_quote_sheet_title(title)}!{PMO_CASTRATION_REQUEST_RANGE_COLS}",
-            valueInputOption="USER_ENTERED",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [row]},
         )
         .execute()
+        .get("values", [])
     )
-
-    updated_range = response.get("updates", {}).get("updatedRange", "")
-    source_row = 0
-    match = re.search(r"!A(\d+)", updated_range)
-    if match:
-        source_row = int(match.group(1))
+    updated_range = _append_rows_at_column_a(
+        service,
+        spreadsheet_id,
+        title,
+        [row],
+        row_number=_first_free_row(existing_rows),
+    )
+    source_row = _updated_range_start_row(updated_range)
+    if not source_row:
+        current_app.logger.warning(
+            "Solicitacao de castracao gravada fora da coluna A (%s); registro local nao criado.",
+            updated_range,
+        )
     sheet_gid = _get_sheet_gid(service, spreadsheet_id, title)
 
     public_token: str | None = None
