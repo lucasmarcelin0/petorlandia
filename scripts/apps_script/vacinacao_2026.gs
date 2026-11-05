@@ -2332,8 +2332,8 @@ var QUADRO_STATUS = {
   colunaStatus: 13, // M
   // Abas de fila e o status de quem aparece nelas sem registro anterior.
   abasDeFila: { 'inscricao a agendar': 'Fluxo ativo', 'agendadas': 'Pendente', 'encaixes': 'Reagendar' },
-  intervaloAposEdicaoMs: 60 * 1000,
-  intervaloSemEdicaoMs: 15 * 60 * 1000,
+  intervaloAposEdicaoMs: 3 * 60 * 1000,   // cada conferência leva ~20 s: a conta Gmail tem ~90 min/dia de acionadores
+  intervaloSemEdicaoMs: 30 * 60 * 1000,
   maxLocais: 8,
   corFluxo: '#c9daf8',  // azul claro do PetOrlândia: agendado / fluxo ativo
   corNeutra: '#ffffff'
@@ -2715,8 +2715,8 @@ function conferirQuadroStatusPMOAgora() {
 
 /**
  * Chamado pelo onEditInstalado. Edição numa aba de fila, de dia ou na mestre
- * confere na hora, no máximo uma vez por minuto; o que ficar para trás é marcado
- * como pendente e o acionador de tempo pega no minuto seguinte.
+ * confere na hora, no máximo uma vez a cada 3 minutos; o que ficar para trás é marcado
+ * como pendente e o acionador de tempo pega na próxima volta (a cada 5 minutos).
  */
 function conferirQuadroAposEdicao_(e) {
   const nome = e && e.range ? e.range.getSheet().getName() : '';
@@ -2727,7 +2727,7 @@ function conferirQuadroAposEdicao_(e) {
   if (Date.now() - ultima >= QUADRO_STATUS.intervaloAposEdicaoMs) conferirQuadroStatusPMO();
 }
 
-/** Acionador de tempo (a cada minuto): só trabalha quando há o que conferir. */
+/** Acionador de tempo (a cada 5 minutos): só trabalha quando há o que conferir. */
 function conferirQuadroPeriodico() {
   const props = PropertiesService.getDocumentProperties();
   const idade = Date.now() - Number(props.getProperty('QUADRO_STATUS_ULTIMA') || 0);

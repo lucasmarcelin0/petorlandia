@@ -982,7 +982,7 @@ teste('quadro: simulação conta as mudanças por tipo e não grava nada', () =>
   assert.deepStrictEqual(JSON.parse(JSON.stringify(resumo.tipos)), { 'linha corrigida na mesma aba': 1 });
 });
 
-teste('quadro: edição confere na hora, no máximo uma vez por minuto', () => {
+teste('quadro: edição confere na hora, no máximo uma vez a cada 3 minutos', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
@@ -999,12 +999,12 @@ teste('quadro: edição confere na hora, no máximo uma vez por minuto', () => {
   delete p.gravados[2];
 
   ctx.conferirQuadroAposEdicao_(edicao('Inscrição a agendar'));
-  assert.deepStrictEqual(p.gravados, {}, 'segunda edição no mesmo minuto espera');
+  assert.deepStrictEqual(p.gravados, {}, 'segunda edição logo em seguida espera');
   assert.strictEqual(p.propriedades.QUADRO_STATUS_PENDENTE, '1');
 
   ctx.conferirQuadroPeriodico();
-  assert.strictEqual(p.propriedades.QUADRO_STATUS_PENDENTE, '1', 'o acionador respeita o minuto');
-  p.propriedades.QUADRO_STATUS_ULTIMA = String(Date.now() - 61 * 1000);
+  assert.strictEqual(p.propriedades.QUADRO_STATUS_PENDENTE, '1', 'o acionador respeita o intervalo');
+  p.propriedades.QUADRO_STATUS_ULTIMA = String(Date.now() - 181 * 1000);
   ctx.conferirQuadroPeriodico();
   assert.strictEqual(p.propriedades.QUADRO_STATUS_PENDENTE, undefined, 'e confere o que ficou pendente');
 });
