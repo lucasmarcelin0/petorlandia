@@ -944,6 +944,19 @@ teste('quadro: status de outro tutor que ficou na linha não é herdado', () => 
   assert.strictEqual(p.lido(2).texto, 'Fluxo ativo\nInscrição a agendar (linha 2): Fluxo ativo');
 });
 
+teste('quadro: simulação conta as mudanças por tipo e não grava nada', () => {
+  const p = planilhaDoQuadro({
+    mestre: [MARIA],
+    status: [quadroAntigo('Fluxo ativo\nInscrição a agendar (linha 84): Fluxo ativo', 100, 84, 'Inscrição a agendar')],
+    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+  });
+  const resumo = carregar(p.stubs).conferirQuadro_(p.stubs.SpreadsheetApp.getActiveSpreadsheet(), true);
+
+  assert.deepStrictEqual(p.gravados, {});
+  assert.strictEqual(resumo.atualizadas, 1);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(resumo.tipos)), { 'linha corrigida na mesma aba': 1 });
+});
+
 teste('quadro: edição confere na hora, no máximo uma vez por minuto', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],

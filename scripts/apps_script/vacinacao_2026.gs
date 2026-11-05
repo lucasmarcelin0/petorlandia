@@ -2584,7 +2584,7 @@ function corDoTitulo_(titulo) {
 }
 
 function conferirQuadro_(ss, simular) {
-  const resumo = { conferidas: 0, atualizadas: 0, exemplos: [] };
+  const resumo = { conferidas: 0, atualizadas: 0, exemplos: [], tipos: {} };
   const mestre = ss.getSheetByName(QUADRO_STATUS.abaMestre);
   if (!mestre) return resumo;
   const ultima = mestre.getLastRow();
@@ -2620,7 +2620,7 @@ function conferirQuadro_(ss, simular) {
     quadro.links.forEach(function (l) { construtor.setLinkUrl(l.inicio, l.fim, l.url); });
     mudancas.push({ indice: i - 1, rico: construtor.build(),
       cor: quadro.titulo !== antigo.titulo ? corDoTitulo_(quadro.titulo) : '' });
-    if (simular) resumo.exemplos.push('linha ' + (i + 1) + ': [' + textoAtual + '] => [' + quadro.texto + ']');
+    if (simular) contarMudanca_(resumo, antigo.titulo, textoAtual, quadro, i + 1);
   }
   if (simular) {
     resumo.atualizadas = mudancas.length;
@@ -2646,11 +2646,37 @@ function conferirQuadro_(ss, simular) {
   return resumo;
 }
 
+/** Simulação: conta cada mudança por tipo e guarda alguns exemplos. */
+function contarMudanca_(resumo, tituloAntigo, textoAtual, quadro, linha) {
+  const conta = function (k) { resumo.tipos[k] = (resumo.tipos[k] || 0) + 1; };
+  const abaDe = function (l) { return l.replace(/ \(.*$/, '').replace(/:.*$/, ''); };
+  if (tituloAntigo !== quadro.titulo) conta('título ' + (tituloAntigo || '(vazio)') + ' -> ' + quadro.titulo);
+  const velhas = textoAtual.split('\n').slice(1);
+  const novas = quadro.texto.split('\n').slice(1);
+  if (velhas.join('\n') === novas.join('\n')) {
+    conta('mesmo texto, link corrigido');
+  } else {
+    novas.forEach(function (l) {
+      if (velhas.indexOf(l) !== -1) return;
+      if (/\(não encontrado\)/.test(l)) conta('dia onde a pessoa não está mais');
+      else if (velhas.some(function (v) { return abaDe(v) === abaDe(l); })) conta('linha corrigida na mesma aba');
+      else conta('aba nova: ' + (dataDoNomeDaAba_(abaDe(l)) ? 'dia' : abaDe(l)));
+    });
+    velhas.forEach(function (l) {
+      if (!novas.some(function (n) { return abaDe(n) === abaDe(l); })) conta('saiu de: ' + abaDe(l));
+    });
+  }
+  if (resumo.exemplos.length < 12) {
+    resumo.exemplos.push('linha ' + linha + ': [' + textoAtual + '] -> [' + quadro.texto + ']');
+  }
+}
+
 /** Mostra no registro de execução o que a conferência mudaria, sem gravar nada. */
 function simularConferenciaDoQuadro() {
   const resumo = conferirQuadro_(SpreadsheetApp.getActiveSpreadsheet(), true);
+  const tipos = Object.keys(resumo.tipos).sort().map(function (k) { return resumo.tipos[k] + '  ' + k; });
   console.log(resumo.atualizadas + ' de ' + resumo.conferidas + ' inscrições mudariam.\n' +
-    resumo.exemplos.join('\n'));
+    tipos.join('\n') + '\n\n' + resumo.exemplos.join('\n'));
   return resumo;
 }
 
