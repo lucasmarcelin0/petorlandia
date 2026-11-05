@@ -13,6 +13,7 @@
   <title>{% if completar %}Editar ficha {{ u.ficha_sinan or 'sem número' }} · Notificação SINAN{% elif u %}Nova ficha · Notificação SINAN{% else %}Ficha SINAN antes do T0 · SFA Orlândia{% endif %}</title>
   {# Datas sempre no padrão brasileiro (dd/mm/aaaa), mesmo em navegador em inglês. #}
   <script src="{{ url_for('static', filename='js/date_br.js', v='20260922') }}"></script>
+  <script src="{{ url_for('static', filename='js/autogrow.js', v='20261105') }}" defer></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_pre_t0.css') }}?v=20261029">
 </head>
 <body>
