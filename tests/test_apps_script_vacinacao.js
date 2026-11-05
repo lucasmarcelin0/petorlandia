@@ -821,7 +821,7 @@ function planilhaDoQuadro({ mestre, status, notas, abas, props }) {
   return { stubs, gravados, cores, propriedades, lido, gidDe: (nome) => 100 + Object.keys(abas || {}).indexOf(nome) };
 }
 
-const MARIA = ['20/10/2026 10:00:00', 'Maria das Graças Brandão', 'Rua 7', '210', '', 'Centro',
+const MARIA = ['20/10/2026 10:00:00', 'Marta Regina Prado', 'Rua 7', '210', '', 'Centro',
   '16991112222', '', '2', '0', 'Mel, Bob', ''];
 
 teste('quadro: inscrição que mudou de linha volta a abrir a linha certa', () => {
@@ -829,7 +829,7 @@ teste('quadro: inscrição que mudou de linha volta a abrir a linha certa', () =
     mestre: [MARIA],
     status: [quadroAntigo('Fluxo ativo\nInscrição a agendar (linha 84): Fluxo ativo', 100, 84, 'Inscrição a agendar')],
     abas: { 'Inscrição a agendar': [linhaFila('Joana Lima', 'Rua 1', '5', '16990000000'),
-      linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16 99111-2222')] },
+      linhaFila('Marta Regina Prado', 'Rua 7', '210', '16 99111-2222')] },
   });
   const resumo = carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -845,7 +845,7 @@ teste('quadro: quem foi agendado num dia aparece na hora, sem a linha velha da f
     status: [quadroAntigo('Fluxo ativo\nInscrição a agendar (linha 52): Fluxo ativo', 100, 52, 'Inscrição a agendar')],
     abas: {
       'Inscrição a agendar': [linhaFila('Joana Lima', 'Rua 1', '5', '16990000000')],
-      '10/11/2099': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')],
+      '10/11/2099': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')],
     },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
@@ -860,7 +860,7 @@ teste('quadro: homônimo com outro telefone não recebe o link', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     status: [quadroAntigo('Fluxo ativo\nInscrição a agendar (linha 2): Fluxo ativo', 100, 2, 'Inscrição a agendar')],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 9', '40', '16998887777')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 9', '40', '16998887777')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -872,7 +872,7 @@ teste('quadro: homônimo com outro telefone não recebe o link', () => {
 teste('quadro: nome abreviado e telefone igual é a mesma pessoa', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria G. Brandão', 'R. 7', '210', '(16) 99111-2222')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta R. Prado', 'R. 7', '210', '(16) 99111-2222')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -883,9 +883,9 @@ teste('quadro: aparece duas vezes na fila, as duas linhas ficam visíveis', () =
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     abas: { 'Inscrição a agendar': [
-      linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222'),
+      linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222'),
       linhaFila('Joana Lima', 'Rua 1', '5', '16990000000'),
-      linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222'),
+      linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222'),
     ] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
@@ -914,7 +914,7 @@ teste('quadro: status do PetOrlândia é reaproveitado e quadro certo não é re
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     status: [ricoFalso(texto, [{ inicio, fim: inicio + 10, url: linkPara(100, 2) }])],
-    abas: { '10/11/2099': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+    abas: { '10/11/2099': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   const resumo = carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -926,7 +926,7 @@ teste('quadro: texto digitado por alguém na coluna M não é tocado', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     status: [ricoFalso('ligar antes, portão quebrado')],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
   assert.deepStrictEqual(p.gravados, {});
@@ -937,7 +937,7 @@ teste('quadro: status de outro tutor que ficou na linha não é herdado', () => 
     mestre: [MARIA],
     status: [quadroAntigo('Vacinado\n01/09/2026 (linha 7): Vacinado - 01/09/2026', 100, 7, '01/09/2026')],
     notas: ['PetOrlandia PMO\nTutor: Joana Lima\nStatus geral: Vacinado'],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -949,7 +949,7 @@ teste('quadro: aba de dia com nome digitado fora do padrão continua contando', 
     mestre: [MARIA],
     status: [quadroAntigo('Vacinado\n18/06/2026  (linha 9): Vacinado - 18/06/2026', 100, 9, '18/06/2026 ')],
     abas: { '18/06/2026 ': [linhaFila('Joana Lima', 'Rua 1', '5', '16990000000'),
-      linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+      linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
 
@@ -963,7 +963,7 @@ teste('quadro: aba de dia com nome digitado fora do padrão continua contando', 
 teste('quadro: telefone trocado vale quando nome e endereço confirmam', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16955554444')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16955554444')] },
   });
   carregar(p.stubs).conferirQuadroStatusPMO();
   assert.strictEqual(p.lido(2).texto, 'Fluxo ativo\nInscrição a agendar (linha 2): Fluxo ativo');
@@ -973,7 +973,7 @@ teste('quadro: simulação conta as mudanças por tipo e não grava nada', () =>
   const p = planilhaDoQuadro({
     mestre: [MARIA],
     status: [quadroAntigo('Fluxo ativo\nInscrição a agendar (linha 84): Fluxo ativo', 100, 84, 'Inscrição a agendar')],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   const resumo = carregar(p.stubs).conferirQuadro_(p.stubs.SpreadsheetApp.getActiveSpreadsheet(), true);
 
@@ -985,7 +985,7 @@ teste('quadro: simulação conta as mudanças por tipo e não grava nada', () =>
 teste('quadro: edição confere na hora, no máximo uma vez a cada 3 minutos', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],
-    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+    abas: { 'Inscrição a agendar': [linhaFila('Marta Regina Prado', 'Rua 7', '210', '16991112222')] },
   });
   const ctx = carregar(p.stubs);
   const edicao = (aba) => ({ range: { getSheet: () => ({ getName: () => aba }) } });
