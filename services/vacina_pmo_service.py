@@ -3369,6 +3369,101 @@ def _pmo_apply_sheet_plan(
     db.session.flush()
 
 
+_PMO_PANEL_NOTE_LINE = re.compile(r"^\d{1,2}:\d{2} - ")
+
+
+def _pmo_merge_sheet_note(sheet_note: str, current_note: str | None) -> str:
+    """Observação da planilha mais as linhas do painel que ainda não chegaram nela.
+
+    O painel grava cada desfecho e cada observação como "HH:MM - ..." e só
+    depois copia para a coluna K. Quando a cópia é recusada (a linha foi
+    editada à mão e não confere mais), a planilha fica para trás; trocar a
+    nota pela dela apagava o registro do campo — foi o que aconteceu com a
+    casa do César em 05/11/2026.
+    """
+    sheet_text = _normalize_text(sheet_note)
+    missing = [
+        part
+        for part in (_normalize_note_line(p) for p in str(current_note or "").split(" | "))
+        if _PMO_PANEL_NOTE_LINE.match(part) and part not in sheet_text
+    ]
+    if not missing:
+        return sheet_note
+    return " | ".join(([sheet_note.strip()] if sheet_note.strip() else []) + missing)
+
+
+def _pmo_same_animal_name(left: Any, right: Any) -> bool:
+    """Mesmo nome com outra grafia ("Luquinha" no cadastro, "luquinho" na aba)."""
+    old, new = _pmo_animal_slug(left), _pmo_animal_slug(right)
+    return bool(old) and (old == new or _pmo_close_slugs(old, new))
+
+
+def _pmo_sync_visit_animals(visit: PmoVaccinationVisit, parsed_animals: list[dict[str, Any]]) -> bool:
+    """Aplica os animais da coluna J sem desfazer vacina aplicada no painel.
+
+    Animal vacinado (ou dispensado por já estar imune) é fato do campo: a
+    planilha não o renomeia, não o troca por outro e não o apaga. Quem foi
+    incluído no painel e ainda não aparece na aba fica no fim da lista.
+    Devolve True quando a planilha ficou para trás e precisa receber o painel.
+    """
+    existing_by_position = {animal.position: animal for animal in visit.animals}
+    ordered: list[PmoVaccinationAnimal] = []
+    preserved: list[PmoVaccinationAnimal] = []
+    behind = False
+    for position, animal_data in enumerate(parsed_animals, start=1):
+        animal = existing_by_position.pop(position, None)
+        name = (animal_data.get("name") or f"Animal {position}")[:PMO_ANIMAL_NAME_MAX]
+        species = animal_data.get("species") or "cao"
+        if animal is not None and _pmo_animal_identity_changed(animal, name=name, species=species):
+            if (animal.status or "") in PMO_DONE_STATUSES:
+                behind = True
+                if animal.species == species and _pmo_same_animal_name(animal.name, name):
+                    ordered.append(animal)
+                    continue
+                preserved.append(animal)
+                animal = None
+            else:
+                _clear_pmo_animal_links(animal)
+        if animal is None:
+            animal = PmoVaccinationAnimal(
+                visit=visit,
+                position=position,
+                status=animal_data.get("status") or "pendente",
+            )
+            db.session.add(animal)
+        animal.name = name
+        animal.species = species
+        ordered.append(animal)
+
+    for animal in existing_by_position.values():
+        if (animal.status or "") in PMO_DONE_STATUSES:
+            preserved.append(animal)
+            behind = True
+        else:
+            db.session.delete(animal)
+
+    for position, animal in enumerate(ordered + preserved, start=1):
+        animal.position = position
+    if preserved:
+        kept = ordered + preserved
+        visit.dogs = max(visit.dogs or 0, sum(1 for a in kept if a.species == "cao"))
+        visit.cats = max(visit.cats or 0, sum(1 for a in kept if a.species != "cao"))
+    return behind
+
+
+def _pmo_push_panel_to_sheet(visit: PmoVaccinationVisit) -> None:
+    """Leva para a linha da aba o que o sync preservou do painel.
+
+    Logo depois do sync a linha confere com a visita, então a trava de
+    ``_pmo_sheet_row_matches_visit`` deixa gravar o que antes tinha sido recusado.
+    """
+    write_animal_names_to_sheet(visit)
+    write_animal_counts_to_sheet(visit)
+    write_vaccinated_counts_to_sheet(visit)
+    write_note_to_sheet(visit)
+    write_attended_by_to_sheet(visit)
+
+
 def persist_vacina_pmo_rows(
     rows: list[dict[str, Any]],
     *,
@@ -3387,6 +3482,7 @@ def persist_vacina_pmo_rows(
         raise ValueError("Não foi possível identificar a aba da planilha. Selecione a aba e sincronize novamente.")
     now = utcnow()
     saved: list[PmoVaccinationVisit] = []
+    behind: list[PmoVaccinationVisit] = []
 
     # Mesmo na aba mestre a identidade deve acompanhar a pessoa, não a linha.
     # Sem gid não é seguro conciliar entre abas.
@@ -3433,12 +3529,13 @@ def persist_vacina_pmo_rows(
         tutor_name = row.get("tutor") or ""
         phone1 = row.get("phone1") or ""
         phone2 = row.get("phone2") or ""
-        if visit.id and _visit_identity_changed(
+        identity_changed = bool(visit.id) and _visit_identity_changed(
             visit,
             tutor_name=tutor_name,
             phone1=phone1,
             phone2=phone2,
-        ):
+        )
+        if identity_changed:
             visit.tutor_user_id = None
             for pmo_animal in visit.animals:
                 _reset_pmo_animal_outcome(pmo_animal)
@@ -3465,38 +3562,25 @@ def persist_vacina_pmo_rows(
         visit.requested_date = _parse_date_object(row.get("requestedDate"))
         visit.vaccine_date = _parse_date_object(row.get("date"))
         visit.shift = row.get("shift") or ""
-        visit.note = row.get("note") or ""
-        visit.attended_by = (row.get("attendedBy") or "").strip() or None
+        # O que o painel registrou e a planilha ainda não recebeu continua
+        # valendo (ver _pmo_merge_sheet_note e _pmo_sync_visit_animals).
+        sheet_note = row.get("note") or ""
+        visit.note = _pmo_merge_sheet_note(sheet_note, "" if identity_changed else visit.note)
+        sheet_attended_by = (row.get("attendedBy") or "").strip()
+        visit.attended_by = sheet_attended_by or (None if identity_changed else visit.attended_by) or None
         visit.synced_at = now
         _ensure_visit_public_token(visit)
 
-        existing_by_position = {animal.position: animal for animal in visit.animals}
-        parsed_animals = row.get("animals") or []
-        keep_positions = set()
-        for position, animal_data in enumerate(parsed_animals, start=1):
-            animal = existing_by_position.get(position)
-            name = (animal_data.get("name") or f"Animal {position}")[:PMO_ANIMAL_NAME_MAX]
-            species = animal_data.get("species") or "cao"
-            if not animal:
-                animal = PmoVaccinationAnimal(
-                    visit=visit,
-                    position=position,
-                    status=animal_data.get("status") or "pendente",
-                )
-                db.session.add(animal)
-            elif _pmo_animal_identity_changed(animal, name=name, species=species):
-                _clear_pmo_animal_links(animal)
-            animal.name = name
-            animal.species = species
-            keep_positions.add(position)
-
-        for position, animal in list(existing_by_position.items()):
-            if position not in keep_positions:
-                db.session.delete(animal)
+        sheet_behind = _pmo_sync_visit_animals(visit, row.get("animals") or [])
+        sheet_behind = sheet_behind or visit.note != sheet_note or bool(
+            visit.attended_by and not sheet_attended_by
+        )
 
         _ensure_visit_records(visit)
 
         saved.append(visit)
+        if sheet_behind:
+            behind.append(visit)
 
     # Remove registros órfãos: linhas que existiam no banco para esta aba mas
     # não aparecem mais na planilha (ex.: tutor removido da lista do dia).
@@ -3522,6 +3606,8 @@ def persist_vacina_pmo_rows(
                 stale_visit.source_row = -abs(stale_visit.id)
 
     db.session.commit()
+    for visit in behind:
+        _pmo_push_panel_to_sheet(visit)
     imunidade = build_previous_immunity_index(saved)
     resolve_animals_already_immune(saved, imunidade)
     return [_serialize_visit(visit, imunidade.get(visit.id, {})) for visit in saved]
