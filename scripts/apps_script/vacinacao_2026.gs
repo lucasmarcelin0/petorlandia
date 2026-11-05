@@ -27,6 +27,11 @@
  *
  * Depois de reordenar a aba mestre, rode "🔄 Atualizar status (PetOrlândia)":
  * é o que reencaixa o Status PMO nas novas posições.
+ *
+ * No editor, este arquivo é `ordenar.gs`. Não repita nomes de função em outro
+ * arquivo do projeto: o arquivo carregado por último vence, e foi assim que o
+ * menu e o onEditInstalado antigos de `wwp.gs` ficaram valendo até 05/11/2026.
+ * `wwp.gs` guarda só `tokenPMOLegado_`.
  */
 
 // ==============================================================================
@@ -1200,7 +1205,10 @@ function compilarControleDeDoses() {
  * que é copiado, versionado e compartilhado.
  */
 function obterTokenPMO_() {
-  const token = PropertiesService.getScriptProperties().getProperty('PMO_TOKEN');
+  let token = PropertiesService.getScriptProperties().getProperty('PMO_TOKEN');
+  // Enquanto a propriedade não existe, o token fica em `wwp.gs` (só no editor
+  // da planilha, nunca neste arquivo, que vai para o repositório público).
+  if (!token && typeof tokenPMOLegado_ === 'function') token = tokenPMOLegado_();
   if (!token) {
     throw new Error(
       'Configure a propriedade de script PMO_TOKEN ' +

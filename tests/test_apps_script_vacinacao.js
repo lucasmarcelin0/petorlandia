@@ -1010,6 +1010,25 @@ teste('quadro: edição confere na hora, no máximo uma vez a cada 3 minutos', (
 });
 
 // --------------------------------------------------------------------------
+// Projeto do editor: ordenar.gs (este arquivo) + wwp.gs com o token
+// --------------------------------------------------------------------------
+teste('projeto: nenhuma função declarada duas vezes (a última vence no Apps Script)', () => {
+  const nomes = fs.readFileSync(SCRIPT, 'utf8').match(/^function \w+/gm).map(l => l.slice(9));
+  const repetidas = nomes.filter((n, i) => nomes.indexOf(n) !== i);
+  assert.deepStrictEqual(repetidas, []);
+});
+
+teste('token: propriedade do script vale; sem ela, o token guardado em wwp.gs', () => {
+  const props = (valor) => ({ getScriptProperties: () => ({ getProperty: () => valor }) });
+
+  assert.strictEqual(carregar({ PropertiesService: props('da-propriedade'), tokenPMOLegado_: () => 'do-wwp' })
+    .obterTokenPMO_(), 'da-propriedade');
+  assert.strictEqual(carregar({ PropertiesService: props(null), tokenPMOLegado_: () => 'do-wwp' })
+    .obterTokenPMO_(), 'do-wwp');
+  assert.throws(() => carregar({ PropertiesService: props(null) }).obterTokenPMO_(), /PMO_TOKEN/);
+});
+
+// --------------------------------------------------------------------------
 let falhas = 0;
 testes.forEach(([nome, fn]) => {
   try {
