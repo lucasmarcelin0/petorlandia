@@ -110,6 +110,30 @@ def test_estagiario_edita_animal_e_consulta(client, clinica, perfil):
     assert not any("Apenas veterinários" in message for message in _flashes(client))
 
 
+ABAS_CLINICAS = ("consulta-tab", "medicamentos-tab", "exames-tab", "vacinas-tab", "documentos-tab", "orcamento-tab")
+
+
+@pytest.mark.parametrize("perfil", ["est", "conta"])
+def test_estagiario_ve_todas_as_abas_da_consulta(client, clinica, perfil):
+    # A tela usava `is_active_veterinarian`, que exclui estagiário: ele só via
+    # Tutor, Animal e Ração, embora as rotas já o deixassem atender.
+    _login(client, getattr(clinica, perfil))
+    response = client.get(f"/consulta/{clinica.animal.id}", headers=HTML)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    for aba in ABAS_CLINICAS:
+        assert f'id="{aba}"' in html, aba
+    assert f"/animal/{clinica.animal.id}/documentos" in html, "envio de documentos"
+
+
+def test_estagiario_sem_supervisor_nao_ve_abas_clinicas(client, clinica):
+    clinica.est_vet.supervisor_id = None
+    db.session.commit()
+    _login(client, clinica.est)
+    html = client.get(f"/consulta/{clinica.animal.id}", headers=HTML).get_data(as_text=True)
+    assert 'id="consulta-tab"' not in html
+
+
 def test_estagiario_prescreve_e_receita_sai_no_nome_do_supervisor(client, clinica):
     _login(client, clinica.est)
     response = client.post(
