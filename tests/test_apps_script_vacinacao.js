@@ -944,6 +944,31 @@ teste('quadro: status de outro tutor que ficou na linha não é herdado', () => 
   assert.strictEqual(p.lido(2).texto, 'Fluxo ativo\nInscrição a agendar (linha 2): Fluxo ativo');
 });
 
+teste('quadro: aba de dia com nome digitado fora do padrão continua contando', () => {
+  const p = planilhaDoQuadro({
+    mestre: [MARIA],
+    status: [quadroAntigo('Vacinado\n18/06/2026  (linha 9): Vacinado - 18/06/2026', 100, 9, '18/06/2026 ')],
+    abas: { '18/06/2026 ': [linhaFila('Joana Lima', 'Rua 1', '5', '16990000000'),
+      linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16991112222')] },
+  });
+  carregar(p.stubs).conferirQuadroStatusPMO();
+
+  assert.strictEqual(p.lido(2).texto, 'Vacinado\n18/06/2026  (linha 3): Vacinado - 18/06/2026');
+  const ctx = carregar(p.stubs);
+  assert.strictEqual(ctx.diaDaAba_('27/03/26'), '2026-03-27');
+  assert.strictEqual(ctx.diaDaAba_('1/06/2026'), '2026-06-01');
+  assert.strictEqual(ctx.diaDaAba_('Encaixes'), '');
+});
+
+teste('quadro: telefone trocado vale quando nome e endereço confirmam', () => {
+  const p = planilhaDoQuadro({
+    mestre: [MARIA],
+    abas: { 'Inscrição a agendar': [linhaFila('Maria das Graças Brandão', 'Rua 7', '210', '16955554444')] },
+  });
+  carregar(p.stubs).conferirQuadroStatusPMO();
+  assert.strictEqual(p.lido(2).texto, 'Fluxo ativo\nInscrição a agendar (linha 2): Fluxo ativo');
+});
+
 teste('quadro: simulação conta as mudanças por tipo e não grava nada', () => {
   const p = planilhaDoQuadro({
     mestre: [MARIA],

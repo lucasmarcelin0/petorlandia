@@ -2422,16 +2422,16 @@ function pessoaDaLinha_(linha, col) {
 }
 
 /**
- * A linha de outra aba é a mesma casa da inscrição? Nome compatível sempre; com
- * telefone dos dois lados, o telefone precisa bater (dois "Maria" na mesma rua
- * não se misturam); sem telefone, vale o endereço ou o nome completo idêntico.
+ * A linha de outra aba é a mesma casa da inscrição? Nome compatível sempre, e
+ * mais telefone OU endereço (rua + número) em comum. Telefone diferente sem o
+ * endereço para confirmar não vale (dois "Maria" no mesmo bairro não se
+ * misturam); sem telefone de um dos lados, vale o nome completo idêntico.
  */
 function mesmaPessoa_(a, b) {
   if (!nomesCompativeis_(a.nome, b.nome)) return false;
-  if (a.telefones.length && b.telefones.length) {
-    return a.telefones.some(function (t) { return b.telefones.indexOf(t) !== -1; });
-  }
+  if (a.telefones.some(function (t) { return b.telefones.indexOf(t) !== -1; })) return true;
   if (a.endereco && a.endereco === b.endereco) return true;
+  if (a.telefones.length && b.telefones.length) return false;
   return a.chaveNome === b.chaveNome && a.chaveNome.split(' ').length >= 2;
 }
 
@@ -2439,8 +2439,18 @@ function statusPadraoDaAba_(nome) {
   return QUADRO_STATUS.abasDeFila[chaveTexto_(nome)] || '';
 }
 
+/**
+ * Dia da aba como "AAAA-MM-DD". Aceita o que a equipe digitou de fato nas abas
+ * ("18/06/2026 " com espaço, "27/03/26", "1/06/2026"), como o PetOrlândia.
+ */
+function diaDaAba_(nome) {
+  const m = String(nome || '').match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})\s*$/);
+  if (!m || +m[1] < 1 || +m[1] > 31 || +m[2] < 1 || +m[2] > 12) return '';
+  return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+}
+
 function ehAbaDoQuadro_(nome) {
-  return !!(statusPadraoDaAba_(nome) || dataDoNomeDaAba_(nome));
+  return !!(statusPadraoDaAba_(nome) || diaDaAba_(nome));
 }
 
 /** Todas as linhas das abas de fila e de dia, indexadas por telefone e nome. */
@@ -2453,14 +2463,14 @@ function indiceDeLocais_(ss) {
     if (ultima < 2) return;
     const dados = aba.getRange(1, 1, ultima, Math.min(9, aba.getMaxColumns())).getValues();
     const col = colunas_(detectarOffset_(dados));
-    const data = dataDoNomeDaAba_(nome);
+    const dia = diaDaAba_(nome);
     for (let i = 1; i < dados.length; i++) {
       const local = pessoaDaLinha_(dados[i], col);
       if (!local.chaveNome) continue;
       local.aba = nome;
       local.gid = aba.getSheetId();
       local.linha = i + 1;
-      local.dia = data ? data.split('/').reverse().join('-') : '';
+      local.dia = dia;
       local.statusPadrao = statusPadraoDaAba_(nome);
       const primeiro = local.chaveNome.split(' ')[0];
       (indice.porNome[primeiro] = indice.porNome[primeiro] || []).push(local);
@@ -2540,11 +2550,10 @@ function montarQuadro_(antigo, achados, hoje, idPlanilha) {
     };
   });
   Object.keys(anteriores).forEach(function (aba) {
-    const data = dataDoNomeDaAba_(aba);
-    if (!data) return;
+    const dia = diaDaAba_(aba);
+    if (!dia) return;
     anteriores[aba].forEach(function (status) {
-      linhas.push({ texto: aba + ' (não encontrado): ' + status, url: '', aba: aba,
-        dia: data.split('/').reverse().join('-'), status: status });
+      linhas.push({ texto: aba + ' (não encontrado): ' + status, url: '', aba: aba, dia: dia, status: status });
     });
   });
   linhas.sort(function (a, b) {
@@ -2660,7 +2669,7 @@ function contarMudanca_(resumo, tituloAntigo, textoAtual, quadro, linha) {
       if (velhas.indexOf(l) !== -1) return;
       if (/\(não encontrado\)/.test(l)) conta('dia onde a pessoa não está mais');
       else if (velhas.some(function (v) { return abaDe(v) === abaDe(l); })) conta('linha corrigida na mesma aba');
-      else conta('aba nova: ' + (dataDoNomeDaAba_(abaDe(l)) ? 'dia' : abaDe(l)));
+      else conta('aba nova: ' + (diaDaAba_(abaDe(l)) ? 'dia' : abaDe(l)));
     });
     velhas.forEach(function (l) {
       if (!novas.some(function (n) { return abaDe(n) === abaDe(l); })) conta('saiu de: ' + abaDe(l));
@@ -2673,9 +2682,11 @@ function contarMudanca_(resumo, tituloAntigo, textoAtual, quadro, linha) {
 
 /** Mostra no registro de execução o que a conferência mudaria, sem gravar nada. */
 function simularConferenciaDoQuadro() {
+  const inicio = Date.now();
   const resumo = conferirQuadro_(SpreadsheetApp.getActiveSpreadsheet(), true);
   const tipos = Object.keys(resumo.tipos).sort().map(function (k) { return resumo.tipos[k] + '  ' + k; });
-  console.log(resumo.atualizadas + ' de ' + resumo.conferidas + ' inscrições mudariam.\n' +
+  console.log(resumo.atualizadas + ' de ' + resumo.conferidas + ' inscrições mudariam (' +
+    Math.round((Date.now() - inicio) / 1000) + ' s).\n' +
     tipos.join('\n') + '\n\n' + resumo.exemplos.join('\n'));
   return resumo;
 }
