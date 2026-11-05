@@ -215,6 +215,32 @@ def repair_pmo_duplicate_animals(apply_changes):
         click.echo('Previa apenas. Rode de novo com --apply para gravar.')
 
 
+@click.command('cleanup-pmo-orphan-animals')
+@click.option('--apply', 'apply_changes', is_flag=True,
+              help='Apaga os cadastros. Sem esta opcao, apenas mostra a previa.')
+@click.option('--tutor', 'tutor_id', type=int, default=None,
+              help='Limita a um tutor (id do usuario).')
+@with_appcontext
+def cleanup_pmo_orphan_animals_command(apply_changes, tutor_id):
+    """Apaga animais que a campanha de vacinacao criou e deixou sem uso.
+
+    Sintoma: o tutor ve na conta animais que nao sao dele (vindos da linha
+    vizinha da planilha). So entram cadastros sem foto e sem nenhum registro
+    ligado. Sem ``--apply`` nada e gravado.
+    """
+    from services.vacina_pmo_service import cleanup_pmo_orphan_animals
+
+    resultado = cleanup_pmo_orphan_animals(dry_run=not apply_changes, tutor_id=tutor_id)
+    for item in resultado['detalhes']:
+        click.echo("tutor={tutor} animal={animal} nome={nome!r}".format(**item))
+    click.echo(
+        "fantasmas={fantasmas} removidos={removidos} tutores={tutores} "
+        "preservados_sem_visita={preservados_sem_visita}".format(**resultado)
+    )
+    if not apply_changes:
+        click.echo('Previa apenas. Rode de novo com --apply para apagar.')
+
+
 @click.command('entomologia-equipe')
 @click.argument('acao', type=click.Choice(['listar', 'conceder', 'revogar']))
 @click.argument('email', required=False)
@@ -266,4 +292,5 @@ def register_cli_commands(app):
     app.cli.add_command(cleanup_test_users)
     app.cli.add_command(reconcile_veterinarian_billing)
     app.cli.add_command(repair_pmo_duplicate_animals)
+    app.cli.add_command(cleanup_pmo_orphan_animals_command)
     app.cli.add_command(entomologia_equipe)
