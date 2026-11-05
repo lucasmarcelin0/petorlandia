@@ -455,7 +455,10 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
         )
         evaluated_state = get_saved_vacina_pmo_rows(sheet_gid="123")
 
-    assert state["rows"][0]["note"] == "observacao atualizada na planilha"
+    # A observação vem da planilha; a linha do painel que ainda não chegou
+    # nela (a gravação na aba não acontece no teste) continua.
+    assert state["rows"][0]["note"].startswith("observacao atualizada na planilha | ")
+    assert state["rows"][0]["note"].endswith(" - Lua: vacinado.")
     assert state["rows"][0]["requestedDate"] == "2026-05-25"
     assert state["rows"][0]["password"] == "PMOA9999"
     assert state["rows"][0]["animals"][0]["status"] == "vacinado"
