@@ -3,7 +3,7 @@
 {% block meta_robots %}noindex, nofollow{% endblock %}
 {% block head %}
   {{ super() }}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261024-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/internacao.css', v='20261024-2') }}">
 {% endblock %}
 {% block main %}
 <div class="ih-shell" data-keep-alerts{% block shell_attrs %}{% endblock %}>
@@ -12,5 +12,5 @@
 {% endblock %}
 {% block scripts %}
   {{ super() }}
-  <script src="{{ url_for('static', filename='js/internacao.js', v='20261022-5') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/internacao.js', v='20261024-2') }}" defer></script>
 {% endblock %}
