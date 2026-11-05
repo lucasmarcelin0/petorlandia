@@ -1,4 +1,6 @@
 """Views do domínio consulta_routes (migrado do app.py)."""
+from security.redact import redact_sensitive_text
+
 from flask import Blueprint
 import json, os, re, unicodedata, uuid
 from authz import can_manage_budget, can_view_budget, can_view_clinic, _is_global_admin
