@@ -114,6 +114,8 @@ def test_workflow_de_deploy_e_so_manual_e_confere_o_token():
     assert 'workflow_dispatch' in gatilhos
     assert 'push' not in gatilhos
     assert 'scripts/check_heroku_token.py' in deploy
-    # A trava contra apagar produção continua: nada de push forçado.
+    # A trava contra apagar produção continua: nada de push forçado, e o
+    # build recusa quando o commit em produção não é ancestral do ref
+    # (tests/test_heroku_build_from_github.py).
     assert not [linha for linha in deploy.splitlines() if 'git push' in linha and '--force' in linha]
-    assert 'git merge-base --is-ancestor heroku/main HEAD' in deploy
+    assert 'scripts/heroku_build_from_github.py' in deploy
