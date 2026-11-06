@@ -119,8 +119,11 @@ O workflow faz, na ordem, as mesmas travas do script manual:
 2. preflight (`scripts/preflight_deploy.py`);
 3. suite completa, com os mesmos comandos do workflow de testes;
 4. guarda de artefatos sensiveis;
-5. push **sem `--force`**, recusando publicar se o Heroku tem commit que o ref
-   nao tem;
+5. build pelo tarball do GitHub, como a integracao faz
+   (`scripts/heroku_build_from_github.py`), recusando publicar se o commit em
+   producao (o do slug) nao for ancestral do ref. Nao usa o Git do Heroku:
+   os deploys pela integracao nao o atualizam, e ele ficava parado no ultimo
+   push manual, recusando publicar quando a integracao parava;
 6. espera o release phase terminar (`scripts/wait_heroku_release.py`) e falha
    com o log quando o `flask db upgrade` quebra.
 
@@ -178,7 +181,9 @@ GitHub. O deploy detecta e **se recusa a publicar**:
 O Heroku tem commit que este ref nao tem. Traga producao para o ref antes de publicar:
 ```
 
-A recusa e proposital: o push e sem `--force`, entao publicar por cima
+(no workflow: `Producao (<sha>) tem commit que <sha> nao tem.`)
+
+A recusa e proposital: publicar por cima
 apagaria do ar um codigo que nao existe em outro lugar. O conserto e trazer
 producao para o repositorio, nunca forcar.
 

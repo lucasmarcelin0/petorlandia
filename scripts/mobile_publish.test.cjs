@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { publish } = require('./mobile_publish.cjs');
+const { publish, dispatchMain } = require('./mobile_publish.cjs');
 
 function fixture(overrides = {}) {
   const pr = { number: 1, node_id: 'PR_1', state: 'open', base: {ref: 'main'},
@@ -61,4 +61,22 @@ test('workflow_run só trata PRs do próprio repositório', async () => {
   assert.equal(f.calls.merges.length, 0);
   await f.run({workflow_run: {event: 'pull_request', head_repository: {full_name: 'owner/repo'}, head_branch: 'claude/fix'}});
   assert.equal(f.calls.merges.length, 1);
+});
+test('dispatch que falha na resposta mas criou o run não é repetido', async () => {
+  const calls = []; const warnings = [];
+  const github = {rest: {actions: {
+    createWorkflowDispatch: async args => {calls.push(args); throw new Error('Unexpected end of JSON input');},
+    listWorkflowRuns: async () => ({data: {workflow_runs: [{head_sha: 'published'}]}})}}};
+  await dispatchMain(github, {owner: 'o', repo: 'r'}, 'tests.yml', 'published', {warning: m => warnings.push(m)}, 0);
+  assert.equal(calls.length, 1); assert.equal(warnings.length, 1);
+});
+test('dispatch que falhou sem criar run é repetido e, persistindo, derruba o job', async () => {
+  let tries = 0;
+  const github = {rest: {actions: {
+    createWorkflowDispatch: async () => {if (++tries === 1) throw new Error('falha'); },
+    listWorkflowRuns: async () => ({data: {workflow_runs: []}})}}};
+  await dispatchMain(github, {owner: 'o', repo: 'r'}, 'tests.yml', 'x', {warning() {}}, 0);
+  assert.equal(tries, 2);
+  github.rest.actions.createWorkflowDispatch = async () => {throw new Error('sempre');};
+  await assert.rejects(dispatchMain(github, {owner: 'o', repo: 'r'}, 'tests.yml', 'x', {warning() {}}, 0));
 });
