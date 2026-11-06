@@ -13,56 +13,9 @@ SCHEMA_PATHS = {
 }
 
 ESSENTIAL_KEYS = {
-    "t0": {
-        "respondent_role",
-        "aceite_tcle",
-        "outras_pessoas_com_sintomas",
-        "vinculo_compartilhado",
-        "exposicao_ambiental",
-        "exposicao_animal",
-        "exposicao_alimentar",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "diagnostico_medico",
-        "diagnostico_medico_qual",
-        "sinais_alerta_atuais",
-        "dias_incap",
-        "houve_gasto",
-        "custo_total",
-        "ausencia_familiar",
-    },
-    "t7": {
-        "classificacao_melhora",
-        "sinais_alerta_atuais",
-        "retornou_servico_saude",
-        "diagnostico_medico",
-        "diagnostico_medico_qual",
-        "novos_casos_semelhantes",
-        "nova_pista_exposicao",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "dias_incap_novos",
-        "houve_novos_gastos",
-        "perda_renda",
-    },
-    "t30": {
-        "respondent_role",
-        "estado_saude_final",
-        "sintomas_atuais",
-        "sinais_alerta_atuais",
-        "retorno_atividades_normais",
-        "diagnostico_medico",
-        "diagnostico_medico_qual",
-        "novos_casos_semelhantes",
-        "nova_informacao_fonte",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "orientacao_ou_acao_percebida",
-        "novos_casos_apos_acao",
-        "dias_incap_novos",
-        "houve_novos_gastos",
-        "perda_renda",
-    },
+    "t0": {"respondent_role", "aceite_tcle", "perda_renda", "exposicao_animal", "exposicao_ambiental", "exposicao_alimentar", "outras_pessoas_com_sintomas"},
+    "t7": {"classificacao_melhora", "diagnostico_medico", "perda_renda", "nova_pista_exposicao"},
+    "t30": {"sintoma_novo_agravado", "situacao_participante", "impacto_periodo", "retorno_atividades_normais", "numero_internacoes", "numero_reconsultas", "novos_casos_semelhantes"},
 }
 
 BANNED_VISIBLE_KEYS = {
@@ -75,63 +28,9 @@ BANNED_VISIBLE_KEYS = {
 }
 
 CONDITIONAL_KEYS = {
-    "t0": {
-        "respondent_name",
-        "outras_pessoas_quantidade",
-        "vinculo_compartilhado",
-        "vinculo_local",
-        "vinculo_data_periodo",
-        "vinculo_exposicao_suspeita",
-        "exposicao_ambiental_detalhe",
-        "exposicao_ambiental_outros_doentes",
-        "exposicao_animal_detalhe",
-        "exposicao_animal_outros_doentes",
-        "exposicao_alimentar_item",
-        "exposicao_alimentar_origem",
-        "exposicao_alimentar_data",
-        "exposicao_alimentar_expostos",
-        "exposicao_alimentar_doentes",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "diagnostico_medico_qual",
-        "diagnostico_medico_status",
-        "custo_total",
-        "dias_cuidador",
-    },
-    "t7": {
-        "diagnostico_medico_qual",
-        "diagnostico_medico_status",
-        "novos_casos_quantidade",
-        "novos_casos_local_periodo",
-        "nova_pista_detalhe",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "custo_outros",
-        "perda_renda_valor",
-    },
-    "t30": {
-        "respondent_name",
-        "situacao_participante",
-        "data_obito",
-        "estado_saude_final",
-        "sinais_alerta_atuais",
-        "retorno_atividades_normais",
-        "sintomas_atuais",
-        "sintomas_atuais_outro",
-        "sintomas_atuais_origem",
-        "diagnostico_medico_qual",
-        "diagnostico_medico_status",
-        "novos_casos_quantidade",
-        "novos_casos_local_periodo",
-        "nova_informacao_fonte",
-        "nova_informacao_fonte_detalhe",
-        "fonte_ainda_ativa",
-        "outras_pessoas_ainda_expostas",
-        "orientacao_ou_acao_percebida",
-        "novos_casos_apos_acao",
-        "custo_outros",
-        "perda_renda_valor",
-    },
+    "t0": {"respondent_name", "exposicao_animal", "vinculo_compartilhado", "vinculo_local", "exposicao_alimentar_doentes"},
+    "t7": {"diagnostico_medico_qual", "dias_cuidador", "custo_outros", "nova_pista_detalhe", "fonte_ainda_ativa"},
+    "t30": {"sintoma_novo_agravado", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "custo_outros", "novos_casos_quantidade", "outras_pessoas_ainda_expostas"},
 }
 
 ATOMIC_OPERATORS = {
@@ -218,10 +117,10 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
 
 
 @pytest.mark.parametrize("stage", ["t0", "t7", "t30"])
-def test_active_sfa_schema_is_collective_v2(stage):
+def test_active_sfa_schema_is_november_revision(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "collective-v3-disease-clock"
+    assert schema.get("instrument_version") == "sfa-2026-11-06"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 
@@ -285,12 +184,5 @@ def test_detail_questions_only_open_after_their_trigger(stage):
 
     if stage == "t0":
         proxy_rule = fields_by_key["respondent_name"]["visible_if"]
-        assert isinstance(proxy_rule.get("all"), list), (
-            "respondent_name deve exigir papel preenchido e papel diferente da propria pessoa"
-        )
-        operators = {
-            str(item.get("operator") or item.get("op") or "").lower()
-            for item in proxy_rule["all"]
-            if isinstance(item, dict)
-        }
-        assert {"nonempty", "not_equals"} <= operators
+        assert proxy_rule["key"] == "respondent_role"
+        assert set(proxy_rule["values"]) == {"Pai, mãe ou responsável", "Outra pessoa autorizada"}

@@ -28,7 +28,7 @@ def pilot_schema(stage, original, participant=None):
             item['required'] = False
             if 'visible_if' in item:
                 item['visible_if'] = _resolver_regra_visibilidade_para_cliente(item['visible_if'], prior)
-            if item['key'] == 'retornou_servico_saude':
+            if stage == 't7' and item['key'] == 'retornou_servico_saude':
                 item['label'] = 'Desde o T0, você precisou procurar algum serviço de saúde, em qualquer município?'
             if item['key'] == 'data_inicio_sintomas':
                 item.pop('prefill', None)
@@ -113,8 +113,8 @@ def pilot_metadata(form, stage):
         workplaces.append(row)
     return dict(purpose='usability_pilot', pilot_version=PILOT_VERSION, municipal_study=False,
                 code=short('pilot_code', 60), mode=short('pilot_mode', 40),
-                reported_onset=onset, target_date=(start+timedelta(days={'t0': 0, 't7': 7, 't30': 30}[stage])).isoformat() if start and stage != 't0' else None,
-                timing_reference='symptom_onset_D0', workplaces=workplaces if stage == 't0' else [],
+                reported_onset=onset, target_date=None,
+                timing_reference='entrevista_t0', workplaces=workplaces if stage == 't0' else [],
                 feedback=dict(minutes=minutes, confusing=short('pilot_confusing', 3000),
                               missing=short('pilot_missing', 3000), suggestion=short('pilot_suggestion', 3000)))
 
@@ -129,15 +129,15 @@ def pilot_calendar(participant):
             onset = date.fromisoformat(saved)
     stages = []
     for stage in STAGES:
-        target = onset + timedelta(days={'t0': 0, 't7': 7, 't30': 30}[stage]) if onset and stage != 't0' else None
+        target = t0.interview_date + timedelta(days=7 if stage == 't7' else 30) if t0 and stage != 't0' else None
         reason = ''
         if stage != 't0':
             if not t0:
                 reason = 'O T0 ainda não foi respondido. Não há entrevista inicial registrada.'
             elif not target:
                 reason = 'Confirme o início dos sintomas com Lucas antes deste acompanhamento.'
-            elif hoje_local() < target:
-                reason = 'O preenchimento desta etapa abre em '+target.strftime('%d/%m/%Y')+'. Por enquanto, você pode enviar somente sugestões.'
+            elif hoje_local() < target - timedelta(days=2 if stage == 't7' else 3):
+                reason = 'A data-alvo desta etapa é '+target.strftime('%d/%m/%Y')+'. Por enquanto, você pode enviar somente sugestões.'
         response = responses.get(stage)
         stages.append(dict(stage=stage, target=target, response=response, blocked=reason,
                            status='Respondido' if response else ('Aguardando T0' if not t0 and stage != 't0' else ('Data a revisar' if stage != 't0' and not target else ('Ainda não abriu' if target and hoje_local() < target else 'Aguardando resposta')))))
@@ -146,10 +146,6 @@ def pilot_calendar(participant):
         flags.append('Início dos sintomas não informado')
     if not t0:
         flags.append('Primeira entrevista ainda não realizada')
-    if t0 and onset:
-        for days in (7, 30):
-            if t0.interview_date > onset + timedelta(days=days):
-                flags.append(f'T0 realizado após o D{days}; não reconstruir entrevista anterior')
     return dict(onset=onset, first_interview=t0.interview_date if t0 else None,
                 illness_days_t0=(t0.interview_date-onset).days if t0 and onset else None,
                 illness_days_today=(hoje_local()-onset).days if onset else None, stages=stages, flags=flags)

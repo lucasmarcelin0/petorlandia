@@ -55,89 +55,91 @@ def native_t0_app(monkeypatch):
 
 def _payload_t0():
     return {
-        "respondent_role": "A propria pessoa",
+        "respondent_role": "A própria pessoa",
         # Valores enviados para campos ocultos devem ser descartados no servidor.
         "respondent_name": "VALOR INJETADO",
         "aceite_tcle": [sfa_service.T0_CONSENT_ACCEPTED],
-        "outras_pessoas_com_sintomas": "Nao",
+        "outras_pessoas_com_sintomas": "Não",
         "outras_pessoas_quantidade": "8",
         "vinculo_compartilhado": ["Evento"],
         "vinculo_local": "Local injetado",
         "vinculo_data_periodo": "Ontem",
         "vinculo_exposicao_suspeita": "Produto injetado",
-        "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
+        "exposicao_ambiental": ["Nenhuma dessas"],
         "exposicao_ambiental_detalhe": "Detalhe injetado",
         "exposicao_ambiental_outros_doentes": "Sim",
         "exposicao_animal": ["Nenhum contato animal relevante"],
         "exposicao_animal_detalhe": "Animal injetado",
         "exposicao_animal_outros_doentes": "Sim",
-        "exposicao_alimentar": ["Nenhuma dessas"],
+        "exposicao_alimentar": ["Não consumi"],
         "exposicao_alimentar_item": "Alimento injetado",
         "exposicao_alimentar_origem": "Origem injetada",
         "fonte_ainda_ativa": "Sim",
         "outras_pessoas_ainda_expostas": "Sim",
-        "diagnostico_medico": "Nao",
+        "diagnostico_medico": "Não",
         "diagnostico_medico_qual": "Dengue",
         "diagnostico_medico_status": "Confirmacao",
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
         "dias_incap": "2",
-        "houve_gasto": "Nao",
+        "houve_gasto": "Não",
         "custo_total": "999.99",
-        "ausencia_familiar": "Nao",
+        "ausencia_familiar": "Não",
         "dias_cuidador": "5",
     }
 
 
 def _payload_t7():
     return {
+        "respondent_role": "A própria pessoa",
         "classificacao_melhora": "Melhorando",
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
-        "retornou_servico_saude": "Nao",
-        "diagnostico_medico": "Nao",
+        "retornou_servico_saude": "Não",
+        "diagnostico_medico": "Não",
         "diagnostico_medico_qual": "Dengue",
         "diagnostico_medico_status": "Confirmacao",
-        "novos_casos_semelhantes": "Nao",
+        "novos_casos_semelhantes": "Não",
         "novos_casos_quantidade": "4",
         "novos_casos_local_periodo": "Local injetado",
-        "nova_pista_exposicao": "Nao",
+        "nova_pista_exposicao": "Não",
         "nova_pista_detalhe": "Pista injetada",
         "fonte_ainda_ativa": "Sim",
         "outras_pessoas_ainda_expostas": "Sim",
         "dias_incap_novos": "3",
-        "houve_novos_gastos": "Nao",
+        "houve_novos_gastos": "Não",
         "custo_outros": "250.00",
-        "perda_renda": "Nao",
+        "perda_renda": "Não",
         "perda_renda_valor": "400.00",
     }
 
 
 def _payload_t30():
     return {
-        "respondent_role": "A propria pessoa",
-        "situacao_participante": "Faleceu",
+        "respondent_role": "A própria pessoa",
+        "situacao_participante": "Não, faleceu",
         "data_obito": "10/08/2026",
         "estado_saude_final": "Quase recuperado(a) - diferencas minimas",
         "sintomas_atuais": ["Cansaco ou fraqueza", "Dor nas juntas (articulacoes)"],
         "sintomas_atuais_outro": "Sintoma injetado",
         "sintomas_atuais_origem": "Comecaram com esta doenca",
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
-        "retorno_atividades_normais": "Retorno completo",
-        "diagnostico_medico": "Nao",
+        "sintoma_novo_agravado": "Sim",
+        "retorno_atividades_normais": "Totalmente",
+        "diagnostico_medico": "Não",
         "diagnostico_medico_qual": "Dengue",
         "diagnostico_medico_status": "Confirmacao",
-        "novos_casos_semelhantes": "Nao",
+        "novos_casos_semelhantes": "Não",
         "novos_casos_quantidade": "3",
         "novos_casos_local_periodo": "Local injetado",
-        "nova_informacao_fonte": "Nao",
+        "nova_informacao_fonte": "Não",
         "nova_informacao_fonte_detalhe": "Informacao injetada",
         "fonte_ainda_ativa": "Sim",
         "outras_pessoas_ainda_expostas": "Sim",
         "orientacao_ou_acao_percebida": "Sim",
         "novos_casos_apos_acao": "Sim",
         "dias_incap_novos": "1",
-        "houve_novos_gastos": "Nao",
+        "houve_novos_gastos": "Não",
         "custo_outros": "300.00",
-        "perda_renda": "Nao",
+        "perda_renda": "Não",
         "perda_renda_valor": "500.00",
     }
 
@@ -150,7 +152,7 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert "T0 - Exposicoes coletivas e prevencao" in html
+    assert "T0 — Entrevista inicial" in html
     assert "Ola, Maria Teste." in html
     assert "Seus dados cadastrais ja estao vinculados nos bastidores." in html
     assert 'name="cpf"' not in html
@@ -180,7 +182,7 @@ def test_public_native_followup_reusa_identidade_sem_repetir_inputs(native_t0_ap
     html = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Ola, Maria Teste." in html
-    assert "T7 - Novas pistas e permanencia da fonte" in html
+    assert "T7 — Acompanhamento aos sete dias" in html
     assert 'name="cpf"' not in html
     assert 'name="nome"' not in html
     assert "Maria Teste T0" not in html
@@ -213,7 +215,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "collective-v3-disease-clock"
+    assert captured["_instrument_version"] == "sfa-2026-11-06"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -222,9 +224,8 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["respondent_name"] == ""
     assert captured["outras_pessoas_quantidade"] == ""
     assert captured["exposicao_ambiental_detalhe"] == ""
-    assert captured["diagnostico_medico_qual"] == ""
-    assert captured["custo_total"] == ""
-    assert captured["dias_cuidador"] == ""
+    assert "diagnostico_medico_qual" not in captured
+    assert "custo_total" not in captured
 
 
 def test_public_native_t0_get_apos_resposta_mostra_confirmacao(native_t0_app):
@@ -271,8 +272,8 @@ def test_tcle_signatures_page_renderiza_lista(native_t0_app, monkeypatch):
 @pytest.mark.parametrize(
     ("url", "expected_title"),
     [
-        ("/sfa/p/token-abc/t7", "T7 - Novas pistas e permanencia da fonte"),
-        ("/sfa/p/token-abc/t30", "T30 - Encerramento do risco coletivo"),
+        ("/sfa/p/token-abc/t7", "T7 — Acompanhamento aos sete dias"),
+        ("/sfa/p/token-abc/t30", "T30 — Encerramento do seguimento"),
     ],
 )
 def test_public_native_followups_get_renderiza_formulario(native_t0_app, url, expected_title):
@@ -307,18 +308,18 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t7_form"
-    assert captured["_instrument_version"] == "collective-v3-disease-clock"
+    assert captured["_instrument_version"] == "sfa-2026-11-06"
     assert captured["dias_incap_novos"] == "3"
-    assert captured["diagnostico_medico_qual"] == ""
-    assert captured["novos_casos_quantidade"] == ""
+    assert captured["diagnostico_medico_qual"] == []
+    assert captured["novos_casos_local_periodo"] == ""
     assert captured["nova_pista_detalhe"] == ""
     assert captured["fonte_ainda_ativa"] == ""
     assert captured["custo_outros"] == ""
-    assert captured["perda_renda_valor"] == ""
+    assert "perda_renda_valor" not in captured
 
 
 @pytest.mark.parametrize("stage", ["t7", "t30"])
-def test_public_native_followup_mantem_valor_da_perda_de_renda_quando_sim(native_t0_app, monkeypatch, stage):
+def test_public_native_followup_registra_perda_de_renda_sem_valor_monetario(native_t0_app, monkeypatch, stage):
     app, paciente, _schema_holder = native_t0_app
     paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
@@ -333,11 +334,16 @@ def test_public_native_followup_mantem_valor_da_perda_de_renda_quando_sim(native
     payload = _payload_t7() if stage == "t7" else _payload_t30()
     payload.update({"perda_renda": "Sim", "perda_renda_valor": "420.50"})
 
+    if stage == "t30":
+        payload["impacto_periodo"] = ["Perda de renda"]
     response = client.post(f"/sfa/p/{paciente.token_acesso}/{stage}", data=payload)
 
     assert response.status_code == 200
-    assert captured["perda_renda"] == "Sim"
-    assert captured["perda_renda_valor"] == "420.50"
+    if stage == "t7":
+        assert captured["perda_renda"] == "Sim"
+    else:
+        assert "Perda de renda" in captured["impacto_periodo"]
+    assert "perda_renda_valor" not in captured
 
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -360,20 +366,14 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "collective-v3-disease-clock"
-    assert captured["estado_saude_final"] == "Quase recuperado(a) - diferencas minimas"
+    assert captured["_instrument_version"] == "sfa-2026-11-06"
+    assert captured["sintoma_novo_agravado"] == "Sim"
     assert captured["situacao_participante"] == ""
     assert captured["data_obito"] == ""
-    assert captured["sintomas_atuais"] == ["Cansaco ou fraqueza", "Dor nas juntas (articulacoes)"]
-    assert captured["sintomas_atuais_outro"] == ""
-    assert captured["sintomas_atuais_origem"] == "Comecaram com esta doenca"
     assert captured["diagnostico_medico_qual"] == ""
     assert captured["novos_casos_quantidade"] == ""
-    assert captured["nova_informacao_fonte_detalhe"] == ""
-    assert captured["orientacao_ou_acao_percebida"] == ""
-    assert captured["novos_casos_apos_acao"] == ""
     assert captured["custo_outros"] == ""
-    assert captured["perda_renda_valor"] == ""
+    assert "perda_renda_valor" not in captured
 
 
 def test_public_native_t30_obito_informado_por_familiar_nao_vira_ausencia_de_sintomas(native_t0_app, monkeypatch):
@@ -392,7 +392,7 @@ def test_public_native_t30_obito_informado_por_familiar_nao_vira_ausencia_de_sin
     payload.update({
         "respondent_role": "Outra pessoa autorizada",
         "respondent_name": "Joana, filha",
-        "situacao_participante": "Faleceu",
+        "situacao_participante": "Não, faleceu",
         "sintomas_atuais": ["Nenhum sintoma novo ou pior do que antes"],
     })
 
@@ -400,14 +400,14 @@ def test_public_native_t30_obito_informado_por_familiar_nao_vira_ausencia_de_sin
 
     assert response.status_code == 200
     assert "Obrigado pela sua participacao" in response.get_data(as_text=True)
-    assert captured["situacao_participante"] == "Faleceu"
+    assert captured["situacao_participante"] == "Não, faleceu"
     assert captured["data_obito"] == "10/08/2026"
-    for key in ("estado_saude_final", "retorno_atividades_normais", "sintomas_atuais_origem"):
+    for key in ("sintoma_novo_agravado", "retorno_atividades_normais", "sintomas_atuais_detalhe"):
         assert captured[key] == ""
-    assert captured["sintomas_atuais"] == []
+    assert "sintomas_atuais" not in captured
     assert captured["sinais_alerta_atuais"] == []
     # O familiar ainda informa o que diz respeito ao risco coletivo.
-    assert captured["novos_casos_semelhantes"] == "Nao"
+    assert captured["novos_casos_semelhantes"] == "Não"
     assert sfa_service.classificar_desfecho_primario_t30(captured) == "Obito"
 
 
@@ -670,7 +670,7 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
                 "ocupacao_principal": "Estudante",
                 "sintomas_principais": ["Cansaco extremo", "Dores musculares intensas"],
                 "contato_agua_suja": "Sim",
-                "contato_carrapato_mata": "Nao",
+                "contato_carrapato_mata": "Não",
                 "contato_animais": ["Caes ou gatos domesticos"],
                 "consumo_recente": ["Agua nao tratada (poco, rio, mina)"],
                 "atividades_recentes": ["Lazer em area rural/chacara"],

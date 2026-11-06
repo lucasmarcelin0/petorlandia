@@ -2,7 +2,7 @@
 import json
 import math
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from flask import abort, flash, make_response, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError
 from werkzeug.datastructures import MultiDict
@@ -130,7 +130,9 @@ def register(bp, require_access, schema_loader):
             metadata.update(participant_id=pilot.id, actual_interview_date=today.isoformat(),
                 reported_onset=onset.isoformat() if onset else '', illness_days=(today-onset).days if onset else None,
                 target_date=stage['target'].isoformat() if stage['target'] else None,
-                interval_from=(calendar['stages'][1]['response'] or calendar['stages'][0]['response']).interview_date.isoformat() if kind=='t30' else (calendar['first_interview'].isoformat() if calendar['first_interview'] else None))
+                interval_from=((calendar['stages'][1]['response'].interview_date + timedelta(days=1)).isoformat()
+                               if kind == 't30' and calendar['stages'][1]['response'] else
+                               onset.isoformat() if onset else None))
             payload = dict(answers=answers, pilot=metadata, source_instrument_version=schema.get('instrument_version'),
                            question_labels={f['key']: f['label'] for f in iterar_campos_form(schema)})
             db.session.add(SfaPilotResponse(pilot_id=pilot.id, stage=kind, interview_date=today,

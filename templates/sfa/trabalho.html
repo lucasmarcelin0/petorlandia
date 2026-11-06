@@ -26,7 +26,7 @@
 {% if p %}
 <div class="card card-body mb-3">
 <h2 class="h4">{{ p.id_estudo }} · <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}">Ficha e respostas</a></h2>
-<p class="mb-1">{% if calendario.inicio %}<strong>D{{ calendario.dia_doenca }} da doença</strong> · D0: {{ calendario.inicio.strftime('%d/%m/%Y') }} · T7: {{ calendario.t7.strftime('%d/%m/%Y') }} · T30: {{ calendario.t30.strftime('%d/%m/%Y') }}{% else %}<strong>Calendário aguardando revisão:</strong> {{ calendario.fonte }}{% endif %}</p>
+<p class="mb-1">{% if calendario.inicio %}<strong>D{{ calendario.dia_doenca }} da doença</strong> · D0: {{ calendario.inicio.strftime('%d/%m/%Y') }}{% else %}Início dos sintomas: {{ calendario.fonte }}{% endif %}{% if calendario.t7 and calendario.t30 %} · T7: {{ calendario.t7.strftime('%d/%m/%Y') }} · T30: {{ calendario.t30.strftime('%d/%m/%Y') }}{% endif %}</p>
 <p class="small text-muted">Fonte: {{ calendario.fonte }}. Datas acima são alvos do calendário por doença; as respostas guardam a data real da coleta. Um T10 histórico não é convertido em T7.</p>
 <details><summary>Conferir início dos sintomas, território e classificação</summary>
 {{ inicio('contexto',p.id_estudo) }}

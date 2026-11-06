@@ -4,11 +4,11 @@ Implementação local de 13/09/2026. Esta entrega não executa migração no ser
 
 ## Calendário e histórico
 
-- O início dos sintomas é **D0**. T7 = D0 + 7 dias; T30 = D0 + 30 dias. T0 é a entrevista inicial, com data própria. Exemplo: sintomas em 10/09 e entrevista em 13/09 → T7 em 17/09 e T30 em 10/10.
+- O início dos sintomas é **D0**. T7 = T0 + 7 dias; T30 = T0 + 30 dias. T0 é a entrevista inicial, com data própria. Exemplo: sintomas em 10/09 e entrevista em 13/09 → T7 em 20/09 e T30 em 13/10.
 - O T0 oferece a data do SINAN para conferência. Uma data ausente, futura, inválida ou divergente entra em revisão. A entrevista nunca substitui o início dos sintomas.
 - Uma revisão documentada na tela de trabalho tem precedência sobre as fontes originais. A revisão identifica responsável e fonte; seu histórico é auditado. Não reescreve respostas anteriores.
-- Os formulários de seguimento exigem T0 e início válido. Antes do dia previsto, informam a data de abertura. Respostas tardias guardam o dia real da doença e o alvo original; não são retrodatadas.
-- O payload de cada nova coleta inclui `_calendario`: início, fonte, dia da doença, data da coleta, alvo e intervalo de referência. No T0 o intervalo começa no início da doença; nos seguimentos, na última resposta anterior. Não somar despesas ou incapacidade de períodos sobrepostos.
+- Os formulários de seguimento exigem a data do T0 na versão de 06/11/2026. Antes do dia previsto, informam a data de abertura. Respostas tardias guardam o dia real da doença e o alvo original; não são retrodatadas.
+- O payload de cada nova coleta inclui `_calendario`: início, fonte, dia da doença, data da coleta, alvo e intervalo de referência. Impacto: D0 até T7; dia seguinte ao T7 até T30, ou D0 até T30 se faltou T7. Não somar despesas ou incapacidade de períodos sobrepostos.
 - T10 permanece em tabela, campos e exportação próprios. Um episódio com T10 histórico não recebe uma segunda coleta equivalente em T7. Os instrumentos `collective-v2` e `legacy-2026-08-24` ficam disponíveis com seus hashes; o novo instrumento é `collective-v3-disease-clock`.
 - O CSV analítico distingue T0, T7, T10 histórico e T30, suas versões e os metadados de calendário. Registros antigos sem esses metadados permanecem vazios nesses campos.
 

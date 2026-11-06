@@ -27,7 +27,7 @@
         {"numero": "4", "campo": "UF", "opcoes": "", "uso": "Descrição do fluxo de notificação."},
         {"numero": "5", "campo": "Município de Notificação (código IBGE)", "opcoes": "", "uso": "Descrição do fluxo de notificação."},
         {"numero": "6", "campo": "Unidade de Saúde (ou outra fonte notificadora) (código)", "opcoes": "", "uso": "Descrição do fluxo de notificação.", "plataforma": ["unidade_notificante"]},
-        {"numero": "7", "campo": "Data dos Primeiros Sintomas", "opcoes": "", "uso": "Define o D0: T7 no D7 e T30 no D30. Aparece preenchida no T0 para a pessoa conferir.", "plataforma": ["data_inicio_sintomas"]}
+        {"numero": "7", "campo": "Data dos Primeiros Sintomas", "opcoes": "", "uso": "Define D0, o início da doença. Os retornos são contados da entrevista inicial. Aparece preenchida no T0 para a pessoa conferir.", "plataforma": ["data_inicio_sintomas"]}
       ]
     },
     {

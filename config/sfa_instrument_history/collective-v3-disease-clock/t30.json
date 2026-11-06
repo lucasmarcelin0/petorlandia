@@ -1,0 +1,805 @@
+{
+  "instrument_version": "collective-v3-disease-clock",
+  "title": "T30 - Encerramento do risco coletivo",
+  "subtitle": "Encerramento breve do episodio e do possivel risco coletivo, sem repetir a historia anterior. O início dos sintomas é D0; T7 ocorre em D0 + 7 dias e T30 em D0 + 30 dias.",
+  "submit_label": "Enviar acompanhamento T30",
+  "sections": [
+    {
+      "title": "Quem responde",
+      "description": "Se outra pessoa estiver respondendo, as perguntas sobre como a pessoa esta hoje se referem a pessoa acompanhada no estudo.",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "Quem esta respondendo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A propria pessoa",
+            "Pai, mae ou responsavel",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "Nome e relacao de quem responde",
+          "type": "text",
+          "required": true,
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "not_equals",
+                "value": "A propria pessoa"
+              }
+            ]
+          }
+        },
+        {
+          "key": "situacao_participante",
+          "label": "Qual e a situacao atual da pessoa acompanhada no estudo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Esta viva",
+            "Faleceu"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "not_equals",
+                "value": "A propria pessoa"
+              }
+            ]
+          }
+        },
+        {
+          "key": "data_obito",
+          "label": "Data do falecimento, se souber",
+          "type": "date",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "situacao_participante",
+            "operator": "equals",
+            "value": "Faleceu"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Encerramento individual e seguranca",
+      "description": "Como voce esta hoje e se ainda precisa de atencao.",
+      "fields": [
+        {
+          "key": "estado_saude_final",
+          "label": "Como voce se sente hoje comparado a antes da doenca?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Recuperado(a) - como antes da doenca",
+            "Quase recuperado(a) - diferencas minimas",
+            "Melhor, mas ainda com alguma limitacao",
+            "Pouco melhor ou sem melhora",
+            "Pior do que antes"
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        },
+        {
+          "key": "sinais_alerta_atuais",
+          "label": "Voce apresenta agora algum destes sinais?",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "Esta pergunta serve apenas para orientar nova avaliacao. Em emergencia, procure atendimento presencial ou ligue 192.",
+          "options": [
+            "Falta de ar importante",
+            "Desmaio ou confusao",
+            "Sangramento importante",
+            "Piora intensa ou preocupacao urgente",
+            "Nenhum destes sinais agora"
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        },
+        {
+          "key": "retorno_atividades_normais",
+          "label": "Como esta seu retorno as atividades habituais?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Retorno completo",
+            "Retorno parcial",
+            "Ainda nao retornei"
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Sintomas hoje",
+      "description": "Compare com como voce estava antes desta doenca. Marque apenas o que comecou com ela ou ficou pior do que era antes.",
+      "fields": [
+        {
+          "key": "sintomas_atuais",
+          "label": "Hoje voce tem algum destes sintomas que comecou com esta doenca ou ficou pior do que era antes dela?",
+          "type": "checkboxes",
+          "required": true,
+          "help_text": "Nao marque o que voce ja tinha antes da doenca do mesmo jeito.",
+          "options": [
+            "Febre ou sensacao de febre",
+            "Cansaco ou fraqueza",
+            "Dor nas juntas (articulacoes)",
+            "Inchaco nas juntas",
+            "Dor no corpo ou nos musculos",
+            "Dor de cabeca",
+            "Manchas, coceira ou descamacao na pele",
+            "Dor nos olhos ou alteracao na visao",
+            "Falta de apetite, enjoo ou diarreia",
+            "Tontura",
+            "Dificuldade para dormir",
+            "Esquecimento ou dificuldade de concentracao",
+            "Queda de cabelo",
+            "Tristeza, desanimo ou ansiedade",
+            "Outro sintoma",
+            "Nenhum sintoma novo ou pior do que antes",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "not": {
+              "source": "current",
+              "key": "situacao_participante",
+              "operator": "equals",
+              "value": "Faleceu"
+            }
+          }
+        },
+        {
+          "key": "sintomas_atuais_outro",
+          "label": "Qual outro sintoma?",
+          "type": "text",
+          "required": true,
+          "visible_if": {
+            "all": [
+              {
+                "not": {
+                  "source": "current",
+                  "key": "situacao_participante",
+                  "operator": "equals",
+                  "value": "Faleceu"
+                }
+              },
+              {
+                "source": "current",
+                "key": "sintomas_atuais",
+                "operator": "selected_any",
+                "values": [
+                  "Outro sintoma"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "sintomas_atuais_origem",
+          "label": "Esses sintomas comecaram com esta doenca ou ja existiam e pioraram?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Comecaram com esta doenca",
+            "Ja existiam e pioraram depois da doenca",
+            "Alguns comecaram e outros pioraram",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "not": {
+                  "source": "current",
+                  "key": "situacao_participante",
+                  "operator": "equals",
+                  "value": "Faleceu"
+                }
+              },
+              {
+                "source": "current",
+                "key": "sintomas_atuais",
+                "operator": "selected_any_except",
+                "values": [
+                  "Nenhum sintoma novo ou pior do que antes",
+                  "Nao sei"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Informacao diagnostica final",
+      "description": "Esta e a informacao que a pessoa entendeu; ela sera comparada aos sistemas e resultados disponiveis.",
+      "fields": [
+        {
+          "key": "diagnostico_medico",
+          "label": "Depois do ultimo contato, recebeu informacao nova sobre algum diagnostico ou suspeita?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_status",
+          "label": "Essa nova informacao foi apresentada como:",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Suspeita",
+            "Confirmacao",
+            "Descarte de uma suspeita anterior",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual diagnostico ou suspeita foi informado agora?",
+          "type": "select",
+          "required": true,
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Virose ou sindrome viral indefinida",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "diagnostico_medico",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "diagnostico_medico_status",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "diagnostico_medico_status",
+                "operator": "not_equals",
+                "value": "Descarte de uma suspeita anterior"
+              }
+            ]
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual_outro",
+          "label": "Qual foi o outro diagnostico ou suspeita?",
+          "type": "text",
+          "required": true,
+          "placeholder": "Escreva o diagnostico ou suspeita informado agora",
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico_qual",
+            "operator": "equals",
+            "value": "Outro"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Fechamento do possivel risco coletivo",
+      "description": "Perguntas de encerramento aparecem quando existe sinal anterior ou nova informacao.",
+      "fields": [
+        {
+          "key": "novos_casos_semelhantes",
+          "label": "Desde o ultimo contato, voce soube de novos casos parecidos?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ]
+        },
+        {
+          "key": "novos_casos_quantidade",
+          "label": "Aproximadamente quantas novas pessoas adoeceram?",
+          "type": "number",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "novos_casos_local_periodo",
+          "label": "Onde e quando essas pessoas adoeceram?",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Local + data ou periodo aproximado",
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "nova_informacao_fonte",
+          "label": "Surgiu alguma nova informacao sobre a possivel fonte?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "nova_pista_detalhe",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "nova_informacao_fonte_detalhe",
+          "label": "Qual informacao surgiu?",
+          "type": "textarea",
+          "required": true,
+          "help_text": "Inclua o que, onde e quando; marca, origem ou especie quando houver.",
+          "visible_if": {
+            "source": "current",
+            "key": "nova_informacao_fonte",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "fonte_ainda_ativa",
+          "label": "A possivel fonte ainda existe ou continua acessivel?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_informacao_fonte_detalhe",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "nova_pista_detalhe",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "outras_pessoas_ainda_expostas",
+          "label": "Outras pessoas ainda podem estar expostas?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_informacao_fonte_detalhe",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "nova_pista_detalhe",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "orientacao_ou_acao_percebida",
+          "label": "Voce ou o grupo exposto recebeu orientacao ou percebeu alguma acao da Vigilancia?",
+          "type": "radio",
+          "required": true,
+          "help_text": "Esta resposta descreve a percepcao do participante; nao conta como decisao administrativa do estudo.",
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_informacao_fonte_detalhe",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              },
+              {
+                "source": "prior",
+                "key": "nova_pista_detalhe",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "novos_casos_apos_acao",
+          "label": "Depois dessa orientacao ou acao, voce soube de novos casos?",
+          "type": "radio",
+          "required": true,
+          "help_text": "Resposta apenas descritiva; nao demonstra que a acao causou ou evitou casos.",
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "orientacao_ou_acao_percebida",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Carga adicional desde o T7",
+      "description": "Nao repita os valores anteriores; informe somente o que ocorreu depois do ultimo contato.",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "Quantos dias adicionais ficou completamente sem suas atividades desde o ultimo contato?",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 30,
+          "step": 1
+        },
+        {
+          "key": "houve_novos_gastos",
+          "label": "Houve novos gastos desde o ultimo contato?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "custo_outros",
+          "label": "Valor total aproximado dos novos gastos (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "houve_novos_gastos",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "perda_renda",
+          "label": "Houve nova perda de renda desde o ultimo contato?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ]
+        },
+        {
+          "key": "perda_renda_valor",
+          "label": "Valor aproximado que deixou de ganhar desde o ultimo contato (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "perda_renda",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        }
+      ]
+    }
+  ]
+}

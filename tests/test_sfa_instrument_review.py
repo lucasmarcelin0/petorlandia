@@ -103,10 +103,10 @@ def test_sfa_chart_review_records_feedback(app, client):
     assert b"Perguntas reais usadas neste bloco" in response.data
     assert b"Vinculos coletivos e novas pistas" in response.data
     assert b"Exposicoes One Health" in response.data
-    assert b"Houve contato animal" in response.data
-    assert b"Caes" in response.data
+    assert "Você teve contato com animais".encode() in response.data
+    assert "Cães".encode() in response.data
     assert b"Gatos" in response.data
-    assert b"Leite cru/queijo nao pasteurizado" in response.data
+    assert "Leite cru ou queijo de leite não pasteurizado".encode() in response.data
     assert b"Sintomas principais no inicio" not in response.data
 
     response = client.post(

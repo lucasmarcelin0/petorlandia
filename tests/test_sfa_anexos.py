@@ -75,10 +75,9 @@ def test_regras_do_t30_explicam_obito_e_sintomas(anexos):
     perguntas = {p["key"]: p for s in t30["secoes"] for p in s["perguntas"]}
     obito = perguntas["situacao_participante"]["numero"]
 
-    assert perguntas["estado_saude_final"]["condicao"]["texto"] == f'Não aparece se pergunta {obito} = "Faleceu".'
-    assert perguntas["respondent_name"]["condicao"]["texto"] == (
-        'Aparece se pergunta 1 respondida com opção diferente de "A propria pessoa".'
-    )
+    assert "A própria pessoa" in str(perguntas["sintoma_novo_agravado"]["condicao"])
+    assert str(obito) in str(perguntas["sintoma_novo_agravado"]["condicao"])
+    assert "Outra pessoa autorizada" in str(perguntas["respondent_name"]["condicao"])
     fonte = perguntas["fonte_ainda_ativa"]["condicao"]
     assert fonte["texto"] == "Aparece se ocorrer pelo menos uma destas situações:"
     assert any(item.startswith('no T7, "') for item in fonte["itens"])

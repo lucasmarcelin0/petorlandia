@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from werkzeug.datastructures import MultiDict
 
 from services import sfa_service
@@ -20,6 +21,14 @@ from services.sfa_service import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IMPORTED_KEYS = {"cpf", "nome", "ficha_sinan", "data_nascimento", "endereco"}
+
+
+@pytest.fixture(autouse=True)
+def instrumento_anterior(monkeypatch):
+    """Exercita os contratos de leitura e edição da versão anterior arquivada."""
+    for stage in ("t0", "t7", "t30"):
+        archive = PROJECT_ROOT / "config/sfa_instrument_history/collective-v3-disease-clock" / f"{stage}.json"
+        monkeypatch.setattr(sfa_service, f"{stage.upper()}_FORM_SCHEMA_FILE", str(archive))
 
 
 def _paciente_fake():
