@@ -20,18 +20,19 @@ from services.sfa_pre_t0 import FIELD_SPECS
 
 
 def _sinan(**extra):
+    # Dados artificiais: os identificadores compostos por zeros não representam participantes.
     dados = {
         **{f"sinais_clinicos__{item}": "2" for item, _rotulo in FIELD_SPECS["33"]["items"]},
         "ficha_sinan": "1234567", "tipo_notificacao": "2", "agravo": "1",
         "data_notificacao": "2026-09-22", "data_inicio_sintomas": "2026-09-20",
-        "nome": "Pessoa Real Digitada", "nome_mae": "Mãe Real", "telefone": "16999990000",
-        "cartao_sus": "123456789012345", "bairro": "Centro", "sexo": "F",
+        "nome": "Participante fictício A", "nome_mae": "Responsável fictício A", "telefone": ("0" * 11),
+        "cartao_sus": ("0" * 15), "bairro": "Centro", "sexo": "F",
         "idade_valor": "34", "idade_unidade": "4",
-        "logradouro": "Rua Verdadeira", "codigo_logradouro": "77",
+        "logradouro": "Logradouro fictício A", "codigo_logradouro": "77",
         "sinais_clinicos__febre": "1", "sinais_clinicos__cefaleia": "1", "sinais_clinicos__exantema": "2",
-        "ns1_resultado": "1", "investigador__nome": "Investigador Real", "investigador__funcao": "Enfermeira",
+        "ns1_resultado": "1", "investigador__nome": "Investigador fictício A", "investigador__funcao": "Enfermeira",
         # Demais campos que a ficha exige no envio.
-        "data_nascimento": "1992-01-15", "gestante": "5", "raca_cor": "4", "municipio_residencia": "Orlândia",
+        "data_nascimento": "2000-01-01", "gestante": "5", "raca_cor": "4", "municipio_residencia": "Orlândia",
         "numero_residencia": "100", "zona": "1", "ocupacao": "Professora", "hospitalizacao": "2",
         "caso_autoctone": "1", "sinais_alarme": "2", "dengue_grave": "2",
         **{f"doencas_preexistentes__{item}": "2" for item, _rotulo in FIELD_SPECS["34"]["items"]},
@@ -42,16 +43,16 @@ def _sinan(**extra):
 
 def _t0(**extra):
     dados = MultiDict([
-        ("respondent_role", "A propria pessoa"),
+        ("respondent_role", "A própria pessoa"),
         ("aceite_tcle", sfa_service.T0_CONSENT_ACCEPTED),
         ("data_inicio_sintomas", "2026-09-20"),
-        ("outras_pessoas_com_sintomas", "Nao"),
-        ("exposicao_ambiental", "Nenhuma exposicao ambiental"),
+        ("outras_pessoas_com_sintomas", "Não"),
+        ("exposicao_ambiental", "Nenhuma dessas"),
         ("exposicao_animal", "Nenhum contato animal relevante"),
-        ("exposicao_alimentar", "Nenhuma dessas"),
-        ("diagnostico_medico", "Nao"),
+        ("exposicao_alimentar", "Não consumi"),
+        ("diagnostico_medico", "Não"),
         ("sinais_alerta_atuais", "Nenhum destes sinais agora"),
-        ("dias_incap", "2"), ("houve_gasto", "Nao"), ("ausencia_familiar", "Nao"),
+        ("dias_incap", "2"), ("houve_gasto", "Não"), ("ausencia_familiar", "Não"),
     ])
     for chave, valor in extra.items():
         dados[chave] = valor
@@ -60,9 +61,9 @@ def _t0(**extra):
 
 def _t7(**extra):
     dados = {
-        "classificacao_melhora": "Melhorando", "sinais_alerta_atuais": "Nenhum destes sinais agora",
-        "retornou_servico_saude": "Nao", "diagnostico_medico": "Nao", "novos_casos_semelhantes": "Nao",
-        "nova_pista_exposicao": "Nao", "dias_incap_novos": "3", "houve_novos_gastos": "Nao", "perda_renda": "Nao",
+        "respondent_role": "A própria pessoa", "classificacao_melhora": "Melhorando", "sinais_alerta_atuais": "Nenhum destes sinais agora",
+        "retornou_servico_saude": "Não", "diagnostico_medico": "Não", "novos_casos_semelhantes": "Não",
+        "nova_pista_exposicao": "Não", "dias_incap_novos": "3", "houve_novos_gastos": "Não", "perda_renda": "Não",
     }
     dados.update(extra)
     return dados
@@ -70,12 +71,12 @@ def _t7(**extra):
 
 def _t30():
     return {
-        "respondent_role": "A propria pessoa", "situacao_participante": "Vivo(a)",
+        "respondent_role": "A própria pessoa", "situacao_participante": "Vivo(a)",
         "estado_saude_final": "Quase recuperado(a) - diferencas minimas",
         "sintomas_atuais": "Cansaco ou fraqueza", "sintomas_atuais_origem": "Comecaram com esta doenca",
-        "sinais_alerta_atuais": "Nenhum destes sinais agora", "retorno_atividades_normais": "Retorno completo",
-        "diagnostico_medico": "Nao", "novos_casos_semelhantes": "Nao", "nova_informacao_fonte": "Nao",
-        "dias_incap_novos": "1", "houve_novos_gastos": "Nao", "perda_renda": "Nao",
+        "sinais_alerta_atuais": "Nenhum destes sinais agora", "sintoma_novo_agravado": "Sim", "retorno_atividades_normais": "Totalmente",
+        "diagnostico_medico": "Não", "novos_casos_semelhantes": "Não", "nova_informacao_fonte": "Não",
+        "dias_incap_novos": "1", "houve_novos_gastos": "Não", "perda_renda": "Não",
     }
 
 
@@ -174,7 +175,7 @@ def test_percurso_completo_usa_formularios_reais_sem_tocar_na_coorte(app, client
     assert 'value="2026-09-20"' in t0  # início dos sintomas vem da ficha SINAN
     assert "somente nesta simulação" in t0
 
-    incompleto = client.post(f"{base}/t0", data=_t0(dias_incap=""))
+    incompleto = client.post(f"{base}/t0", data=_t0(respondent_role=""))
     assert incompleto.status_code == 400
     assert "Campo obrigatorio" in incompleto.get_data(as_text=True)
     for etapa, dados in (("t0", _t0(**_ocultos(incompleto.get_data(as_text=True)))), ("t7", _t7()), ("t30", _t30())):
@@ -184,17 +185,17 @@ def test_percurso_completo_usa_formularios_reais_sem_tocar_na_coorte(app, client
     assert set(respostas) == {"sinan", "t0", "t7", "t30"}
     sinan = service.carregar_respostas(respostas["sinan"])
     guardado = json.dumps(sinan, ensure_ascii=False)
-    for identificador in ("Pessoa Real", "Mãe Real", "16999990000", "123456789012345", "Rua Verdadeira", "Investigador Real"):
+    for identificador in ("Participante fictício", "Responsável fictício A", ("0" * 11), ("0" * 15), "Logradouro fictício A", "Investigador fictício A"):
         assert identificador in guardado
-    assert sinan["nome"] == "Pessoa Real Digitada"
-    assert sinan["nome_mae"] == "Mãe Real"
-    assert sinan["telefone"] == "16999990000"
-    assert sinan["cartao_sus"] == "123456789012345"
-    assert sinan["logradouro"]["valor"] == "Rua Verdadeira"
-    assert sinan["investigador"]["nome"] == "Investigador Real"
+    assert sinan["nome"] == "Participante fictício A"
+    assert sinan["nome_mae"] == "Responsável fictício A"
+    assert sinan["telefone"] == ("0" * 11)
+    assert sinan["cartao_sus"] == ("0" * 15)
+    assert sinan["logradouro"]["valor"] == "Logradouro fictício A"
+    assert sinan["investigador"]["nome"] == "Investigador fictício A"
     assert sinan["investigador"]["funcao"] == "Enfermeira"
     assert json.loads(respostas["sinan"].erros_json) == [["Preencha os campos obrigatórios indicados antes de enviar."]]
-    assert json.loads(respostas["t0"].erros_json) == [["dias_incap"]]
+    assert json.loads(respostas["t0"].erros_json) == [["respondent_role"]]
     assert respostas["sinan"].duracao_segundos is not None
 
     t0_payload = service.carregar_respostas(respostas["t0"])
@@ -222,7 +223,7 @@ def test_ficha_ficticia_nao_puxa_dados_de_caso_real_do_sinan(app, client, hoje):
         assert "01/09/2026" not in resposta.respostas_json
 
 
-def test_agenda_do_protocolo_libera_t7_no_d7_e_t30_no_d30(app, client, hoje):
+def test_agenda_do_protocolo_libera_acompanhamentos_na_janela_da_entrevista(app, client, hoje):
     grupo = _criar_grupo(client, agenda="protocolo", etapas=("t0", "t7", "t30"))
     participante = _entrar(client, grupo)
     base = f"/sfa/simulacao/p/{participante.token}"
@@ -292,22 +293,22 @@ def test_analise_por_grupo_consolidada_e_exportacoes(app, client, hoje):
     assert pagina.status_code == 200
     assert "Consolidado" in texto and "Instituto" in texto and "Vigilância" in texto
     assert "Explicar o campo 7." in texto
-    assert "Pessoa Real Digitada" in texto
+    assert "Participante fictício A" in texto
     assert client.get(f"/sfa/simulacoes/analise?g={instituto.id}&etapa=t0").status_code == 200
     assert client.get("/sfa/simulacoes/analise?visao=consolidado&etapa=t30").status_code == 200
 
     largo = list(csv.DictReader(io.StringIO(client.get("/sfa/simulacoes/exportar.csv?formato=largo").get_data(as_text=True).lstrip("﻿"))))
     assert len(largo) == 7
     assert {linha["grupo"] for linha in largo} == {"Instituto", "Vigilância"}
-    assert largo[0]["sinan__nome"] == "Pessoa Real Digitada"
-    assert largo[0]["t0__dias_incap"] == "2"
+    assert largo[0]["sinan__nome"] == "Participante fictício A"
+    assert largo[0]["t0__respondent_role"] == "A própria pessoa"
     longo = client.get(f"/sfa/simulacoes/exportar.csv?g={instituto.id}").get_data(as_text=True)
-    assert "Pessoa Real Digitada" in longo and "Vigilância" not in longo
+    assert "Participante fictício A" in longo and "Vigilância" not in longo
     assert "sinais_clinicos__febre" in longo
 
     # Página do participante exibe os dados preenchidos
     detalhe_p = client.get(f"/sfa/simulacoes/participante/{participante_incompleto.id}").get_data(as_text=True)
-    assert "Pessoa Real Digitada" in detalhe_p
+    assert "Participante fictício A" in detalhe_p
     assert "Preenchido (conteúdo não guardado)" not in detalhe_p
 
     for url in ("/sfa/simulacoes", f"/sfa/simulacoes/{instituto.id}",
@@ -334,12 +335,12 @@ def test_dados_preenchidos_salvos_e_retrocompatibilidade_legado(app, client, hoj
     base = f"/sfa/simulacao/p/{p.token}"
 
     client.post(f"{base}/sinan", data=_sinan(
-        nome="Carlos Silva", nome_mae="Ana Silva", telefone="16988887777",
-        cartao_sus="987654321098765", logradouro="Avenida Brasil",
-        investigador__nome="Dra. Paula",
+        nome="Participante fictício B", nome_mae="Responsável fictício B", telefone=("0" * 11),
+        cartao_sus=("0" * 15), logradouro="Logradouro fictício B",
+        investigador__nome="Investigador fictício B",
     ))
     resp_t0 = client.post(f"{base}/t0", data=_t0(
-        respondent_role="Outra pessoa autorizada", respondent_name="Mariana Silva",
+        respondent_role="Outra pessoa autorizada", respondent_name="Representante fictício B",
     ))
     assert resp_t0.status_code == 302
 
@@ -348,23 +349,23 @@ def test_dados_preenchidos_salvos_e_retrocompatibilidade_legado(app, client, hoj
     sinan_dados = service.carregar_respostas(respostas["sinan"])
     t0_dados = service.carregar_respostas(respostas["t0"])
 
-    assert sinan_dados["nome"] == "Carlos Silva"
-    assert sinan_dados["nome_mae"] == "Ana Silva"
-    assert sinan_dados["telefone"] == "16988887777"
-    assert sinan_dados["cartao_sus"] == "987654321098765"
-    assert sinan_dados["logradouro"]["valor"] == "Avenida Brasil"
-    assert sinan_dados["investigador"]["nome"] == "Dra. Paula"
-    assert t0_dados["respondent_name"] == "Mariana Silva"
+    assert sinan_dados["nome"] == "Participante fictício B"
+    assert sinan_dados["nome_mae"] == "Responsável fictício B"
+    assert sinan_dados["telefone"] == ("0" * 11)
+    assert sinan_dados["cartao_sus"] == ("0" * 15)
+    assert sinan_dados["logradouro"]["valor"] == "Logradouro fictício B"
+    assert sinan_dados["investigador"]["nome"] == "Investigador fictício B"
+    assert t0_dados["respondent_name"] == "Representante fictício B"
 
     # Verifica a renderização da página do participante (/sfa/simulacoes/participante/<id>)
     pagina = client.get(f"/sfa/simulacoes/participante/{p.id}").get_data(as_text=True)
-    assert "Carlos Silva" in pagina
-    assert "Ana Silva" in pagina
-    assert "16988887777" in pagina
-    assert "987654321098765" in pagina
-    assert "Avenida Brasil" in pagina
-    assert "Dra. Paula" in pagina
-    assert "Mariana Silva" in pagina
+    assert "Participante fictício B" in pagina
+    assert "Responsável fictício B" in pagina
+    assert ("0" * 11) in pagina
+    assert ("0" * 15) in pagina
+    assert "Logradouro fictício B" in pagina
+    assert "Investigador fictício B" in pagina
+    assert "Representante fictício B" in pagina
     assert "Preenchido (conteúdo não guardado)" not in pagina
 
     # Retrocompatibilidade com registro legado que continha [preenchido]

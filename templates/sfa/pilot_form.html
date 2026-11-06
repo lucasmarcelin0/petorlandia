@@ -8,7 +8,7 @@
 <form method="post" id="pilot-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <section><h2>{{ pilot.label }}</h2><p>Este link já identifica seu piloto. Não informe CPF, nome completo ou número de prontuário.</p>
-<p><strong>D0 = início dos sintomas; T0 = primeira entrevista.</strong> T7 é D0 + 7 dias; T30 é D0 + 30 dias. Ao enviar as respostas, a entrevista será registrada na data de hoje, {{ hoje.strftime('%d/%m/%Y') }}, separadamente do início da doença.</p>
+<p><strong>D0 = início dos sintomas; T0 = primeira entrevista.</strong> T7 é T0 + 7 dias e T30 é T0 + 30 dias. Ao enviar as respostas, a entrevista será registrada na data de hoje, {{ hoje.strftime('%d/%m/%Y') }}, separadamente do início da doença.</p>
 <p>Primeira entrevista: {{ calendar.first_interview.strftime('%d/%m/%Y') if calendar.first_interview else 'ainda não realizada' }}. {% if calendar.illness_days_t0 is not none %}T0 ocorreu {{ calendar.illness_days_t0 }} dias após o início dos sintomas.{% endif %}</p>
 <p id="pilot-calendar" role="status">Início dos sintomas: {{ calendar.onset.strftime('%d/%m/%Y') if calendar.onset else 'não informado' }}. T7: {{ calendar.stages[1].target.strftime('%d/%m/%Y') if calendar.stages[1].target else 'a definir' }}. T30: {{ calendar.stages[2].target.strftime('%d/%m/%Y') if calendar.stages[2].target else 'a definir' }}.</p>
 {% if kind=='t30' and calendar.first_interview %}<p class="help">Última entrevista deste piloto: {{ (calendar.stages[1].response.interview_date if calendar.stages[1].response else calendar.first_interview).strftime('%d/%m/%Y') }}. Use essa data para as perguntas “desde o último contato”.</p>{% endif %}

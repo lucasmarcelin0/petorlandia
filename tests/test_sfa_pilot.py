@@ -37,8 +37,8 @@ def test_pilot_registration_is_independent_and_visible(app, client, pilot):
     response = client.get(f'/sfa/pilotos/{pid}')
     assert response.status_code == 200
     assert f'/sfa/piloto/{token}/t0'.encode() in response.data
-    assert b'09/01/2025' in response.data
-    assert b'01/02/2025' in response.data
+    assert b'09/01/2025' not in response.data
+    assert b'01/02/2025' not in response.data
     assert b'NS1 negativo isolado' in response.data
 
 
@@ -89,19 +89,19 @@ def test_linked_timing_real_interview_and_no_duplicate(app, client, pilot, monke
         assert r.interview_date == date(2025,1,6)
         assert payload['pilot']['illness_days']==4
         assert len(payload['pilot']['workplaces'])==2
-        assert service.pilot_calendar(db.session.get(SfaPilotParticipant,pid))['stages'][1]['target']==date(2025,1,9)
+        assert service.pilot_calendar(db.session.get(SfaPilotParticipant,pid))['stages'][1]['target']==date(2025,1,13)
     assert client.post(f'/sfa/piloto/{token}/t7',data={'action':'answer'}).status_code==409
-    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,1,9))
+    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,1,13))
     response=client.get(f'/sfa/piloto/{token}/t7')
     assert b'answer__fonte_ainda_ativa' in response.data
     assert client.post(f'/sfa/piloto/{token}/t7',data={'action':'answer','answer__classificacao_melhora':'Melhorando'}).status_code==200
-    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,2,1))
+    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,2,11))
     assert client.post(f'/sfa/piloto/{token}/t30',data={'action':'answer'}).status_code==200
     with app.app_context():
         rows=SfaPilotResponse.query.all()
         assert len(rows)==3
         last=next(r for r in rows if r.stage=='t30')
-        assert json.loads(last.payload_json)['pilot']['interval_from']=='2025-01-09'
+        assert json.loads(last.payload_json)['pilot']['interval_from']=='2025-01-14'
         assert SfaPaciente.query.count()==0
     assert 'Oficina fictícia'.encode() in client.get(f'/sfa/pilotos/{pid}').data
 
@@ -113,13 +113,13 @@ def test_late_t0_does_not_reset_targets_and_no_t7_fallback(app, client, pilot, m
     with app.app_context():
         c=service.pilot_calendar(db.session.get(SfaPilotParticipant,pid))
         assert c['first_interview']==date(2025,1,12)
-        assert c['stages'][1]['target']==date(2025,1,9)
-        assert any('após o D7' in f for f in c['flags'])
-    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,2,1))
+        assert c['stages'][1]['target']==date(2025,1,19)
+        assert c['stages'][2]['target']==date(2025,2,11)
+    monkeypatch.setattr(service,'hoje_local',lambda:date(2025,2,11))
     assert client.post(f'/sfa/piloto/{token}/t30',data={'action':'answer'}).status_code==200
     with app.app_context():
         r=SfaPilotResponse.query.filter_by(stage='t30').one()
-        assert json.loads(r.payload_json)['pilot']['interval_from']=='2025-01-12'
+        assert json.loads(r.payload_json)['pilot']['interval_from']=='2025-01-02'
 
 
 def test_admin_and_csrf_boundaries(app, client, pilot, monkeypatch):

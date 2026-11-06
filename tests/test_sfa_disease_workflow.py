@@ -58,6 +58,24 @@ def test_t0_agenda_por_doenca_e_nao_reinicia_por_reenvio(app, hoje):
     assert p.data_t7 == '17/09/2026'
 
 
+@pytest.mark.parametrize('inicio', ['01/09/2026', ''])
+def test_revisao_agenda_pela_entrevista_mesmo_sem_inicio_dos_sintomas(app, hoje, inicio):
+    p = paciente(app)
+    dados = t0_payload(p, inicio)
+    dados['_instrument_version'] = flow.INTERVIEW_VERSION
+    assert service.on_submit_t0(dados)['ok']
+    assert (p.data_t7, p.data_t30) == ('20/09/2026', '13/10/2026')
+    assert flow.impedimento_etapa(p, 't7')
+    hoje[0] = date(2026, 9, 18)
+    assert flow.impedimento_etapa(p, 't7') is None
+    assert service.on_submit_t7({'id_estudo': p.id_estudo, '_instrument_version': flow.INTERVIEW_VERSION})['ok']
+    hoje[0] = date(2026, 10, 13)
+    assert service.on_submit_t30({'id_estudo': p.id_estudo, '_instrument_version': flow.INTERVIEW_VERSION})['ok']
+    calendario = json.loads(p.respostas_t30[0].dados_json)['_calendario']
+    assert calendario['base'] == 'entrevista_t0'
+    assert calendario['intervalo_desde'] == '2026-09-19'
+
+
 def test_datas_ausentes_conflitantes_e_futuras_nao_viram_entrevista(app, hoje):
     p = paciente(app)
     assert not service.on_submit_t0(t0_payload(p, '14/09/2026'))['ok']

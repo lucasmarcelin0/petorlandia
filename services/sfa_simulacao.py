@@ -37,7 +37,7 @@ ETAPA_DESCRICOES = {
 DIAS_ALVO = {"t7": 7, "t30": 30}
 AGENDAS = {
     "imediata": "Sequencial imediata: cada etapa abre logo após a anterior",
-    "protocolo": "Calendário do protocolo: T7 no D7 e T30 no D30 do início dos sintomas",
+    "protocolo": "Calendário do protocolo: T7 e T30 após a entrevista inicial",
 }
 PERFIS = [
     "Profissional da assistência à saúde",
@@ -368,11 +368,14 @@ def calendario_participante(participante, hoje: date | None = None) -> dict:
     grupo = participante.grupo
     respostas = respostas_por_etapa(participante)
     inicio, fonte = inicio_sintomas_participante(participante)
+    t0 = carregar_respostas(respostas.get("t0"))
+    primeira = _parse_data(t0.get("_simulacao", {}).get("data_envio"))
     itens = []
     anterior = None
     for etapa in etapas_grupo(grupo):
         resposta = respostas.get(etapa)
-        abre_em = inicio + timedelta(days=DIAS_ALVO[etapa]) if inicio and etapa in DIAS_ALVO else None
+        alvo = primeira + timedelta(days=DIAS_ALVO[etapa]) if primeira and etapa in DIAS_ALVO else None
+        abre_em = alvo - timedelta(days=2 if etapa == "t7" else 3) if alvo else None
         status, motivo = "disponivel", ""
         if resposta:
             status = "respondida"
@@ -381,11 +384,11 @@ def calendario_participante(participante, hoje: date | None = None) -> dict:
         elif anterior and anterior["status"] != "respondida":
             status, motivo = "bloqueada", f"Responda primeiro a etapa {anterior['rotulo']}."
         elif grupo.agenda == "protocolo" and etapa in DIAS_ALVO:
-            if not inicio:
-                status, motivo = "bloqueada", "Informe o início dos sintomas no T0 para liberar esta etapa."
+            if not primeira:
+                status, motivo = "bloqueada", "Registre a entrevista inicial para liberar esta etapa."
             elif hoje < abre_em:
                 status = "agendada"
-                motivo = f"Abre em {abre_em:%d/%m/%Y}, no D{DIAS_ALVO[etapa]} do início dos sintomas."
+                motivo = f"Abre em {abre_em:%d/%m/%Y}, com data-alvo em {alvo:%d/%m/%Y}."
         item = {"etapa": etapa, "rotulo": ETAPA_ROTULOS[etapa], "descricao": ETAPA_DESCRICOES[etapa],
                 "status": status, "motivo": motivo, "abre_em": abre_em, "resposta": resposta}
         itens.append(item)

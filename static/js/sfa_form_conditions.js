@@ -131,6 +131,13 @@
       container.setAttribute("aria-hidden", visible ? "false" : "true");
       setControlsEnabled(container, visible);
     });
+    const onsetLabel = documentObj.querySelector?.('[data-onset-others-label]');
+    if (onsetLabel) {
+      const count = Number(getValue("outras_pessoas_quantidade"));
+      onsetLabel.textContent = count === 1 ? "26. Quando essa pessoa começou a passar mal?"
+        : count > 1 ? "26. Quando essas pessoas começaram a passar mal?"
+        : "26. Quando começaram os sintomas entre as outras pessoas?";
+    }
     updateSections(documentObj);
   };
 

@@ -1064,6 +1064,18 @@ def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, 
 def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> dict:
     filtered = copy.deepcopy(schema or {})
     prior_payloads = _payloads_anteriores_por_stage(paciente, form_stage)
+    if form_stage == "t30" and filtered.get("instrument_version") == "sfa-2026-11-06":
+        from services.sfa_workflow import inicio_doenca
+        resposta, payload = obter_payload_formulario(paciente, "t7")
+        if resposta:
+            coleta = _data_resposta_stage("t7", resposta, payload)
+            desde = coleta + timedelta(days=1) if coleta else None
+        else:
+            desde, _ = inicio_doenca(paciente)
+        if desde:
+            for field in iterar_campos_form(filtered):
+                if field["key"] == "impacto_periodo":
+                    field["label"] = field["label"].replace("No período de referência", f"Desde {desde:%d/%m/%Y}")
     sections = []
 
     for section in filtered.get("sections", []):
@@ -1155,7 +1167,7 @@ def t0_consentimento_aceito(decisao: object) -> bool:
 
 
 def _nome_assinatura_tcle(payload: dict[str, object]) -> str:
-    if payload.get("respondent_role") in {"Pai, mae ou responsavel", "Outra pessoa autorizada"}:
+    if normalizar_nome_chave(payload.get("respondent_role")) in {"pai, mae ou responsavel", "outra pessoa autorizada"}:
         return str(payload.get("respondent_name") or "").strip()
     return str(
         payload.get("tcle_assinado_por")
@@ -1363,8 +1375,15 @@ def classificar_desfecho_primario_t30(payload: dict[str, object]) -> str:
     """
     if not payload:
         return ""
-    if normalizar_nome_chave(payload.get("situacao_participante")) == "faleceu":
+    situacao = normalizar_nome_chave(payload.get("situacao_participante"))
+    if situacao in {"faleceu", "nao, faleceu"}:
         return "Obito"
+    if payload.get("_instrument_version") == "sfa-2026-11-06":
+        propria_pessoa = normalizar_nome_chave(payload.get("respondent_role")) == "a propria pessoa"
+        if not propria_pessoa and situacao != "sim":
+            return "Sem informacao valida"
+        resposta = normalizar_nome_chave(payload.get("sintoma_novo_agravado"))
+        return {"sim": "Sim", "nao": "Nao"}.get(resposta, "Sem informacao valida")
     if "sintomas_atuais" not in payload:
         return "Nao coletado"
     sintomas = _valores_regra(payload.get("sintomas_atuais"))
@@ -1596,6 +1615,9 @@ def normalizar_itens_exposicao_t0(field_key: str, value: object) -> list[str]:
 
 def normalizar_payload_t0_exposicoes(payload: dict[str, object]) -> dict[str, object]:
     normalized = dict(payload or {})
+    if normalized.get("_instrument_version") == "sfa-2026-11-06":
+        # A exportação e a consulta histórica devem conservar as opções respondidas.
+        return normalized
 
     if _resposta_sim(normalized.get("contato_agua_suja")):
         base = _split_resposta_lista(normalized.get("exposicao_ambiental"))

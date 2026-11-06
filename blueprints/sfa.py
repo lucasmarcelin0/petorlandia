@@ -1762,7 +1762,8 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t0", "exposicao_ambiental", "porta ambiental"),
                 ("t0", "exposicao_ambiental_detalhe", "local, periodo e situacao"),
                 ("t0", "exposicao_ambiental_outros_doentes", "procura coadoecimento"),
-                ("t0", "exposicao_animal", "porta animal"),
+                ("t0", "contato_animal", "porta animal"),
+                ("t0", "exposicao_animal", "espécies com contato"),
                 ("t0", "exposicao_animal_detalhe", "especie, evento, local e periodo"),
                 ("t0", "exposicao_animal_outros_doentes", "liga pessoas e animais"),
                 ("t0", "exposicao_alimentar", "porta alimentar, hidrica ou produto"),
@@ -1805,7 +1806,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t7", "perda_renda_valor", "valor que deixou de ganhar"),
                 ("t30", "dias_incap_novos", "dias adicionais finais"),
                 ("t30", "custo_outros", "gasto total adicional final"),
-                ("t30", "perda_renda", "nova perda de renda declarada"),
+                ("t30", "impacto_periodo", "inclui perda de renda qualitativa"),
                 ("t30", "perda_renda_valor", "valor final que deixou de ganhar"),
             ),
         },
@@ -1821,7 +1822,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t7", "sinais_alerta_atuais", "seguranca no seguimento"),
                 ("t7", "retornou_servico_saude", "captura atendimento fora da rede visivel"),
                 ("t30", "situacao_participante", "separa obitos do denominador"),
-                ("t30", "sintomas_atuais", "desfecho primario: sintoma novo ou agravado"),
+                ("t30", "sintoma_novo_agravado", "desfecho primario: sintoma novo ou agravado"),
                 ("t30", "sintomas_atuais_origem", "novo versus agravado"),
                 ("t30", "estado_saude_final", "estado complementar no fechamento"),
                 ("t30", "retorno_atividades_normais", "retorno funcional"),
@@ -2332,6 +2333,8 @@ def paciente_detail(id_estudo: str):
     def _summary_currency(stage, instrument_version, payload, resposta) -> str:
         if stage == "t0":
             candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
+        elif instrument_version == "sfa-2026-11-06":
+            return _format_currency(payload.get("custo_outros"))
         elif instrument_version in {"collective-v2", "collective-v3-disease-clock"}:
             # No instrumento essencial, custo_outros representa o gasto total
             # incremental. A propriedade do modelo permanece como fallback

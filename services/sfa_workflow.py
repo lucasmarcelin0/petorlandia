@@ -6,6 +6,7 @@ import json
 
 
 VERSION = "collective-v3-disease-clock"
+INTERVIEW_VERSION = "sfa-2026-11-06"
 
 
 def hoje_local():
@@ -47,11 +48,17 @@ def inicio_doenca(paciente):
 
 
 def resumo_calendario(paciente):
+    from services.sfa_service import obter_payload_formulario, _data_resposta_stage, parse_data
     inicio, fonte = inicio_doenca(paciente)
-    return {"inicio": inicio, "fonte": fonte,
+    resposta, payload = obter_payload_formulario(paciente, "t0")
+    por_entrevista = payload.get("_instrument_version") == INTERVIEW_VERSION
+    referencia = inicio
+    if por_entrevista:
+        referencia = parse_data(getattr(paciente, "data_t0", "")) or _data_resposta_stage("t0", resposta, payload)
+    return {"inicio": inicio, "fonte": fonte, "base": "entrevista_t0" if por_entrevista else "inicio_sintomas",
             "dia_doenca": (hoje_local() - inicio).days if inicio else None,
-            "t7": inicio + timedelta(days=7) if inicio else None,
-            "t30": inicio + timedelta(days=30) if inicio else None}
+            "t7": referencia + timedelta(days=7) if referencia else None,
+            "t30": referencia + timedelta(days=30) if referencia else None}
 
 
 def aplicar_calendario(paciente):
@@ -83,6 +90,14 @@ def impedimento_etapa(paciente, etapa):
     if etapa == "t7" and getattr(paciente, "respostas_t10", None):
         return "Este episódio já tem um T10 histórico. A equipe deve acompanhar a etapa T30."
     calendario = resumo_calendario(paciente)
+    if calendario["base"] == "entrevista_t0":
+        alvo = calendario[etapa]
+        if not alvo:
+            return "A equipe precisa confirmar a data da entrevista inicial."
+        abertura = alvo - timedelta(days=2 if etapa == "t7" else 3)
+        if hoje_local() < abertura:
+            return f"Este acompanhamento estará disponível em {abertura:%d/%m/%Y}. Data-alvo: {alvo:%d/%m/%Y}."
+        return None
     if not calendario["inicio"]:
         return "A equipe precisa confirmar a data de início dos sintomas antes deste acompanhamento."
     alvo = calendario[etapa]
@@ -106,13 +121,22 @@ def metadados_coleta(paciente, etapa, dados):
                 if dt:
                     anteriores.append(dt)
         inicio_intervalo = max(anteriores) if anteriores else None
+    if dados.get("_instrument_version") == INTERVIEW_VERSION:
+        inicio_intervalo = calendario["inicio"]
+        if etapa == "t30":
+            resposta, payload = obter_payload_formulario(paciente, "t7")
+            if resposta:
+                data_t7 = _data_resposta_stage("t7", resposta, payload)
+                inicio_intervalo = data_t7 + timedelta(days=1) if data_t7 else None
     dados["_calendario"] = {
-        "base": "inicio_sintomas", "inicio_sintomas": str(calendario["inicio"] or ""),
+        "base": calendario["base"], "inicio_sintomas": str(calendario["inicio"] or ""),
         "fonte": calendario["fonte"], "data_coleta": data_coleta.isoformat(),
         "dia_doenca": calendario["dia_doenca"],
         "data_alvo": str(calendario.get(etapa) or ""),
         "intervalo_desde": str(inicio_intervalo or ""), "intervalo_ate": str(data_coleta),
-        "regra_intervalo": "Desde o início no T0; desde a última resposta anterior nos seguimentos. Não somar períodos sobrepostos.",
+        "regra_intervalo": ("Desde D0 até T7; no T30, desde o dia seguinte ao T7 ou desde D0 quando faltou T7."
+                            if dados.get("_instrument_version") == INTERVIEW_VERSION else
+                            "Desde o início no T0; desde a última resposta anterior nos seguimentos. Não somar períodos sobrepostos."),
     }
 
 

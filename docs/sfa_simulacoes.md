@@ -11,7 +11,7 @@ real ou assinatura de TCLE.
    equipe (ex.: "Instituto · turma da professora", "Vigilância · equipe").
 2. Escolha as etapas (o T0 é obrigatório) e como elas abrem:
    - **Sequencial imediata:** cada etapa abre logo após a anterior;
-   - **Calendário do protocolo:** T7 no D7 e T30 no D30 do início dos sintomas
+   - **Calendário do protocolo:** T7 e T30 aos 7 e 30 dias da primeira entrevista
      informado no T0 (ou na ficha, se não houver T0).
 3. (Recomendado) Escreva um **caso fictício compartilhado**: um texto geral e,
    se quiser, um por etapa. Ele aparece no topo de cada formulário.

@@ -383,7 +383,7 @@
           {% set current = values.get(field.key, [] if field.type == "checkboxes" else "") %}
           <div class="field {% if field.type in ['textarea', 'checkboxes', 'radio'] %}full{% endif %}"{% if field.visible_if %} data-visible-if='{{ field.visible_if | tojson }}'{% endif %}>
             <label class="field-label" for="{{ field.key }}">
-              {{ field.label }}
+              {% if field.key == "inicio_outros" %}<span data-onset-others-label>{{ field.label }}</span>{% else %}{{ field.label }}{% endif %}
               {% if field.required %}<span class="required">*</span>{% endif %}
               {% if field.readonly %}<span class="field-help">&nbsp;preenchido automaticamente</span>{% endif %}
             </label>
@@ -461,6 +461,6 @@
       </div>
     </form>
   </div>
-  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20260824a"></script>
+  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20261106"></script>
 </body>
 </html>

@@ -15,11 +15,11 @@ O piloto usa o próprio SFA, com uma pessoa identificada por rótulo neutro no p
 
 ## Datas confirmadas com Lucas
 
-**D0 é a data do início dos sintomas. T0 é a data real da primeira entrevista. T7 = D0 + 7 dias; T30 = D0 + 30 dias.**
+**D0 é a data do início dos sintomas. T0 é a data real da primeira entrevista. T7 = T0 + 7 dias; T30 = T0 + 30 dias.**
 
 Criar o piloto não registra T0. Abrir um link ou enviar somente sugestões também não registra T0. A primeira entrevista é registrada na data local de São Paulo quando as respostas T0 são enviadas; o sistema calcula separadamente os dias de doença nessa entrevista. Não há retrodatação para o início dos sintomas.
 
-T7/T30 podem ser lidos antes da data para avaliar as perguntas. O envio de respostas da etapa requer T0 registrado, início conhecido e chegada à data de referência. Antes disso é possível enviar apenas sugestões. Um T0 tardio não desloca os alvos T7/T30. A ficha sinaliza T0 após D7 ou D30, sem fabricar observações anteriores. T30 pode ocorrer sem T7, usando a data do T0 como último contato conhecido. Uma resposta já enviada não é sobrescrita por repetição do envio.
+T7/T30 podem ser lidos antes da data para avaliar as perguntas. A entrevista T0 define os alvos. A janela abre dois dias antes do alvo do T7 e três dias antes do alvo do T30. Se faltar T7, o impacto no T30 abrange o período desde D0. Uma resposta já enviada não é sobrescrita por repetição do envio.
 
 ## Como Lucas poderá usar
 
