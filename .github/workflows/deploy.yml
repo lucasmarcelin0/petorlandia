@@ -4,8 +4,8 @@
 # Este workflow existe para quando quem publica nao tem o remoto `heroku`
 # configurado -- inclusive um agente. O segredo mora no GitHub, cada deploy
 # fica registrado em Actions e as mesmas travas do script manual valem aqui:
-# preflight antes, suite completa antes, push sem --force e espera pelo
-# release phase depois.
+# preflight antes, suite completa antes, recusa se producao tem commit que o
+# ref nao tem e espera pelo release phase depois.
 #
 # O caminho normal agora e a integracao GitHub do Heroku: todo merge na main
 # publica sozinho depois dos testes (DEPLOY.md). Este workflow fica para
@@ -58,8 +58,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-          # Historico completo: o push para o Heroku precisa dos commits, e a
-          # checagem de fast-forward compara com o que ja esta em producao.
+          # Historico completo: a trava compara o commit em producao com o ref.
           fetch-depth: 0
 
       - name: Setup Python
@@ -119,32 +118,20 @@ jobs:
           echo "versao=$versao" >> "$GITHUB_OUTPUT"
           echo "Release atual em producao: v$versao"
 
+      # Build de tarball do GitHub, como a integracao nativa faz. Nao usa o Git
+      # do Heroku: depois dos deploys pela integracao ele fica parado no ultimo
+      # push manual e recusava publicar. A trava agora compara com o commit do
+      # slug em producao: se ele nao for ancestral do ref, alguem publicou por
+      # fora e o deploy para, em vez de apagar a correcao que esta no ar.
       - name: Publicar
         id: push
         run: |
-          set -euo pipefail
-          git remote add heroku "https://heroku:$HEROKU_API_KEY@git.heroku.com/${{ steps.app.outputs.nome }}.git"
-          # App que nunca publicou nao tem `main` remoto: nesse caso nao ha o
-          # que comparar e o push segue direto.
-          if git fetch heroku main; then
-            # Sem --force, de proposito: se producao tem commit que este ref
-            # nao tem, alguem publicou por fora e um push forcado apagaria a
-            # correcao que ja esta no ar. Melhor falhar e alguem olhar.
-            if ! git merge-base --is-ancestor heroku/main HEAD; then
-              echo "O Heroku tem commit que este ref nao tem. Traga producao para o ref antes de publicar:"
-              git log --oneline HEAD..heroku/main | head -20
-              exit 1
-            fi
-            if git merge-base --is-ancestor HEAD heroku/main; then
-              echo "Producao ja esta neste commit; nada a publicar."
-              echo "publicou=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          git push heroku HEAD:main
-          echo "publicou=true" >> "$GITHUB_OUTPUT"
+          python scripts/heroku_build_from_github.py \
+            --app "${{ steps.app.outputs.nome }}" \
+            --repo "${{ github.repository }}" \
+            --sha "$(git rev-parse HEAD)"
 
-      # `git push` volta quando o build acaba; o `release: flask db upgrade`
+      # O build volta quando termina; o `release: flask db upgrade`
       # roda depois. Sem esperar por ele, migration quebrada passaria por
       # deploy bem-sucedido.
       - name: Esperar o release phase

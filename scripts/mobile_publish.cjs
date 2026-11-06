@@ -3,6 +3,27 @@
 const MARKER = /^PetOrlandia-Publish: true\s*$/m;
 const REQUIRED = ['pytest', 'authorization-tests'];
 
+// O dispatch pode falhar na leitura da resposta mesmo tendo criado o run:
+// antes de repetir, confere se já existe run desse workflow para o SHA.
+async function dispatchMain(github, repo, workflow_id, sha, core, delay = 5000) {
+  const started = async () => {
+    await new Promise(resolve => setTimeout(resolve, delay));
+    const runs = (await github.rest.actions.listWorkflowRuns({ ...repo, workflow_id,
+      branch: 'main', event: 'workflow_dispatch', per_page: 10 })).data.workflow_runs;
+    return runs.some(run => run.head_sha === sha);
+  };
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await github.rest.actions.createWorkflowDispatch({ ...repo, workflow_id, ref: 'main' });
+      return;
+    } catch (error) {
+      core.warning(`${workflow_id}: dispatch falhou (${error.message}); conferindo.`);
+      if (await started()) return;
+      if (attempt >= 2) throw error;
+    }
+  }
+}
+
 async function publish({ github, context, core }) {
   const repo = context.repo;
   const payload = context.payload;
@@ -56,11 +77,14 @@ async function publish({ github, context, core }) {
     // Merges feitos pelo GITHUB_TOKEN não disparam eventos push em outros
     // workflows. workflow_dispatch é a exceção oficial: dispara os dois CI
     // na main, cujos checks liberam a integração nativa do Heroku.
+    // Uma falha aqui deixava a main sem checks e o Heroku esperando para
+    // sempre (06/11/2026: "Unexpected end of JSON input" no dispatch, que
+    // responde sem corpo). Tenta de novo e só desiste avisando.
     for (const workflow_id of ['tests.yml', 'authorization-gate.yml']) {
-      await github.rest.actions.createWorkflowDispatch({ ...repo, workflow_id, ref: 'main' });
+      await dispatchMain(github, repo, workflow_id, result.sha, core);
     }
     await core.summary.addHeading('Correção integrada').addRaw(
       `PR #${pull_number}: ${result.sha}\n\nTestes da main iniciados. A integração GitHub do Heroku publica após aprovação.\n`).write();
   }
 }
-module.exports = { publish, MARKER, REQUIRED };
+module.exports = { publish, dispatchMain, MARKER, REQUIRED };
