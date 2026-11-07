@@ -115,6 +115,18 @@
           }
         },
         {
+          "key": "participante_faixa_etaria",
+          "label": "Qual é a idade da pessoa que participa do estudo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "18 anos ou mais",
+            "De 7 a 17 anos",
+            "Menos de 7 anos"
+          ],
+          "help_text": "Para menores de 18 anos, quem aceita o TCLE é o pai, a mãe ou o responsável legal."
+        },
+        {
           "key": "aceite_tcle",
           "label": "2. O consentimento para participar foi registrado conforme o TCLE do estudo?",
           "type": "checkboxes",
@@ -135,6 +147,22 @@
           "label": "Data do aceite",
           "type": "date",
           "required": false
+        },
+        {
+          "key": "assentimento_tale",
+          "label": "Assentimento da criança ou do adolescente (TALE)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "A criança ou o adolescente ouviu ou leu o Termo de Assentimento, entendeu e concorda em participar."
+          ],
+          "help_text": "Se a criança ou o adolescente não quiser participar, a recusa vale mesmo com a autorização do responsável. Nesse caso, não envie o formulário.",
+          "visible_if": {
+            "source": "current",
+            "key": "participante_faixa_etaria",
+            "operator": "equals",
+            "value": "De 7 a 17 anos"
+          }
         },
         {
           "key": "data_inicio_sintomas",

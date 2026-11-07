@@ -58,6 +58,7 @@ def _payload_t0():
         "respondent_role": "A própria pessoa",
         # Valores enviados para campos ocultos devem ser descartados no servidor.
         "respondent_name": "VALOR INJETADO",
+        "participante_faixa_etaria": "18 anos ou mais",
         "aceite_tcle": [sfa_service.T0_CONSENT_ACCEPTED],
         "outras_pessoas_com_sintomas": "Não",
         "outras_pessoas_quantidade": "8",
@@ -160,7 +161,7 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
     assert 'name="ficha_sinan"' not in html
     assert 'name="data_nascimento"' not in html
     assert 'name="data_inicio_sintomas"' in html
-    assert "TCLE_SFA_Orlandia_v1.docx" in html
+    assert "TCLE_SFA_Orlandia_v3.docx" in html
     assert "será registrado quem consentiu" in html
 
 
@@ -747,3 +748,80 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
     assert "Sexo biológico" in html
     assert "Faixa etária" in html
     assert "Ocupação principal" in html
+
+
+def _envia_t0(app, paciente, monkeypatch, **extra):
+    client = app.test_client()
+    captured = {}
+
+    def fake_on_submit(dados):
+        captured.update(dados)
+        paciente.resposta_t0 = object()
+        return {"ok": True, "id_estudo": paciente.id_estudo, "acao": "atualizado"}
+
+    monkeypatch.setattr(sfa_service, "on_submit_t0", fake_on_submit)
+    payload = _payload_t0()
+    payload.update(extra)
+    response = client.post(f"/sfa/p/{paciente.token_acesso}", data=payload)
+    return response.get_data(as_text=True), captured
+
+
+def test_t0_mostra_assentimento_so_para_7_a_17_anos(native_t0_app):
+    app, paciente, _schema_holder = native_t0_app
+
+    html = app.test_client().get(f"/sfa/p/{paciente.token_acesso}").get_data(as_text=True)
+
+    assert "Qual é a idade da pessoa que participa do estudo?" in html
+    assert "TALE_SFA_Orlandia_v1.docx" in html
+    assert '"value": "De 7 a 17 anos"' in html  # condição de exibição do assentimento
+
+
+def test_t0_de_menor_exige_responsavel_e_assentimento(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+
+    html, captured = _envia_t0(app, paciente, monkeypatch, participante_faixa_etaria="De 7 a 17 anos")
+
+    assert not captured
+    assert "o TCLE deve ser aceito pelo pai, pela mãe ou pelo responsável" in html
+    assert "Sem o assentimento da criança ou do adolescente" in html
+
+
+def test_t0_de_menor_com_responsavel_e_assentimento_e_registrado(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+
+    html, captured = _envia_t0(
+        app, paciente, monkeypatch,
+        participante_faixa_etaria="De 7 a 17 anos",
+        respondent_role="Pai, mãe ou responsável",
+        respondent_name="Joana Teste (mãe)",
+        assentimento_tale=[sfa_service.T0_ASSENTIMENTO_ACEITO],
+    )
+
+    assert "Obrigado pela sua participacao" in html
+    assert captured["assentimento_tale"] == [sfa_service.T0_ASSENTIMENTO_ACEITO]
+    assert captured["participante_faixa_etaria"] == "De 7 a 17 anos"
+
+
+def test_t0_menor_de_7_anos_dispensa_assentimento_mas_exige_responsavel(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+
+    html, captured = _envia_t0(
+        app, paciente, monkeypatch,
+        participante_faixa_etaria="Menos de 7 anos",
+        respondent_role="Pai, mãe ou responsável",
+        respondent_name="Joana Teste (mãe)",
+        assentimento_tale=[sfa_service.T0_ASSENTIMENTO_ACEITO],  # campo oculto: descartado
+    )
+
+    assert "Obrigado pela sua participacao" in html
+    assert captured["assentimento_tale"] == []
+
+
+def test_on_submit_t0_recusa_menor_sem_assentimento():
+    resultado = sfa_service.on_submit_t0({
+        "id_estudo": "SFA-1", "nome": "Teste", "respondent_role": "Pai, mãe ou responsável",
+        "respondent_name": "Responsável Teste", "aceite_tcle": [sfa_service.T0_CONSENT_ACCEPTED],
+        "participante_faixa_etaria": "De 7 a 17 anos", "assentimento_tale": [],
+    })
+    assert resultado["ok"] is False
+    assert "assentimento" in resultado["erro"]
