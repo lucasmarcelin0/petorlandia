@@ -114,6 +114,11 @@
 {% endif %}
 {% if p.prefill %}<p style="margin:0 0 1pt {{ recuo }};color:{{ cor_suave }};font-size:9.5pt;">Vem preenchida com a data da ficha SINAN; a pessoa confere ou corrige.</p>{% endif %}
 {% if p.help_text %}<p style="margin:0 0 1pt {{ recuo }};color:{{ cor_suave }};font-size:9.5pt;">{{ p.help_text }}</p>{% endif %}
+{% if form.stage == "t0" and p.key == "assentimento_tale" %}
+<table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;margin:3pt 0;">
+  <tr><td style="border:1px solid #9aa5b1;padding:6pt;font-size:9.5pt;">{% include "sfa/_tale_resumo.html" %}</td></tr>
+</table>
+{% endif %}
 {% if form.stage == "t0" and p.key == "aceite_tcle" %}
 <table width="100%" cellpadding="4" style="border-collapse:collapse;width:100%;margin:3pt 0;">
   <tr><td style="border:1px solid #9aa5b1;padding:6pt;font-size:9.5pt;">{% include "sfa/_tcle_resumo.html" %}</td></tr>

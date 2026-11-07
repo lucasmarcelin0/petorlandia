@@ -44,6 +44,7 @@ def _sinan(**extra):
 def _t0(**extra):
     dados = MultiDict([
         ("respondent_role", "A própria pessoa"),
+        ("participante_faixa_etaria", "18 anos ou mais"),
         ("aceite_tcle", sfa_service.T0_CONSENT_ACCEPTED),
         ("data_inicio_sintomas", "2026-09-20"),
         ("outras_pessoas_com_sintomas", "Não"),

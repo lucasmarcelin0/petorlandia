@@ -395,6 +395,9 @@
             {% if (form_stage or 't0') == 't0' and field.key == 'aceite_tcle' %}
             {% include "sfa/_tcle_resumo.html" %}
             {% endif %}
+            {% if (form_stage or 't0') == 't0' and field.key == 'assentimento_tale' %}
+            {% include "sfa/_tale_resumo.html" %}
+            {% endif %}
 
             {% if field.type == "textarea" %}
             <textarea id="{{ field.key }}" name="{{ field.key }}" {% if field.required %}required{% endif %} {% if field.readonly %}readonly aria-readonly="true"{% endif %}>{{ current }}</textarea>

@@ -66,6 +66,11 @@ SUPPORTED_T0_FIELD_TYPES = {
 T0_CONSENT_ACCEPTED = "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
 T0_CONSENT_DECLINED = "Nao aceito participar."
 LEGACY_T0_CONSENT_ACCEPTED = "Aceito participar voluntariamente deste estudo."
+T0_FAIXA_7_A_17 = "De 7 a 17 anos"
+T0_FAIXAS_MENORES = {"de 7 a 17 anos", "menos de 7 anos"}
+T0_ASSENTIMENTO_ACEITO = (
+    "A criança ou o adolescente ouviu ou leu o Termo de Assentimento, entendeu e concorda em participar."
+)
 
 # ---------------------------------------------------------------------------
 # Configuração (lida de variáveis de ambiente ou fallback)
@@ -2333,12 +2338,37 @@ def coletar_resposta_nativa(
     return dados, errors
 
 
+def erros_consentimento_menor_t0(dados: dict) -> dict[str, str]:
+    """Menores de 18 anos: TCLE pelo responsável e, de 7 a 17 anos, assentimento (TALE).
+
+    Respostas sem a pergunta de faixa etária (instrumentos anteriores) não são bloqueadas.
+    """
+    faixa = normalizar_nome_chave(dados.get("participante_faixa_etaria"))
+    if faixa not in T0_FAIXAS_MENORES:
+        return {}
+    errors: dict[str, str] = {}
+    if normalizar_nome_chave(dados.get("respondent_role")) == "a propria pessoa":
+        errors["respondent_role"] = (
+            "Para menores de 18 anos, o TCLE deve ser aceito pelo pai, pela mãe ou pelo responsável. "
+            "Marque quem está respondendo."
+        )
+    if faixa == normalizar_nome_chave(T0_FAIXA_7_A_17):
+        assentimento = dados.get("assentimento_tale")
+        valores = assentimento if isinstance(assentimento, list) else [assentimento]
+        if T0_ASSENTIMENTO_ACEITO not in {str(v or "").strip() for v in valores}:
+            errors["assentimento_tale"] = (
+                "Sem o assentimento da criança ou do adolescente, a participação não pode ser registrada."
+            )
+    return errors
+
+
 def coletar_resposta_t0_nativa(schema: dict, form_data, paciente) -> tuple[dict, dict[str, str]]:
     dados, errors = coletar_resposta_nativa("t0", schema, form_data, paciente)
     aceite_tcle = dados.get("aceite_tcle")
 
     if not t0_consentimento_aceito(aceite_tcle):
         errors["aceite_tcle"] = "Voce precisa aceitar o TCLE para enviar o formulario."
+    errors.update(erros_consentimento_menor_t0(dados))
 
     return dados, errors
 
@@ -4157,6 +4187,9 @@ def on_submit_t0(dados: dict) -> dict:
 
     if not t0_consentimento_aceito(dados.get("aceite_tcle")):
         return {"ok": False, "erro": "Aceite do TCLE ausente"}
+    erros_menor = erros_consentimento_menor_t0(dados)
+    if erros_menor:
+        return {"ok": False, "erro": " ".join(erros_menor.values())}
     if not nome:
         return {"ok": False, "erro": "Nome completo ausente para registrar a assinatura do TCLE"}
 
