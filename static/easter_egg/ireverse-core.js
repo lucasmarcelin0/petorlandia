@@ -369,6 +369,13 @@
 
   function anoDe(dataIso) { return Number(String(dataIso).slice(0, 4)); }
 
+  // Data do dia no fuso de quem usa (mesma regra do PetDateBR.todayIso).
+  // Em UTC, das 21h à meia-noite no Brasil, "hoje" já seria amanhã.
+  function dataLocalIso(data) {
+    const d = data instanceof Date ? data : new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   // ── Registro (comandos validados → eventos) ───────────────────────────────
   class Registro {
     constructor(opcoes) {
@@ -527,7 +534,7 @@
         if (Number(data.slice(0, 4)) !== info.ano || Number(data.slice(5, 7)) !== info.mes) {
           erros.push('A data de emissão não bate com o ano/mês gravado na chave (' + String(info.mes).padStart(2, '0') + '/' + info.ano + ').');
         }
-        if (data > this.agora().toISOString().slice(0, 10)) erros.push('Data de emissão no futuro.');
+        if (data > dataLocalIso(this.agora())) erros.push('Data de emissão no futuro.');
       }
 
       // Rastreabilidade atacadista → reciclador: as notas de compra que ele
@@ -721,7 +728,7 @@
       if (!empresa || empresa.tipo !== 'empresa') erros.push('Escolha a empresa aderente que receberá o certificado.');
       if (!MATERIAIS[dados.material]) erros.push('Escolha o material.');
       const anoMeta = Number(dados.anoMeta);
-      const anoAtual = this.agora().getUTCFullYear();
+      const anoAtual = this.agora().getFullYear();
       if (!Number.isInteger(anoMeta) || anoMeta > anoAtual || anoMeta < anoAtual - 2) {
         erros.push('Ano da meta deve estar entre ' + (anoAtual - 2) + ' e ' + anoAtual + '.');
       }
@@ -800,6 +807,6 @@
   return {
     sha256, canonico, limparDoc, validarCPF, validarCNPJ, gerarCPF, gerarCNPJ, formatarDoc, mascararDoc,
     analisarChave, gerarChave, dvChave, verificarCadeia, Registro, MATERIAIS, TIPOS, LIMITES, UF_POR_CODIGO,
-    CODIGO_POR_UF, kgParaG,
+    CODIGO_POR_UF, kgParaG, dataLocalIso,
   };
 });

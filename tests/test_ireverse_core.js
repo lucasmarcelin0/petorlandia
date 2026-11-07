@@ -1,5 +1,7 @@
 // Regras do protótipo iReverse (certificadora de créditos de logística reversa).
 // Uso: node tests/test_ireverse_core.js
+// Fuso do Brasil: o "hoje" do protótipo não pode virar amanhã depois das 21h.
+process.env.TZ = 'America/Sao_Paulo';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -155,5 +157,20 @@ assert.equal(recusado.registro.eventos.length, 0, 'cadeia adulterada não é car
 const semUm = JSON.parse(JSON.stringify(reg.eventos));
 semUm.splice(3, 1);
 assert.ok(!C.verificarCadeia(semUm).ok, 'evento removido é detectado');
+
+// ── Data do dia no fuso local ─────────────────────────────────────────────
+const noite = new Date('2026-11-08T01:30:00Z'); // 22h30 de 07/11 em São Paulo
+assert.equal(C.dataLocalIso(noite), '2026-11-07');
+const regNoite = new C.Registro({ agora: () => noite });
+const coopN = ok(regNoite.cadastrarParticipante({ tipo: 'cooperativa', nome: 'Coop Noturna', doc: cnpj(70000007), uf: 'SP' })).id;
+const recN = ok(regNoite.cadastrarParticipante({ tipo: 'reciclador', nome: 'Recicla Noite', doc: cnpj(80000008), uf: 'SP' })).id;
+ok(regNoite.registrarNFe(coopN, { chave: C.gerarChave({ uf: 'SP', ano: 2026, mes: 11, cnpj: regNoite.participante(coopN).doc, numero: 5 }), emitenteId: coopN, destinatarioId: recN, material: 'vidro', massaKg: 50, dataEmissao: '2026-11-07' }));
+falha(regNoite.registrarNFe(coopN, { chave: C.gerarChave({ uf: 'SP', ano: 2026, mes: 11, cnpj: regNoite.participante(coopN).doc, numero: 6 }), emitenteId: coopN, destinatarioId: recN, material: 'vidro', massaKg: 50, dataEmissao: '2026-11-08' }), 'futuro');
+// Réveillon às 22h: a meta do ano seguinte ainda não pode ser emitida.
+const reveillon = new C.Registro({ agora: () => new Date('2027-01-01T01:00:00Z') });
+assert.equal(C.dataLocalIso(new Date('2027-01-01T01:00:00Z')), '2026-12-31');
+const ent = ok(reveillon.cadastrarParticipante({ tipo: 'entidade', nome: 'Gestora', doc: cnpj(90000009), uf: 'SP' })).id;
+const emp = ok(reveillon.cadastrarParticipante({ tipo: 'empresa', nome: 'Empresa', doc: cnpj(91000009), uf: 'SP' })).id;
+falha(reveillon.emitirCertificado(ent, { empresaId: emp, material: 'vidro', anoMeta: 2027, massaKg: 1 }), 'entre 2024 e 2026');
 
 console.log('ireverse-core: todos os cenários passaram');

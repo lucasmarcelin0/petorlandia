@@ -9,8 +9,8 @@
   const $$ = (sel, raiz) => Array.from((raiz || document).querySelectorAll(sel));
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const kg = (g) => (Number(g || 0) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 3 }) + ' kg';
-  const hoje = () => new Date().toISOString().slice(0, 10);
-  const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const hoje = () => C.dataLocalIso(new Date());
+  const diasAtras = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return C.dataLocalIso(d); };
 
   // ── Persistência (só neste navegador) ──────────────────────────────────
   function lerStorage(chave) {
