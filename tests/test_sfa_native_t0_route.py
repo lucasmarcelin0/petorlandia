@@ -215,7 +215,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-06"
+    assert captured["_instrument_version"] == "sfa-2026-11-07"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -308,7 +308,7 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t7_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-06"
+    assert captured["_instrument_version"] == "sfa-2026-11-07"
     assert captured["dias_incap_novos"] == "3"
     assert captured["diagnostico_medico_qual"] == []
     assert captured["novos_casos_local_periodo"] == ""
@@ -335,14 +335,14 @@ def test_public_native_followup_registra_perda_de_renda_sem_valor_monetario(nati
     payload.update({"perda_renda": "Sim", "perda_renda_valor": "420.50"})
 
     if stage == "t30":
-        payload["impacto_periodo"] = ["Perda de renda"]
+        payload["impacto_periodo"] = ["Perdi renda ou deixei de ganhar dinheiro"]
     response = client.post(f"/sfa/p/{paciente.token_acesso}/{stage}", data=payload)
 
     assert response.status_code == 200
     if stage == "t7":
         assert captured["perda_renda"] == "Sim"
     else:
-        assert "Perda de renda" in captured["impacto_periodo"]
+        assert "Perdi renda ou deixei de ganhar dinheiro" in captured["impacto_periodo"]
     assert "perda_renda_valor" not in captured
 
 
@@ -366,7 +366,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-06"
+    assert captured["_instrument_version"] == "sfa-2026-11-07"
     assert captured["sintoma_novo_agravado"] == "Sim"
     assert captured["situacao_participante"] == ""
     assert captured["data_obito"] == ""

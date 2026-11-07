@@ -1,11 +1,59 @@
 {
-  "instrument_version": "sfa-2026-11-06",
+  "instrument_version": "sfa-2026-11-07",
   "title": "T30 — Encerramento do seguimento",
-  "subtitle": "Instrumento revisado em 06/11/2026.",
+  "subtitle": "Instrumento revisado em 07/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
   "submit_label": "Registrar T30",
   "sections": [
     {
-      "title": "Quem responde e situação vital",
+      "title": "Registro da entrevista",
+      "description": "Preenchido pela equipe quando a entrevista é presencial ou por telefone.",
+      "fields": [
+        {
+          "key": "modo_entrevista",
+          "label": "Como esta entrevista está sendo feita?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Presencial",
+            "Telefone",
+            "Pela própria pessoa, pelo link"
+          ],
+          "help_text": "Data e hora do registro ficam gravadas automaticamente pelo sistema."
+        },
+        {
+          "key": "entrevistador",
+          "label": "Entrevistador(a)",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        },
+        {
+          "key": "local_servico",
+          "label": "Local/serviço",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Quem responde e situação atual",
       "fields": [
         {
           "key": "respondent_role",
@@ -51,7 +99,8 @@
               "Pai, mãe ou responsável",
               "Outra pessoa autorizada"
             ]
-          }
+          },
+          "help_text": "Se a pessoa estiver viva, aplicar as perguntas 5 a 10. Em caso de óbito ou situação vital desconhecida, pular 5 e 6. Com respondente autorizado, seguir da 7 em diante e registrar apenas o que souber. Em caso de óbito, limitar os eventos e impactos individuais ao período até o falecimento."
         },
         {
           "key": "data_obito",
@@ -65,7 +114,8 @@
             "value": "Não, faleceu"
           }
         }
-      ]
+      ],
+      "description": "Parte 1 — Informações individuais."
     },
     {
       "title": "Sintomas e atividades hoje",
@@ -108,7 +158,8 @@
                 ]
               }
             ]
-          }
+          },
+          "help_text": "Registrar a resposta mesmo se a pessoa já se declarou recuperada no T7. Se respondeu “Sim”, preencher os dois detalhes abaixo."
         },
         {
           "key": "sintomas_atuais_detalhe",
@@ -206,7 +257,7 @@
               }
             ]
           },
-          "help_text": "Priorizar avaliação assistencial se houver sinal de urgência. Em emergência, procurar atendimento presencial ou ligar 192."
+          "help_text": "Se houver sinal de urgência, priorizar a avaliação assistencial. Em emergência, procurar atendimento presencial ou ligar 192."
         },
         {
           "key": "retorno_atividades_normais",
@@ -248,100 +299,6 @@
               }
             ]
           }
-        },
-        {
-          "key": "data_retorno",
-          "label": "Data aproximada do retorno completo, se ainda não registrada",
-          "type": "date",
-          "required": false,
-          "visible_if": {
-            "all": [
-              {
-                "any": [
-                  {
-                    "source": "current",
-                    "key": "respondent_role",
-                    "operator": "equals",
-                    "value": "A própria pessoa"
-                  },
-                  {
-                    "all": [
-                      {
-                        "source": "current",
-                        "key": "respondent_role",
-                        "operator": "selected_any",
-                        "values": [
-                          "Pai, mãe ou responsável",
-                          "Outra pessoa autorizada"
-                        ]
-                      },
-                      {
-                        "source": "current",
-                        "key": "situacao_participante",
-                        "operator": "equals",
-                        "value": "Sim"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "source": "current",
-                "key": "retorno_atividades_normais",
-                "operator": "equals",
-                "value": "Totalmente"
-              }
-            ]
-          }
-        },
-        {
-          "key": "retorno_sem_data",
-          "label": "Se a data não se aplica ou é desconhecida",
-          "type": "radio",
-          "required": false,
-          "options": [
-            "Sem interrupção das atividades",
-            "Não sei"
-          ],
-          "visible_if": {
-            "all": [
-              {
-                "any": [
-                  {
-                    "source": "current",
-                    "key": "respondent_role",
-                    "operator": "equals",
-                    "value": "A própria pessoa"
-                  },
-                  {
-                    "all": [
-                      {
-                        "source": "current",
-                        "key": "respondent_role",
-                        "operator": "selected_any",
-                        "values": [
-                          "Pai, mãe ou responsável",
-                          "Outra pessoa autorizada"
-                        ]
-                      },
-                      {
-                        "source": "current",
-                        "key": "situacao_participante",
-                        "operator": "equals",
-                        "value": "Sim"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "source": "current",
-                "key": "retorno_atividades_normais",
-                "operator": "equals",
-                "value": "Totalmente"
-              }
-            ]
-          }
         }
       ]
     },
@@ -358,11 +315,12 @@
             "Não",
             "Ainda aguardo resultado",
             "Não sei informar"
-          ]
+          ],
+          "help_text": "Se “Sim”, registrar uma linha por doença e marcar o que foi informado. A equipe confere a informação nos registros disponíveis."
         },
         {
           "key": "diagnostico_medico_qual",
-          "label": "Informar uma doença por linha e indicar suspeita, confirmação, descarte ou não sabe distinguir",
+          "label": "Doença(s) informada(s): uma por linha, com suspeita, confirmação, descarte ou não sabe distinguir",
           "type": "textarea",
           "required": false,
           "visible_if": {
@@ -378,13 +336,13 @@
           "type": "checkboxes",
           "required": false,
           "options": [
-            "Dias sem conseguir realizar as atividades habituais",
-            "Gastos da família ou do participante",
-            "Perda de renda",
+            "Houve dias em que não consegui realizar minhas atividades habituais",
+            "Minha família ou eu tivemos gastos",
+            "Perdi renda ou deixei de ganhar dinheiro",
             "Nenhuma dessas situações",
             "Não sei informar sobre o período"
           ],
-          "help_text": "Do dia seguinte à entrevista T7 até hoje. Sem T7, contar desde o início dos sintomas. Em caso de óbito, limitar até o falecimento."
+          "help_text": "A data é o dia seguinte à entrevista T7 ou, se o T7 faltou, o primeiro dia dos sintomas (D0). Em caso de óbito, limitar até o falecimento. Registrar cada situação uma vez."
         },
         {
           "key": "dias_incap_novos",
@@ -396,7 +354,7 @@
             "key": "impacto_periodo",
             "operator": "selected_any",
             "values": [
-              "Dias sem conseguir realizar as atividades habituais"
+              "Houve dias em que não consegui realizar minhas atividades habituais"
             ]
           },
           "min": 0
@@ -407,14 +365,14 @@
           "type": "checkboxes",
           "required": false,
           "options": [
-            "Não sei estimar"
+            "Não sei quantos"
           ],
           "visible_if": {
             "source": "current",
             "key": "impacto_periodo",
             "operator": "selected_any",
             "values": [
-              "Dias sem conseguir realizar as atividades habituais"
+              "Houve dias em que não consegui realizar minhas atividades habituais"
             ]
           }
         },
@@ -428,7 +386,7 @@
             "key": "impacto_periodo",
             "operator": "selected_any",
             "values": [
-              "Gastos da família ou do participante"
+              "Minha família ou eu tivemos gastos"
             ]
           },
           "min": 0,
@@ -447,15 +405,9 @@
             "key": "impacto_periodo",
             "operator": "selected_any",
             "values": [
-              "Gastos da família ou do participante"
+              "Minha família ou eu tivemos gastos"
             ]
           }
-        },
-        {
-          "key": "impacto_item_desconhecido",
-          "label": "Se houver dúvida sobre apenas um item, indicar qual",
-          "type": "text",
-          "required": false
         },
         {
           "key": "retornou_servico_saude",
@@ -464,9 +416,9 @@
           "required": false,
           "options": [
             "Sim",
-            "Não",
-            "Não sei informar"
-          ]
+            "Não"
+          ],
+          "help_text": "Se “Sim”, registrar inclusive atendimentos fora da rede municipal, sem repetir os já informados."
         },
         {
           "key": "numero_reconsultas",
@@ -513,14 +465,27 @@
       "fields": [
         {
           "key": "pista_coletiva_confirmada",
-          "label": "Verificação da equipe: havia pista coletiva anterior?",
+          "label": "Antes da entrevista, verificar: havia pista coletiva no T0 ou no T7?",
           "type": "radio",
           "required": false,
           "options": [
             "Sim",
             "Não",
             "Não verificado"
-          ]
+          ],
+          "help_text": "Usar os critérios do bloco coletivo do T7 para o T0 e as respostas do T7 (12 ou 15 = “Sim”, ou pista descrita na 16). Consultar as observações. Se constar como “Não verificado”, conferir o histórico antes de encerrar."
+        },
+        {
+          "key": "pista_coletiva_descricao",
+          "label": "Pista",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "pista_coletiva_confirmada",
+            "operator": "equals",
+            "value": "Sim"
+          }
         },
         {
           "key": "novos_casos_semelhantes",
@@ -531,7 +496,8 @@
             "Sim",
             "Não",
             "Não sei"
-          ]
+          ],
+          "help_text": "Se “Sim”, registrar apenas os novos casos: quantos, onde e quando adoeceram, relação com a pessoa acompanhada e o que tiveram em comum."
         },
         {
           "key": "novos_casos_quantidade",
@@ -649,7 +615,8 @@
                 "value": "Sim"
               }
             ]
-          }
+          },
+          "help_text": "Se houve novos casos ou já havia pista no T0 ou no T7, atualizar a investigação, mesmo que a resposta à 10 seja “Não” ou “Não sei”."
         },
         {
           "key": "nova_informacao_fonte_detalhe",
@@ -905,7 +872,8 @@
           "type": "textarea",
           "required": false
         }
-      ]
+      ],
+      "description": "Parte 2 — Informações coletivas."
     }
   ]
 }

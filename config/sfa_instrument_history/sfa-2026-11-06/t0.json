@@ -1,0 +1,606 @@
+{
+  "instrument_version": "sfa-2026-11-06",
+  "title": "T0 — Entrevista inicial",
+  "subtitle": "Instrumento revisado em 06/11/2026.",
+  "submit_label": "Registrar T0",
+  "sections": [
+    {
+      "title": "Participação e início dos sintomas",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "1. Quem está respondendo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A própria pessoa",
+            "Pai, mãe ou responsável",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "Nome e relação de quem responde",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "respondent_role",
+            "operator": "selected_any",
+            "values": [
+              "Pai, mãe ou responsável",
+              "Outra pessoa autorizada"
+            ]
+          }
+        },
+        {
+          "key": "aceite_tcle",
+          "label": "2. O consentimento para participar foi registrado conforme o TCLE do estudo?",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
+          ],
+          "help_text": "Sem consentimento, encerrar a entrevista."
+        },
+        {
+          "key": "versao_tcle",
+          "label": "Versão do TCLE",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "data_aceite",
+          "label": "Data do aceite",
+          "type": "date",
+          "required": false
+        },
+        {
+          "key": "data_inicio_sintomas",
+          "label": "3. Em que dia começaram os sintomas desta doença?",
+          "type": "date",
+          "required": false,
+          "prefill": "data_inicio_sintomas",
+          "help_text": "D0 é o primeiro dia de sintomas. Se desconhecido, registrar para revisão."
+        },
+        {
+          "key": "febre",
+          "label": "4. Você teve febre ou sensação de febre nesta doença?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "temperatura_medida",
+          "label": "Temperatura medida (°C), se disponível",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "data_temperatura",
+          "label": "Data da medida",
+          "type": "date",
+          "required": false
+        },
+        {
+          "key": "sinais_alerta_atuais",
+          "label": "5. Você apresenta agora algum destes sinais?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Muita falta de ar",
+            "Desmaio ou confusão",
+            "Sangramento importante",
+            "Piora muito forte ou preocupação urgente",
+            "Nenhum destes sinais agora"
+          ],
+          "help_text": "Em caso de sinal de urgência, priorizar avaliação assistencial. Em emergência, procurar atendimento presencial ou ligar 192."
+        }
+      ]
+    },
+    {
+      "title": "Ambiente, animais e alimentos nos 15 dias anteriores ao início dos sintomas",
+      "fields": [
+        {
+          "key": "exposicao_ambiental",
+          "label": "6. Nesses 15 dias, você teve contato ou esteve em alguma destas situações?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Água suja, lama ou enchente",
+            "Rio, córrego, pesca ou natação",
+            "Mata, trilha ou acampamento",
+            "Área rural, sítio ou chácara",
+            "Muitos mosquitos ou outros insetos",
+            "Carrapatos no corpo ou na roupa",
+            "Viagem ou estadia em outro município",
+            "Outra situação",
+            "Nenhuma dessas",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "exposicao_ambiental_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_ambiental",
+            "operator": "selected_any",
+            "values": [
+              "Outra situação"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_ambiental_detalhe",
+          "label": "7. Onde, quando e o que aconteceu?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_ambiental",
+            "operator": "selected_any_except",
+            "values": [
+              "Nenhuma dessas",
+              "Não sei"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_ambiental_outros_doentes",
+          "label": "8. Você soube se outras pessoas que estiveram nos locais da pergunta 7 também adoeceram?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_ambiental_detalhe",
+            "operator": "nonempty"
+          }
+        },
+        {
+          "key": "contato_animal",
+          "label": "9. Você teve contato com animais ou cuidou deles nesse período?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "tipos_animais",
+          "label": "10. Com quais tipos de animais você teve contato?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Domésticos ou de criação",
+            "Silvestres",
+            "Exóticos",
+            "Não sei o tipo"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "contato_animal",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "exposicao_animal",
+          "label": "11. Quais animais eram?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Cães",
+            "Gatos",
+            "Bovinos",
+            "Porcos",
+            "Galinhas ou outras aves",
+            "Roedores",
+            "Capivaras",
+            "Outros",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "contato_animal",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "exposicao_animal_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_animal",
+            "operator": "selected_any",
+            "values": [
+              "Outros"
+            ]
+          }
+        },
+        {
+          "key": "tipo_contato_animal",
+          "label": "12. Que tipo de contato você teve?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Conviveu, tocou, alimentou ou cuidou",
+            "Trabalhou com animais",
+            "Mordida ou arranhadura",
+            "Carrapato no corpo ou na roupa",
+            "Contato com urina, fezes ou sangue",
+            "Contato com animal morto ou carcaça",
+            "Ajudou em parto ou teve contato com aborto ou placenta",
+            "Outro",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "contato_animal",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "tipo_contato_animal_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "tipo_contato_animal",
+            "operator": "selected_any",
+            "values": [
+              "Outro"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_animal_outros_doentes",
+          "label": "13. Outros animais ou pessoas ligados ao contato com os animais que você informou também adoeceram?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Pessoas",
+            "Animais",
+            "Não soube de outros casos",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "contato_animal",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "exposicao_alimentar",
+          "label": "14. Nesses 15 dias, você consumiu ou teve contato com algum destes itens?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Carne crua ou mal passada",
+            "Leite cru ou queijo de leite não pasteurizado",
+            "Ovo cru ou maionese caseira",
+            "Água sem tratamento",
+            "Comida de rua ou barraca",
+            "Refeição em festa, evento ou estabelecimento",
+            "Alimento ou produto com aspecto, cheiro ou sabor estranho",
+            "Outro",
+            "Não consumi"
+          ]
+        },
+        {
+          "key": "exposicao_alimentar_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any",
+            "values": [
+              "Outro"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_origem",
+          "label": "15. Qual a marca, quem produziu e onde foi comprado ou consumido?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Não consumi"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_data",
+          "label": "16. Quando ocorreu o consumo ou contato?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Não consumi"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_outros_doentes",
+          "label": "17. Você soube se outras pessoas que consumiram o alimento ou a água, ou tiveram contato com o produto, também adoeceram?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Não consumi"
+            ]
+          }
+        },
+        {
+          "key": "exposicao_alimentar_expostos",
+          "label": "18. Aproximadamente quantas pessoas consumiram ou tiveram contato, e quantas adoeceram?",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Não consumi"
+            ]
+          },
+          "min": 0
+        },
+        {
+          "key": "exposicao_alimentar_doentes",
+          "label": "Quantas dessas pessoas adoeceram?",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "exposicao_alimentar",
+            "operator": "selected_any_except",
+            "values": [
+              "Não consumi"
+            ]
+          },
+          "min": 0
+        },
+        {
+          "key": "perda_renda",
+          "label": "19. Esta doença já fez você perder renda ou deixar de ganhar dinheiro?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Outras pessoas com sintomas parecidos",
+      "fields": [
+        {
+          "key": "outras_pessoas_com_sintomas",
+          "label": "20. Você soube de outra pessoa com febre ou sintomas parecidos perto da época em que você adoeceu?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "outras_pessoas_quantidade",
+          "label": "21. Aproximadamente quantas outras pessoas adoeceram? ",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "min": 0
+        },
+        {
+          "key": "vinculo_compartilhado",
+          "label": "22. Qual é a sua relação com essas pessoas?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Familiar ou parente",
+            "Pessoa que mora na mesma casa",
+            "Vizinho(a)",
+            "Colega de trabalho",
+            "Colega de escola",
+            "Outra",
+            "Prefiro não informar"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_compartilhado_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "vinculo_compartilhado",
+            "operator": "selected_any",
+            "values": [
+              "Outra"
+            ]
+          }
+        },
+        {
+          "key": "vinculo_local",
+          "label": "23. Quais locais vocês frequentaram em comum?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Mesma casa",
+            "Mesma vizinhança",
+            "Mesmo trabalho",
+            "Mesma escola",
+            "Mesmo serviço de saúde",
+            "Mesmo local de lazer",
+            "Outro local",
+            "Prefiro não informar"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "vinculo_local_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "vinculo_local",
+            "operator": "selected_any",
+            "values": [
+              "Outro local"
+            ]
+          }
+        },
+        {
+          "key": "atividade_comum",
+          "label": "24. Vocês participaram juntos de alguma atividade, evento ou refeição?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Refeição ou consumo do mesmo alimento/água",
+            "Festa ou outro evento",
+            "Viagem",
+            "Mesmo transporte",
+            "Atividade com animais",
+            "Outra atividade",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "atividade_comum_outro",
+          "label": "Especifique a outra opção",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "atividade_comum",
+            "operator": "selected_any",
+            "values": [
+              "Outra atividade"
+            ]
+          }
+        },
+        {
+          "key": "vinculo_data_periodo",
+          "label": "25. Onde e quando aconteceu?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "vinculo_local",
+                "operator": "selected_any_except",
+                "values": [
+                  "Prefiro não informar"
+                ]
+              },
+              {
+                "source": "current",
+                "key": "atividade_comum",
+                "operator": "selected_any_except",
+                "values": [
+                  "Não sei"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "inicio_outros",
+          "label": "26. Quando começaram os sintomas entre as outras pessoas?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "help_text": "Usar a redação correspondente à quantidade informada na pergunta 21."
+        },
+        {
+          "key": "vinculo_exposicao_suspeita",
+          "label": "27. Você suspeita de algum alimento, água, produto, animal ou situação que vocês tiveram em comum?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "outras_pessoas_com_sintomas",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "observacoes_entrevistador",
+          "label": "Observações do entrevistador",
+          "type": "textarea",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
