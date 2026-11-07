@@ -129,7 +129,7 @@
             "operator": "equals",
             "value": "Sim"
           },
-          "help_text": "Informar serviço/hospital, município e data(s). Ex.: Hospital Santo Antônio. Registrar também atendimentos que possam não constar no prontuário municipal."
+          "help_text": "Informar o serviço (UBS, pronto-atendimento, hospital ou consultório particular), o município e a data. Incluir atendimentos particulares ou fora de Orlândia."
         }
       ],
       "description": "Parte 1 — Informações individuais."
