@@ -89,7 +89,9 @@ def test_t7_registra_a_pista_coletiva_do_t0():
     ]
     assert campos["pista_coletiva_descricao"]["visible_if"]["key"] == "pista_coletiva_confirmada"
     assert campos["dias_incap_novos_sem_numero"]["options"] == ["Nenhum", "Não sei"]
-    assert "Hospital Santo Antônio" in campos["atendimento_detalhe"]["help_text"]
+    ajuda = campos["atendimento_detalhe"]["help_text"]
+    assert "particulares ou fora de Orlândia" in ajuda
+    assert "Hospital" not in ajuda  # sem nome de serviço específico como exemplo
 
 
 def test_t30_usa_as_situacoes_do_documento():
