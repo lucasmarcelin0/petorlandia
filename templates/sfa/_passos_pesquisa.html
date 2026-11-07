@@ -1,0 +1,67 @@
+{% set total_passos = passos_pesquisa | length %}
+{% set passos_feitos = passos_pesquisa | selectattr('concluido') | list | length %}
+<section class="card shadow-sm mb-3" id="passos-pesquisa" aria-labelledby="passos-pesquisa-titulo" style="scroll-margin-top:5rem">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+      <h4 id="passos-pesquisa-titulo" class="mb-0">Passos da pesquisa</h4>
+      <span class="small text-muted">
+        {% if total_passos %}{{ passos_feitos }} de {{ total_passos }} concluído{{ 's' if passos_feitos != 1 }}{% endif %}
+        · <a href="{{ url_for('sfa_routes.pilotos') }}">Pilotos de usabilidade</a>
+      </span>
+    </div>
+    <p class="text-muted mb-2">Clique no botão para abrir o documento. Marque a caixa quando o passo estiver concluído.</p>
+
+    {% if passos_pesquisa %}
+    <ol class="list-unstyled mb-2">
+      {% for passo in passos_pesquisa %}
+      <li class="d-flex flex-wrap align-items-center gap-2 border-top py-2">
+        <form method="POST" action="{{ url_for('sfa_routes.passo_concluido', passo_id=passo.id) }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="concluido" value="{{ '0' if passo.concluido else '1' }}">
+          <input class="form-check-input mt-0" type="checkbox" id="passo-{{ passo.id }}-feito"
+                 {% if passo.concluido %}checked{% endif %} onchange="this.form.submit()"
+                 aria-label="{{ 'Desmarcar' if passo.concluido else 'Marcar' }} &quot;{{ passo.titulo }}&quot; como concluído"
+                 style="width:1.4rem;height:1.4rem;cursor:pointer">
+        </form>
+        {% if passo.url %}
+        <a class="btn btn-sm {{ 'btn-success' if passo.concluido else 'btn-outline-primary' }}"
+           href="{{ passo.url }}" target="_blank" rel="noopener noreferrer">{{ loop.index }}. {{ passo.titulo }}</a>
+        {% else %}
+        <span class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true">{{ loop.index }}. {{ passo.titulo }} (sem link)</span>
+        {% endif %}
+        {% if passo.concluido and passo.concluido_em %}
+        <span class="small text-success">Concluído em {{ passo.concluido_em.strftime('%d/%m/%Y') }}</span>
+        {% endif %}
+        <details class="ms-auto">
+          <summary class="small text-muted" style="cursor:pointer">Editar</summary>
+          <form method="POST" action="{{ url_for('sfa_routes.passo_editar', passo_id=passo.id) }}" class="d-flex flex-wrap gap-2 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="visually-hidden" for="passo-{{ passo.id }}-titulo">Nome do passo</label>
+            <input class="form-control form-control-sm" style="max-width:16rem" id="passo-{{ passo.id }}-titulo" name="titulo" value="{{ passo.titulo }}" maxlength="120" required>
+            <label class="visually-hidden" for="passo-{{ passo.id }}-url">Link</label>
+            <input class="form-control form-control-sm" style="max-width:24rem" type="url" id="passo-{{ passo.id }}-url" name="url" value="{{ passo.url }}" maxlength="500" placeholder="https://...">
+            <button class="btn btn-sm btn-primary" type="submit" name="acao" value="salvar">Salvar</button>
+            <button class="btn btn-sm btn-outline-danger" type="submit" name="acao" value="remover" formnovalidate
+                    onclick="return confirm('Remover este passo da lista?')">Remover</button>
+          </form>
+        </details>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="mb-2">Nenhum passo cadastrado.</p>
+    {% endif %}
+
+    <details>
+      <summary class="small" style="cursor:pointer">Adicionar passo</summary>
+      <form method="POST" action="{{ url_for('sfa_routes.passo_novo') }}" class="d-flex flex-wrap gap-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="visually-hidden" for="passo-novo-titulo">Nome do passo</label>
+        <input class="form-control form-control-sm" style="max-width:16rem" id="passo-novo-titulo" name="titulo" maxlength="120" placeholder="Nome do passo" required>
+        <label class="visually-hidden" for="passo-novo-url">Link</label>
+        <input class="form-control form-control-sm" style="max-width:24rem" type="url" id="passo-novo-url" name="url" maxlength="500" placeholder="https://...">
+        <button class="btn btn-sm btn-primary" type="submit">Adicionar</button>
+      </form>
+    </details>
+  </div>
+</section>
