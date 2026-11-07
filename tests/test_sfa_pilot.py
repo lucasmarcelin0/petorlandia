@@ -33,7 +33,7 @@ def test_pilot_registration_is_independent_and_visible(app, client, pilot):
         assert len(token) >= 40
         for model in (SfaPaciente, SfaRespostaT0, SfaRespostaT7, SfaRespostaT30):
             assert model.query.count() == 0
-    assert b'Piloto fict' in client.get('/sfa/').data
+    assert b'Piloto fict' in client.get('/sfa/pilotos').data
     response = client.get(f'/sfa/pilotos/{pid}')
     assert response.status_code == 200
     assert f'/sfa/piloto/{token}/t0'.encode() in response.data

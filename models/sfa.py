@@ -22,6 +22,18 @@ class SfaPilotParticipant(db.Model):
     responses = db.relationship('SfaPilotResponse', backref='participant', order_by='SfaPilotResponse.created_at')
 
 
+class SfaPassoPesquisa(db.Model):
+    """Passo do roteiro da pesquisa exibido no painel (projeto, TCLE, questionário...)."""
+    __tablename__ = 'sfa_passo_pesquisa'
+    id = db.Column(db.Integer, primary_key=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    titulo = db.Column(db.String(120), nullable=False)
+    url = db.Column(db.String(500), nullable=False, default='')
+    concluido = db.Column(db.Boolean, nullable=False, default=False)
+    concluido_em = db.Column(db.DateTime(timezone=True))
+    atualizado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class SfaPilotResponse(db.Model):
     __tablename__ = 'sfa_pilot_response'
     __table_args__ = (UniqueConstraint('pilot_id', 'stage', name='uq_sfa_pilot_response_stage'),)

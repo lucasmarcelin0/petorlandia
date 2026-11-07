@@ -411,9 +411,8 @@ def dashboard():
         year, month = mes_valido
         mes_label = f"{month:02d}/{year}"
 
-    from models.sfa import SfaPilotParticipant
-    from services.sfa_pilot import pilot_calendar
-    pilotos = [(p, pilot_calendar(p)) for p in SfaPilotParticipant.query.order_by(SfaPilotParticipant.id.desc()).all()]
+    from blueprints.sfa_passos import listar_passos
+    passos_pesquisa = listar_passos()
     stats = stats_painel(mes_inicio_sintomas=mes_selecionado)
     diagnostico = diagnostico_configuracao()
     resumo_testes = resumo_dados_teste_sfa()
@@ -441,7 +440,7 @@ def dashboard():
 
     return render_template(
         "sfa/dashboard.html",
-        pilotos=pilotos,
+        passos_pesquisa=passos_pesquisa,
         stats=stats,
         diagnostico=diagnostico,
         resumo_testes=resumo_testes,
@@ -3018,6 +3017,9 @@ def t10_config_legacy():
 
 from blueprints.sfa_pilot import register as _register_pilot_routes
 _register_pilot_routes(bp, require_sfa_internal_access, _review_schema_loader)
+
+from blueprints.sfa_passos import register as _register_passos_routes
+_register_passos_routes(bp, require_sfa_internal_access)
 
 from blueprints.sfa_simulacao import register as _register_simulacao_routes
 _register_simulacao_routes(bp, require_sfa_internal_access)
