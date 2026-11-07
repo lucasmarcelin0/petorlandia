@@ -160,6 +160,16 @@
     }
     .card--date:hover { border-color: rgba(244,114,182,.45); }
 
+    /* Card 4 – iReverse */
+    .card--ireverse {
+      --card-glow: radial-gradient(ellipse at 20% 0%, rgba(59,130,246,.15) 0%, transparent 65%);
+      --tag-bg: rgba(59,130,246,.15);
+      --tag-color: #93c5fd;
+      --btn-bg: linear-gradient(135deg,#3b82f6,#1d4fa3);
+      --btn-shadow: rgba(29,79,163,.35);
+    }
+    .card--ireverse:hover { border-color: rgba(59,130,246,.45); }
+
     .card-icon {
       font-size: 2.8rem; line-height: 1;
       filter: drop-shadow(0 4px 12px rgba(15,23,42,.5));
@@ -378,6 +388,23 @@
           <span class="card-chip">🔒 Só duas pessoas</span>
         </div>
         <span class="card-btn">Criar nossa sala →</span>
+      </a>
+
+      <!-- Mini app: iReverse (protótipo de certificadora de logística reversa) -->
+      <a class="card card--ireverse" href="/surpresa/ireverse.html">
+        <span class="card-icon">♻️</span>
+        <span class="card-tag">Protótipo · ESG</span>
+        <div class="card-title">iReverse · Certificadora</div>
+        <p class="card-desc">
+          Créditos de logística reversa com rastreio de NF-e, MTR e CDF, verificador
+          independente e bloqueio de dupla contagem, conforme o Decreto 11.413/2023.
+        </p>
+        <div class="card-meta">
+          <span class="card-chip">🧾 NF-e única</span>
+          <span class="card-chip">⚖️ PNRS</span>
+          <span class="card-chip">🔗 Hash encadeado</span>
+        </div>
+        <span class="card-btn">Abrir protótipo →</span>
       </a>
 
     </div>

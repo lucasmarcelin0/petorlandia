@@ -162,7 +162,12 @@ def secret_game_partituras():
 @bp.route("/surpresa/<path:filename>")
 def secret_game_static(filename: str):
     response = send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
-    if filename in {"sala-a-dois.html", "sala-a-dois.js", "desafio.html", "main.js"}:
+    if filename in {
+        "sala-a-dois.html", "sala-a-dois.js", "desafio.html", "main.js",
+        # Protótipo iReverse: as regras mudam a cada etapa; uma versão antiga
+        # em cache aplicaria regras de dupla contagem desatualizadas.
+        "ireverse.html", "ireverse-core.js", "ireverse-app.js",
+    }:
         # A chamada muda rapidamente e uma versao antiga pode remover TURN,
         # chat ou permissoes. Nunca deixe o navegador reutilizar estes dois
         # arquivos sem consultar o servidor. O Desafio Secreto entra aqui pelo
