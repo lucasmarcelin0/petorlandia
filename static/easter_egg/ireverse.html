@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iReverse · Certificadora (protótipo)</title>
+  <meta name="description" content="Protótipo de certificadora de créditos de logística reversa: rastreabilidade de NF-e, MTR e CDF com bloqueio de dupla contagem.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #f3f5fb;
+      --surface: #ffffff;
+      --surface-2: #eef2fb;
+      --border: #d9dfee;
+      --text: #172036;
+      --muted: #5b6684;
+      --brand: #1d4fa3;
+      --brand-2: #2563eb;
+      --brand-soft: #e3ebfb;
+      --green: #15803d;
+      --green-soft: #dcf5e4;
+      --amber: #b45309;
+      --amber-soft: #fdf0d9;
+      --red: #b91c1c;
+      --red-soft: #fde3e3;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --shadow: 0 1px 2px rgba(23,32,54,.06), 0 4px 16px rgba(23,32,54,.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1424;
+        --surface: #161e33;
+        --surface-2: #1c2640;
+        --border: #2b3756;
+        --text: #e8edf8;
+        --muted: #9aa6c4;
+        --brand: #7aa5f5;
+        --brand-2: #8fb4ff;
+        --brand-soft: #1e2d52;
+        --green: #4ade80;
+        --green-soft: #12341f;
+        --amber: #fbbf24;
+        --amber-soft: #3a2a0c;
+        --red: #f87171;
+        --red-soft: #3d1616;
+        --shadow: 0 1px 2px rgba(0,0,0,.3);
+      }
+    }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Poppins', system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
+    a { color: var(--brand-2); }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+    header.top { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+    .top-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 0; }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+    .logo-word { font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; }
+    .logo svg { width: 34px; height: 34px; }
+    .proto { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); background: var(--amber-soft); border-radius: 999px; padding: 3px 10px; }
+    .ator { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ator label { font-size: .82rem; color: var(--muted); }
+    .ator select { min-width: 240px; }
+    nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+    nav.tabs button { background: none; border: none; border-bottom: 3px solid transparent; padding: 10px 12px; font: inherit; font-size: .9rem; color: var(--muted); cursor: pointer; white-space: nowrap; }
+    nav.tabs button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+
+    main { padding: 20px 0 60px; }
+    section.tab { display: none; }
+    section.tab.ativa { display: block; }
+    h2 { font-size: 1.3rem; margin: 0 0 4px; }
+    h3 { font-size: 1.05rem; margin: 0 0 10px; }
+    p.lead { color: var(--muted); margin: 0 0 18px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); margin-bottom: 16px; }
+    .grid { display: grid; gap: 12px; }
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    .kpi b { display: block; font-size: 1.35rem; }
+    .kpi span { font-size: .8rem; color: var(--muted); }
+    .cols-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+    form .campos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    label.campo { display: flex; flex-direction: column; gap: 4px; font-size: .82rem; color: var(--muted); }
+    input, select, textarea { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+    input:focus, select:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
+    .linha { display: flex; gap: 6px; }
+    .linha input { flex: 1; }
+    .chk { display: flex; align-items: center; gap: 8px; font-size: .88rem; }
+    .acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    button.btn { font: inherit; font-size: .88rem; font-weight: 600; border-radius: 8px; padding: 8px 14px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
+    @media (prefers-color-scheme: dark) { button.btn { color: #0e1424; } }
+    button.btn.sec { background: transparent; color: var(--brand); }
+    button.btn.perigo { background: transparent; color: var(--red); border-color: var(--red); }
+    button.btn.mini { padding: 4px 10px; font-size: .8rem; }
+    button.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .tabela { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    .mono { font-family: var(--mono); font-size: .78rem; word-break: break-all; }
+    .chip { display: inline-block; font-size: .72rem; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+    .s-registrada, .s-emitido { background: var(--brand-soft); color: var(--brand); }
+    .s-recebida { background: var(--amber-soft); color: var(--amber); }
+    .s-homologada, .s-aposentado { background: var(--green-soft); color: var(--green); }
+    .s-rejeitada, .s-cancelado { background: var(--red-soft); color: var(--red); }
+    .alerta-txt { color: var(--amber); font-size: .78rem; }
+    .vazio { color: var(--muted); font-size: .9rem; padding: 12px 0; }
+
+    #avisos { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; max-width: min(440px, calc(100vw - 32px)); }
+    .aviso { border-radius: 10px; padding: 12px 14px; font-size: .86rem; box-shadow: var(--shadow); border: 1px solid var(--border); background: var(--surface); }
+    .aviso.erro { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+    .aviso.ok { border-color: var(--green); background: var(--green-soft); color: var(--green); }
+    .aviso.alerta { border-color: var(--amber); background: var(--amber-soft); color: var(--amber); }
+    .aviso ul { margin: 4px 0 0; padding-left: 18px; }
+
+    .banner { border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: .9rem; }
+    .banner.erro { background: var(--red-soft); color: var(--red); border: 1px solid var(--red); }
+    .banner.info { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--border); }
+
+    .fluxo { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: passo; }
+    .passo { background: var(--surface-2); border-radius: 10px; padding: 12px; font-size: .84rem; position: relative; }
+    .passo::before { counter-increment: passo; content: counter(passo); display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; font-size: .8rem; align-items: center; justify-content: center; margin-bottom: 6px; }
+    .passo b { display: block; margin-bottom: 2px; }
+    .passo small { color: var(--muted); }
+
+    dialog { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); padding: 20px; width: min(520px, calc(100vw - 32px)); }
+    dialog::backdrop { background: rgba(10,15,30,.55); }
+
+    .certificado { position: relative; border: 2px solid var(--brand); border-radius: 14px; padding: 22px; overflow: hidden; background: var(--surface); }
+    .certificado::after { content: 'PROTÓTIPO · SEM VALIDADE LEGAL'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: clamp(1.1rem, 4vw, 2rem); font-weight: 700; color: var(--red); opacity: .13; transform: rotate(-18deg); pointer-events: none; text-align: center; }
+    .certificado h3 { color: var(--brand); font-size: 1.15rem; }
+    .certificado dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 12px 0; font-size: .88rem; }
+    .certificado dt { color: var(--muted); }
+    .certificado dd { margin: 0; }
+
+    .lei li { margin-bottom: 8px; }
+    .lei .art { font-family: var(--mono); font-size: .78rem; color: var(--brand); }
+    details summary { cursor: pointer; font-weight: 600; }
+    .etapas { display: grid; gap: 10px; }
+    .etapa { border-left: 4px solid var(--border); padding: 6px 0 6px 14px; }
+    .etapa.atual { border-left-color: var(--green); }
+    .etapa b { display: block; }
+    .etapa small { color: var(--muted); }
+    footer.rodape { color: var(--muted); font-size: .8rem; text-align: center; padding: 24px 16px 40px; }
+
+    @media (max-width: 600px) {
+      .ator { margin-left: 0; width: 100%; }
+      .ator select { min-width: 0; flex: 1; }
+      .certificado dl { grid-template-columns: 1fr; }
+      .certificado dt { margin-top: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="top-row">
+        <a class="logo" href="#painel" data-tab-link="painel" aria-label="iReverse, painel">
+          <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M33 13a14 14 0 1 0 2 11" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" style="color:var(--brand)"/><path d="M27 6l7 7-9 2z" fill="currentColor" style="color:var(--brand)"/></svg>
+          <span class="logo-word">ireverse</span>
+        </a>
+        <span class="proto">Protótipo · sem validade legal</span>
+        <div class="ator">
+          <label for="ator">Atuando como</label>
+          <select id="ator"></select>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Seções">
+        <button role="tab" data-tab="painel" aria-selected="true">Painel</button>
+        <button role="tab" data-tab="elos">Elos da cadeia</button>
+        <button role="tab" data-tab="notas">Notas e destinação</button>
+        <button role="tab" data-tab="certificados">Certificados</button>
+        <button role="tab" data-tab="consulta">Consulta pública</button>
+        <button role="tab" data-tab="livro">Livro-razão</button>
+        <button role="tab" data-tab="lei">Lei e etapas</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="banner"></div>
+
+    <!-- PAINEL ─────────────────────────────────────────── -->
+    <section class="tab ativa" id="tab-painel" role="tabpanel">
+      <h2>Certificadora de créditos de logística reversa</h2>
+      <p class="lead">Cada quilo reciclado vira crédito <b>uma única vez</b>: a NF-e é validada, a recicladora confirma o recebimento (MTR/CDF), um verificador independente homologa, e só então a entidade gestora emite o certificado. Tudo fica num livro-razão encadeado por hash.</p>
+
+      <div class="grid kpis" id="kpis"></div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>Como a massa percorre a cadeia</h3>
+        <div class="fluxo">
+          <div class="passo"><b>Coleta e venda</b><small>Catador, cooperativa, PEV ou ferro-velho emite a NF-e de venda do reciclável.</small></div>
+          <div class="passo"><b>Validação da chave</b><small>DV, modelo 55, CNPJ e UF do emitente, data. Chave repetida é bloqueada para sempre.</small></div>
+          <div class="passo"><b>Destinação final</b><small>A recicladora confirma o recebimento com MTR e CDF. Só a massa recebida conta.</small></div>
+          <div class="passo"><b>Homologação</b><small>Verificador independente consulta a SEFAZ e homologa. Ele não emite nem vende créditos.</small></div>
+          <div class="passo"><b>Certificado (CCRLR)</b><small>A entidade gestora emite com lastro integral, priorizando os catadores. A baixa é única.</small></div>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Experimente</h3>
+          <p class="lead" style="margin-bottom:10px">Carregue uma cadeia de exemplo (cooperativa → ferro-velho → recicladora → empresa) e depois tente fraudá-la.</p>
+          <div class="acoes" style="margin-top:0">
+            <button class="btn" type="button" id="btn-exemplo">Carregar cenário de exemplo</button>
+            <button class="btn sec" type="button" id="btn-fraudes">Testar 8 tentativas de fraude</button>
+          </div>
+          <div id="fraudes" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>Dados deste protótipo</h3>
+          <p class="lead" style="margin-bottom:10px">Os dados ficam <b>só neste navegador</b>. Nada vai para o servidor do PetOrlândia. Exporte o livro-razão para guardar ou auditar.</p>
+          <div class="acoes" style="margin-top:0">
+            <button class="btn sec" type="button" id="btn-exportar">Exportar livro-razão (JSON)</button>
+            <label class="btn sec" style="display:inline-flex;align-items:center;font-weight:600;font-size:.88rem;border:1px solid var(--brand);border-radius:8px;padding:8px 14px;color:var(--brand);cursor:pointer">Importar<input type="file" id="btn-importar" accept="application/json,.json" hidden></label>
+            <button class="btn perigo" type="button" id="btn-apagar">Apagar tudo</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ELOS ───────────────────────────────────────────── -->
+    <section class="tab" id="tab-elos" role="tabpanel">
+      <h2>Elos da cadeia</h2>
+      <p class="lead">Quem participa e em que papel. Um documento, um cadastro. A mesma raiz de CNPJ não pode ser verificador e atuar em outro elo.</p>
+      <form class="card" id="form-participante" autocomplete="off">
+        <h3>Cadastrar participante</h3>
+        <div class="campos">
+          <label class="campo">Papel<select name="tipo" id="p-tipo"></select></label>
+          <label class="campo">Nome ou razão social<input name="nome" required maxlength="120"></label>
+          <label class="campo"><span id="p-doc-rotulo">CNPJ</span><span class="linha"><input name="doc" id="p-doc" required maxlength="18"><button class="btn sec mini" type="button" id="p-doc-gerar" title="Gerar documento fictício válido">Fictício</button></span></label>
+          <label class="campo">UF<select name="uf" id="p-uf"></select></label>
+          <label class="campo">Município<input name="municipio" maxlength="80"></label>
+          <label class="campo" id="p-cap-campo" hidden>Capacidade de recebimento (kg/mês)<input name="capacidadeKgMes" inputmode="decimal"></label>
+        </div>
+        <div class="acoes"><button class="btn" type="submit">Cadastrar</button></div>
+      </form>
+      <div class="card"><div class="tabela"><table><thead><tr><th>ID</th><th>Papel</th><th>Nome</th><th>Documento</th><th>UF</th></tr></thead><tbody id="lista-participantes"></tbody></table></div></div>
+    </section>
+
+    <!-- NOTAS ──────────────────────────────────────────── -->
+    <section class="tab" id="tab-notas" role="tabpanel">
+      <h2>Notas fiscais e destinação</h2>
+      <p class="lead">A nota é registrada pelo emitente ou pela entidade gestora. A recicladora confirma o recebimento, e o verificador homologa. As ações disponíveis dependem de quem você escolheu em "Atuando como".</p>
+      <form class="card" id="form-nfe" autocomplete="off">
+        <h3>Registrar NF-e de venda de reciclável</h3>
+        <div class="campos">
+          <label class="campo">Emitente<select name="emitenteId" id="n-emitente"></select></label>
+          <label class="campo">Destinatário<select name="destinatarioId" id="n-destinatario"></select></label>
+          <label class="campo">Material<select name="material" id="n-material"></select></label>
+          <label class="campo">Massa (kg)<input name="massaKg" id="n-massa" inputmode="decimal" required></label>
+          <label class="campo">Data de emissão<input type="date" name="dataEmissao" id="n-data" required></label>
+          <label class="campo" style="grid-column:1/-1">Chave de acesso (44 posições)<span class="linha"><input name="chave" id="n-chave" class="mono" required maxlength="54"><button class="btn sec mini" type="button" id="n-chave-gerar" title="Gera uma chave fictícia coerente com emitente e data">Fictícia</button></span></label>
+          <label class="chk" id="n-avulsa-campo" hidden><input type="checkbox" name="avulsa" id="n-avulsa"> NF-e avulsa emitida pela SEFAZ (catador sem CNPJ)</label>
+        </div>
+        <div id="n-origens" hidden style="margin-top:14px">
+          <h3>Notas de origem repassadas pelo atacadista</h3>
+          <p class="lead" style="margin-bottom:8px">Informe quanto de cada nota de compra está nesta revenda. Essa massa vira crédito para quem a vendeu ao atacadista, nunca duas vezes.</p>
+          <div id="n-origens-lista"></div>
+        </div>
+        <div class="acoes"><button class="btn" type="submit">Registrar nota</button></div>
+      </form>
+      <div class="card">
+        <div class="tabela"><table><thead><tr><th>Chave / partes</th><th>Material</th><th class="num">Faturado</th><th class="num">Elegível</th><th class="num">Saldo livre</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="lista-nfes"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- CERTIFICADOS ───────────────────────────────────── -->
+    <section class="tab" id="tab-certificados" role="tabpanel">
+      <h2>Certificados de crédito (CCRLR)</h2>
+      <p class="lead">Só a entidade gestora emite, e só com lastro integral em notas homologadas do ano da meta ou do anterior. Organizações de catadores são usadas primeiro.</p>
+      <form class="card" id="form-cert" autocomplete="off">
+        <h3>Emitir certificado</h3>
+        <div class="campos">
+          <label class="campo">Empresa aderente<select name="empresaId" id="c-empresa"></select></label>
+          <label class="campo">Material<select name="material" id="c-material"></select></label>
+          <label class="campo">Ano da meta<input name="anoMeta" id="c-ano" inputmode="numeric" required></label>
+          <label class="campo">Massa (kg)<input name="massaKg" id="c-massa" inputmode="decimal" required></label>
+        </div>
+        <div id="c-previa" class="vazio"></div>
+        <div class="acoes"><button class="btn sec" type="button" id="c-simular">Simular lastro</button><button class="btn" type="submit">Emitir</button></div>
+      </form>
+      <div class="card"><div class="tabela"><table><thead><tr><th>Código</th><th>Empresa</th><th>Material / meta</th><th class="num">Massa</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="lista-certs"></tbody></table></div></div>
+    </section>
+
+    <!-- CONSULTA ───────────────────────────────────────── -->
+    <section class="tab" id="tab-consulta" role="tabpanel">
+      <h2>Consulta pública de certificado</h2>
+      <p class="lead">Qualquer pessoa confere a cadeia de custódia de um certificado: de qual nota veio cada quilo, quem recebeu e quem homologou. O CPF de catador aparece mascarado (LGPD).</p>
+      <form class="card" id="form-consulta"><div class="linha"><input id="q-codigo" class="mono" placeholder="CCRLR-2026-…" aria-label="Código do certificado"><button class="btn" type="submit">Consultar</button></div></form>
+      <div id="resultado-consulta"></div>
+    </section>
+
+    <!-- LIVRO-RAZÃO ────────────────────────────────────── -->
+    <section class="tab" id="tab-livro" role="tabpanel">
+      <h2>Livro-razão encadeado</h2>
+      <p class="lead">Cada evento guarda o hash SHA-256 do anterior. O estado do sistema é sempre reconstruído a partir destes eventos. Alterar, inserir ou remover qualquer um quebra a cadeia.</p>
+      <div class="card">
+        <div class="acoes" style="margin-top:0">
+          <button class="btn" type="button" id="btn-integridade">Verificar integridade</button>
+          <button class="btn sec" type="button" id="btn-adulterar">Simular adulteração (sem gravar)</button>
+        </div>
+        <div id="integridade" style="margin-top:12px"></div>
+      </div>
+      <div class="card"><div class="tabela"><table><thead><tr><th>#</th><th>Quando</th><th>Evento</th><th>Ator</th><th>Hash / anterior</th></tr></thead><tbody id="lista-eventos"></tbody></table></div></div>
+    </section>
+
+    <!-- LEI E ETAPAS ───────────────────────────────────── -->
+    <section class="tab" id="tab-lei" role="tabpanel">
+      <h2>Base legal e etapas do projeto</h2>
+      <p class="lead">O que o protótipo já aplica, o que ainda falta e os pontos da apresentação que precisam ser ajustados antes de operar de verdade.</p>
+      <div class="grid cols-2">
+        <div class="card lei">
+          <h3>Regras aplicadas neste protótipo</h3>
+          <ul>
+            <li><span class="art">Dec. 11.413/2023, art. 15 §1º I</span><br>Veracidade, autenticidade, unicidade e não colidência da NF-e: DV da chave, modelo 55, CNPJ e UF do emitente, data, chave única para sempre.</li>
+            <li><span class="art">art. 15 §1º II · art. 31</span><br>Recebimento confirmado pela recicladora com MTR e CDF do SINIR. Um MTR/CDF comprova uma única nota.</li>
+            <li><span class="art">art. 15 §4º</span><br>Lastro só com notas do ano da meta ou do ano anterior.</li>
+            <li><span class="art">art. 15 §6º · art. 17</span><br>Organizações de catadores são esgotadas antes de outros operadores.</li>
+            <li><span class="art">art. 15 §7º e §8º</span><br>Catador pode vender a recicladora ou atacadista. Atacadista só vale vendendo a recicladora.</li>
+            <li><span class="art">art. 23</span><br>Só a entidade gestora emite certificados.</li>
+            <li><span class="art">art. 29 II, V e §1º</span><br>O verificador consulta a SEFAZ, preserva a não colidência das massas e não pode emitir, comprar ou vender créditos. Conflito de grupo econômico é bloqueado.</li>
+            <li><span class="art">LGPD (Lei 13.709/2018)</span><br>CPF de catador mascarado na consulta pública.</li>
+          </ul>
+        </div>
+        <div class="card lei">
+          <h3>Pontos de atenção da apresentação</h3>
+          <ul>
+            <li><b>ANM não é a autoridade.</b> A apresentação fala em certificado "autorizado pela ANM" (Agência Nacional de Mineração). Para embalagens quem habilita entidades gestoras e verificadores é o Ministério do Meio Ambiente (Portarias 1.102/2024, 1.117/2024 e 1.561/2026), com reporte no SINIR / Sisrev-BR (Portaria 1.778/2026).</li>
+            <li><b>Escolher um papel: gestora ou verificadora.</b> O verificador não pode comercializar créditos (art. 29 §1º). Se a iReverse vende os créditos, ela é entidade gestora e precisa contratar um verificador independente, ou ser só verificadora e não vender nada.</li>
+            <li><b>Crédito de reciclagem não é crédito de carbono.</b> Vender a mesma tonelada como CCRLR e como compensação de GEE é dupla alegação ambiental. O mercado de carbono tem regime próprio (Lei 15.042/2024, SBCE).</li>
+            <li><b>Token iREV como meio de pagamento.</b> Usar o token para comprar em lojas pode caracterizar ativo virtual ou arranjo de pagamento (Lei 14.478/2022 e regras do Banco Central). Para o protótipo, o mais seguro é tratar como pontos de fidelidade não negociáveis e deixar o blockchain como registro de prova (hash), não como moeda.</li>
+            <li><b>Leis estaduais e municipais.</b> SP e outros estados exigem logística reversa no licenciamento e podem ter sistema próprio. A baixa precisa dizer em qual sistema a meta foi comprovada, para a mesma tonelada não valer em dois.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Etapas</h3>
+        <div class="etapas">
+          <div class="etapa atual"><b>Etapa 1 · Protótipo de regras (este)</b><small>Motor de unicidade e balanço de massa, papéis separados, livro-razão com hash, consulta pública. Dados só no navegador.</small></div>
+          <div class="etapa"><b>Etapa 2 · Validação jurídica e regulatória</b><small>Parecer sobre o papel da iReverse (gestora ou verificadora), leitura do texto consolidado do Dec. 11.413/2023 e das Portarias do MMA, e regras estaduais dos estados de operação.</small></div>
+          <div class="etapa"><b>Etapa 3 · Backend real</b><small>Banco próprio, autenticação por papel, trilha de auditoria, leitura do XML da NF-e com assinatura digital, consulta de situação na SEFAZ e custódia dos XML por 5 anos (art. 29 VII).</small></div>
+          <div class="etapa"><b>Etapa 4 · Integrações oficiais</b><small>MTR/CDF do SINIR, reporte ao Sisrev-BR e interoperabilidade com outros verificadores (art. 30) para checar unicidade entre sistemas.</small></div>
+          <div class="etapa"><b>Etapa 5 · Rede e incentivos</b><small>Apps de coleta, credenciamento de ferros-velhos e cooperativas, programa de pontos (sem caráter de moeda) e pagamento dos catadores via Pix.</small></div>
+          <div class="etapa"><b>Etapa 6 · Ancoragem pública e comercial</b><small>Publicar periodicamente o hash do livro-razão numa blockchain pública (prova de não adulteração), vitrine de créditos e onboarding das empresas compradoras.</small></div>
+        </div>
+      </div>
+      <p class="lead" style="font-size:.8rem">Referências: Lei 12.305/2010 (PNRS); Decreto 10.936/2022; Decreto 11.413/2023; Decreto 12.688/2025 (embalagens plásticas); Portarias GM/MMA 1.561/2026 e 1.778/2026. Este protótipo não substitui parecer jurídico nem o texto oficial no Diário Oficial da União.</p>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    Protótipo experimental hospedado no <a href="/surpresa">cantinho secreto do PetOrlândia</a>. Não emite certificados reais.
+  </footer>
+
+  <dialog id="dlg">
+    <form method="dialog" id="dlg-form">
+      <h3 id="dlg-titulo"></h3>
+      <div id="dlg-corpo" class="campos" style="display:grid;gap:12px"></div>
+      <div class="acoes"><button class="btn sec" value="cancelar" type="submit" formnovalidate>Cancelar</button><button class="btn" value="ok" type="submit" id="dlg-ok">Confirmar</button></div>
+    </form>
+  </dialog>
+
+  <div id="avisos" aria-live="polite"></div>
+
+  <script src="/surpresa/ireverse-core.js?v=20261107a"></script>
+  <script src="/surpresa/ireverse-app.js?v=20261107a"></script>
+</body>
+</html>
