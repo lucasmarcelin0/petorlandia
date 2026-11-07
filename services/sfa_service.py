@@ -41,6 +41,8 @@ from extensions import db
 from flask import current_app, url_for
 from sqlalchemy.exc import InternalError, NoSuchTableError, OperationalError, ProgrammingError
 
+from services.sfa_workflow import INTERVIEW_VERSIONS
+
 log = logging.getLogger("sfa_service")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FORM_SCHEMA_FILES = {
@@ -1064,7 +1066,7 @@ def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, 
 def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> dict:
     filtered = copy.deepcopy(schema or {})
     prior_payloads = _payloads_anteriores_por_stage(paciente, form_stage)
-    if form_stage == "t30" and filtered.get("instrument_version") == "sfa-2026-11-06":
+    if form_stage == "t30" and filtered.get("instrument_version") in INTERVIEW_VERSIONS:
         from services.sfa_workflow import inicio_doenca
         resposta, payload = obter_payload_formulario(paciente, "t7")
         if resposta:
@@ -1378,7 +1380,7 @@ def classificar_desfecho_primario_t30(payload: dict[str, object]) -> str:
     situacao = normalizar_nome_chave(payload.get("situacao_participante"))
     if situacao in {"faleceu", "nao, faleceu"}:
         return "Obito"
-    if payload.get("_instrument_version") == "sfa-2026-11-06":
+    if payload.get("_instrument_version") in INTERVIEW_VERSIONS:
         propria_pessoa = normalizar_nome_chave(payload.get("respondent_role")) == "a propria pessoa"
         if not propria_pessoa and situacao != "sim":
             return "Sem informacao valida"
@@ -1615,7 +1617,7 @@ def normalizar_itens_exposicao_t0(field_key: str, value: object) -> list[str]:
 
 def normalizar_payload_t0_exposicoes(payload: dict[str, object]) -> dict[str, object]:
     normalized = dict(payload or {})
-    if normalized.get("_instrument_version") == "sfa-2026-11-06":
+    if normalized.get("_instrument_version") in INTERVIEW_VERSIONS:
         # A exportação e a consulta histórica devem conservar as opções respondidas.
         return normalized
 

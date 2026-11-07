@@ -6,7 +6,9 @@ import json
 
 
 VERSION = "collective-v3-disease-clock"
-INTERVIEW_VERSION = "sfa-2026-11-06"
+INTERVIEW_VERSION = "sfa-2026-11-07"
+# Instrumentos que agendam T7/T30 pela entrevista T0 e contam o impacto desde D0.
+INTERVIEW_VERSIONS = frozenset({"sfa-2026-11-06", INTERVIEW_VERSION})
 
 
 def hoje_local():
@@ -51,7 +53,7 @@ def resumo_calendario(paciente):
     from services.sfa_service import obter_payload_formulario, _data_resposta_stage, parse_data
     inicio, fonte = inicio_doenca(paciente)
     resposta, payload = obter_payload_formulario(paciente, "t0")
-    por_entrevista = payload.get("_instrument_version") == INTERVIEW_VERSION
+    por_entrevista = payload.get("_instrument_version") in INTERVIEW_VERSIONS
     referencia = inicio
     if por_entrevista:
         referencia = parse_data(getattr(paciente, "data_t0", "")) or _data_resposta_stage("t0", resposta, payload)
@@ -121,7 +123,7 @@ def metadados_coleta(paciente, etapa, dados):
                 if dt:
                     anteriores.append(dt)
         inicio_intervalo = max(anteriores) if anteriores else None
-    if dados.get("_instrument_version") == INTERVIEW_VERSION:
+    if dados.get("_instrument_version") in INTERVIEW_VERSIONS:
         inicio_intervalo = calendario["inicio"]
         if etapa == "t30":
             resposta, payload = obter_payload_formulario(paciente, "t7")
@@ -135,7 +137,7 @@ def metadados_coleta(paciente, etapa, dados):
         "data_alvo": str(calendario.get(etapa) or ""),
         "intervalo_desde": str(inicio_intervalo or ""), "intervalo_ate": str(data_coleta),
         "regra_intervalo": ("Desde D0 até T7; no T30, desde o dia seguinte ao T7 ou desde D0 quando faltou T7."
-                            if dados.get("_instrument_version") == INTERVIEW_VERSION else
+                            if dados.get("_instrument_version") in INTERVIEW_VERSIONS else
                             "Desde o início no T0; desde a última resposta anterior nos seguimentos. Não somar períodos sobrepostos."),
     }
 

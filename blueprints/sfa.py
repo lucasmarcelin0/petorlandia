@@ -2321,6 +2321,7 @@ def paciente_detail(id_estudo: str):
         montar_visao_resposta_formulario, obter_resposta_formulario,
     )
     from services.sfa_pre_t0 import obter_ficha_pre_t0
+    from services.sfa_workflow import INTERVIEW_VERSIONS
 
     def _format_currency(value) -> str:
         if value in (None, ""):
@@ -2333,7 +2334,7 @@ def paciente_detail(id_estudo: str):
     def _summary_currency(stage, instrument_version, payload, resposta) -> str:
         if stage == "t0":
             candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
-        elif instrument_version == "sfa-2026-11-06":
+        elif instrument_version in INTERVIEW_VERSIONS:
             return _format_currency(payload.get("custo_outros"))
         elif instrument_version in {"collective-v2", "collective-v3-disease-clock"}:
             # No instrumento essencial, custo_outros representa o gasto total

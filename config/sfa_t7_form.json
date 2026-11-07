@@ -1,11 +1,59 @@
 {
-  "instrument_version": "sfa-2026-11-06",
+  "instrument_version": "sfa-2026-11-07",
   "title": "T7 — Acompanhamento aos sete dias",
-  "subtitle": "Instrumento revisado em 06/11/2026.",
+  "subtitle": "Instrumento revisado em 07/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
   "submit_label": "Registrar T7",
   "sections": [
     {
-      "title": "Respondente e evolução",
+      "title": "Registro da entrevista",
+      "description": "Preenchido pela equipe quando a entrevista é presencial ou por telefone.",
+      "fields": [
+        {
+          "key": "modo_entrevista",
+          "label": "Como esta entrevista está sendo feita?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Presencial",
+            "Telefone",
+            "Pela própria pessoa, pelo link"
+          ],
+          "help_text": "Data e hora do registro ficam gravadas automaticamente pelo sistema."
+        },
+        {
+          "key": "entrevistador",
+          "label": "Entrevistador(a)",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        },
+        {
+          "key": "local_servico",
+          "label": "Local/serviço",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Evolução e atendimento",
       "fields": [
         {
           "key": "respondent_role",
@@ -20,7 +68,7 @@
         },
         {
           "key": "respondent_name",
-          "label": "Nome e relação",
+          "label": "Se outra pessoa, nome e relação",
           "type": "text",
           "required": false,
           "visible_if": {
@@ -57,7 +105,8 @@
             "Sangramento importante",
             "Piora muito forte ou preocupação urgente",
             "Nenhum destes sinais agora"
-          ]
+          ],
+          "help_text": "Se houver sinal de urgência, priorizar a avaliação assistencial. Em emergência, procurar atendimento presencial ou ligar 192."
         },
         {
           "key": "retornou_servico_saude",
@@ -79,8 +128,15 @@
             "key": "retornou_servico_saude",
             "operator": "equals",
             "value": "Sim"
-          }
-        },
+          },
+          "help_text": "Informar serviço/hospital, município e data(s). Ex.: Hospital Santo Antônio. Registrar também atendimentos que possam não constar no prontuário municipal."
+        }
+      ],
+      "description": "Parte 1 — Informações individuais."
+    },
+    {
+      "title": "Informação sobre o diagnóstico",
+      "fields": [
         {
           "key": "diagnostico_medico",
           "label": "5. Durante ou após a consulta, você recebeu algum diagnóstico?",
@@ -117,7 +173,7 @@
         },
         {
           "key": "diagnostico_medico_qual_outro",
-          "label": "Especifique a outra opção",
+          "label": "Qual outra doença?",
           "type": "text",
           "required": false,
           "visible_if": {
@@ -129,10 +185,11 @@
             ]
           }
         }
-      ]
+      ],
+      "description": "Registrar o que foi informado pelo profissional, inclusive na consulta realizada após o T0. A resposta será conferida com os registros disponíveis."
     },
     {
-      "title": "Impacto desde o início dos sintomas",
+      "title": "Impacto individual desde o início dos sintomas",
       "fields": [
         {
           "key": "dias_incap_novos",
@@ -140,6 +197,16 @@
           "type": "number",
           "required": false,
           "min": 0
+        },
+        {
+          "key": "dias_incap_novos_sem_numero",
+          "label": "Se não houver número de dias",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Nenhum",
+            "Não sei"
+          ]
         },
         {
           "key": "houve_novos_gastos",
@@ -154,7 +221,7 @@
         },
         {
           "key": "custo_outros",
-          "label": "Valor aproximado do gasto (R$)",
+          "label": "Se respondeu “Sim”, qual foi o valor aproximado do gasto? (R$)",
           "type": "number",
           "required": false,
           "visible_if": {
@@ -216,21 +283,35 @@
           },
           "min": 0
         }
-      ]
+      ],
+      "description": "Nesta primeira apuração, contar todo o período do D0 até hoje, inclusive os dias anteriores à entrevista T0. Não contar duas vezes o mesmo dia ou valor."
     },
     {
       "title": "Informações coletivas",
       "fields": [
         {
           "key": "pista_coletiva_confirmada",
-          "label": "Havia pista coletiva no T0?",
+          "label": "Relação com o T0 — preencher antes deste bloco: foi identificada alguma suspeita ou pista de contágio coletivo no T0?",
           "type": "radio",
           "required": false,
           "options": [
             "Sim",
             "Não",
             "Não verificado"
-          ]
+          ],
+          "help_text": "Marcar “Sim” se, no T0, a 20 = “Sim”, a 8 = “Sim”, a 13 indica pessoas/animais doentes, a 17 = “Sim” ou a 27 registra uma suspeita concreta. Consultar também as observações."
+        },
+        {
+          "key": "pista_coletiva_descricao",
+          "label": "Registrar a pista",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "pista_coletiva_confirmada",
+            "operator": "equals",
+            "value": "Sim"
+          }
         },
         {
           "key": "novos_casos_semelhantes",
@@ -265,7 +346,8 @@
             "key": "novos_casos_semelhantes",
             "operator": "equals",
             "value": "Sim"
-          }
+          },
+          "help_text": "Ex.: familiares, vizinhos; mesma refeição, evento, trabalho ou contato com animais. Não contar pessoas já registradas no T0."
         },
         {
           "key": "nova_pista_exposicao",
@@ -288,7 +370,8 @@
             "key": "nova_pista_exposicao",
             "operator": "equals",
             "value": "Sim"
-          }
+          },
+          "help_text": "Informar o que, onde e quando; marca, origem ou animal, se souber."
         },
         {
           "key": "fonte_ainda_ativa",
@@ -434,7 +517,8 @@
           "type": "textarea",
           "required": false
         }
-      ]
+      ],
+      "description": "Parte 2 — Informações coletivas. Aplicar as perguntas 12 e 15 mesmo que nenhuma pista coletiva tenha sido identificada no T0."
     }
   ]
 }

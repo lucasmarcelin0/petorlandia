@@ -72,6 +72,30 @@
           "sha256": "235985735b2c01ba3028d3b84588900537c2a24bc3afc4f590870a21cea1de00"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-06",
+      "label": "Instrumentos revisados em 06/11/2026",
+      "status": "archived",
+      "archived_at": "2026-11-07",
+      "description": "Cópia dos instrumentos T0, T7 e T30 publicados em 06/11/2026, antes do ajuste ao documento de perguntas revisado em 07/11/2026.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-06/t0.json",
+          "field_count": 41,
+          "sha256": "d0f73be7cdd5db8c405025dcfa1302cb8af467eff9452aa1a80634a3c3d51475"
+        },
+        "t7": {
+          "file": "sfa-2026-11-06/t7.json",
+          "field_count": 25,
+          "sha256": "bb2674ae7d839f0f6112d28181474dc072fbdcc8c2507428693740e93eb52142"
+        },
+        "t30": {
+          "file": "sfa-2026-11-06/t30.json",
+          "field_count": 32,
+          "sha256": "3c3cb823fdccc43d4aad94078cb6122a7141bcdc07abe05b799b8c2fd6023397"
+        }
+      }
     }
   ]
 }
