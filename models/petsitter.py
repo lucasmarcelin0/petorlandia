@@ -200,8 +200,15 @@ class ReferralCode(db.Model):
     code = db.Column(db.String(16), nullable=False, unique=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
+    # O cascade no ORM apaga o código junto com o usuário. Sem ele, excluir a
+    # conta tentava anular user_id (NOT NULL) e quebrava /delete_account. O
+    # banco já declara ON DELETE CASCADE; isto só alinha o ORM a ele, igual
+    # no Postgres e no SQLite dos testes.
     user = db.relationship(
-        "User", backref=db.backref("referral_code", uselist=False)
+        "User",
+        backref=db.backref(
+            "referral_code", uselist=False, cascade="all, delete-orphan"
+        ),
     )
 
     @staticmethod
@@ -249,8 +256,12 @@ class ReferralSignup(db.Model):
     #: cliente não gera custo.
     rewarded_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Mesmo motivo: apagar o código não pode tentar anular code_id (NOT NULL).
     code = db.relationship(
-        "ReferralCode", backref=db.backref("signups", lazy="selectin")
+        "ReferralCode",
+        backref=db.backref(
+            "signups", lazy="selectin", cascade="all, delete-orphan"
+        ),
     )
     referred_user = db.relationship("User", foreign_keys=[referred_user_id])
 
