@@ -120,6 +120,30 @@
           "sha256": "60f5f964c3edec3bb5c02d333988c1214240a575348ce13f1b2ca79a6c870f1f"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-09",
+      "label": "Instrumentos revisados em 09/11/2026 (manhã)",
+      "status": "archived",
+      "archived_at": "2026-11-09",
+      "description": "Cópia dos instrumentos T0, T7 e T30 de 09/11/2026 que ainda pediam o valor aproximado dos gastos no T7 e no T30; a versão seguinte registra o gasto só como Sim/Não.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-09/t0.json",
+          "field_count": 49,
+          "sha256": "a2b50a540fd57d5b993c169f027cdbc16c9bbaddc33393c44ccde54de7230455"
+        },
+        "t7": {
+          "file": "sfa-2026-11-09/t7.json",
+          "field_count": 28,
+          "sha256": "f84f47d84b886009c912347f5658fb6fef7a39a1bb43426775b963e56384cdc6"
+        },
+        "t30": {
+          "file": "sfa-2026-11-09/t30.json",
+          "field_count": 31,
+          "sha256": "4632be29c60774c4181c8d26d2297f0365b06a0967d8e0956540ec3130436bd6"
+        }
+      }
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "instrument_version": "sfa-2026-11-09",
+  "instrument_version": "sfa-2026-11-09b",
   "title": "T7 — Acompanhamento aos sete dias",
   "subtitle": "Instrumento revisado em 09/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
   "submit_label": "Registrar T7",
@@ -218,35 +218,6 @@
             "Não",
             "Não sei"
           ]
-        },
-        {
-          "key": "custo_outros",
-          "label": "Se respondeu “Sim”, qual foi o valor aproximado do gasto? (R$)",
-          "type": "number",
-          "required": false,
-          "visible_if": {
-            "source": "current",
-            "key": "houve_novos_gastos",
-            "operator": "equals",
-            "value": "Sim"
-          },
-          "min": 0,
-          "step": "0.01"
-        },
-        {
-          "key": "gasto_desconhecido",
-          "label": "Consegue estimar o gasto?",
-          "type": "checkboxes",
-          "required": false,
-          "options": [
-            "Não sei estimar"
-          ],
-          "visible_if": {
-            "source": "current",
-            "key": "houve_novos_gastos",
-            "operator": "equals",
-            "value": "Sim"
-          }
         },
         {
           "key": "perda_renda",

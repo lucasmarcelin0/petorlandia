@@ -105,7 +105,8 @@ def test_t30_usa_as_situacoes_do_documento():
         "Perdi renda ou deixei de ganhar dinheiro",
     ]
     assert campos["dias_incap_novos"]["visible_if"]["values"] == [opcoes[0]]
-    assert campos["custo_outros"]["visible_if"]["values"] == [opcoes[1]]
+    # Gasto só Sim/Não, sem valor (decisão da equipe, 09/11/2026).
+    assert "custo_outros" not in campos and "custo_outros_ignorado" not in campos
     assert campos["retornou_servico_saude"]["options"] == ["Sim", "Não"]
     assert "pista_coletiva_confirmada" not in campos
     for retirado in ("data_retorno", "retorno_sem_data", "impacto_item_desconhecido"):
@@ -127,6 +128,6 @@ def test_as_duas_revisoes_de_novembro_usam_o_calendario_pela_entrevista(versao):
     payload = {"_instrument_version": versao, "respondent_role": "A própria pessoa",
                "situacao_participante": "Sim", "sintoma_novo_agravado": "Sim"}
 
-    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09"}
+    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b"}
     assert sfa_service.classificar_desfecho_primario_t30(payload) == "Sim"
     assert sfa_service.normalizar_payload_t0_exposicoes(payload) == payload

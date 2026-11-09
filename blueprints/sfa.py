@@ -1791,20 +1791,19 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
         {
             "key": "carga_complementar",
             "title": "Carga complementar enxuta",
-            "description": "Mantem apenas dias sem atividade, gasto total incremental, cuidador e perda de renda declarada.",
+            "description": "Mantem apenas dias sem atividade, se houve gasto (sem valor), cuidador e perda de renda declarada.",
             "review_prompt": "Essas medidas acrescentam valor sem desviar o foco da prevencao coletiva?",
-            "items": ["Dias sem atividade", "Gasto total", "Cuidador", "Perda de renda"],
+            "items": ["Dias sem atividade", "Houve gasto", "Cuidador", "Perda de renda"],
             "questions": _review_question_refs(
                 ("t0", "dias_incap", "carga inicial"),
                 ("t0", "custo_total", "gasto total inicial"),
                 ("t0", "ausencia_familiar", "necessidade de cuidador"),
                 ("t0", "dias_cuidador", "dias do cuidador"),
                 ("t7", "dias_incap_novos", "dias adicionais"),
-                ("t7", "custo_outros", "gasto total adicional"),
+                ("t7", "houve_novos_gastos", "teve gasto (sem valor)"),
                 ("t7", "perda_renda", "perda de renda declarada"),
                 ("t7", "perda_renda_valor", "valor que deixou de ganhar"),
                 ("t30", "dias_incap_novos", "dias adicionais finais"),
-                ("t30", "custo_outros", "gasto total adicional final"),
                 ("t30", "impacto_periodo", "inclui perda de renda qualitativa"),
                 ("t30", "perda_renda_valor", "valor final que deixou de ganhar"),
             ),
@@ -2334,7 +2333,13 @@ def paciente_detail(id_estudo: str):
         if stage == "t0":
             candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
         elif instrument_version in INTERVIEW_VERSIONS:
-            return _format_currency(payload.get("custo_outros"))
+            if payload.get("custo_outros") not in (None, ""):
+                return _format_currency(payload.get("custo_outros"))
+            # Desde sfa-2026-11-09b o gasto e so Sim/Nao, sem valor.
+            if stage == "t30":
+                impactos = payload.get("impacto_periodo") or []
+                return "Sim" if "Minha família ou eu tivemos gastos" in impactos else "Nao informado"
+            return str(payload.get("houve_novos_gastos") or "Nao informado")
         elif instrument_version in {"collective-v2", "collective-v3-disease-clock"}:
             # No instrumento essencial, custo_outros representa o gasto total
             # incremental. A propriedade do modelo permanece como fallback
