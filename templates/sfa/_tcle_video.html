@@ -1,0 +1,14 @@
+<aside class="consent-video" aria-labelledby="tcle-video-titulo">
+  <h3 id="tcle-video-titulo">Prefere assistir?</h3>
+  <p>
+    Guia em vídeo do termo, em 7 minutos: o que a pesquisa estuda, como são as três entrevistas,
+    como seus dados são protegidos e por que suas respostas ajudam a melhorar o atendimento em Orlândia.
+  </p>
+  <video controls preload="none" playsinline width="1280" height="720"
+         poster="{{ url_for('static', filename='docs/Guia_Visual_TCLE_Orlandia_capa.jpg') }}">
+    <source src="{{ url_for('static', filename='docs/Guia_Visual_TCLE_Orlandia.mp4') }}" type="video/mp4">
+    Seu navegador não abre o vídeo aqui.
+    <a href="{{ url_for('static', filename='docs/Guia_Visual_TCLE_Orlandia.mp4') }}">Baixar o vídeo</a>.
+  </video>
+  <p class="consent-video-nota">O vídeo resume o termo. O que vale é o TCLE completo.</p>
+</aside>

@@ -224,6 +224,58 @@
       border: 1px solid rgba(11, 107, 115, 0.18);
     }
 
+    .consent-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+      gap: 0.9rem;
+      align-items: start;
+      margin-bottom: 0.9rem;
+    }
+
+    .consent-grid .consent-box {
+      margin-bottom: 0;
+    }
+
+    .consent-video {
+      border: 1px solid rgba(11, 107, 115, 0.18);
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 18px;
+      padding: 1rem 1.05rem;
+    }
+
+    .consent-video h3 {
+      margin: 0 0 0.45rem;
+      font-size: 1rem;
+    }
+
+    .consent-video p {
+      margin: 0 0 0.75rem;
+      color: rgba(23, 49, 58, 0.8);
+      line-height: 1.5;
+      font-size: 0.94rem;
+    }
+
+    .consent-video video {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      background: #0f2730;
+    }
+
+    .consent-video .consent-video-nota {
+      margin: 0.6rem 0 0;
+      font-size: 0.84rem;
+      color: rgba(23, 49, 58, 0.65);
+    }
+
+    @media (max-width: 860px) {
+      .consent-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
     input[type="text"],
     input[type="date"],
     input[type="number"],
@@ -393,7 +445,10 @@
             {% endif %}
 
             {% if (form_stage or 't0') == 't0' and field.key == 'aceite_tcle' %}
-            {% include "sfa/_tcle_resumo.html" %}
+            <div class="consent-grid">
+              {% include "sfa/_tcle_resumo.html" %}
+              {% include "sfa/_tcle_video.html" %}
+            </div>
             {% endif %}
             {% if (form_stage or 't0') == 't0' and field.key == 'assentimento_tale' %}
             {% include "sfa/_tale_resumo.html" %}
