@@ -29,8 +29,8 @@ BANNED_VISIBLE_KEYS = {
 
 CONDITIONAL_KEYS = {
     "t0": {"respondent_name", "exposicao_animal", "vinculo_compartilhado", "vinculo_local", "exposicao_alimentar_doentes"},
-    "t7": {"diagnostico_medico_qual", "dias_cuidador", "custo_outros", "nova_pista_detalhe", "fonte_ainda_ativa"},
-    "t30": {"sintoma_novo_agravado", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "custo_outros", "novos_casos_quantidade", "outras_pessoas_ainda_expostas"},
+    "t7": {"diagnostico_medico_qual", "dias_cuidador", "nova_pista_detalhe", "fonte_ainda_ativa"},
+    "t30": {"sintoma_novo_agravado", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "novos_casos_quantidade", "outras_pessoas_ainda_expostas"},
 }
 
 ATOMIC_OPERATORS = {
@@ -120,7 +120,7 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
 def test_active_sfa_schema_is_november_revision(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "sfa-2026-11-09"
+    assert schema.get("instrument_version") == "sfa-2026-11-09b"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 

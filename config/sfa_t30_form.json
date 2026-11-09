@@ -1,5 +1,5 @@
 {
-  "instrument_version": "sfa-2026-11-09",
+  "instrument_version": "sfa-2026-11-09b",
   "title": "T30 — Encerramento do seguimento",
   "subtitle": "Instrumento revisado em 09/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
   "submit_label": "Registrar T30",
@@ -373,39 +373,6 @@
             "operator": "selected_any",
             "values": [
               "Houve dias em que não consegui realizar minhas atividades habituais"
-            ]
-          }
-        },
-        {
-          "key": "custo_outros",
-          "label": "Valor aproximado dos gastos (R$)",
-          "type": "number",
-          "required": false,
-          "visible_if": {
-            "source": "current",
-            "key": "impacto_periodo",
-            "operator": "selected_any",
-            "values": [
-              "Minha família ou eu tivemos gastos"
-            ]
-          },
-          "min": 0,
-          "step": "0.01"
-        },
-        {
-          "key": "custo_outros_ignorado",
-          "label": "Se desconhecido",
-          "type": "checkboxes",
-          "required": false,
-          "options": [
-            "Não sei estimar"
-          ],
-          "visible_if": {
-            "source": "current",
-            "key": "impacto_periodo",
-            "operator": "selected_any",
-            "values": [
-              "Minha família ou eu tivemos gastos"
             ]
           }
         },

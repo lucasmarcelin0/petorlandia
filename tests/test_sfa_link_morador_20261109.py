@@ -131,3 +131,22 @@ def test_t0_registra_versao_e_data_do_tcle_sozinho(monkeypatch):
     assert dados["versao_tcle"] == sfa_service.TCLE_VERSAO_ATUAL
     assert dados["data_aceite"] == "09/11/2026"
     assert _campos(schema)["aceite_tcle"]["label"] == "2. Termo de Consentimento (TCLE)"
+
+
+def test_gasto_e_so_sim_ou_nao_sem_valor():
+    """A equipe optou por registrar apenas se houve impacto financeiro, não o valor."""
+    for stage in ("t0", "t7", "t30"):
+        campos = _campos(sfa_service.carregar_form_schema(stage))
+        for campo in campos.values():
+            assert "R$" not in campo["label"], (stage, campo["key"])
+            assert "valor" not in campo["label"].lower(), (stage, campo["key"])
+            assert not any("estimar" in str(opcao).lower() for opcao in campo.get("options", [])), (stage, campo["key"])
+    assert _campos(sfa_service.carregar_form_schema("t7"))["houve_novos_gastos"]["options"] == ["Sim", "Não", "Não sei"]
+    assert "Minha família ou eu tivemos gastos" in _campos(sfa_service.carregar_form_schema("t30"))["impacto_periodo"]["options"]
+
+
+def test_versao_que_pedia_valor_continua_aberta_para_respostas_antigas():
+    t7 = sfa_service.carregar_schema_historico_instrumento("sfa-2026-11-09", "t7")
+    assert "custo_outros" in _campos(t7)
+    schema = sfa_service.carregar_schema_para_payload("t7", {"_instrument_version": "sfa-2026-11-09"})
+    assert "custo_outros" in _campos(schema)
