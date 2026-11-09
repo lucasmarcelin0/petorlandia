@@ -1,7 +1,7 @@
 {
-  "instrument_version": "sfa-2026-11-07",
+  "instrument_version": "sfa-2026-11-09",
   "title": "T0 — Entrevista inicial",
-  "subtitle": "Instrumento revisado em 07/11/2026. Entrevista inicial complementar ao SINAN. Primeiro, informações da pessoa; depois, informações sobre outras pessoas e exposições em comum.",
+  "subtitle": "Instrumento revisado em 09/11/2026. Entrevista inicial complementar ao SINAN. Primeiro, informações da pessoa; depois, informações sobre outras pessoas e exposições em comum.",
   "submit_label": "Registrar T0",
   "sections": [
     {
@@ -134,19 +134,7 @@
           "options": [
             "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
           ],
-          "help_text": "Usar o TCLE aprovado, com comprovação do aceite e assentimento quando aplicável. Sem consentimento, encerrar a entrevista de pesquisa."
-        },
-        {
-          "key": "versao_tcle",
-          "label": "Versão do TCLE",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "data_aceite",
-          "label": "Data do aceite",
-          "type": "date",
-          "required": false
+          "help_text": "Usar o TCLE aprovado, com comprovação do aceite e assentimento quando aplicável. Sem consentimento, encerrar a entrevista de pesquisa. A versão do TCLE e a data do aceite são registradas automaticamente pelo sistema."
         },
         {
           "key": "assentimento_tale",

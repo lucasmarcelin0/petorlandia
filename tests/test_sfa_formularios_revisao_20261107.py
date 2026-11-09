@@ -77,7 +77,7 @@ def test_t0_tem_as_opcoes_nao_sei_do_documento_e_sem_temperatura():
     assert "onde dormiu" in campos["exposicao_ambiental_detalhe"]["help_text"]
 
 
-def test_t7_registra_a_pista_coletiva_do_t0():
+def test_t7_nao_pergunta_a_relacao_com_o_t0():
     schema = _schema("t7")
     campos = _campos(schema)
 
@@ -87,7 +87,8 @@ def test_t7_registra_a_pista_coletiva_do_t0():
         "Impacto individual desde o início dos sintomas",
         "Informações coletivas",
     ]
-    assert campos["pista_coletiva_descricao"]["visible_if"]["key"] == "pista_coletiva_confirmada"
+    # A relação com o T0 é calculada pelo sistema (ver test_sfa_link_morador_20261109).
+    assert "pista_coletiva_confirmada" not in campos
     assert campos["dias_incap_novos_sem_numero"]["options"] == ["Nenhum", "Não sei"]
     ajuda = campos["atendimento_detalhe"]["help_text"]
     assert "particulares ou fora de Orlândia" in ajuda
@@ -106,7 +107,7 @@ def test_t30_usa_as_situacoes_do_documento():
     assert campos["dias_incap_novos"]["visible_if"]["values"] == [opcoes[0]]
     assert campos["custo_outros"]["visible_if"]["values"] == [opcoes[1]]
     assert campos["retornou_servico_saude"]["options"] == ["Sim", "Não"]
-    assert "pista_coletiva_descricao" in campos
+    assert "pista_coletiva_confirmada" not in campos
     for retirado in ("data_retorno", "retorno_sem_data", "impacto_item_desconhecido"):
         assert retirado not in campos
 
@@ -126,6 +127,6 @@ def test_as_duas_revisoes_de_novembro_usam_o_calendario_pela_entrevista(versao):
     payload = {"_instrument_version": versao, "respondent_role": "A própria pessoa",
                "situacao_participante": "Sim", "sintoma_novo_agravado": "Sim"}
 
-    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07"}
+    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09"}
     assert sfa_service.classificar_desfecho_primario_t30(payload) == "Sim"
     assert sfa_service.normalizar_payload_t0_exposicoes(payload) == payload

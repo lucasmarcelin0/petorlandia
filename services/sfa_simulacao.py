@@ -447,8 +447,10 @@ def schema_etapa(etapa: str, participante) -> dict:
     """Esquema que o participante vê, com as condições resolvidas pelas etapas anteriores."""
     if etapa == "sinan":
         return schema_base_etapa("sinan")
-    from services.sfa_service import filtrar_form_schema_condicional
-    return filtrar_form_schema_condicional(schema_base_etapa(etapa), adaptador_participante(participante), etapa)
+    from services.sfa_service import adaptar_schema_link_morador, filtrar_form_schema_condicional
+    # A simulação testa o mesmo formulário que o morador recebe pelo link.
+    return adaptar_schema_link_morador(
+        filtrar_form_schema_condicional(schema_base_etapa(etapa), adaptador_participante(participante), etapa))
 
 
 def valores_iniciais(etapa: str, schema: dict, participante) -> dict:

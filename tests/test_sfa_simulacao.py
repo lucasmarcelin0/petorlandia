@@ -402,3 +402,41 @@ def test_templates_nao_desempacotam_metodo_de_dict_sem_chamar():
             if padrao.search(linha):
                 achados.append(f"{arquivo.relative_to(raiz)}:{numero}")
     assert not achados, "Iteração sobre método de dict sem chamar: " + ", ".join(achados)
+
+
+def test_link_da_simulacao_e_o_formulario_do_morador(app, client, hoje):
+    """O voluntário vê o que o morador verá: nada de perguntas da equipe."""
+    grupo = _criar_grupo(client, nome="Morador", chave="morador")
+    participante = _entrar(client, grupo)
+    base = f"/sfa/simulacao/p/{participante.token}"
+    assert client.post(f"{base}/sinan", data=_sinan()).status_code == 302
+
+    t0 = client.get(f"{base}/t0").get_data(as_text=True)
+    for texto_da_equipe in ("Registro da entrevista", "Como esta entrevista está sendo feita",
+                            "Versão do TCLE", "Data do aceite", "Observações do entrevistador"):
+        assert texto_da_equipe not in t0, texto_da_equipe
+    assert "Baixar TCLE completo" in t0 and "Observações" in t0
+
+    t0_com_pista = _t0(outras_pessoas_com_sintomas="Sim", outras_pessoas_quantidade="2",
+                       vinculo_exposicao_suspeita="Feijoada no domingo")
+    assert client.post(f"{base}/t0", data=t0_com_pista).status_code == 302
+
+    t7 = client.get(f"{base}/t7").get_data(as_text=True)
+    assert "Relação com o T0" not in t7 and "Registro da entrevista" not in t7
+    assert "Na primeira entrevista, você contou que outras pessoas tiveram febre ou sintomas parecidos" in t7
+    assert "Feijoada no domingo" in t7
+    assert client.post(f"{base}/t7", data=_t7()).status_code == 302
+
+    t30 = client.get(f"{base}/t30").get_data(as_text=True)
+    assert "Antes da entrevista, verificar" not in t30
+    assert "Nas entrevistas anteriores, você contou que" in t30
+
+    respostas = service.respostas_por_etapa(db.session.get(SfaSimulacaoParticipante, participante.id))
+    t0_payload = service.carregar_respostas(respostas["t0"])
+    t7_payload = service.carregar_respostas(respostas["t7"])
+    assert t0_payload["modo_entrevista"] == sfa_service.MODO_ENTREVISTA_LINK
+    assert t0_payload["versao_tcle"] == sfa_service.TCLE_VERSAO_ATUAL
+    assert t0_payload["data_aceite"] == "29/09/2026"
+    assert t7_payload["modo_entrevista"] == sfa_service.MODO_ENTREVISTA_LINK
+    assert t7_payload["pista_coletiva_confirmada"] == "Sim"
+    assert "Feijoada no domingo" in t7_payload["pista_coletiva_descricao"]

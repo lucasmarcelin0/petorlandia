@@ -71,6 +71,31 @@ T0_FAIXAS_MENORES = {"de 7 a 17 anos", "menos de 7 anos"}
 T0_ASSENTIMENTO_ACEITO = (
     "A criança ou o adolescente ouviu ou leu o Termo de Assentimento, entendeu e concorda em participar."
 )
+# TCLE oferecido para download no T0. A versão e a data do aceite são gravadas
+# pelo sistema; ninguém precisa digitá-las.
+TCLE_ARQUIVO_ATUAL = "docs/TCLE_SFA_Orlandia_v3.docx"
+TCLE_VERSAO_ATUAL = "v3 (07/11/2026)"
+
+# Link enviado ao morador: ele mesmo responde, então o bloco "Registro da
+# entrevista" (feito para presencial/telefone) sai do formulário e o modo é
+# gravado sozinho.
+MODO_ENTREVISTA_LINK = "Pela própria pessoa, pelo link"
+CAMPOS_REGISTRO_ENTREVISTA = frozenset({
+    "modo_entrevista", "entrevistador", "local_servico",
+    "momento_entrevista", "momento_entrevista_outro",
+})
+_ROTULOS_LINK_MORADOR = {
+    "observacoes_entrevistador": {
+        "label": "Observações",
+        "help_text": "Se quiser, escreva aqui algo que não coube nas perguntas.",
+    },
+    "aceite_tcle": {
+        "label": "2. Termo de Consentimento (TCLE)",
+        "help_text": (
+            "Leia o resumo abaixo ou baixe o termo completo. Sem o aceite, não é possível participar."
+        ),
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Configuração (lida de variáveis de ambiente ou fallback)
@@ -1068,9 +1093,120 @@ def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, 
     return [payload for payload in payloads if payload]
 
 
+def _citar_resposta(value: object, limite: int = 160) -> str:
+    texto = " ".join(str(value or "").split())
+    if len(texto) > limite:
+        texto = texto[: limite - 1].rstrip() + "…"
+    return f"“{texto}”" if texto else ""
+
+
+def _juntar_itens(itens: list[str]) -> str:
+    if len(itens) <= 1:
+        return "".join(itens)
+    return ", ".join(itens[:-1]) + " e " + itens[-1]
+
+
+def pistas_coletivas_anteriores(prior_payloads: list[dict[str, object]]) -> list[str]:
+    """O que a pessoa já contou, no T0 e no T7, que aponta para outros casos.
+
+    Substitui a pergunta "Relação com o T0", que pedia ao entrevistador para
+    reler a entrevista anterior: o próprio sistema confere as respostas.
+    """
+    itens: list[str] = []
+
+    def add(texto: str) -> None:
+        if texto and texto not in itens:
+            itens.append(texto)
+
+    for payload in prior_payloads or []:
+        if not isinstance(payload, dict):
+            continue
+        sim = lambda key: normalizar_nome_chave(payload.get(key)) == "sim"  # noqa: E731
+        if sim("outras_pessoas_com_sintomas"):
+            add("outras pessoas tiveram febre ou sintomas parecidos")
+        if sim("exposicao_ambiental_outros_doentes"):
+            add("outras pessoas que estiveram nos mesmos locais também adoeceram")
+        doentes_animal = {str(item).strip() for item in _valores_regra(payload.get("exposicao_animal_outros_doentes"))}
+        quem = [rotulo for valor, rotulo in (("Pessoas", "outras pessoas"), ("Animais", "outros animais"))
+                if valor in doentes_animal]
+        if quem:
+            add(f"{_juntar_itens(quem)} ligados aos animais com que você teve contato também adoeceram")
+        if sim("exposicao_alimentar_outros_doentes"):
+            add("outras pessoas que consumiram o mesmo alimento, água ou produto também adoeceram")
+        suspeita = _citar_resposta(payload.get("vinculo_exposicao_suspeita"))
+        if suspeita:
+            add(f"suspeitava de {suspeita}")
+        if sim("novos_casos_semelhantes"):
+            add("depois da primeira entrevista, soube de novas pessoas com sintomas parecidos")
+        if sim("nova_pista_exposicao"):
+            detalhe = _citar_resposta(payload.get("nova_pista_detalhe"))
+            add(f"surgiu uma nova informação: {detalhe}" if detalhe else "surgiu uma nova informação sobre a possível origem")
+        if sim("pista_coletiva_confirmada") and not payload.get("_pista_coletiva_automatica"):
+            # T7 da versão de 07/11, em que a equipe registrava a pista à mão.
+            descricao = _citar_resposta(payload.get("pista_coletiva_descricao"))
+            add(f"a equipe registrou uma pista: {descricao}" if descricao else "a equipe registrou uma pista de casos ligados")
+    return itens
+
+
+def _secao_coletiva_seguimento(section: dict) -> bool:
+    chaves = {field.get("key") for field in section.get("fields", []) if isinstance(field, dict)}
+    return "novos_casos_semelhantes" in chaves and "pista_coletiva_confirmada" not in chaves
+
+
+def _descrever_secao_coletiva(filtered: dict, form_stage: str, prior_payloads: list[dict[str, object]]) -> None:
+    if form_stage not in {"t7", "t30"}:
+        return
+    itens = pistas_coletivas_anteriores(prior_payloads)
+    if not itens:
+        return
+    quando = "Na primeira entrevista" if form_stage == "t7" else "Nas entrevistas anteriores"
+    for section in filtered.get("sections", []):
+        if isinstance(section, dict) and _secao_coletiva_seguimento(section):
+            section["description"] = (
+                f"Parte 2 — Informações coletivas. {quando}, você contou que {_juntar_itens(itens)}. "
+                "Agora queremos saber se surgiu alguma novidade."
+            )
+
+
+def preencher_pista_coletiva_automatica(dados: dict, schema: dict, prior_payloads: list[dict[str, object]]) -> None:
+    """Grava a relação com as entrevistas anteriores quando o formulário não pergunta mais."""
+    if any(field["key"] == "pista_coletiva_confirmada" for field in iterar_campos_form(schema)):
+        return
+    itens = pistas_coletivas_anteriores(prior_payloads)
+    dados["pista_coletiva_confirmada"] = "Sim" if itens else "Não"
+    dados["pista_coletiva_descricao"] = "; ".join(itens)
+    dados["_pista_coletiva_automatica"] = True
+
+
+def adaptar_schema_link_morador(schema: dict) -> dict:
+    """Formulário do link enviado ao participante, que responde sozinho.
+
+    Tira o bloco de registro da entrevista (presencial/telefone) e usa rótulos
+    dirigidos à pessoa. O modo "pelo link" é gravado na coleta.
+    """
+    adaptado = copy.deepcopy(schema or {})
+    sections = []
+    for section in adaptado.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        fields = []
+        for field in section.get("fields", []):
+            if not isinstance(field, dict) or field.get("key") in CAMPOS_REGISTRO_ENTREVISTA:
+                continue
+            field.update(_ROTULOS_LINK_MORADOR.get(field.get("key"), {}))
+            fields.append(field)
+        section["fields"] = fields
+        if fields:
+            sections.append(section)
+    adaptado["sections"] = sections
+    adaptado["_link_morador"] = True
+    return adaptado
+
+
 def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> dict:
     filtered = copy.deepcopy(schema or {})
     prior_payloads = _payloads_anteriores_por_stage(paciente, form_stage)
+    _descrever_secao_coletiva(filtered, form_stage, prior_payloads)
     if form_stage == "t30" and filtered.get("instrument_version") in INTERVIEW_VERSIONS:
         from services.sfa_workflow import inicio_doenca
         resposta, payload = obter_payload_formulario(paciente, "t7")
@@ -2333,6 +2469,10 @@ def coletar_resposta_nativa(
     ).strip()
     dados["_submitted_stage"] = stage
     dados["_origem"] = f"native_{stage}_form"
+    if schema.get("_link_morador"):
+        dados["modo_entrevista"] = MODO_ENTREVISTA_LINK
+    if stage in {"t7", "t30"}:
+        preencher_pista_coletiva_automatica(dados, schema, prior_payloads)
     if stage == "t0":
         dados = normalizar_payload_t0_exposicoes(dados)
     return dados, errors
@@ -2368,6 +2508,10 @@ def coletar_resposta_t0_nativa(schema: dict, form_data, paciente) -> tuple[dict,
 
     if not t0_consentimento_aceito(aceite_tcle):
         errors["aceite_tcle"] = "Voce precisa aceitar o TCLE para enviar o formulario."
+    elif not any(field["key"] == "versao_tcle" for field in iterar_campos_form(schema)):
+        from services.sfa_workflow import hoje_local
+        dados["versao_tcle"] = TCLE_VERSAO_ATUAL
+        dados["data_aceite"] = formatar_data(hoje_local())
     errors.update(erros_consentimento_menor_t0(dados))
 
     return dados, errors

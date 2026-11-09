@@ -6,9 +6,9 @@ import json
 
 
 VERSION = "collective-v3-disease-clock"
-INTERVIEW_VERSION = "sfa-2026-11-07"
+INTERVIEW_VERSION = "sfa-2026-11-09"
 # Instrumentos que agendam T7/T30 pela entrevista T0 e contam o impacto desde D0.
-INTERVIEW_VERSIONS = frozenset({"sfa-2026-11-06", INTERVIEW_VERSION})
+INTERVIEW_VERSIONS = frozenset({"sfa-2026-11-06", "sfa-2026-11-07", INTERVIEW_VERSION})
 
 
 def hoje_local():
