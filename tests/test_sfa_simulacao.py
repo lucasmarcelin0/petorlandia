@@ -416,6 +416,12 @@ def test_link_da_simulacao_e_o_formulario_do_morador(app, client, hoje):
                             "Versão do TCLE", "Data do aceite", "Observações do entrevistador"):
         assert texto_da_equipe not in t0, texto_da_equipe
     assert "Baixar TCLE completo" in t0 and "Observações" in t0
+    # Guia em vídeo ao lado do termo; só baixa se a pessoa apertar play.
+    assert 'preload="none"' in t0 and "docs/Guia_Visual_TCLE_Orlandia.mp4" in t0
+    assert client.get("/static/docs/Guia_Visual_TCLE_Orlandia_capa.jpg").status_code == 200
+    video = client.get("/static/docs/Guia_Visual_TCLE_Orlandia.mp4", headers={"Range": "bytes=0-99"})
+    assert video.status_code == 206 and len(video.data) == 100  # o player consegue avançar o vídeo
+    video.close()
 
     t0_com_pista = _t0(outras_pessoas_com_sintomas="Sim", outras_pessoas_quantidade="2",
                        vinculo_exposicao_suspeita="Feijoada no domingo")
