@@ -784,13 +784,39 @@ function refinarCluster_(base, bairro, info, casa, ruaDigitada, complemento) {
  */
 var ALTURA_LINHA_ROTA = 21; // altura padrão do Sheets, em pixels
 
+/**
+ * Lock das funções do menu.
+ *
+ * A conferência do Status PMO (acionador de tempo e "Ao editar") segura o
+ * lock da planilha por 30 a 40 s. Com espera de 1 s, quem clicava no menu logo
+ * depois de editar uma aba recebia "Já existe uma operação na planilha em
+ * andamento" (09/11/2026: o "Ao editar" das 08:03:01 durou 35 s e derrubou o
+ * "Otimizar rotas" das 08:03:26). Agora o menu espera a conferência terminar,
+ * avisando com um toast. Devolve null só se a planilha seguir ocupada.
+ */
+var ESPERA_LOCK_MENU_MS = 90000;
+
+function obterLockDoMenu_() {
+  const lock = LockService.getDocumentLock() || LockService.getScriptLock();
+  if (lock.tryLock(1000)) return lock;
+  try {
+    SpreadsheetApp.getActive().toast(
+      'A conferência do Status PMO está rodando. Aguardando ela terminar (até 1 min e meio)…',
+      'Vacinação', 15);
+  } catch (e) {
+    // Sem planilha ativa (execução pelo editor): só espera.
+  }
+  return lock.tryLock(ESPERA_LOCK_MENU_MS) ? lock : null;
+}
+
+var MENSAGEM_PLANILHA_OCUPADA =
+  'A planilha continua ocupada por outra operação há mais de 1 min e meio. Tente de novo em instantes.';
+
 function routeOptimizeByCluster() {
   let lock;
   try {
-    lock = LockService.getDocumentLock() || LockService.getScriptLock();
-    if (!lock.tryLock(1000)) {
-      throw new Error("Já existe uma operação na planilha em andamento. Aguarde e tente novamente.");
-    }
+    lock = obterLockDoMenu_();
+    if (!lock) throw new Error(MENSAGEM_PLANILHA_OCUPADA);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     const range = sheet.getDataRange();
     const data = range.getValues();
@@ -1224,10 +1250,8 @@ function sincronizarPlanilhas() {
   let titulo = '✅ Sincronização Concluída!';
   let mensagem;
   try {
-    lock = LockService.getDocumentLock() || LockService.getScriptLock();
-    if (!lock.tryLock(1000)) {
-      throw new Error('Já existe uma sincronização em andamento. Aguarde e tente novamente.');
-    }
+    lock = obterLockDoMenu_();
+    if (!lock) throw new Error(MENSAGEM_PLANILHA_OCUPADA);
 
     const sourceId = '1GFp6yyjPVj4UDhDEh8o-9rhmOhSAnQb6hwQprgje304';
     const nomeAbaOrigem = 'Respostas ao formulário 1';
@@ -2699,10 +2723,13 @@ function simularConferenciaDoQuadro() {
   return resumo;
 }
 
-/** Conferência completa (menu, acionador de tempo, depois de reordenar). */
-function conferirQuadroStatusPMO() {
+/**
+ * Conferência completa (menu, acionador de tempo, depois de reordenar).
+ * `esperaMs` só vale quando é número: acionadores passam o evento aqui.
+ */
+function conferirQuadroStatusPMO(esperaMs) {
   const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(5000)) return null;
+  if (!lock.tryLock(typeof esperaMs === 'number' ? esperaMs : 5000)) return null;
   try {
     const props = PropertiesService.getDocumentProperties();
     props.setProperty('QUADRO_STATUS_ULTIMA', String(Date.now()));
@@ -2714,10 +2741,11 @@ function conferirQuadroStatusPMO() {
 }
 
 function conferirQuadroStatusPMOAgora() {
-  const resumo = conferirQuadroStatusPMO();
+  // Do menu: se uma conferência automática estiver rodando, espera por ela.
+  const resumo = conferirQuadroStatusPMO(ESPERA_LOCK_MENU_MS);
   SpreadsheetApp.getActiveSpreadsheet().toast(
     resumo ? resumo.atualizadas + ' de ' + resumo.conferidas + ' inscrições atualizadas no Status PMO.'
-      : 'Outra operação está em andamento. Tente de novo em instantes.',
+      : MENSAGEM_PLANILHA_OCUPADA,
     'Status PMO', 8);
 }
 

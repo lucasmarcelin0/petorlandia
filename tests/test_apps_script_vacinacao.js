@@ -1029,6 +1029,66 @@ teste('token: propriedade do script vale; sem ela, o token guardado em wwp.gs', 
 });
 
 // --------------------------------------------------------------------------
+// Lock do menu: esperar a conferência do Status PMO em vez de falhar
+// --------------------------------------------------------------------------
+function lockComRespostas(respostas, esperas) {
+  return {
+    tryLock: (ms) => { esperas.push(ms); return respostas.shift(); },
+    releaseLock: () => {},
+    hasLock: () => false,
+  };
+}
+
+teste('menu: com a conferência rodando, espera o lock em vez de falhar em 1 s', () => {
+  const esperas = [];
+  const toasts = [];
+  const ctx = carregar({
+    LockService: { getDocumentLock: () => lockComRespostas([false, true], esperas) },
+    SpreadsheetApp: { getActive: () => ({ toast: (m) => toasts.push(m) }) },
+  });
+  assert.ok(ctx.obterLockDoMenu_());
+  assert.deepStrictEqual(esperas, [1000, ctx.ESPERA_LOCK_MENU_MS]);
+  assert.ok(ctx.ESPERA_LOCK_MENU_MS >= 60000, 'a conferência leva até ~40 s');
+  assert.strictEqual(toasts.length, 1);
+});
+
+teste('menu: lock livre não mostra aviso; ocupado demais devolve null', () => {
+  const toasts = [];
+  const livre = carregar({
+    LockService: { getDocumentLock: () => lockComRespostas([true], []) },
+    SpreadsheetApp: { getActive: () => ({ toast: (m) => toasts.push(m) }) },
+  });
+  assert.ok(livre.obterLockDoMenu_());
+  assert.strictEqual(toasts.length, 0);
+
+  const ocupado = carregar({
+    LockService: { getDocumentLock: () => lockComRespostas([false, false], []) },
+    SpreadsheetApp: { getActive: () => ({ toast: () => {} }) },
+  });
+  assert.strictEqual(ocupado.obterLockDoMenu_(), null);
+});
+
+teste('menu: nenhuma função do menu tenta o lock só por 1 s fora de obterLockDoMenu_', () => {
+  const src = fs.readFileSync(SCRIPT, 'utf8');
+  assert.strictEqual((src.match(/tryLock\(1000\)/g) || []).length, 1);
+  ['routeOptimizeByCluster', 'sincronizarPlanilhas'].forEach((nome) => {
+    const corpo = src.slice(src.indexOf('function ' + nome + '('));
+    const fim = corpo.indexOf('\nfunction ', 1);
+    assert.ok(/obterLockDoMenu_\(\)/.test(corpo.slice(0, fim)), nome + ' deve usar obterLockDoMenu_');
+  });
+});
+
+teste('Status PMO: acionador passa o evento e a espera continua 5 s; menu espera mais', () => {
+  const esperas = [];
+  const ctx = carregar({
+    LockService: { getDocumentLock: () => lockComRespostas([false, false], esperas) },
+  });
+  assert.strictEqual(ctx.conferirQuadroStatusPMO({ triggerUid: 'x' }), null);
+  assert.strictEqual(ctx.conferirQuadroStatusPMO(ctx.ESPERA_LOCK_MENU_MS), null);
+  assert.deepStrictEqual(esperas, [5000, ctx.ESPERA_LOCK_MENU_MS]);
+});
+
+// --------------------------------------------------------------------------
 let falhas = 0;
 testes.forEach(([nome, fn]) => {
   try {
