@@ -96,6 +96,30 @@
           "sha256": "3c3cb823fdccc43d4aad94078cb6122a7141bcdc07abe05b799b8c2fd6023397"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-07",
+      "label": "Instrumentos revisados em 07/11/2026",
+      "status": "archived",
+      "archived_at": "2026-11-09",
+      "description": "Cópia dos instrumentos T0, T7 e T30 publicados em 07/11/2026, antes de o link do participante preencher sozinho a versão e a data do TCLE e a relação com as entrevistas anteriores.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-07/t0.json",
+          "field_count": 51,
+          "sha256": "3af28c1d6d3f90b5a94742e19bf7f1e9f6cb9255b073cc44aeec027cbdccefc1"
+        },
+        "t7": {
+          "file": "sfa-2026-11-07/t7.json",
+          "field_count": 30,
+          "sha256": "57ba7375188fd4ba9bfe44cc28191252ed2f9c90a8e6cbfbbd32b270367e586d"
+        },
+        "t30": {
+          "file": "sfa-2026-11-07/t30.json",
+          "field_count": 33,
+          "sha256": "60f5f964c3edec3bb5c02d333988c1214240a575348ce13f1b2ca79a6c870f1f"
+        }
+      }
     }
   ]
 }

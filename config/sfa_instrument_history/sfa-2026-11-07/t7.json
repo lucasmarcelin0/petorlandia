@@ -1,0 +1,524 @@
+{
+  "instrument_version": "sfa-2026-11-07",
+  "title": "T7 — Acompanhamento aos sete dias",
+  "subtitle": "Instrumento revisado em 07/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
+  "submit_label": "Registrar T7",
+  "sections": [
+    {
+      "title": "Registro da entrevista",
+      "description": "Preenchido pela equipe quando a entrevista é presencial ou por telefone.",
+      "fields": [
+        {
+          "key": "modo_entrevista",
+          "label": "Como esta entrevista está sendo feita?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Presencial",
+            "Telefone",
+            "Pela própria pessoa, pelo link"
+          ],
+          "help_text": "Data e hora do registro ficam gravadas automaticamente pelo sistema."
+        },
+        {
+          "key": "entrevistador",
+          "label": "Entrevistador(a)",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        },
+        {
+          "key": "local_servico",
+          "label": "Local/serviço",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Evolução e atendimento",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "Quem responde?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A própria pessoa",
+            "Pai, mãe ou responsável",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "Se outra pessoa, nome e relação",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "respondent_role",
+            "operator": "selected_any",
+            "values": [
+              "Pai, mãe ou responsável",
+              "Outra pessoa autorizada"
+            ]
+          }
+        },
+        {
+          "key": "classificacao_melhora",
+          "label": "1. Como você está desde a primeira entrevista?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Recuperado(a)",
+            "Melhorando",
+            "Sem mudança",
+            "Piorando",
+            "Melhorei e depois piorei"
+          ]
+        },
+        {
+          "key": "sinais_alerta_atuais",
+          "label": "2. Você apresenta agora algum destes sinais?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Muita falta de ar",
+            "Desmaio ou confusão",
+            "Sangramento importante",
+            "Piora muito forte ou preocupação urgente",
+            "Nenhum destes sinais agora"
+          ],
+          "help_text": "Se houver sinal de urgência, priorizar a avaliação assistencial. Em emergência, procurar atendimento presencial ou ligar 192."
+        },
+        {
+          "key": "retornou_servico_saude",
+          "label": "3. Depois da primeira entrevista, você procurou atendimento de saúde novamente?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não"
+          ]
+        },
+        {
+          "key": "atendimento_detalhe",
+          "label": "4. Onde e quando foi atendido(a)?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "retornou_servico_saude",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "help_text": "Informar o serviço (UBS, pronto-atendimento, hospital ou consultório particular), o município e a data. Incluir atendimentos particulares ou fora de Orlândia."
+        }
+      ],
+      "description": "Parte 1 — Informações individuais."
+    },
+    {
+      "title": "Informação sobre o diagnóstico",
+      "fields": [
+        {
+          "key": "diagnostico_medico",
+          "label": "5. Durante ou após a consulta, você recebeu algum diagnóstico?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Ainda aguardo resultado",
+            "Não sei informar"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "6. Qual(is) doença(s) o profissional mencionou?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Virose",
+            "Febre sem causa definida",
+            "Intoxicação alimentar",
+            "Outra",
+            "Não lembro"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual_outro",
+          "label": "Qual outra doença?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico_qual",
+            "operator": "selected_any",
+            "values": [
+              "Outra"
+            ]
+          }
+        }
+      ],
+      "description": "Registrar o que foi informado pelo profissional, inclusive na consulta realizada após o T0. A resposta será conferida com os registros disponíveis."
+    },
+    {
+      "title": "Impacto individual desde o início dos sintomas",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "7. Desde o início dos sintomas, por quantos dias você ficou totalmente sem conseguir realizar suas atividades habituais?",
+          "type": "number",
+          "required": false,
+          "min": 0
+        },
+        {
+          "key": "dias_incap_novos_sem_numero",
+          "label": "Se não houver número de dias",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Nenhum",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "houve_novos_gastos",
+          "label": "8. Você teve algum gasto por causa desta doença, desde o início dos sintomas?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "custo_outros",
+          "label": "Se respondeu “Sim”, qual foi o valor aproximado do gasto? (R$)",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "houve_novos_gastos",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "min": 0,
+          "step": "0.01"
+        },
+        {
+          "key": "gasto_desconhecido",
+          "label": "Consegue estimar o gasto?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Não sei estimar"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "houve_novos_gastos",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "perda_renda",
+          "label": "9. Desde o início dos sintomas, esta doença fez você perder renda ou deixar de ganhar dinheiro?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "ausencia_familiar",
+          "label": "10. Alguém deixou suas atividades para cuidar de você?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "dias_cuidador",
+          "label": "11. Por aproximadamente quantos dias?",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "ausencia_familiar",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "min": 0
+        }
+      ],
+      "description": "Nesta primeira apuração, contar todo o período do D0 até hoje, inclusive os dias anteriores à entrevista T0. Não contar duas vezes o mesmo dia ou valor."
+    },
+    {
+      "title": "Informações coletivas",
+      "fields": [
+        {
+          "key": "pista_coletiva_confirmada",
+          "label": "Relação com o T0 — preencher antes deste bloco: foi identificada alguma suspeita ou pista de contágio coletivo no T0?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não verificado"
+          ],
+          "help_text": "Marcar “Sim” se, no T0, a 20 = “Sim”, a 8 = “Sim”, a 13 indica pessoas/animais doentes, a 17 = “Sim” ou a 27 registra uma suspeita concreta. Consultar também as observações."
+        },
+        {
+          "key": "pista_coletiva_descricao",
+          "label": "Registrar a pista",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "pista_coletiva_confirmada",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "novos_casos_semelhantes",
+          "label": "12. Depois da primeira entrevista, você soube de outras pessoas com sintomas parecidos?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "novos_casos_local_periodo",
+          "label": "13. Quantas novas pessoas adoeceram, onde e quando?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "novos_casos_vinculo",
+          "label": "14. Qual a relação delas com você e o que vocês tiveram em comum?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "help_text": "Ex.: familiares, vizinhos; mesma refeição, evento, trabalho ou contato com animais. Não contar pessoas já registradas no T0."
+        },
+        {
+          "key": "nova_pista_exposicao",
+          "label": "15. Surgiu alguma nova informação sobre alimento, água, produto, animal, lugar ou atividade que possa estar ligado aos casos?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "nova_pista_detalhe",
+          "label": "16. Qual foi a nova informação?",
+          "type": "textarea",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "nova_pista_exposicao",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "help_text": "Informar o que, onde e quando; marca, origem ou animal, se souber."
+        },
+        {
+          "key": "fonte_ainda_ativa",
+          "label": "17. A situação ou o contato que pode estar ligado aos casos ainda continua?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "any": [
+                  {
+                    "source": "prior",
+                    "key": "outras_pessoas_com_sintomas",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_ambiental_outros_doentes",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_alimentar_outros_doentes",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_animal_outros_doentes",
+                    "operator": "selected_any",
+                    "values": [
+                      "Pessoas",
+                      "Animais"
+                    ]
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  }
+                ]
+              },
+              {
+                "source": "current",
+                "key": "pista_coletiva_confirmada",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_pista_exposicao",
+                "operator": "equals",
+                "value": "Sim"
+              }
+            ]
+          }
+        },
+        {
+          "key": "outras_pessoas_ainda_expostas",
+          "label": "18. Outras pessoas ainda podem ter contato com essa situação?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "any": [
+                  {
+                    "source": "prior",
+                    "key": "outras_pessoas_com_sintomas",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_ambiental_outros_doentes",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_alimentar_outros_doentes",
+                    "operator": "equals",
+                    "value": "Sim"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "exposicao_animal_outros_doentes",
+                    "operator": "selected_any",
+                    "values": [
+                      "Pessoas",
+                      "Animais"
+                    ]
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  }
+                ]
+              },
+              {
+                "source": "current",
+                "key": "pista_coletiva_confirmada",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_pista_exposicao",
+                "operator": "equals",
+                "value": "Sim"
+              }
+            ]
+          }
+        },
+        {
+          "key": "observacoes_entrevistador",
+          "label": "Observações do entrevistador",
+          "type": "textarea",
+          "required": false
+        }
+      ],
+      "description": "Parte 2 — Informações coletivas. Aplicar as perguntas 12 e 15 mesmo que nenhuma pista coletiva tenha sido identificada no T0."
+    }
+  ]
+}

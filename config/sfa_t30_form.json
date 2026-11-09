@@ -1,7 +1,7 @@
 {
-  "instrument_version": "sfa-2026-11-07",
+  "instrument_version": "sfa-2026-11-09",
   "title": "T30 — Encerramento do seguimento",
-  "subtitle": "Instrumento revisado em 07/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
+  "subtitle": "Instrumento revisado em 09/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
   "submit_label": "Registrar T30",
   "sections": [
     {
@@ -464,30 +464,6 @@
       "title": "Informações coletivas",
       "fields": [
         {
-          "key": "pista_coletiva_confirmada",
-          "label": "Antes da entrevista, verificar: havia pista coletiva no T0 ou no T7?",
-          "type": "radio",
-          "required": false,
-          "options": [
-            "Sim",
-            "Não",
-            "Não verificado"
-          ],
-          "help_text": "Usar os critérios do bloco coletivo do T7 para o T0 e as respostas do T7 (12 ou 15 = “Sim”, ou pista descrita na 16). Consultar as observações. Se constar como “Não verificado”, conferir o histórico antes de encerrar."
-        },
-        {
-          "key": "pista_coletiva_descricao",
-          "label": "Pista",
-          "type": "textarea",
-          "required": false,
-          "visible_if": {
-            "source": "current",
-            "key": "pista_coletiva_confirmada",
-            "operator": "equals",
-            "value": "Sim"
-          }
-        },
-        {
           "key": "novos_casos_semelhantes",
           "label": "10. Desde a última entrevista, você soube de outras pessoas com sintomas parecidos?",
           "type": "radio",
@@ -497,11 +473,11 @@
             "Não",
             "Não sei"
           ],
-          "help_text": "Se “Sim”, registrar apenas os novos casos: quantos, onde e quando adoeceram, relação com a pessoa acompanhada e o que tiveram em comum."
+          "help_text": "Conte só as pessoas novas, que você ainda não tinha mencionado nas entrevistas anteriores."
         },
         {
           "key": "novos_casos_quantidade",
-          "label": "Número aproximado",
+          "label": "Quantas pessoas, aproximadamente?",
           "type": "number",
           "required": false,
           "visible_if": {
@@ -514,7 +490,7 @@
         },
         {
           "key": "novos_casos_local_periodo",
-          "label": "Local e período",
+          "label": "Onde e quando elas adoeceram?",
           "type": "text",
           "required": false,
           "visible_if": {
@@ -526,7 +502,7 @@
         },
         {
           "key": "novos_casos_vinculo",
-          "label": "Relação e exposição em comum",
+          "label": "Qual a relação delas com você e o que vocês tiveram em comum?",
           "type": "text",
           "required": false,
           "visible_if": {
@@ -538,7 +514,7 @@
         },
         {
           "key": "nova_informacao_fonte",
-          "label": "Há informação nova sobre alimento, água, produto, animal, lugar ou atividade?",
+          "label": "Você ficou sabendo de algo novo sobre alimento, água, produto, animal, lugar ou atividade que possa estar ligado aos casos?",
           "type": "radio",
           "required": false,
           "options": [
@@ -551,12 +527,6 @@
               {
                 "source": "current",
                 "key": "novos_casos_semelhantes",
-                "operator": "equals",
-                "value": "Sim"
-              },
-              {
-                "source": "current",
-                "key": "pista_coletiva_confirmada",
                 "operator": "equals",
                 "value": "Sim"
               },
@@ -591,12 +561,6 @@
                   },
                   {
                     "source": "prior",
-                    "key": "pista_coletiva_confirmada",
-                    "operator": "equals",
-                    "value": "Sim"
-                  },
-                  {
-                    "source": "prior",
                     "key": "vinculo_exposicao_suspeita",
                     "operator": "nonempty"
                   }
@@ -615,12 +579,11 @@
                 "value": "Sim"
               }
             ]
-          },
-          "help_text": "Se houve novos casos ou já havia pista no T0 ou no T7, atualizar a investigação, mesmo que a resposta à 10 seja “Não” ou “Não sei”."
+          }
         },
         {
           "key": "nova_informacao_fonte_detalhe",
-          "label": "Descreva o que, onde e quando",
+          "label": "O que foi, onde e quando?",
           "type": "textarea",
           "required": false,
           "visible_if": {
@@ -630,12 +593,6 @@
                   {
                     "source": "current",
                     "key": "novos_casos_semelhantes",
-                    "operator": "equals",
-                    "value": "Sim"
-                  },
-                  {
-                    "source": "current",
-                    "key": "pista_coletiva_confirmada",
                     "operator": "equals",
                     "value": "Sim"
                   },
@@ -670,12 +627,6 @@
                       },
                       {
                         "source": "prior",
-                        "key": "pista_coletiva_confirmada",
-                        "operator": "equals",
-                        "value": "Sim"
-                      },
-                      {
-                        "source": "prior",
                         "key": "vinculo_exposicao_suspeita",
                         "operator": "nonempty"
                       }
@@ -706,7 +657,7 @@
         },
         {
           "key": "fonte_ainda_ativa",
-          "label": "A situação ou contato continua?",
+          "label": "A situação ou o contato que pode estar ligado aos casos ainda continua?",
           "type": "radio",
           "required": false,
           "options": [
@@ -719,12 +670,6 @@
               {
                 "source": "current",
                 "key": "novos_casos_semelhantes",
-                "operator": "equals",
-                "value": "Sim"
-              },
-              {
-                "source": "current",
-                "key": "pista_coletiva_confirmada",
                 "operator": "equals",
                 "value": "Sim"
               },
@@ -756,12 +701,6 @@
                       "Pessoas",
                       "Animais"
                     ]
-                  },
-                  {
-                    "source": "prior",
-                    "key": "pista_coletiva_confirmada",
-                    "operator": "equals",
-                    "value": "Sim"
                   },
                   {
                     "source": "prior",
@@ -804,12 +743,6 @@
                 "value": "Sim"
               },
               {
-                "source": "current",
-                "key": "pista_coletiva_confirmada",
-                "operator": "equals",
-                "value": "Sim"
-              },
-              {
                 "any": [
                   {
                     "source": "prior",
@@ -840,12 +773,6 @@
                   },
                   {
                     "source": "prior",
-                    "key": "pista_coletiva_confirmada",
-                    "operator": "equals",
-                    "value": "Sim"
-                  },
-                  {
-                    "source": "prior",
                     "key": "vinculo_exposicao_suspeita",
                     "operator": "nonempty"
                   }
@@ -873,7 +800,7 @@
           "required": false
         }
       ],
-      "description": "Parte 2 — Informações coletivas."
+      "description": "Parte 2 — Informações coletivas. Agora, algumas perguntas sobre outras pessoas e situações que podem estar ligadas à sua doença."
     }
   ]
 }

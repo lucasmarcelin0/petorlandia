@@ -2646,6 +2646,7 @@ def _render_public_native_form(
     submitter,
 ):
     from services.sfa_service import (
+        adaptar_schema_link_morador,
         filtrar_form_schema_condicional,
         iterar_campos_form,
         registrar_auditoria,
@@ -2675,7 +2676,10 @@ def _render_public_native_form(
         if impedimento:
             return render_template("sfa/erro.html", mensagem=impedimento), 409
 
-    schema = filtrar_form_schema_condicional(schema_loader(), paciente, form_stage)
+    # O link vai para o participante, que responde sozinho.
+    schema = adaptar_schema_link_morador(
+        filtrar_form_schema_condicional(schema_loader(), paciente, form_stage)
+    )
     values = initial_builder(paciente, schema)
     errors: dict[str, str] = {}
 

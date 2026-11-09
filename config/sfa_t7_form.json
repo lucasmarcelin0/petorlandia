@@ -1,7 +1,7 @@
 {
-  "instrument_version": "sfa-2026-11-07",
+  "instrument_version": "sfa-2026-11-09",
   "title": "T7 — Acompanhamento aos sete dias",
-  "subtitle": "Instrumento revisado em 07/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
+  "subtitle": "Instrumento revisado em 09/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
   "submit_label": "Registrar T7",
   "sections": [
     {
@@ -290,30 +290,6 @@
       "title": "Informações coletivas",
       "fields": [
         {
-          "key": "pista_coletiva_confirmada",
-          "label": "Relação com o T0 — preencher antes deste bloco: foi identificada alguma suspeita ou pista de contágio coletivo no T0?",
-          "type": "radio",
-          "required": false,
-          "options": [
-            "Sim",
-            "Não",
-            "Não verificado"
-          ],
-          "help_text": "Marcar “Sim” se, no T0, a 20 = “Sim”, a 8 = “Sim”, a 13 indica pessoas/animais doentes, a 17 = “Sim” ou a 27 registra uma suspeita concreta. Consultar também as observações."
-        },
-        {
-          "key": "pista_coletiva_descricao",
-          "label": "Registrar a pista",
-          "type": "textarea",
-          "required": false,
-          "visible_if": {
-            "source": "current",
-            "key": "pista_coletiva_confirmada",
-            "operator": "equals",
-            "value": "Sim"
-          }
-        },
-        {
           "key": "novos_casos_semelhantes",
           "label": "12. Depois da primeira entrevista, você soube de outras pessoas com sintomas parecidos?",
           "type": "radio",
@@ -347,7 +323,7 @@
             "operator": "equals",
             "value": "Sim"
           },
-          "help_text": "Ex.: familiares, vizinhos; mesma refeição, evento, trabalho ou contato com animais. Não contar pessoas já registradas no T0."
+          "help_text": "Ex.: familiares, vizinhos; mesma refeição, evento, trabalho ou contato com animais. Não conte pessoas que você já mencionou na primeira entrevista."
         },
         {
           "key": "nova_pista_exposicao",
@@ -423,12 +399,6 @@
               },
               {
                 "source": "current",
-                "key": "pista_coletiva_confirmada",
-                "operator": "equals",
-                "value": "Sim"
-              },
-              {
-                "source": "current",
                 "key": "novos_casos_semelhantes",
                 "operator": "equals",
                 "value": "Sim"
@@ -492,12 +462,6 @@
               },
               {
                 "source": "current",
-                "key": "pista_coletiva_confirmada",
-                "operator": "equals",
-                "value": "Sim"
-              },
-              {
-                "source": "current",
                 "key": "novos_casos_semelhantes",
                 "operator": "equals",
                 "value": "Sim"
@@ -518,7 +482,7 @@
           "required": false
         }
       ],
-      "description": "Parte 2 — Informações coletivas. Aplicar as perguntas 12 e 15 mesmo que nenhuma pista coletiva tenha sido identificada no T0."
+      "description": "Parte 2 — Informações coletivas. Agora, algumas perguntas sobre outras pessoas e situações que podem estar ligadas à sua doença."
     }
   ]
 }
