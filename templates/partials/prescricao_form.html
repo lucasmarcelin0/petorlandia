@@ -287,6 +287,12 @@
 
   <!-- Card de sugestão clínica de dose (bulário) -->
   <div id="prescription-panel-posologia" class="prescription-panel d-none" data-prescription-panel-content="posologia">
+  <!-- Posologia de bula do PRODUTO escolhido (não do princípio ativo, que
+       junta todas as marcas): dosagens, via, frequência e duração como o
+       fabricante publica. Fica na etapa em que a dose é escrita.
+       Preenchido por _renderPosologiaProduto. -->
+  <div id="med-posologia-produto" class="d-none mb-3"
+       style="border:1px solid #d6e4f5;border-left:3px solid #0d6efd;border-radius:7px;padding:10px 12px;background:#f6f9fe;"></div>
   <div id="sugestao-dose-card" class="card border-info mb-3 d-none prescription-stage" data-prescription-panel="posologia">
     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
       <span>
@@ -329,6 +335,9 @@
             <span id="sug-apresentacao-texto" class="fw-semibold ms-1">— escolha acima —</span>
           </div>
         </div>
+        <!-- Aviso quando a dose de bula não se converte na apresentação
+             escolhida (ex.: dose em mL e apresentação em pó). -->
+        <div id="sug-apresentacao-aviso" class="alert alert-warning py-2 px-3 small mb-3 d-none" role="status"></div>
 
         <!-- Resumo clínico — colapsado por padrão.  Só abre quando o vet
              quer ver o detalhe de origem/risco. -->
@@ -642,7 +651,7 @@
   }
 </style>
 <script src="{{ url_for('static', filename='js/unified-history-sync.js') }}"></script>
-<script src="{{ url_for('static', filename='js/numero_extenso.js') }}"></script>
+<script src="{{ url_for('static', filename='js/numero_extenso.js', v='20261110-1') }}"></script>
 <script src="{{ url_for('static', filename='js/posologia_estruturada.js', v='20261024-1') }}"></script>
 <script>
     let _posologiaEstruturada = null;
@@ -897,6 +906,10 @@
     // serializador é usado pelo dose card pra pre-selecionar quando abrir.
     let _apresentacaoPrescricao = null;
     let _apresentacoesDisponiveis = [];
+    // De onde vêm as apresentações listadas: do produto escolhido, do
+    // princípio ativo ou — quando o bulário não tem as do produto — de
+    // outras marcas. Vem do servidor em `apresentacoes_origem`.
+    let _origemApresentacoes = null;
     // Estado do seletor de apresentação no card de dose pré-calculada.
     // Declaradas aqui (topo do script) pra serem acessíveis em
     // `_limparValoresCardSugestao`, que roda antes da seção de render.
@@ -970,6 +983,21 @@
     return (document.getElementById(id)?.value || '').trim();
   }
 
+  // "7 dias" e "sete dias" viram "por 7 dias"; "Dose única", "Até o 6º mês
+  // de idade" e "A critério do médico-veterinário" já são a frase inteira —
+  // "por Até o 6º mês de idade" não é português.
+  function _duracaoNaFrase(duracao) {
+    const texto = String(duracao || '').trim();
+    const contavel = /^(\d|uma?\b|dois\b|duas\b|tr[eê]s\b|quatro\b|cinco\b|seis\b|sete\b|oito\b|nove\b|dez\b|quinze\b|vinte\b|trinta\b)/i;
+    return contavel.test(texto) ? `por ${texto}` : texto;
+  }
+
+  // Dose, frequência e duração numa linha só, sem "Veterinário., por".
+  function _montarTextoPosologia(dose, frequencia, duracao) {
+    const aparar = (parte) => String(parte || '').trim().replace(/[\s.,;]+$/, '');
+    return [aparar(dose), aparar(frequencia), aparar(_duracaoNaFrase(duracao))].filter(Boolean).join(', ');
+  }
+
   function _textoApresentacaoAtual() {
     if (_apresentacaoPrescricao) return _rotuloApresentacaoParaReceita(_apresentacaoPrescricao);
     if (_apresentacoesDisponiveis.length) return 'Apresentacao pendente';
@@ -1001,8 +1029,7 @@
     if (modoPersonalizado && textoLivre) {
       texto = textoLivre;
     } else if (dose || frequencia || duracao) {
-      const duracaoNormalizada = duracao && !/^(por |uso contínuo$)/i.test(duracao) ? `por ${duracao}` : duracao;
-      texto = [dose, frequencia, duracaoNormalizada].filter(Boolean).join(', ');
+      texto = _montarTextoPosologia(dose, frequencia, duracao);
     }
 
     nomeEl.textContent = nome || 'Escolha um medicamento';
@@ -1719,6 +1746,8 @@
   function abrirSugestaoDose() {
     if (!_medicamentoIdSugestao) return;
     _toggleBotaoSugestao(false);
+    // O card da dose mora na etapa de posologia: abre lá, à vista.
+    mostrarEtapaPrescricao('posologia');
     carregarSugestaoDose(_medicamentoIdSugestao, null, false, _nomeComercialFiltroSugestao);
   }
 
@@ -2016,8 +2045,12 @@
     _opcaoRecomendadaEscolhida = opcoes.find(o => Number(o.protocolo_id || 0) === protocoloAtual) || opcoes[0];
     container.innerHTML = opcoes.map((opcao, idx) => {
       const ativa = Number(opcao.protocolo_id || 0) === Number(_opcaoRecomendadaEscolhida?.protocolo_id || 0);
-      const indicacao = opcao.indicacao && opcao.indicacao !== 'Uso geral'
-        ? `<span class="badge text-bg-light border">${_escapeHtmlSugestao(opcao.indicacao)}</span>`
+      // A variante ("Vermivet Plus 660 mg") diz de qual apresentação do
+      // produto é a dose; quando existe, é ela que identifica a opção.
+      const etiqueta = opcao.variante
+        || (opcao.indicacao && opcao.indicacao !== 'Uso geral' ? opcao.indicacao : '');
+      const indicacao = etiqueta
+        ? `<span class="badge text-bg-light border">${_escapeHtmlSugestao(etiqueta)}</span>`
         : '';
       return `
         <button type="button"
@@ -2053,8 +2086,25 @@
       'dose_exibir', 'faixa_texto', 'intervalo_horas', 'intervalo_min_horas',
       'intervalo_max_horas', 'intervalos_disponiveis', 'tem_faixa_frequencia',
       'frequencia_texto', 'frequencia_bruta', 'duracao_min_dias', 'duracao_max_dias',
-      'duracao_texto', 'duracao_bruta', 'tem_faixa_duracao', 'observacao'
+      'duracao_texto', 'duracao_bruta', 'tem_faixa_duracao', 'observacao',
+      'variante', 'apresentacao_ids'
     ];
+
+    // Opção que pertence a outra apresentação do produto: troca a
+    // apresentação e deixa o servidor recalcular para ela — dose e
+    // apresentação nunca ficam descasadas.
+    const idsDaOpcao = Array.isArray(opcao.apresentacao_ids) ? opcao.apresentacao_ids : [];
+    const idAtual = Number(_apresentacaoPrescricao?.id || 0);
+    if (idsDaOpcao.length && !idsDaOpcao.includes(idAtual)) {
+      const destino = idsDaOpcao.find(id => _apresentacoesDisponiveis.some(a => a.id === id));
+      const seletor = document.getElementById('presc-apresentacao');
+      if (destino && seletor) {
+        seletor.value = String(destino);
+        onApresentacaoPrescricaoChange();
+        return;
+      }
+    }
+
     campos.forEach(campo => {
       if (Object.prototype.hasOwnProperty.call(opcao, campo)) {
         sugestaoDoseAtual[campo] = opcao[campo];
@@ -2153,6 +2203,11 @@
     if (toggleConversaoBtn) toggleConversaoBtn.classList.add('d-none');
     const praticaWrap = document.getElementById('sug-dose-pratica-wrap');
     if (praticaWrap) praticaWrap.classList.add('d-none');
+    const avisoApresentacao = document.getElementById('sug-apresentacao-aviso');
+    if (avisoApresentacao) {
+      avisoApresentacao.classList.add('d-none');
+      avisoApresentacao.textContent = '';
+    }
     // Esconde TODOS os wrappers de concentração (o "guarda-chuva" + dropdown
     // + input manual) e zera as opções do select pra não vazar estado entre
     // sugestões consecutivas.
@@ -2460,6 +2515,10 @@
       });
       if (indicacao) params.append('indicacao', indicacao);
       if (nomeComercialFiltro) params.append('nome_comercial_filtro', nomeComercialFiltro);
+      // Produto com dose diferente por apresentação (1 comprimido/10 kg no
+      // de 660 mg, 1/30 kg no de 2 g): a apresentação escolhida decide a dose.
+      const apresentacaoEscolhidaId = Number(_apresentacaoPrescricao?.id || 0);
+      if (apresentacaoEscolhidaId > 0) params.append('apresentacao_id', String(apresentacaoEscolhidaId));
       const url = `/api/bulario/sugerir-dose?${params.toString()}`;
       const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const data = await resp.json().catch(() => ({}));
@@ -2681,6 +2740,9 @@
   // precisa ser definida pra prescrição ter valor (250 mg comprimido é
   // farmacologicamente diferente de 250 mg/5 mL suspensão).
   function _rotuloOpcaoApresentacao(ap) {
+    // Apresentação de um produto escolhido já vem com o rótulo do fabricante
+    // ("Frasco (20 mL), com seringa dosadora"): não se recompõe nada.
+    if (ap.rotulo_opcao) return ap.rotulo_opcao;
     if (ap.nome_variante && ap.nome_variante.includes('(')) {
       return ap.nome_variante;
     }
@@ -2747,7 +2809,10 @@
         medicamento_id: medId,
         forma: forma,
         concentracao: conc,
-        fabricante: fab || null
+        fabricante: fab || null,
+        // Cadastrada com um produto comercial selecionado, a apresentação
+        // fica presa a ele: aparece nele, e só nele, da próxima vez.
+        nome_comercial: medicamentoSelecionado?.nome_comercial_filtro || null
       };
 
       const { resp, data } = await fetchMedicamentoComCsrf('/apresentacao_medicamento', {
@@ -2841,7 +2906,19 @@
     }
 
     if (hint) {
-      hint.textContent = 'Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).';
+      const origem = _origemApresentacoes || {};
+      const deOutros = origem.tipo === 'outros_produtos';
+      if (origem.tipo === 'produto' && origem.produto) {
+        hint.textContent = `Apresentações de ${origem.produto}, como o fabricante publica.`;
+      } else if (deOutros) {
+        // Nunca fingir que a apresentação de outra marca é a deste produto.
+        hint.textContent = `O bulário não tem as apresentações de ${origem.produto}. Estas são de outros produtos com o mesmo princípio ativo: confira a que corresponde ou cadastre a correta em "Nova apresentação".`;
+      } else {
+        hint.textContent = 'Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).';
+      }
+      hint.classList.toggle('text-warning-emphasis', deOutros);
+      hint.classList.toggle('fw-semibold', deOutros);
+      hint.classList.toggle('text-muted', !deOutros);
     }
 
     // Agrupa por categoria_label (Comprimidos, Suspensões, Líquidos, …)
@@ -2854,7 +2931,7 @@
     const placeholderCount = _apresentacoesDisponiveis.length;
     let html = `<option value="">— escolha a apresentação (${placeholderCount}) —</option>`;
     for (const [cat, lista] of grupos) {
-      html += `<optgroup label="${cat}">`;
+      html += `<optgroup label="${_escapeHtml(cat)}">`;
       for (const ap of lista) {
         const lbl = _escapeHtml(_rotuloOpcaoApresentacao(ap));
         html += `<option value="${ap.id}">${lbl}</option>`;
@@ -2863,6 +2940,13 @@
     }
     select.innerHTML = html;
     select.classList.remove('is-invalid');
+    if (_apresentacoesDisponiveis.length === 1 && _origemApresentacoes?.tipo === 'produto') {
+      // Produto com uma apresentação só: não há o que escolher. Já vem
+      // selecionada, como no VetSmart, e a tela segue para a posologia.
+      select.value = String(_apresentacoesDisponiveis[0].id);
+      onApresentacaoPrescricaoChange();
+      return;
+    }
     atualizarPreviewPrescricao();
     mostrarEtapaPrescricao('apresentacao');
   }
@@ -2880,6 +2964,20 @@
     try { _renderApresentacaoIndicador(); } catch (_) {}
     const cardAberto = document.getElementById('sugestao-dose-card')
       && !document.getElementById('sugestao-dose-card').classList.contains('d-none');
+    if (cardAberto && _apresentacaoPrescricao && sugestaoDoseAtual?.depende_da_apresentacao
+        && _medicamentoIdSugestao) {
+      // A dose deste produto muda com a apresentação: recalcula em vez de
+      // reaproveitar a dose da apresentação anterior.
+      atualizarPreviewPrescricao();
+      carregarSugestaoDose(
+        _medicamentoIdSugestao,
+        sugestaoDoseAtual.indicacao || null,
+        true,
+        _nomeComercialFiltroSugestao,
+      );
+      mostrarEtapaPrescricao('posologia');
+      return;
+    }
     if (cardAberto && _apresentacaoPrescricao
         && typeof onApresentacaoEscolhida === 'function'
         && (sugestaoDoseAtual?.apresentacoes || []).some(a => a.id === _apresentacaoPrescricao.id)) {
@@ -2896,6 +2994,7 @@
   // compra o que estiver disponível; forma + concentração é o que importa.
   function _rotuloApresentacaoParaReceita(ap) {
     if (!ap) return '';
+    if (ap.rotulo_opcao) return ap.rotulo_opcao;
     if (ap.rotulo_principal) {
       const contexto = ap.rotulo_escolha?.principal || '';
       return contexto && !ap.rotulo_principal.toLowerCase().includes(contexto.toLowerCase())
@@ -2956,13 +3055,17 @@
       return;
     }
     const partes = [];
-    if (ap.forma) partes.push(ap.forma);
-    if (ap.concentracao_label) partes.push(ap.concentracao_label);
-    else if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
-      const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
-      partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
-    } else if (ap.concentracao_texto) {
-      partes.push(ap.concentracao_texto);
+    if (ap.rotulo_opcao) {
+      partes.push(ap.rotulo_opcao);
+    } else {
+      if (ap.forma) partes.push(ap.forma);
+      if (ap.concentracao_label) partes.push(ap.concentracao_label);
+      else if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
+        const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
+        partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
+      } else if (ap.concentracao_texto) {
+        partes.push(ap.concentracao_texto);
+      }
     }
     txt.textContent = partes.filter(Boolean).join(' · ') || (ap.descricao || 'Apresentação selecionada');
     txt.classList.remove('text-danger');
@@ -3167,6 +3270,39 @@
       }
     }
 
+    const aviso = document.getElementById('sug-apresentacao-aviso');
+    if (aviso) {
+      aviso.classList.add('d-none');
+      aviso.textContent = '';
+    }
+
+    if (ap.conversao_direta) {
+      // Dose de bula já na unidade que esta apresentação entrega (mL,
+      // comprimidos, pipetas, gotas): é a quantidade a administrar, sem
+      // passar por concentração em mg. "1 mL/kg" num frasco de suspensão.
+      _concentracaoEscolhida = { valor: null, unidade: '' };
+      _esconderConcWrap();
+      _atualizarPrescricaoPratica();
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(ap, 'conversao_direta')
+        && _doseEmUnidadeDeEntrega(sugestaoDoseAtual)) {
+      // Produto escolhido, dose em mL/comprimidos/pipetas/gotas, e esta
+      // apresentação não é medida assim (ou a dose é de outra apresentação).
+      // Pedir concentração em mg aqui não levaria a nada.
+      _concentracaoEscolhida = null;
+      _esconderConcWrap();
+      _esconderPrescricaoPratica();
+      if (aviso) {
+        aviso.textContent = ap.dose_nao_se_aplica
+          ? `Esta dose é de outra apresentação do produto${sugestaoDoseAtual.variante ? ` (${sugestaoDoseAtual.variante})` : ''}. Confira a apresentação escolhida antes de aplicar.`
+          : `A dose de bula está em ${sugestaoDoseAtual.dose_unit_out} e esta apresentação não é medida assim. A dose do bulário pode ser aplicada como referência; confira a posologia.`;
+        aviso.classList.remove('d-none');
+      }
+      return;
+    }
+
     if (ap.permite_calculo_automatico && ap.concentracao_valor) {
       // Apresentação já tem concentração cadastrada — usa direto.
       _concentracaoEscolhida = {
@@ -3288,6 +3424,28 @@
   function _ehUnidadeSolidaSugestao(unidade) {
     const normalizada = String(unidade || '').toLowerCase();
     return ['comprimido', 'capsula', 'cápsula', 'tablete', 'dragea', 'drágea'].includes(normalizada);
+  }
+
+  // Dose expressa na unidade de entrega (mL, comprimidos, pipetas, gotas):
+  // já é a quantidade a administrar, não depende de concentração em mg.
+  function _doseEmUnidadeDeEntrega(sugestao) {
+    const unidade = String(sugestao?.dose_unit_out || '').toLowerCase();
+    return ['ml', 'comprimido(s)', 'cp', 'pipeta(s)', 'gota(s)'].includes(unidade);
+  }
+
+  // Arredonda a quantidade prática sem nunca zerar uma dose que existe:
+  // 0,2 comprimido vira 1/4, não "0 comprimido".
+  function _arredondarQuantidadePratica(qtd, unidadePratica) {
+    if (!isFinite(qtd) || qtd <= 0) return qtd;
+    const liquido = ['mL', 'gota'].includes(unidadePratica);
+    if (liquido) {
+      const decimo = Math.round(qtd * 10) / 10;
+      return decimo > 0 ? decimo : Math.round(qtd * 100) / 100;
+    }
+    const meio = Math.round(qtd * 2) / 2;
+    if (meio > 0) return meio;
+    const quarto = Math.round(qtd * 4) / 4;
+    return quarto > 0 ? quarto : 0.25;
   }
 
   function _concentracaoSugestaoEmMg(valor, unidade) {
@@ -3452,10 +3610,11 @@
       qtdMax = doseUsar;
       unidadePratica = 'mL';
     } else if (doseUnit === 'comprimido(s)' || doseUnit === 'cp') {
-      // Dose já é em comprimidos (ex: COMPRIMIDOS_KG → dose_calc já multiplicou por peso)
+      // Dose já é em comprimidos (ex: COMPRIMIDOS_KG → dose_calc já multiplicou por peso).
+      // Se a apresentação é cápsula/drágea, a receita fala em cápsula/drágea.
       qtdMin = doseUsar;
       qtdMax = doseUsar;
-      unidadePratica = 'comprimido';
+      unidadePratica = _ehUnidadeSolidaSugestao(ap.unidade_pratica) ? ap.unidade_pratica : 'comprimido';
     } else if (doseUnit === 'pipeta(s)') {
       qtdMin = doseUsar;
       qtdMax = doseUsar;
@@ -3472,9 +3631,8 @@
     }
 
     // Arredonda para casas úteis: sólidos → meio (0,5); líquidos → décimo (0,1).
-    const isSolido = !['mL', 'gota'].includes(unidadePratica);
-    qtdMin = isSolido ? Math.round(qtdMin * 2) / 2 : Math.round(qtdMin * 10) / 10;
-    qtdMax = isSolido ? Math.round(qtdMax * 2) / 2 : Math.round(qtdMax * 10) / 10;
+    qtdMin = _arredondarQuantidadePratica(qtdMin, unidadePratica);
+    qtdMax = _arredondarQuantidadePratica(qtdMax, unidadePratica);
 
     const doseTxtBase = NumeroExtenso.doseFormatada(qtdMin, qtdMax, unidadePratica);
     const doseTxt = s.compact_practical_dose
@@ -3491,15 +3649,16 @@
     _dosePraticaCalculada = {
       qtdMin, qtdMax, unidadePratica,
       doseTxt, freqTxt, durTxt,
-      apresentacaoNomeVariante: ap.nome_variante || '',
+      // Apresentação de um produto escolhido: o nome na receita é o do
+      // produto e o rótulo ("Frasco (20 mL), ...") entra ao adicionar.
+      apresentacaoDoProduto: !!ap.rotulo_opcao,
+      apresentacaoNomeVariante: ap.rotulo_opcao ? '' : (ap.nome_variante || ''),
       apresentacaoForma: ap.forma,
       apresentacaoFabricante: ap.fabricante,
       concentracao: conc,
     };
 
     // Popula o alert de preview.
-    const concStr = `${NumeroExtenso.formatarPtBR(conc.valor)} ${conc.unidade}`;
-    const formaLabel = ap.forma ? ` de ${ap.forma.toLowerCase()} ${concStr}` : ` de ${concStr}`;
     document.getElementById('sug-dose-pratica-linha1').textContent = doseTxt;
     document.getElementById('sug-dose-pratica-linha2').textContent = freqTxt;
     document.getElementById('sug-dose-pratica-linha3').textContent = durTxt;
@@ -3527,14 +3686,16 @@
     let nomeStr = nomeBase;
     if (_dosePraticaCalculada) {
       const p = _dosePraticaCalculada;
-      if (p.apresentacaoNomeVariante) {
+      if (p.apresentacaoDoProduto) {
+        nomeStr = nomeBase;
+      } else if (p.apresentacaoNomeVariante) {
         nomeStr = p.apresentacaoNomeVariante;
-      } else {
+      } else if (p.concentracao && p.concentracao.valor !== null && p.concentracao.valor !== undefined) {
         const concStr = `${NumeroExtenso.formatarPtBR(p.concentracao.valor)} ${p.concentracao.unidade}`;
         const partes = [p.apresentacaoForma, concStr].filter(Boolean);
         if (partes.length) nomeStr = `${nomeBase} - ${partes.join(' ')}`;
       }
-    } else if (_apresentacaoEscolhida?.nome_variante) {
+    } else if (_apresentacaoEscolhida?.nome_variante && !_apresentacaoEscolhida.rotulo_opcao) {
       nomeStr = _apresentacaoEscolhida.nome_variante;
     }
 
@@ -3579,7 +3740,11 @@
     if (durStr)  document.getElementById('duracao').value = durStr;
     _registrarUsoDoseBulario(s);
     atualizarPreviewPrescricao();
-    mostrarEtapaPrescricao('revisao');
+    // Fica na posologia: é aqui que estão os campos recém-preenchidos e o
+    // "Adicionar ao rascunho". Ir para a revisão mostrava "Nenhuma
+    // prescrição adicionada" com a dose aplicada e nada no rascunho.
+    mostrarEtapaPrescricao('posologia');
+    document.querySelector('.prescription-final-preview')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     mostrarFeedback('Sugestão clínica aplicada. Revise e ajuste antes de prescrever.', 'success');
   }
 
@@ -3752,6 +3917,40 @@
     });
   }
 
+  // Quadro "Dosagens / Via / Frequência / Duração" do produto escolhido, com
+  // o texto do fabricante. É a referência que o veterinário tinha no
+  // VetSmart; a dose pré-calculada continua sendo opt-in logo abaixo.
+  function _renderPosologiaProduto(posologia) {
+    const box = document.getElementById('med-posologia-produto');
+    if (!box) return;
+    const dosagens = Array.isArray(posologia?.dosagens) ? posologia.dosagens : [];
+    if (!dosagens.length) {
+      box.classList.add('d-none');
+      box.innerHTML = '';
+      return;
+    }
+    const linha = (d) => {
+      const contexto = [d.grupo, d.especie, d.rotulo].filter(Boolean).map(_escapeHtml).join(' · ');
+      return `<li><span class="fw-semibold">${_escapeHtml(d.dose || '')}</span>${contexto ? ` <span class="text-muted">— ${contexto}</span>` : ''}</li>`;
+    };
+    const campo = (rotulo, valor) => valor
+      ? `<div class="mt-1"><span class="fw-semibold">${rotulo}:</span> <span class="text-muted">${_escapeHtml(valor)}</span></div>`
+      : '';
+    box.innerHTML = `
+      <div class="small fw-semibold mb-1" style="color:#0a4fb3;">
+        <i class="bi bi-prescription2 me-1"></i>Posologia de bula — ${_escapeHtml(posologia.produto || '')}
+      </div>
+      <ul class="small mb-1 ps-3">${dosagens.map(linha).join('')}</ul>
+      <div class="small">
+        ${campo('Via', posologia.via)}${campo('Frequência', posologia.frequencia)}${campo('Duração', posologia.duracao)}
+      </div>
+      ${ANIMAL_ID_CONSULTA ? `
+      <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="abrirSugestaoDose()">
+        <i class="bi bi-calculator me-1"></i>Calcular para este paciente
+      </button>` : ''}`;
+    box.classList.remove('d-none');
+  }
+
   function preencherCardMedicamento(m) {
     // Carrega favoritos (se ainda não foi feito) e atualiza ícone da estrela
     _carregarFavoritosSeNecessario().then(() => _atualizarIconeFavorito(m?.id));
@@ -3760,7 +3959,9 @@
     prepararSugestaoDose(m?.id, m?.nome_comercial_filtro || null);
     // Dropdown obrigatório de apresentação — renderizado sempre que houver
     // apresentações cadastradas, independente da dose pré-calculada.
+    _origemApresentacoes = m?.apresentacoes_origem || null;
     _renderDropdownApresentacaoPrescricao(m?.apresentacoes || []);
+    _renderPosologiaProduto(m?.posologia_produto || null);
     const tabs = m?.monografia_estruturada?.resumo_posologia?.tabs || [];
     const temPosologiaEstruturada = Array.isArray(tabs) && tabs.length > 0;
     const totalProtocolos = temPosologiaEstruturada
@@ -3842,7 +4043,9 @@
     _renderMonografiaEstruturada(m.monografia_estruturada || null);
     document.getElementById('info-medicamento').classList.remove('d-none');
     atualizarPreviewPrescricao();
-    mostrarEtapaPrescricao(_apresentacoesDisponiveis.length ? 'apresentacao' : 'posologia');
+    mostrarEtapaPrescricao(
+      _apresentacoesDisponiveis.length && !_apresentacaoPrescricao ? 'apresentacao' : 'posologia'
+    );
   }
 
 
@@ -4014,8 +4217,7 @@
       frequencia = document.getElementById('frequencia').value.trim();
       dose = document.getElementById('dose').value.trim();
       duracao = document.getElementById('duracao').value.trim();
-      const duracaoNormalizada = /^(por |uso contínuo$)/i.test(duracao) ? duracao : `por ${duracao}`;
-      texto = `${dose}, ${frequencia}, ${duracaoNormalizada}`;
+      texto = _montarTextoPosologia(dose, frequencia, duracao);
     }
 
     prescricoes.push({
@@ -4040,7 +4242,9 @@
     document.getElementById('duracao').value = '';
     document.getElementById('info-medicamento').classList.add('d-none');
     // Reseta o dropdown de apresentação pro próximo medicamento.
+    _origemApresentacoes = null;
     _renderDropdownApresentacaoPrescricao([]);
+    _renderPosologiaProduto(null);
     medicamentoSelecionado = null;
     fecharSugestaoDose();
     atualizarPreviewPrescricao();

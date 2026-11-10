@@ -306,11 +306,35 @@ _DUR_FRASES = (
 )
 
 
+# "Repetir após 15 dias", "repetido a cada 3 meses", "a cada 30 dias": é
+# intervalo de repetição, não duração do tratamento. Lido como duração, um
+# vermífugo de dose única saía na receita "por 15 dias".
+_RE_REPETICAO = re.compile(
+    r"(?:\b(?:repet\w+|reaplic\w+|refor[cç]\w*)\b[^.;]*?"
+    r"\b(?:a\s+cada|ap[oó]s|depois\s+de|em|com)\s+|\ba\s+cada\s+)"
+    r"\d{1,3}(?:\s*(?:a|-|–|ou)\s*\d{1,3})?\s*(?:dias?|semanas?|m[eê]s(?:es)?)\b",
+    re.IGNORECASE,
+)
+
+
+def sem_repeticao(texto: Optional[str]) -> str:
+    """O texto de duração sem as cláusulas que só dizem quando repetir."""
+    return _limpo(_RE_REPETICAO.sub(" ", str(texto or "")))
+
+
 def normalizar_duracao(texto: Optional[str]) -> Optional[str]:
     """Texto bruto de duração -> frase curta e profissional (ou None)."""
-    t = _limpo(texto)
-    if not t:
+    original = _limpo(texto)
+    if not original:
         return None
+    t = sem_repeticao(original)
+    if t != original and not re.search(r"\d", t):
+        # Tudo o que havia de número era intervalo de repetição: a frase do
+        # fabricante vale mais que um "3 meses" tirado dela.
+        if len(original) <= 90:
+            limpo = original.rstrip(" .;:-–")
+            return limpo[0].upper() + limpo[1:] if limpo else None
+        t = original
 
     # 1) duração numérica explícita (pega a PRIMEIRA — descarta o resto da prosa)
     m = _RE_DUR_DIAS.search(t)

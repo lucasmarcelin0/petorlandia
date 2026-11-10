@@ -130,16 +130,23 @@
     // mL, mg, UI, mcg etc. não flexionam
   };
 
+  // "1 comprimido" e "meio comprimido" são singular; o resto flexiona.
+  function _quantidadeNoSingular(quantidade) {
+    const q = Math.abs(quantidade);
+    return q === 1 || q === 0.5;
+  }
+
   /**
    * Pluraliza uma unidade conforme a quantidade.
-   * Ex: unidadePorQuantidade('cápsula', 2) → 'cápsulas'
-   *     unidadePorQuantidade('mL', 10)      → 'mL'
-   *     unidadePorQuantidade('cápsula', 1)  → 'cápsula'
+   * Ex: unidadePorQuantidade('cápsula', 2)   → 'cápsulas'
+   *     unidadePorQuantidade('mL', 10)        → 'mL'
+   *     unidadePorQuantidade('cápsula', 1)    → 'cápsula'
+   *     unidadePorQuantidade('cápsula', 0.5)  → 'cápsula'
    */
   function unidadePorQuantidade(unidade, quantidade) {
     if (!unidade) return '';
     const u = String(unidade).toLowerCase();
-    const plural = Math.abs(quantidade) !== 1;
+    const plural = !_quantidadeNoSingular(quantidade);
     if (!plural) return unidade;
     return PLURAIS_UNIDADE[u] || unidade;
   }
@@ -167,7 +174,7 @@
   function unidadePorExtenso(unidade, quantidade) {
     if (!unidade) return '';
     const u = String(unidade).toLowerCase();
-    const plural = Math.abs(quantidade) !== 1;
+    const plural = !_quantidadeNoSingular(quantidade);
     const tabela = plural ? UNIDADE_POR_EXTENSO_PLURAL : UNIDADE_POR_EXTENSO_SINGULAR;
     return tabela[u] || unidade;
   }

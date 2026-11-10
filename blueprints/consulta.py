@@ -1934,7 +1934,12 @@ def criar_apresentacao_medicamento():
         _clear_medication_search_cache()
 
         from services.bulario import listar_apresentacoes_medicamento
-        apresentacoes_atualizadas = listar_apresentacoes_medicamento(med)
+        # Cadastrada a partir de um produto comercial, a apresentação fica
+        # presa a ele (nome_comercial) e a lista devolvida é a do produto.
+        apresentacoes_atualizadas = listar_apresentacoes_medicamento(
+            med,
+            nome_comercial_filtro=nome_comercial,
+        )
 
         return jsonify({
             "success": True,
@@ -2274,6 +2279,33 @@ def buscar_medicamentos():
                 score += 60
 
         return score
+
+    # "Vermivet Filhote, frasco (20 mL), com seringa dosadora" é um cadastro
+    # solto, criado do texto de uma receita antiga: sem princípio ativo, sem
+    # dose e sem apresentação. Quando o produto de verdade ("Vermivet
+    # Filhote") está na lista, o eco só confunde — escolhê-lo dá uma
+    # prescrição sem nada do bulário.
+    nomes_de_produto = {
+        _normalizar_termo_farmaceutico(item.get("nome_exibicao_busca") or "")
+        for item, origem, _direto in candidatos
+        if origem == "comercial"
+    }
+    nomes_de_produto.discard("")
+
+    def _eh_eco_de_produto(item, origem):
+        if origem != "canonico":
+            return False
+        if item.get("principio_ativo") or item.get("tem_doses") or item.get("tem_apresentacoes"):
+            return False
+        nome = _normalizar_termo_farmaceutico(item.get("nome") or "")
+        return any(
+            nome.startswith(produto)
+            and len(nome) > len(produto)
+            and not nome[len(produto)].isalnum()
+            for produto in nomes_de_produto
+        )
+
+    candidatos = [entry for entry in candidatos if not _eh_eco_de_produto(entry[0], entry[1])]
 
     # Cada opção deve corresponder à consulta inteira. Um produto dentro de um
     # catálogo misto não herda palavras presentes apenas em outros produtos.

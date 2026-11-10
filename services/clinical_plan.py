@@ -14,7 +14,7 @@ from typing import Any
 
 from extensions import db
 from models import Medicamento
-from services.bulario import sugerir_dose
+from services.bulario import escopo_de, sugerir_dose
 from services.clinical_suggestions import build_followup_prefill
 from services.posologia_normalizacao import normalizar_frequencia
 from services.prescricao_alias import resolver_alias
@@ -422,6 +422,9 @@ def _practical_presentation_options(suggestion: dict[str, Any], mode: str) -> li
     presentations = [
         ap for ap in (suggestion.get("apresentacoes") or [])
         if ap.get("permite_calculo_automatico")
+        # Dose presa a outra apresentação do produto (o "1 cp / 10 kg" do
+        # comprimido de 660 mg) não se aplica ao de 2 g.
+        and not ap.get("dose_nao_se_aplica")
     ]
     if not presentations:
         return []
@@ -752,7 +755,11 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         })
         return base
 
-    if not (getattr(med, "doses", None) or []):
+    commercial_filter = _commercial_filter(item, med)
+    # Protocolo que cita um produto comercial usa as doses daquele produto,
+    # que podem existir só no retrato dele (sem linha no princípio ativo).
+    escopo = escopo_de(med, commercial_filter)
+    if not (getattr(escopo if escopo is not None else med, "doses", None) or []):
         status = MANUAL if base["dose_protocolo"] else BLOCKED
         base.update({
             "status": status,
@@ -761,7 +768,6 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         })
         return base
 
-    commercial_filter = _commercial_filter(item, med)
     suggestion = sugerir_dose(
         med,
         animal,
