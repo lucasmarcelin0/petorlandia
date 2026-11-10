@@ -57,6 +57,7 @@ def test_criar_apresentacao_medicamento_autenticado(app, client):
         assert dados["fabricante"] == "Medicamento Genérico"
         assert "apresentacoes" in dados
         assert len(dados["apresentacoes"]) >= 1
+        assert any(item["id"] == dados["id"] for item in dados["apresentacoes"])
 
         # Verifica persistência no banco
         ap = ApresentacaoMedicamento.query.get(dados["id"])
@@ -64,6 +65,25 @@ def test_criar_apresentacao_medicamento_autenticado(app, client):
         assert ap.forma == "comprimido"
         assert float(ap.concentracao_valor) == 500.0
         assert ap.concentracao_unidade == "mg"
+
+
+def test_salvar_e_usar_preserva_id_novo_quando_catalogo_agrupa_equivalentes(app, client):
+    user = User(name="Vet", email="quick-apres-equivalente@test.local", password_hash="x")
+    db.session.add(user)
+    db.session.flush()
+    med = Medicamento(nome="Medicamento de teste", created_by=user.id)
+    db.session.add(med)
+    db.session.commit()
+    _login(client, user.id)
+    payload = {"medicamento_id": med.id, "forma": "comprimido", "concentracao": "500 mg"}
+    first = client.post("/apresentacao_medicamento", json=payload).get_json()
+    response = client.post("/apresentacao_medicamento", json=payload)
+    assert response.status_code == 200
+    created = response.get_json()
+    assert created["id"] != first["id"]
+    selected = next(item for item in created["apresentacoes"] if item["id"] == created["id"])
+    assert selected["forma"] == "comprimido"
+    assert selected["concentracao_valor"] == 500
 
 
 def test_criar_apresentacao_medicamento_sem_login_bloqueado(app, client):
