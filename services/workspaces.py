@@ -71,6 +71,13 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
     elif getattr(user, 'veterinario', None):
         area('membership', 'Acesso profissional', 'fa-id-card',
              action('Revisar assinatura', 'veterinarian_membership', 'fa-id-card'))
+    # Contabilidade logo depois da área profissional, antes de loja e entregas.
+    if accounting:
+        area('accounting', 'Contabilidade', 'fa-chart-line',
+             action('Financeiro', 'contabilidade_financeiro', 'fa-chart-line'),
+             WorkAction('Pagamentos', '/contabilidade/pagamentos', 'fa-wallet'),
+             WorkAction('Obrigações', '/contabilidade/obrigacoes', 'fa-file-invoice'),
+             WorkAction('NFS-e', '/contabilidade/nfse', 'fa-receipt'))
     if store:
         area('store', store.nome, 'fa-store',
              action('Minha loja', 'casa_de_racao_dashboard', 'fa-store', casa_id=store.id),
@@ -133,12 +140,6 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         area('student', 'Estudar', 'fa-graduation-cap',
              action('Biblioteca educacional', 'student_hub', 'fa-book'),
              action('Prática simulada', 'student_practice', 'fa-graduation-cap'))
-    if accounting:
-        area('accounting', 'Contabilidade', 'fa-chart-line',
-             action('Financeiro', 'contabilidade_financeiro', 'fa-chart-line'),
-             WorkAction('Pagamentos', '/contabilidade/pagamentos', 'fa-wallet'),
-             WorkAction('Obrigações', '/contabilidade/obrigacoes', 'fa-file-invoice'),
-             WorkAction('NFS-e', '/contabilidade/nfse', 'fa-receipt'))
     if active_vet:
         capabilities.add('documents')
     if can_start_consulta(user):

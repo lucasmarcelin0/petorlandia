@@ -36,6 +36,17 @@ CATEGORIAS = {
     "outro": "Outro",
 }
 
+def normalizar_categorias(valores) -> str:
+    """Chaves válidas, sem repetição, na ordem da lista acima."""
+    escolhidas = set(valores or [])
+    return ",".join(c for c in CATEGORIAS if c in escolhidas)
+
+
+def rotulo_categorias(valor) -> str:
+    chaves = valor.split(",") if isinstance(valor, str) else list(valor or [])
+    return ", ".join(CATEGORIAS.get(c, c) for c in chaves if c)
+
+
 STATUS = {"aberta": "Aguardando limpeza", "concluida": "Limpeza comprovada", "descartada": "Descartada"}
 
 FLAG_COMUNICACAO_ABERTA = "limpeza_comunicacao_aberta"
@@ -301,15 +312,22 @@ def distancia_m(lat1, lon1, lat2, lon2) -> float:
     return 2 * raio * math.asin(math.sqrt(a))
 
 
-def ler_foto(arquivo) -> tuple[bytes, DadosFoto]:
-    if arquivo is None:
-        raise LimpezaErro("Tire ou escolha uma foto.")
-    data = arquivo.read()
-    if not data:
-        raise LimpezaErro("A foto chegou vazia. Tire a foto de novo.")
-    if len(data) > FOTO_MAX_BYTES:
-        raise LimpezaErro("A foto é muito grande. Use uma imagem de até 15 MB.")
-    return data, ler_exif(data)
+def ler_foto(arquivos) -> tuple[bytes, DadosFoto, str]:
+    """(conteúdo, EXIF, nome) do primeiro arquivo com conteúdo.
+
+    A tela tem dois campos "foto" (câmera e galeria) e o navegador envia os dois,
+    um deles vazio; o iPhone às vezes manda o nome em branco, então vale o conteúdo.
+    """
+    for arquivo in arquivos or []:
+        if arquivo is None:
+            continue
+        data = arquivo.read(FOTO_MAX_BYTES + 1)
+        if not data:
+            continue
+        if len(data) > FOTO_MAX_BYTES:
+            raise LimpezaErro("A foto é muito grande. Use uma imagem de até 15 MB.")
+        return data, ler_exif(data), arquivo.filename or "foto"
+    raise LimpezaErro("Tire a foto do local antes de enviar.")
 
 
 def guardar_foto(data: bytes, nome_original: str, pasta: str, uploader) -> str:
@@ -398,7 +416,8 @@ def consultar(status=None, categoria=None, desde: date | None = None, ate: date 
     if status in STATUS:
         q = q.filter(LimpezaSolicitacao.status == status)
     if categoria in CATEGORIAS:
-        q = q.filter(LimpezaSolicitacao.categoria == categoria)
+        # Nenhuma chave é parte de outra, então o LIKE não confunde tipos.
+        q = q.filter(LimpezaSolicitacao.categorias.like(f"%{categoria}%"))
     if desde:
         q = q.filter(LimpezaSolicitacao.criado_em >= datetime.combine(desde, time.min, BR_TZ).astimezone(timezone.utc))
     if ate:
@@ -413,7 +432,7 @@ def como_ponto(s, *, ver_autor: bool):
     comprovacao = s.comprovacao_valida
     ponto = {
         "id": s.id, "status": s.status, "status_rotulo": STATUS.get(s.status, s.status),
-        "categoria": s.categoria, "categoria_rotulo": CATEGORIAS.get(s.categoria, s.categoria),
+        "categorias": s.lista_categorias, "categoria_rotulo": rotulo_categorias(s.categorias),
         "descricao": s.descricao or "", "referencia": s.referencia or "",
         "lat": s.latitude, "lon": s.longitude, "precisao_m": s.precisao_m, "origem_local": s.origem_local,
         "foto": s.foto_url, "criado_em": _iso(s.criado_em), "criado_local": _local(s.criado_em),

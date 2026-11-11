@@ -39,7 +39,8 @@ class LimpezaSolicitacao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     autor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    categoria = db.Column(db.String(20), nullable=False)
+    # Um ou mais tipos (chaves de ``services.limpeza_urbana.CATEGORIAS``) separados por vírgula.
+    categorias = db.Column(db.String(120), nullable=False)
     descricao = db.Column(db.String(500))
     referencia = db.Column(db.String(200))
     latitude = db.Column(db.Float, nullable=False)
@@ -62,6 +63,10 @@ class LimpezaSolicitacao(db.Model):
         "LimpezaComprovacao", back_populates="solicitacao",
         order_by="LimpezaComprovacao.criado_em", cascade="all, delete-orphan",
     )
+
+    @property
+    def lista_categorias(self):
+        return [c for c in (self.categorias or "").split(",") if c]
 
     @property
     def comprovacao_valida(self):

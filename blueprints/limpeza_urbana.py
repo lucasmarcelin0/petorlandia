@@ -60,6 +60,7 @@ def _contexto_base():
         pode_fiscalizar=servico.pode_fiscalizar(current_user),
         eh_admin=servico.eh_admin(current_user),
         CATEGORIAS=servico.CATEGORIAS, STATUS=servico.STATUS, hora_local=servico.hora_local,
+        rotulo_categorias=servico.rotulo_categorias,
         DISTANCIA_ALERTA_M=servico.DISTANCIA_ALERTA_M,
     )
 
@@ -81,16 +82,15 @@ def comunicar():
     form = request.form
     if request.method == "POST":
         try:
-            categoria = form.get("categoria")
-            if categoria not in servico.CATEGORIAS:
-                raise LimpezaErro("Escolha o que precisa ser limpo.")
-            arquivo = request.files.get("foto")
-            data, exif = servico.ler_foto(arquivo)
+            categorias = servico.normalizar_categorias(form.getlist("categoria"))
+            if not categorias:
+                raise LimpezaErro("Marque o que precisa ser limpo (pode marcar mais de um).")
+            data, exif, nome = servico.ler_foto(request.files.getlist("foto"))
             lat, lon, precisao, origem = servico.escolher_local(form, exif)
-            foto_url = servico.guardar_foto(data, arquivo.filename, "limpeza/comunicacoes", upload_to_s3)
+            foto_url = servico.guardar_foto(data, nome, "limpeza/comunicacoes", upload_to_s3)
             from models.limpeza import LimpezaSolicitacao
             solicitacao = LimpezaSolicitacao(
-                autor_id=current_user.id, categoria=categoria,
+                autor_id=current_user.id, categorias=categorias,
                 descricao=(form.get("descricao") or "").strip()[:500] or None,
                 referencia=(form.get("referencia") or "").strip()[:200] or None,
                 latitude=lat, longitude=lon, precisao_m=precisao, origem_local=origem,
@@ -99,15 +99,16 @@ def comunicar():
             db.session.add(solicitacao)
             db.session.flush()
             servico.registrar_evento("comunicada", solicitacao.id, current_user,
-                                     f"{servico.CATEGORIAS[categoria]} ({origem})")
+                                     f"{servico.rotulo_categorias(categorias)} ({origem})")
             db.session.commit()
         except LimpezaErro as exc:
             db.session.rollback()
             flash(str(exc), "danger")
-            return render_template("limpeza/comunicar.html", form=form, **_contexto_base()), 400
+            return render_template("limpeza/comunicar.html", form=form, selecionadas=form.getlist("categoria"),
+                                   **_contexto_base()), 400
         flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
         return redirect(url_for(".minhas"))
-    return render_template("limpeza/comunicar.html", form={}, **_contexto_base())
+    return render_template("limpeza/comunicar.html", form={}, selecionadas=[], **_contexto_base())
 
 
 @bp.route("/minhas")
@@ -182,13 +183,12 @@ def comprovar(solicitacao_id):
         flash("Esta comunicação não está aguardando limpeza.", "warning")
         return redirect(destino)
     try:
-        arquivo = request.files.get("foto")
-        data, exif = servico.ler_foto(arquivo)
+        data, exif, nome = servico.ler_foto(request.files.getlist("foto"))
         if servico.foto_antiga(exif.capturada_em):
             raise LimpezaErro("A foto da comprovação é antiga. Tire a foto agora, no local, depois da limpeza.")
         lat, lon, precisao, origem = servico.escolher_local(request.form, exif)
         distancia = round(servico.distancia_m(item.latitude, item.longitude, lat, lon), 1)
-        foto_url = servico.guardar_foto(data, arquivo.filename, "limpeza/comprovacoes", upload_to_s3)
+        foto_url = servico.guardar_foto(data, nome, "limpeza/comprovacoes", upload_to_s3)
         from models.limpeza import LimpezaComprovacao
         comprovacao = LimpezaComprovacao(
             solicitacao_id=item.id, autor_id=current_user.id,
@@ -270,7 +270,7 @@ def relatorio():
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";")
     escritor.writerow([
-        "nº", "categoria", "situação", "comunicada em", "latitude", "longitude", "origem do ponto",
+        "nº", "tipos", "situação", "comunicada em", "latitude", "longitude", "origem do ponto",
         "precisão (m)", "foto da comunicação", "referência", "descrição", "comunicada por",
         "limpeza comprovada em", "horas até a limpeza", "distância da comprovação (m)",
         "foto da comprovação", "comprovada por", "comprovações recusadas", "motivo do descarte",
@@ -278,7 +278,7 @@ def relatorio():
     for s in itens:
         c = s.comprovacao_valida
         escritor.writerow([
-            s.id, servico.CATEGORIAS.get(s.categoria, s.categoria), servico.STATUS.get(s.status, s.status),
+            s.id, servico.rotulo_categorias(s.categorias), servico.STATUS.get(s.status, s.status),
             servico.hora_local(s.criado_em), s.latitude, s.longitude, s.origem_local,
             s.precisao_m if s.precisao_m is not None else "", s.foto_url, s.referencia or "", s.descricao or "",
             servico.nome_da_conta(s.autor),

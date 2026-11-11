@@ -25,7 +25,7 @@
     <div class="col-md-6 col-lg-4">
       <a class="limpeza-cartao d-block h-100 text-decoration-none text-reset" href="{{ url_for('limpeza_urbana.solicitacao', solicitacao_id=s.id) }}">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <strong>Nº {{ s.id }} · {{ CATEGORIAS.get(s.categoria, s.categoria) }}</strong>
+          <strong>Nº {{ s.id }} · {{ rotulo_categorias(s.categorias) }}</strong>
           <span class="limpeza-selo {{ s.status }}">{{ STATUS.get(s.status, s.status) }}</span>
         </div>
         <div class="row g-2">

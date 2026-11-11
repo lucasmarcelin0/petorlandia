@@ -83,7 +83,8 @@ def uploads(monkeypatch):
 
 
 def comunicar(client, categoria='galhos', lat=PONTO[0], lon=PONTO[1], arquivo=None, **extra):
-    dados = {'categoria': categoria, 'foto': (arquivo or foto(), 'foto.jpg'), **extra}
+    # Como o navegador envia: o campo da câmera com a foto e o da galeria vazio.
+    dados = {'categoria': categoria, 'foto': [(arquivo or foto(), 'foto.jpg'), (io.BytesIO(b''), '')], **extra}
     if lat is not None:
         dados.update(latitude=str(lat), longitude=str(lon), precisao='8')
     return client.post('/limpeza-urbana/comunicar', data=dados, content_type='multipart/form-data')
@@ -116,7 +117,7 @@ def test_colaborador_comunica_com_gps_do_aparelho(app, client, uploads):
     assert resposta.status_code == 302 and resposta.headers['Location'].endswith('/limpeza-urbana/minhas')
     item = LimpezaSolicitacao.query.one()
     assert (item.latitude, item.longitude, item.origem_local, item.precisao_m) == (PONTO[0], PONTO[1], 'aparelho', 8.0)
-    assert item.status == 'aberta' and item.autor_id == user.id and item.categoria == 'galhos'
+    assert item.status == 'aberta' and item.autor_id == user.id and item.categorias == 'galhos'
     assert item.foto_url.startswith('https://fotos.example.test/limpeza/comunicacoes/')
     assert uploads[0][0] == 'limpeza/comunicacoes'
     assert LimpezaEvento.query.filter_by(tipo='comunicada', solicitacao_id=item.id).count() == 1
@@ -353,3 +354,90 @@ def test_ler_exif_sem_metadados_nao_quebra():
     dados = servico.ler_exif(foto().getvalue())
     assert dados.latitude is None and dados.capturada_em is None
     assert servico.ler_exif(b'nao e imagem').latitude is None
+
+
+def test_comunicacao_com_varios_tipos_e_foto_da_galeria(client, uploads):
+    user = conta('varios@example.test')
+    dar(user, 'colaborador')
+    entrar(client, user)
+    resposta = client.post('/limpeza-urbana/comunicar', data={
+        'categoria': ['moveis', 'galhos', 'moveis', 'inventado'],
+        'foto': [(io.BytesIO(b''), ''), (foto(), 'galeria.jpg')],
+        'latitude': str(PONTO[0]), 'longitude': str(PONTO[1])}, content_type='multipart/form-data')
+    assert resposta.status_code == 302
+    item = LimpezaSolicitacao.query.one()
+    assert item.categorias == 'moveis,galhos' and item.lista_categorias == ['moveis', 'galhos']
+    assert servico.rotulo_categorias(item.categorias) == 'Móveis e objetos grandes, Galhos e poda'
+    pagina = client.get(f'/limpeza-urbana/solicitacao/{item.id}').get_data(as_text=True)
+    assert 'Móveis e objetos grandes, Galhos e poda' in pagina
+
+    sem_tipo = comunicar(client, categoria=[])
+    assert sem_tipo.status_code == 400 and 'Marque o que precisa ser limpo' in sem_tipo.get_data(as_text=True)
+    sem_foto = client.post('/limpeza-urbana/comunicar', data={
+        'categoria': 'lixo', 'foto': [(io.BytesIO(b''), ''), (io.BytesIO(b''), '')],
+        'latitude': str(PONTO[0]), 'longitude': str(PONTO[1])}, content_type='multipart/form-data')
+    assert sem_foto.status_code == 400 and 'Tire a foto do local' in sem_foto.get_data(as_text=True)
+    assert LimpezaSolicitacao.query.count() == 1
+
+
+def test_filtro_por_tipo_encontra_comunicacao_com_varios_tipos(client, uploads):
+    fiscal = conta('fiscal@example.test')
+    dar(fiscal, 'fiscal')
+    entrar(client, fiscal)
+    comunicar(client, categoria=['entulho', 'lixo'])
+    comunicar(client, categoria='galhos')
+    ids = lambda q: [p['id'] for p in client.get(f'/limpeza-urbana/mapa/dados?{q}').get_json()['pontos']]
+    assert len(ids('categoria=lixo')) == 1 and len(ids('categoria=galhos')) == 1 and len(ids('')) == 2
+
+
+def test_tirar_foto_agora_e_camera_liberada_so_na_limpeza(client):
+    user = conta('camera@example.test')
+    dar(user, 'equipe')
+    entrar(client, user)
+    pagina = client.get('/limpeza-urbana/comunicar')
+    html = pagina.get_data(as_text=True)
+    assert 'Tirar foto agora' in html and 'capture="environment"' in html and 'Escolher da galeria' in html
+    assert 'camera=(self)' in pagina.headers['Permissions-Policy']
+    assert 'camera=()' in client.get('/').headers['Permissions-Policy']
+
+
+def test_comprovacao_so_aceita_foto_na_hora(client, uploads):
+    item = _comunicada(client)
+    equipe = conta('gari@example.test')
+    dar(equipe, 'equipe')
+    entrar(client, equipe)
+    html = client.get(f'/limpeza-urbana/solicitacao/{item.id}').get_data(as_text=True)
+    assert 'Tirar foto agora' in html and 'Escolher da galeria' not in html
+
+
+@pytest.mark.parametrize('papeis,ve,nao_ve', [
+    (('colaborador',), ['Comunicar', 'Minhas comunicações'], ['Mapa', 'Quem acessa', 'Exportar relatório']),
+    (('equipe',), ['Mapa', 'Comunicar'], ['Quem acessa', 'Exportar relatório']),
+    (('fiscal',), ['Mapa', 'Exportar relatório'], ['Quem acessa']),
+])
+def test_cada_papel_ve_somente_o_que_pode(client, papeis, ve, nao_ve):
+    user = conta('papel@example.test')
+    dar(user, *papeis)
+    entrar(client, user)
+    destino = '/limpeza-urbana/mapa' if 'Mapa' in ve else '/limpeza-urbana/comunicar'
+    html = client.get(destino).get_data(as_text=True)
+    nav = html[html.index('limpeza-nav'):html.index('</nav>', html.index('limpeza-nav'))]
+    pagina = html
+    for rotulo in ve:
+        assert rotulo in pagina, rotulo
+    for rotulo in nao_ve:
+        assert rotulo not in nav and rotulo not in pagina.split('</nav>', 1)[-1].split('<footer', 1)[0], rotulo
+    assert client.get('/limpeza-urbana/acessos').status_code in NEGADO
+
+
+def test_contabilidade_vem_logo_depois_da_area_profissional(app):
+    from flask_login import login_user
+    from services.workspaces import resolve_experience
+
+    admin = conta('admin@example.test', role='admin')
+    with app.test_request_context():
+        limpar_g()
+        login_user(admin)
+        chaves = [w.key for w in resolve_experience(admin, accounting=True).workspaces]
+    assert chaves.index('accounting') == chaves.index('professional') + 1
+    assert chaves.index('accounting') < chaves.index('delivery')

@@ -19,10 +19,11 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <fieldset class="mb-3">
-      <legend class="form-label fw-semibold fs-6">O que precisa ser limpo?</legend>
+      <legend class="form-label fw-semibold fs-6 mb-1">O que precisa ser limpo?</legend>
+      <p class="small text-muted mb-2">Marque tudo o que tem no local.</p>
       <div class="limpeza-categorias">
         {% for chave, rotulo in CATEGORIAS.items() %}
-        <label><input class="form-check-input" type="radio" name="categoria" value="{{ chave }}" required {{ 'checked' if form.get('categoria') == chave }}><span>{{ rotulo }}</span></label>
+        <label><input class="form-check-input" type="checkbox" name="categoria" value="{{ chave }}" {{ 'checked' if chave in selecionadas }}><span>{{ rotulo }}</span></label>
         {% endfor %}
       </div>
     </fieldset>
@@ -41,5 +42,5 @@
     <p class="small text-muted mt-2 mb-0">Evite fotografar rostos e placas de veículos. A foto é vista pela equipe de limpeza e pela fiscalização.</p>
   </form>
 </div>
-<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='3') }}"></script>
 {% endblock %}

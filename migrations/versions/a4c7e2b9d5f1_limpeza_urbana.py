@@ -42,7 +42,7 @@ def upgrade():
             'limpeza_solicitacao',
             sa.Column('id', sa.Integer(), primary_key=True),
             sa.Column('autor_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
-            sa.Column('categoria', sa.String(20), nullable=False),
+            sa.Column('categorias', sa.String(120), nullable=False),
             sa.Column('descricao', sa.String(500)),
             sa.Column('referencia', sa.String(200)),
             sa.Column('latitude', sa.Float(), nullable=False),
