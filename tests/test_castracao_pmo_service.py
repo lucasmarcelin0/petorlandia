@@ -43,6 +43,7 @@ class _FakeSheetsService:
 
     def append(self, **kwargs):
         self.appended_body = kwargs["body"]
+        self.append_range = kwargs["range"]
         return _FakeExecute({"updates": {"updatedRange": f"'{self.sheet_title}'!A2:U2"}})
 
 
@@ -97,10 +98,14 @@ def test_castracao_pmo_request_route_appends_sheet_and_creates_history(app, clie
     assert row[0] == "Tutor Castracao"
     assert row[10:13] == ["1", "Mia", "Mia - gato - Femea - 3.2 kg - nao castrado"]
     assert row[20] == "Solicitado"
+    # Ancorado na coluna A, logo abaixo do cabeçalho: um append sobre A:U
+    # escreveria a partir da "última tabela" que o Sheets enxergasse.
+    assert fake_service.append_range == "'Solicitacoes Castracao'!A2"
 
     with app.app_context():
         request_obj = PmoCastrationRequest.query.one()
         assert request_obj.tutor_name == "Tutor Castracao"
+        assert request_obj.source_row == 2
         assert request_obj.cats == 1
         assert request_obj.dogs == 0
         assert request_obj.public_token
