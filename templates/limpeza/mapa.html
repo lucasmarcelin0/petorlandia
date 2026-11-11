@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Mapa da Prefeitura integrada{% endblock %}
+{% block page_title %}{{ 'Todas as comunicações' if visao_lista else 'Mapa da Prefeitura integrada' }}{% endblock %}
 {% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block head %}
@@ -11,11 +11,11 @@
 
 {% block main %}
 <div class="container-fluid limpeza-pagina py-4">
-  {% set ativo = 'mapa' %}
+  {% set ativo = 'lista' if visao_lista else 'mapa' %}
   {% include "limpeza/_nav.html" %}
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
     <div>
-      <h1 class="h3 mb-1">Mapa da Prefeitura integrada</h1>
+      <h1 class="h3 mb-1">{{ "Todas as comunicações" if visao_lista else "Mapa da Prefeitura integrada" }}</h1>
       <p class="text-muted mb-0" id="limpeza-sub">Carregando comunicações…</p>
     </div>
     {% if pode_fiscalizar %}
@@ -55,13 +55,9 @@
   <div class="row g-2 mb-3" id="limpeza-indicadores"></div>
   <div class="alert alert-danger d-none" id="limpeza-erro"></div>
 
-  {% if eh_admin %}
-  <div class="btn-group mb-3" role="group" aria-label="Visualização das comunicações">
-    <button type="button" class="btn btn-success" id="visao-mapa" aria-pressed="true">Mapa</button>
-    <button type="button" class="btn btn-outline-success" id="visao-lista" aria-pressed="false">Todas as comunicações</button>
-  </div>
-  <div id="limpeza-lista" class="d-none" aria-live="polite"></div>
-  {% endif %}
+  {% if visao_lista %}
+  <div id="limpeza-lista" aria-live="polite"></div>
+  {% else %}
   <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações de limpeza"></div>
   <div class="limpeza-legenda mt-2" id="limpeza-legenda">
     <span><i style="background:#ef4444"></i>Aguardando limpeza</span>
@@ -70,6 +66,7 @@
     <span><i style="background:#a855f7"></i>Comprovada longe do ponto (&gt; {{ DISTANCIA_ALERTA_M|int }} m)</span>
     <span><i style="background:#9ca3af"></i>Descartada</span>
   </div>
+  {% endif %}
 </div>
 
 <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
@@ -82,11 +79,11 @@
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const urlSegura = (u) => /^(https?:\/\/|\/)/.test(String(u || '')) ? esc(u) : '';
 
-  const mapa = L.map('limpeza-mapa').setView([-20.7205, -47.8750], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  const mapa = el('limpeza-mapa') ? L.map('limpeza-mapa').setView([-20.7205, -47.8750], 14) : null;
+  if (mapa) L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
   }).addTo(mapa);
-  let camada = L.layerGroup().addTo(mapa);
+  let camada = mapa ? L.layerGroup().addTo(mapa) : null;
   let primeiraVez = true;
 
   function cor(p) {
@@ -146,9 +143,9 @@
             <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}${p.referencia ? ` · ${esc(p.referencia)}` : ''}</div></a>`
         ).join('') : '<p>Nenhuma comunicação neste filtro.</p>';
       }
-      camada.clearLayers();
+      if (camada) camada.clearLayers();
       const limites = [];
-      d.pontos.forEach((p) => {
+      if (mapa) d.pontos.forEach((p) => {
         const c = cor(p);
         L.circleMarker([p.lat, p.lon], { radius: 8, color: '#1f2937', weight: 1, fillColor: c, fillOpacity: .9 })
           .bindPopup(popup(p), { maxWidth: 280 }).addTo(camada);
@@ -157,7 +154,7 @@
       el('limpeza-sub').textContent = d.pontos.length
         ? `${d.pontos.length} comunicação(ões) no filtro${d.limite ? ' (mostrando as 2.000 mais recentes)' : ''}. Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
         : 'Nenhuma comunicação neste filtro.';
-      if (primeiraVez && limites.length) {
+      if (mapa && primeiraVez && limites.length) {
         mapa.invalidateSize();
         mapa.fitBounds(limites, { padding: [30, 30], maxZoom: 17 });
       }
@@ -168,22 +165,6 @@
     }
   }
 
-  if (el('visao-lista')) {
-    function trocarVisao(lista) {
-      el('limpeza-lista').classList.toggle('d-none', !lista);
-      el('limpeza-mapa').classList.toggle('d-none', lista);
-      el('limpeza-legenda').classList.toggle('d-none', lista);
-      ['mapa', 'lista'].forEach(nome => {
-        const ativo = (nome === 'lista') === lista;
-        el('visao-' + nome).classList.toggle('btn-success', ativo);
-        el('visao-' + nome).classList.toggle('btn-outline-success', !ativo);
-        el('visao-' + nome).setAttribute('aria-pressed', String(ativo));
-      });
-      if (!lista) mapa.invalidateSize();
-    }
-    el('visao-lista').addEventListener('click', () => trocarVisao(true));
-    el('visao-mapa').addEventListener('click', () => trocarVisao(false));
-  }
   el('limpeza-filtros').addEventListener('submit', (ev) => {
     ev.preventDefault();
     history.replaceState(null, '', `?${parametros()}`);
@@ -193,7 +174,7 @@
   el('limpeza-atualizar').addEventListener('click', carregar);
   // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
   const intervalo = setInterval(() => { if (!document.hidden) carregar(); }, 60000);
-  window.addEventListener('limpeza:saida', () => { clearInterval(intervalo); mapa.remove(); }, { once: true });
+  window.addEventListener('limpeza:saida', () => { clearInterval(intervalo); if (mapa) mapa.remove(); }, { once: true });
   carregar();
 })();
 </script>

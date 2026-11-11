@@ -137,7 +137,14 @@ def _filtros():
 @login_required
 def mapa():
     _exigir(servico.pode_ver_mapa(current_user))
-    return render_template("limpeza/mapa.html", filtros=_filtros(), **_contexto_base())
+    return render_template("limpeza/mapa.html", filtros=_filtros(), visao_lista=False, **_contexto_base())
+
+
+@bp.route("/comunicacoes")
+@login_required
+def todas_comunicacoes():
+    _exigir(servico.eh_admin(current_user))
+    return render_template("limpeza/mapa.html", filtros=_filtros(), visao_lista=True, **_contexto_base())
 
 
 @bp.route("/mapa/dados")
