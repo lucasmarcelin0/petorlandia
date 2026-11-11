@@ -2146,6 +2146,46 @@ def test_delete_account_removes_payments(monkeypatch, app):
         assert Payment.query.first() is None
 
 
+def test_delete_account_removes_referral_code_and_signups(monkeypatch, app):
+    """Erro de produção 06/11: excluir conta com código de indicação dava
+    NotNullViolation porque o ORM tentava anular referral_code.user_id."""
+    from models.petsitter import ReferralCode, ReferralSignup
+
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Indicador', email='x@test')
+        user.set_password('x')
+        indicado = User(id=2, name='Indicado', email='y@test')
+        indicado.set_password('y')
+        db.session.add_all([user, indicado])
+        db.session.commit()
+        code = ReferralCode(user_id=1, code='Z0TKA3IJ')
+        db.session.add(code)
+        db.session.commit()
+        db.session.add(ReferralSignup(code_id=code.id, referred_user_id=2))
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.post('/delete_account', data={'submit': True}, follow_redirects=True)
+        assert 'Sua conta foi excluída'.encode() in response.data
+        assert User.query.get(1) is None
+        assert ReferralCode.query.count() == 0
+        assert ReferralSignup.query.count() == 0
+        # A conta de quem foi indicado continua intacta.
+        assert User.query.get(2) is not None
+
+
 def test_delete_account_removes_saved_addresses(monkeypatch, app):
     client = app.test_client()
 
