@@ -1,7 +1,8 @@
 """Public IBGE address references; original coordinates never get snapped."""
 from collections import Counter, defaultdict
 from copy import deepcopy
-import csv, hashlib, io, json, math, re, unicodedata, zipfile
+from functools import lru_cache
+import csv, hashlib, io, json, math, re, threading, unicodedata, zipfile
 
 TIPO = 'atlas_cnefe'
 MUNICIPALITY = '3534302'
@@ -44,7 +45,74 @@ def read_csv(raw_zip):
 
 def active():
     from services.entomologia_cadastre import active_record
-    return active_record(TIPO)
+    return requalify(active_record(TIPO))
+
+FAR='Coordenada distante da rua informada na base local'
+RURAL=('rodovia','estrada','vicinal','fazenda','sitio','chacara','acesso','anel','colonia','via','marginal')
+MX=111320*math.cos(math.radians(-20.72));MY=111320
+_requalify_lock=threading.Lock()
+
+@lru_cache(maxsize=1)
+def _street_names():
+    """Nomes das ruas com traçado na malha OSM do atlas, como a conferência os compara."""
+    from services.entomologia_atlas_editor import references,search_text
+    return frozenset(search_text(f['properties'].get('name') or f['properties'].get('label','')) for f in references()['features']
+                     if (f.get('geometry') or {}).get('type') in ('LineString','MultiLineString'))
+
+def requalify(data):
+    """Libera coordenadas originais do Censo retidas por engano pela conferência com a rua de mesmo nome.
+
+    A importação retinha todo ponto a mais de 60 m da rua declarada na malha OSM. Três situações comuns faziam
+    isso com coordenadas boas (nível 1 do IBGE), e aqui elas voltam ao mapa, cada uma com o motivo registrado:
+
+    * ``homonimo``: a malha não tem rua com exatamente esse nome e a conferência usou outra de nome parecido
+      (as alamedas internas dos condomínios, "Alameda Sete A", comparadas com a "Alameda 7" da cidade);
+    * ``rural``: rodovia, estrada, fazenda, sítio: a via informada é o acesso, não a frente do imóvel;
+    * ``vizinhos``: a rua existe na malha em outro lugar ou com outro nome, mas pelo menos dois imóveis do
+      Censo da mesma rua, com numeração próxima (±40), ficam a até 60 m do ponto.
+
+    Os demais continuam pendentes. Altera ``data`` no lugar, uma única vez, e atualiza as contagens da fonte.
+    """
+    source=data.get('source',{})
+    if not data.get('layers') or 'requalified' in source:return data
+    with _requalify_lock:
+        if 'requalified' in source:return data
+        from services.entomologia_atlas_editor import search_text
+        names=_street_names()
+        features=[f for layer in data['layers'] for f in layer['features']]
+        number=lambda p:int(re.match(r'\d+',p['house_number'])[0]) if re.match(r'\d+',p.get('house_number') or '') else None
+        by_street=defaultdict(list);shared=defaultdict(set)
+        for f in features:
+            p=f['properties'];point=p.get('source_coordinates')
+            if not point or p.get('cnefe_geo_level')!='1':continue
+            shared[tuple(point)].add((p.get('street'),p.get('house_number')))
+            if number(p) is not None:by_street[normalized(p.get('street',''))].append((number(p),point))
+        released=Counter()
+        for f in features:
+            p=f['properties'];point=p.get('source_coordinates')
+            if f.get('geometry') or p.get('quality_issues')!=[FAR] or not point or p.get('cnefe_geo_level')!='1':continue
+            street=normalized(p.get('street',''));n=number(p)
+            # Vizinhos de verdade: outros números da mesma rua (registros repetidos do próprio imóvel não contam).
+            near=len({other for other,q in by_street[street] if other!=n and abs(other-n)<=40
+                      and math.hypot((q[0]-point[0])*MX,(q[1]-point[1])*MY)<=60}) if n is not None else 0
+            reason=('homonimo' if search_text(p.get('street','')) not in names else
+                    'rural' if street.split(' ')[0] in RURAL else 'vizinhos' if near>=2 else '')
+            if not reason:continue
+            released[reason]+=1
+            house=p.get('cnefe_building_type') in ('101','102') and bool(p.get('house_number'))
+            f['geometry']={'type':'Point','coordinates':point[:]}
+            p.update(quality_issues=[],position_status='imported',requalified=reason,
+                     kind='cnefe_house' if house and len(shared[tuple(point)])==1 else 'cnefe_address',
+                     notes=p.get('notes','').split(' Pendências:')[0]+' Coordenada original do Censo, liberada após conferência: '+
+                           {'homonimo':'a rua de nome parecido na malha era outra.','rural':'endereço rural, a via informada é só o acesso.',
+                            'vizinhos':'confirmada pelos imóveis vizinhos da mesma rua.'}[reason])
+        total=sum(released.values())
+        issues=dict(source.get('issues',{}))
+        if total:issues[FAR]=issues.get(FAR,0)-total
+        source.update(requalified=dict(released),issues={k:v for k,v in issues.items() if v>0},
+                      located_records=sum(1 for f in features if f.get('geometry')),
+                      number_labels=sum(1 for f in features if f['properties'].get('kind')=='cnefe_house'))
+    return data
 
 def source_layers():
     return {layer['id']:{**deepcopy(layer),'default_visible':True} for layer in active()['layers']}
@@ -134,7 +202,7 @@ def build(raw_zip,boundary,assess=None):
             'read_only':True,'url':SOURCE_URL,'sha256':source_hash,'records':len(rows),'raw_records':len(original_rows),
             'consolidated_duplicates':len(original_rows)-len(rows),'unique_address_ids':len({r['COD_UNICO_ENDERECO'] for r in rows}),
             'neighborhoods':len(layers),'geocoding_levels':dict(levels),'issues':dict(issues_count),**dict(checks)}
-    return {'schema_version':1,'source':source,'layers':layers,'drawings':{}}
+    return requalify({'schema_version':1,'source':source,'layers':layers,'drawings':{}})
 
 def validate(data):
     source=data.get('source',{})

@@ -428,3 +428,87 @@ python -m pytest tests/test_entomologia_dengue_auto.py -q
 node tests/test_atlas_layers_model.js
 node tests/test_atlas_hotspots_model.js
 ```
+
+
+## Numeração métrica, endereços do Censo liberados e memória de endereços (5 de outubro de 2026)
+
+Pesquisa feita com a cópia pública do CNEFE e a planilha do dia, para os
+registros que ficavam sem posição e para os 782 endereços "com posição
+pendente" da base.
+
+**Os 782 pendentes tinham um erro em comum.** 710 estavam retidos por uma única
+regra da importação: ponto a mais de 60 m da rua declarada na malha OSM. A
+conferência comparava nomes por prefixo, e três situações retinham coordenadas
+boas (nível 1 do IBGE). `entomologia_cnefe.requalify` as libera, com o motivo
+gravado em cada registro (`requalified`) e nas contagens da fonte:
+
+- `homonimo` (477): a malha não tem rua com exatamente esse nome e a comparação
+  usou outra de nome parecido. São as 394 casas dos condomínios Quebec e Torino
+  ("Alameda Sete A" comparada com a "Alameda 7" da cidade; as coordenadas do
+  Censo ficam a 9 m do croqui, na mediana) e marginais de nome composto.
+- `vizinhos` (115): a rua existe na malha em outro lugar ou com outro nome
+  (Travessa P, M e N), mas pelo menos dois outros números da mesma rua, com
+  numeração próxima (±40), ficam a até 60 m.
+- `rural` (42): rodovia, estrada, fazenda: a via informada é o acesso.
+
+Ficam pendentes 148: 72 que o próprio IBGE marca como coordenada estimada,
+agrupada ou de face de quadra, e 70 isolados e longe da rua declarada. A
+liberação roda uma vez ao carregar a fonte (0,7 s) e também no fim de novas
+importações; não exige reimportar. `ARTEFATOS_FORMATO` passou a `mapa-2` para o
+índice de busca ser refeito.
+
+**A numeração de Orlândia é métrica** (`services/entomologia_numeracao.py`).
+Em 16.000 dos 16.442 imóveis de ruas, avenidas, alamedas e travessas, a posição
+ao longo da via é `origem ± número`, um número por metro. Ruas e alamedas
+correm num sentido da malha (5,2° em relação ao leste), avenidas e travessas no
+outro. Cada rua tem um ou mais trechos de numeração, com origem e sentido
+próprios, e a letra "A" marca o lado (nas ruas, números crescendo para leste).
+Nada disso é fixo no código: ângulo, trechos e a tendência de cada letra são
+aprendidos da base a cada atualização.
+
+Com isso o posicionador ganha o método **numeração métrica**, usado quando o
+número não está na base e não há vizinho dos dois lados: a posição é a do
+número ao longo do trecho, na linha dos imóveis conhecidos da rua (ou no
+traçado dela na malha OSM). Só vale onde a rua existe: imóvel conhecido do
+mesmo trecho a até 300 m ou traçado passando naquela altura. Quando o número
+cabe em dois trechos (lados leste e oeste), decide a letra ou o bairro; a
+simples ausência de letra não decide, porque ela some com frequência. Sem
+decisão, o registro fica sem posição com esse motivo.
+
+Validação, escondendo de cada vez um imóvel e todos os números da mesma rua a
+±60 dele (1.500 sorteios): com confiança média (852 casos), erro mediano de
+11 m, 95% a até 50 m e 1,4% acima de 200 m; com confiança baixa (34 casos),
+mediana de 43 m e 82% a até 100 m. Em 41% dos sorteios o método se recusa a
+posicionar, quase sempre por caber em dois trechos sem letra nem bairro que
+decidam.
+
+**Portarias:** sem ponto de referência nem acesso registrado no Censo, a
+portaria é posicionada pelo próprio número na numeração da rua. Conferência: a
+do Torino (Rua 20, 1107-A) cai a 42 m do acesso que o Censo registra. A do
+Paris (Rua 26, 1109-A) fica a 111 m do nº 1222.
+
+**Lugares sem rua e número** (assentamento, chácara, sítio, fazenda, estrada):
+o nome é o endereço. Vale um ponto de referência da equipe com esse nome; na
+falta, os endereços do Censo cujo logradouro ou localidade tenham o nome (com
+tolerância de grafia: o Censo escreve "Aparecida" e "Aparexida"), com confiança
+baixa. Nome espalhado por mais de 3 km não é posicionado.
+
+**Memória:** quando a equipe marca no editor a posição de um registro da
+camada, o endereço dele (rua e número com a letra, casa de condomínio ou nome
+do lugar) fica guardado na própria camada (`automation.memory`). Os próximos
+registros com o mesmo endereço recebem essa posição (método "endereço já
+posicionado pela equipe"), mesmo que a linha original saia da planilha. Marcar
+uma vez resolve as repetições.
+
+Resultado com a planilha de 05/10/2026: 166 de 171 no mapa (143 pelo número
+exato, 12 entre vizinhos, 8 em condomínio, 2 pela numeração, 1 por localidade).
+Os 5 restantes têm diagnóstico no próprio registro e apontam provável erro de
+digitação: Avenida 15, 1180 (a avenida é interrompida nessa altura), Avenida U,
+1661 e Alameda 3, 131 (número fora de onde a rua existe), Travessa S (não
+existe na base nem na malha) e Chácara Recanto Feliz (não consta do Censo;
+marcar uma vez).
+
+```powershell
+python -m pytest tests/test_entomologia_dengue_auto.py tests/test_entomologia_cnefe.py -q
+node tests/test_atlas_layers_model.js
+```

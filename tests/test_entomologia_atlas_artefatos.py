@@ -193,7 +193,7 @@ def test_versao_muda_com_os_arquivos_de_dados_e_o_formato(app, ligado, monkeypat
         monkeypatch.setattr(fast, 'INDEX_FORMAT', 'formato-novo')
         assert artefatos.versao(((1, 'a'),)) != base
         outra = artefatos.versao(((1, 'a'),))
-        monkeypatch.setattr(artefatos, 'ARTEFATOS_FORMATO', 'mapa-2')         # saídas novas: monta tudo de novo
+        monkeypatch.setattr(artefatos, 'ARTEFATOS_FORMATO', 'mapa-seguinte')  # saídas novas: monta tudo de novo
         assert artefatos.versao(((1, 'a'),)) != outra
 
 
