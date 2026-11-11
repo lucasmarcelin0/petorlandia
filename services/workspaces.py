@@ -35,7 +35,7 @@ class Experience:
 
 
 def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False,
-                       sinan=False, loja_operada=None):
+                       sinan=False, loja_operada=None, limpeza=frozenset(), limpeza_aberta=False):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -71,6 +71,13 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
     elif getattr(user, 'veterinario', None):
         area('membership', 'Acesso profissional', 'fa-id-card',
              action('Revisar assinatura', 'veterinarian_membership', 'fa-id-card'))
+    # Contabilidade logo depois da área profissional, antes de loja e entregas.
+    if accounting:
+        area('accounting', 'Contabilidade', 'fa-chart-line',
+             action('Financeiro', 'contabilidade_financeiro', 'fa-chart-line'),
+             WorkAction('Pagamentos', '/contabilidade/pagamentos', 'fa-wallet'),
+             WorkAction('Obrigações', '/contabilidade/obrigacoes', 'fa-file-invoice'),
+             WorkAction('NFS-e', '/contabilidade/nfse', 'fa-receipt'))
     if store:
         area('store', store.nome, 'fa-store',
              action('Minha loja', 'casa_de_racao_dashboard', 'fa-store', casa_id=store.id),
@@ -116,6 +123,15 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         if admin:
             acoes.append(action('Unidades e responsáveis', 'sfa_routes.notificacao_unidades', 'fa-hospital-user'))
         area('sinan', 'Notificação SINAN', 'fa-file-medical', *acoes)
+    if limpeza or limpeza_aberta:
+        # Papéis da limpeza urbana (services.limpeza_urbana): adicionais e com período.
+        acoes = [action('Comunicar limpeza', 'limpeza_urbana.comunicar', 'fa-camera'),
+                 action('Minhas comunicações', 'limpeza_urbana.minhas', 'fa-folder-open')]
+        if limpeza & {'equipe', 'fiscal'}:
+            acoes.insert(0, action('Mapa da limpeza', 'limpeza_urbana.mapa', 'fa-map-location-dot'))
+        if admin:
+            acoes.append(action('Quem acessa', 'limpeza_urbana.acessos', 'fa-user-shield'))
+        area('limpeza', 'Limpeza urbana', 'fa-broom', *acoes)
     if internship:
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
@@ -124,12 +140,6 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         area('student', 'Estudar', 'fa-graduation-cap',
              action('Biblioteca educacional', 'student_hub', 'fa-book'),
              action('Prática simulada', 'student_practice', 'fa-graduation-cap'))
-    if accounting:
-        area('accounting', 'Contabilidade', 'fa-chart-line',
-             action('Financeiro', 'contabilidade_financeiro', 'fa-chart-line'),
-             WorkAction('Pagamentos', '/contabilidade/pagamentos', 'fa-wallet'),
-             WorkAction('Obrigações', '/contabilidade/obrigacoes', 'fa-file-invoice'),
-             WorkAction('NFS-e', '/contabilidade/nfse', 'fa-receipt'))
     if active_vet:
         capabilities.add('documents')
     if can_start_consulta(user):
@@ -152,6 +162,7 @@ def current_experience():
         from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao, loja_operada_do_usuario
         from helpers import _user_can_access_accounting, is_veterinarian
         from services.entomologia_acesso import membro_equipe
+        from services.limpeza_urbana import comunicacao_aberta, papeis_de
         from services.sfa_notificacao import pode_acessar as pode_acessar_sinan
 
         g.user_experience = resolve_experience(
@@ -163,8 +174,17 @@ def current_experience():
             dengue=membro_equipe(current_user),
             sinan=pode_acessar_sinan(current_user),
             loja_operada=loja_operada_do_usuario(),
+            limpeza=papeis_de(current_user),
+            limpeza_aberta=_limpeza_aberta(comunicacao_aberta),
         )
     return g.user_experience
+
+
+def _limpeza_aberta(consulta):
+    try:
+        return consulta()
+    except Exception:
+        return False
 
 
 def home_next_actions(user, experience, pets, overdue, appointments):

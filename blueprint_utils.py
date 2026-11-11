@@ -53,6 +53,7 @@ def register_domain_blueprints(app):
         financeiro,
         internacao,
         fiscal,
+        limpeza_urbana,
         loja,
         mensagens,
         oauth,
@@ -187,3 +188,7 @@ def register_domain_blueprints(app):
     internacao_bp = internacao.get_blueprint()
     if not _is_blueprint_registered(app, internacao_bp):
         app.register_blueprint(internacao_bp)
+
+    limpeza_bp = limpeza_urbana.get_blueprint()
+    if not _is_blueprint_registered(app, limpeza_bp):
+        app.register_blueprint(limpeza_bp)
