@@ -30,6 +30,15 @@ normalizar_duracao = _pn.normalizar_duracao
 consolidar_linhas = _pn.consolidar_linhas
 intervalos_disponiveis_horas = _pn.intervalos_disponiveis_horas
 
+# Recorte por produto comercial — carregado do mesmo jeito, pelo caminho.
+_esc_spec = importlib.util.spec_from_file_location(
+    "bulario_escopo",
+    os.path.join(os.path.dirname(__file__), "bulario_escopo.py"),
+)
+_esc = importlib.util.module_from_spec(_esc_spec)
+_esc_spec.loader.exec_module(_esc)
+escopo_de = _esc.escopo_de
+
 
 def _strip_accents(s: str) -> str:
     """Remove acentos: 'Antibiótico' → 'Antibiotico'. Assim os regex dos
@@ -276,6 +285,11 @@ _DURACAO_PADRAO: List[Tuple[re.Pattern, int, int, str]] = [
 _RE_DUR_FAIXA = re.compile(r'(\d{1,3})\s*(?:a|-|ate)\s*(\d{1,3})\s*dias?')
 _RE_DUR_UNICO = re.compile(r'(?:por|durante|continuidade por|usa-se de)?\s*(\d{1,3})\s*dias?')
 _RE_DUR_SEMANAS = re.compile(r'(\d{1,2})\s*semanas?')
+_RE_RAZAO_DE_BULA = re.compile(
+    r'\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*[^\d/]+/\s*\d+(?:[.,]\d+)?\s*kg',
+    re.IGNORECASE,
+)
+_RE_DUR_ANCORADA = re.compile(r'\b(?:por|durante)\s+(\d{1,3})(?:\s*(?:a|-|ate)\s*(\d{1,3}))?\s*dias?\b')
 
 _RE_SPACES = re.compile(r"\s+")
 _RE_TABS_SPACES = re.compile(r"[ \t]+")
@@ -411,7 +425,8 @@ def _duracao_prescritor_vetsmart(medicamento) -> Tuple[Optional[int], Optional[i
 def _parse_duracao_dias(texto: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
     if not texto:
         return (None, None)
-    t = _strip_accents(str(texto)).lower()
+    # "Repetir após 15 dias" não é duração — ver posologia_normalizacao.
+    t = _strip_accents(_pn.sem_repeticao(str(texto))).lower()
     faixa = _RE_DUR_FAIXA.search(t)
     if faixa:
         return (int(faixa.group(1)), int(faixa.group(2)))
@@ -426,25 +441,63 @@ def _parse_duracao_dias(texto: Optional[str]) -> Tuple[Optional[int], Optional[i
     return (None, None)
 
 
+def _parse_duracao_ancorada(texto: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+    """Duração em prosa só vale quando o texto diz "por/durante N dias"."""
+    if not texto:
+        return (None, None)
+    m = _RE_DUR_ANCORADA.search(_strip_accents(str(texto)).lower())
+    if not m:
+        return (None, None)
+    minimo = int(m.group(1))
+    return (minimo, int(m.group(2)) if m.group(2) else minimo)
+
+
 def _duracao_produtos_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     for prod in _produtos_vetsmart(medicamento):
         secoes = prod.get('secoes')
         if not isinstance(secoes, dict):
             secoes = {}
+        admin = _esc.administracao_do_produto(prod)
 
+        # Só o que o VetSmart publica como duração. A seção inteira não serve:
+        # "administrar aos 15 dias de idade" e "repetir após 15 dias" são
+        # frequência, e já viraram "por 15 dias" na receita de um vermífugo.
         candidatos = [
             prod.get('duracao_tratamento'),
             secoes.get('Duração do Tratamento', {}).get('texto')
             if isinstance(secoes.get('Duração do Tratamento'), dict) else None,
-            secoes.get('Administração e doses', {}).get('texto')
-            if isinstance(secoes.get('Administração e doses'), dict) else None,
+            ' '.join(admin['duracao']),
         ]
         for texto in candidatos:
             mn, mx = _parse_duracao_dias(texto)
             if mn is not None or mx is not None:
                 nome = prod.get('nome') or 'VetSmart'
                 return (mn, mx, f'painel clinico VetSmart: {nome}')
+        mn, mx = _parse_duracao_ancorada(' '.join(admin['modo_de_usar']))
+        if mn is not None:
+            nome = prod.get('nome') or 'VetSmart'
+            return (mn, mx, f'painel clinico VetSmart: {nome}')
     return (None, None, None)
+
+
+def _duracao_estruturada(proto) -> Tuple[Optional[int], Optional[int]]:
+    """Dias de duração do protocolo, quando dá para confiar neles.
+
+    O importador às vezes preencheu os dias com um número que o texto de
+    duração não diz ("Até o 6º mês de idade" gravado como 15 dias, "A critério
+    do médico veterinário" como 30). Nesses casos vale o texto. Linha
+    revisada por uma pessoa mantém o número que ela escreveu.
+    """
+    minimo = getattr(proto, 'duracao_min_dias', None)
+    maximo = getattr(proto, 'duracao_max_dias', None)
+    texto = (getattr(proto, 'duracao', None) or '').strip()
+    if minimo is None and maximo is None:
+        return (None, None)
+    if not texto or (getattr(proto, 'fonte', None) or '').upper() == 'HUMANO':
+        return (minimo, maximo)
+    if _parse_duracao_dias(texto) == (None, None):
+        return (None, None)
+    return (minimo, maximo)
 
 
 def _duracao_texto_de_produtos_vetsmart(medicamento) -> Optional[str]:
@@ -950,6 +1003,10 @@ def _dose_ambigua_por_apresentacao(medicamento, dose) -> bool:
     unidade = (getattr(dose, 'dose_unidade', None) or '').upper()
     if unidade not in {'COMPRIMIDOS_ANIMAL', 'COMPRIMIDOS_KG'}:
         return False
+    if getattr(dose, 'apresentacao_ids', None):
+        # O VetSmart publica esta dose sob o cabeçalho de uma concentração
+        # específica do produto ("Vermivet Plus 660 mg"): não há o que adivinhar.
+        return False
     if _dose_texto_tem_forca_explicita(dose):
         return False
     return len(_apresentacoes_solidas_com_forca(medicamento)) > 1
@@ -1002,9 +1059,18 @@ def _dose_volumetrica_ambigua(medicamento, dose) -> bool:
     unidade = (getattr(dose, 'dose_unidade', None) or '').upper()
     if unidade not in {'ML_ANIMAL', 'ML_KG'}:
         return False
+    if getattr(dose, 'apresentacao_ids', None):
+        return False
     if _dose_texto_tem_concentracao_explicita(dose):
         return False
-    return len(_apresentacoes_liquidas_compativeis_com_dose(medicamento, dose)) != 1
+    concentracoes = len(_apresentacoes_liquidas_compativeis_com_dose(medicamento, dose))
+    if getattr(medicamento, 'escopo_produto', False):
+        # Dentro de um produto, "1 mL/kg" é a dose de bula daquele líquido. Só
+        # é ambígua se o produto tiver mais de uma concentração e a dose não
+        # disser de qual se trata. Fora do recorte, mL sem uma concentração
+        # única por trás pode ser de qualquer marca.
+        return concentracoes > 1
+    return concentracoes != 1
 
 
 def _dose_volumetrica_com_equivalencia(medicamento, dose) -> str:
@@ -1088,7 +1154,14 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
                     or "Conforme orientação veterinária"
                 )
                 linhas_norm.append({
-                    "faixa_peso": _texto_limpo(getattr(d, "faixa_peso", None)) or "Sem faixa definida",
+                    # A variante ("Vermivet Plus 660 mg") diz a qual concentração
+                    # do produto a dose pertence; vai junto com a faixa de peso.
+                    "faixa_peso": " · ".join(
+                        parte for parte in (
+                            _texto_limpo(getattr(d, "variante", None)),
+                            _texto_limpo(getattr(d, "faixa_peso", None)),
+                        ) if parte
+                    ) or "Sem faixa definida",
                     "via": _texto_limpo(getattr(d, "via", None)) or _texto_limpo(getattr(medicamento, "via_administracao", None)) or "—",
                     "dose": _dose_volumetrica_com_equivalencia(medicamento, d),
                     "frequencia": freq,
@@ -1228,8 +1301,12 @@ def serializar_medicamento_busca(
     nome_exibicao: Optional[str] = None,
     nome_comercial_filtro: Optional[str] = None,
 ) -> Dict[str, Any]:
-    estrutura = montar_monografia_medicamento(medicamento)
-    bula_url = vetsmart_url(medicamento)
+    # Escolhido um produto comercial, via, posologia, apresentações e bula são
+    # as dele — não as do princípio ativo, que juntam todas as marcas.
+    escopo = escopo_de(medicamento, nome_comercial_filtro)
+    visao = escopo or medicamento
+    estrutura = montar_monografia_medicamento(visao)
+    bula_url = vetsmart_url(visao)
     return {
         "id": medicamento.id,
         "nome": medicamento.nome,
@@ -1239,12 +1316,12 @@ def serializar_medicamento_busca(
         # nome_comercial_filtro: carregado pelo front para filtrar apresentações
         # e nome na sugestão de dose ao usar o nome comercial.
         "nome_comercial_filtro": nome_comercial_filtro,
-        "classificacao": getattr(medicamento, "classificacao", None),
+        "classificacao": getattr(visao, "classificacao", None),
         "principio_ativo": getattr(medicamento, "principio_ativo", None),
-        "via_administracao": getattr(medicamento, "via_administracao", None),
-        "dosagem_recomendada": getattr(medicamento, "dosagem_recomendada", None),
-        "frequencia": getattr(medicamento, "frequencia", None),
-        "duracao_tratamento": getattr(medicamento, "duracao_tratamento", None),
+        "via_administracao": getattr(visao, "via_administracao", None),
+        "dosagem_recomendada": getattr(visao, "dosagem_recomendada", None),
+        "frequencia": getattr(visao, "frequencia", None),
+        "duracao_tratamento": getattr(visao, "duracao_tratamento", None),
         "observacoes": getattr(medicamento, "observacoes", None),
         "bula": getattr(medicamento, "bula", None),
         "bula_url": bula_url,
@@ -1253,9 +1330,50 @@ def serializar_medicamento_busca(
         # após a escolha do medicamento — sem apresentação não há prescrição
         # válida (250 mg comprimido ≠ 250 mg/5 mL suspensão).
         "apresentacoes": listar_apresentacoes_medicamento(
-            medicamento,
+            visao,
             nome_comercial_filtro=nome_comercial_filtro,
         ),
+        "apresentacoes_origem": origem_das_apresentacoes(medicamento, nome_comercial_filtro, escopo),
+        "posologia_produto": posologia_do_produto(escopo),
+    }
+
+
+def origem_das_apresentacoes(medicamento, nome_comercial_filtro: Optional[str], escopo=None) -> Dict[str, Any]:
+    """De onde vêm as apresentações oferecidas ao veterinário.
+
+    ``outros_produtos`` é o caso em que o bulário não tem as apresentações do
+    produto escolhido e a lista traz as de outras marcas do mesmo princípio
+    ativo. O prescritor avisa em vez de fingir que são dele.
+    """
+    if escopo is not None:
+        return {"tipo": "produto", "produto": escopo.produto_nome}
+    produto = _esc.resolver_produto(medicamento, nome_comercial_filtro)
+    if produto is not None and (produto.get("tipo") or "produto") != "principio_ativo":
+        return {"tipo": "outros_produtos", "produto": (produto.get("nome") or "").strip()}
+    return {"tipo": "principio_ativo", "produto": None}
+
+
+def posologia_do_produto(escopo) -> Optional[Dict[str, Any]]:
+    """O quadro "Dosagens / Via / Frequência / Duração" do produto no VetSmart."""
+    if escopo is None:
+        return None
+    dosagens = [
+        {
+            "grupo": _texto_limpo(entrada.get("grupo")),
+            "especie": _texto_limpo(entrada.get("especie")),
+            "rotulo": _texto_limpo(entrada.get("rotulo")),
+            "dose": _texto_limpo(entrada.get("dose")),
+        }
+        for entrada in (escopo.dosagens or [])
+    ]
+    if not dosagens:
+        return None
+    return {
+        "produto": escopo.produto_nome,
+        "via": _texto_limpo(escopo.via_administracao),
+        "frequencia": _texto_limpo(escopo.frequencia),
+        "duracao": _texto_limpo(escopo.duracao_tratamento),
+        "dosagens": dosagens,
     }
 
 
@@ -1793,6 +1911,213 @@ def _montar_rotulo_apresentacao_escolha(ap) -> Dict[str, str]:
     }
 
 
+_CATEGORIA_POR_VIA = {
+    'ORAL': ('liquido_oral', 'Liquidos orais'),
+    'INJETAVEL': ('injetavel', 'Injetaveis'),
+    'OFTALMICA': ('oftalmico', 'Oftalmicos'),
+    'OTICA': ('otico', 'Oticos'),
+    'TOPICA': ('topico', 'Topicos'),
+}
+
+
+def _volume_em_ml(ap) -> bool:
+    return (
+        getattr(ap, 'volume_valor', None) is not None
+        and _texto_norm(getattr(ap, 'volume_unidade', None)) in {'ml', 'l'}
+    )
+
+
+def _categoria_pela_via(ap, via: Optional[str]) -> Optional[Tuple[str, str]]:
+    """Categoria de um frasco/bisnaga cujo texto não diz a forma farmacêutica.
+
+    "Frasco (20 mL)" sozinho não é nada; no produto de via oral é um líquido
+    oral medido em mL. Só decide quando a via do produto é uma só.
+    """
+    if not _volume_em_ml(ap):
+        return None
+    vias = {
+        cat for cat in (
+            _categoria_via_texto(parte)
+            for parte in re.split(r'\s*(?:/|,|;|\be\b|\bou\b)\s*', via or '')
+        ) if cat
+    }
+    if len(vias) != 1:
+        return None
+    return _CATEGORIA_POR_VIA.get(next(iter(vias)))
+
+
+def _montar_info_apresentacao(
+    ap,
+    dose_unit_out: Optional[str] = None,
+    dose_media: Optional[float] = None,
+    *,
+    via_do_produto: Optional[str] = None,
+    no_produto: bool = False,
+) -> Dict[str, Any]:
+    fabricante = getattr(ap, 'fabricante', None)
+    categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
+    if no_produto and categoria == 'outros':
+        pela_via = _categoria_pela_via(ap, via_do_produto)
+        if pela_via:
+            categoria, categoria_label = pela_via
+    unidade_pratica = _unidade_pratica_por_forma(ap.forma, categoria, ap.concentracao)
+    if no_produto and categoria == 'outros' and unidade_pratica == 'unidade' and _volume_em_ml(ap):
+        unidade_pratica = 'mL'
+    tipo_origem = _tipo_origem_apresentacao(fabricante)
+    rotulo_principal = _rotulo_principal_apresentacao(ap, categoria, unidade_pratica)
+    rotulo_secundario = _rotulo_secundario_apresentacao(ap, rotulo_principal)
+
+    desc_parts = [rotulo_principal or ap.forma]
+    desc = ' '.join(p for p in desc_parts if p)
+    if fabricante:
+        desc = f"{desc} — {fabricante}"
+
+    equiv = None
+    if (dose_media is not None and dose_unit_out == 'mg'
+            and ap.concentracao_valor and ap.concentracao_unidade):
+        cv = float(ap.concentracao_valor)
+        un_ap = (ap.concentracao_unidade or '').lower()
+        if un_ap in ('mg', 'g', 'mcg'):
+            cv_mg = cv
+            if un_ap == 'g':
+                cv_mg = cv * 1000.0
+            elif un_ap == 'mcg':
+                cv_mg = cv / 1000.0
+            n = dose_media / cv_mg
+            equiv = f"{_fmt_apresentacao_label(n)} × {ap.forma} de {_fmt_apresentacao_label(cv)} {un_ap} por administração"
+        elif un_ap in ('mg/ml', 'mcg/ml'):
+            cv_mg_ml = cv / 1000.0 if un_ap == 'mcg/ml' else cv
+            ml = dose_media / cv_mg_ml
+            equiv = f"{_fmt_apresentacao_label(ml)} mL por administração"
+
+    return {
+        'id': ap.id,
+        'descricao': desc,
+        'nome_variante': getattr(ap, 'nome_variante', None) or '',
+        'nome_comercial': getattr(ap, 'nome_comercial', None) or '',
+        'fabricante': fabricante,
+        'tipo_origem': tipo_origem,
+        'categoria': categoria,
+        'categoria_label': categoria_label,
+        'forma': ap.forma or '',
+        'concentracao_texto': ap.concentracao or '',
+        'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
+        'concentracao_unidade': _fmt_unidade_apresentacao(ap.concentracao_unidade),
+        'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
+        'volume_unidade': _fmt_unidade_apresentacao(ap.volume_unidade),
+        'unidade_pratica': unidade_pratica,
+        'rotulo_principal': rotulo_principal,
+        'rotulo_secundario': rotulo_secundario,
+        'concentracao_label': _concentracao_principal_apresentacao(ap),
+        'forma_label': _forma_principal_apresentacao(ap, categoria, unidade_pratica),
+        'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
+        'especie_label': _extrair_especie_apresentacao(ap),
+        'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
+        'permite_calculo_automatico': bool(ap.concentracao_valor),
+        'equivalencia': equiv,
+    }
+
+
+_UNIDADES_SOLIDAS_ORAIS = {'comprimido', 'capsula', 'dragea', 'tablete', 'petisco'}
+
+
+def _entrega_dose_direta(ap_info: Dict[str, Any], dose_unit_out: Optional[str]) -> bool:
+    """A apresentação entrega a dose na unidade em que a bula a expressa?
+
+    "3 mL" só vira quantidade prática num líquido medido em mL; "1 comprimido"
+    só num sólido oral. Dose em mg não é direta: depende da concentração.
+    """
+    unidade = _texto_norm(ap_info.get('unidade_pratica'))
+    alvo = (dose_unit_out or '').lower()
+    # Frasco de pour-on, pipeta de spot-on e colírio em frasco: é líquido
+    # medido em mL, mesmo que a categoria não seja "líquido oral".
+    liquido = (
+        ap_info.get('volume_valor') is not None
+        and _texto_norm(ap_info.get('volume_unidade')) in {'ml', 'l'}
+    )
+    if alvo == 'ml':
+        return unidade == 'ml' or liquido
+    if alvo == 'comprimido(s)':
+        return unidade in _UNIDADES_SOLIDAS_ORAIS
+    if alvo == 'pipeta(s)':
+        return unidade == 'pipeta'
+    if alvo == 'gota(s)':
+        return unidade == 'gota' or liquido
+    return False
+
+
+def _apresentacao_tem_texto(ap_info: Dict[str, Any]) -> bool:
+    """Descarta só o lixo: forma e concentração sem uma letra ou número."""
+    texto = f"{ap_info.get('forma') or ''}{ap_info.get('concentracao_texto') or ''}"
+    return any(c.isalnum() for c in texto)
+
+
+def _listar_apresentacoes_do_produto(
+    escopo,
+    dose_unit_out: Optional[str] = None,
+    dose_media: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """As apresentações do produto escolhido — todas, e só elas.
+
+    Aqui não vale o filtro de "tem força ou forma útil" nem a deduplicação
+    entre marcas: essas regras existem para a lista do princípio ativo, que
+    junta dezenas de produtos. Dentro de um produto, "Frasco (20 mL), com
+    seringa dosadora" é exatamente o que o tutor vai comprar.
+    """
+    produto_nome = escopo.produto_nome
+    proprias: List[Dict[str, Any]] = []
+    rotulos_vistos: set = set()
+    for ap in escopo.apresentacoes:
+        info = _montar_info_apresentacao(
+            ap, dose_unit_out, dose_media,
+            via_do_produto=escopo.via_administracao, no_produto=True,
+        )
+        rotulo = _esc.rotulo_vetsmart(ap, produto_nome)
+        chave = _texto_norm(rotulo)
+        if not chave or chave in rotulos_vistos:
+            continue
+        rotulos_vistos.add(chave)
+        fabricante = info.get('fabricante') or ''
+        info.update({
+            'descricao': rotulo,
+            'produto_nome': produto_nome,
+            'rotulo_principal': rotulo,
+            # Rótulo pronto para o seletor e para a receita: o front não
+            # precisa recompor a partir de nome_variante/concentração.
+            'rotulo_opcao': rotulo,
+            'rotulo_secundario': '',
+            'rotulo_escolha': {'principal': '', 'secundario': '', 'especie': info.get('especie_label') or ''},
+            'origem': 'produto',
+            'fabricantes': [fabricante] if fabricante else [],
+            'source_count': 1,
+        })
+        proprias.append(info)
+    proprias.sort(key=_ordenar_apresentacao_info)
+
+    forcas_proprias = {
+        (info['categoria'], info['concentracao_valor'], (info['concentracao_unidade'] or '').lower())
+        for info in proprias if info['concentracao_valor'] is not None
+    }
+    avulsas: List[Dict[str, Any]] = []
+    for ap in escopo.apresentacoes_avulsas:
+        info = _montar_info_apresentacao(ap, dose_unit_out, dose_media)
+        if not _apresentacao_tem_forca_ou_forma_util(info):
+            continue
+        forca = (info['categoria'], info['concentracao_valor'], (info['concentracao_unidade'] or '').lower())
+        if info['concentracao_valor'] is not None and forca in forcas_proprias:
+            continue
+        fabricante = info.get('fabricante') or ''
+        info.update({
+            'origem': 'avulsa',
+            'categoria_label': 'Outras cadastradas',
+            'fabricantes': [fabricante] if fabricante else [],
+            'source_count': 1,
+        })
+        avulsas.append(info)
+    avulsas.sort(key=_ordenar_apresentacao_info)
+    return proprias + avulsas
+
+
 def listar_apresentacoes_medicamento(
     medicamento,
     dose_unit_out: Optional[str] = None,
@@ -1809,11 +2134,19 @@ def listar_apresentacoes_medicamento(
         apresentação que vai logo abaixo da escolha do medicamento — a
         apresentação é obrigatória pra prescrição ter valor clínico.
 
-    Dedup por (categoria, concentração_valor, concentração_unidade,
-    unidade_prática, tipo_origem); preserva a apresentação mais informativa
-    quando há colisão, e acumula fabricantes equivalentes em `fabricantes`.
+    Com um produto comercial escolhido (ou quando o medicamento é um produto
+    só), devolve as apresentações daquele produto e nada mais — ver
+    `_listar_apresentacoes_do_produto`.
+
+    Sem produto, é a lista do princípio ativo: dedup por (categoria,
+    concentração_valor, concentração_unidade, unidade_prática, tipo_origem);
+    preserva a apresentação mais informativa quando há colisão, e acumula
+    fabricantes equivalentes em `fabricantes`.
     """
-    apres_info: List[Dict[str, Any]] = []
+    escopo = escopo_de(medicamento, nome_comercial_filtro)
+    if escopo is not None:
+        return _listar_apresentacoes_do_produto(escopo, dose_unit_out, dose_media)
+
     todas_apresentacoes = getattr(medicamento, 'apresentacoes', None) or []
     if nome_comercial_filtro:
         nc_lower = nome_comercial_filtro.strip().lower()
@@ -1823,65 +2156,16 @@ def listar_apresentacoes_medicamento(
         ]
         if apresentacoes_filtradas:
             todas_apresentacoes = apresentacoes_filtradas
-    for ap in todas_apresentacoes:
-        fabricante = getattr(ap, 'fabricante', None)
-        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
-        unidade_pratica = _unidade_pratica_por_forma(ap.forma, categoria, ap.concentracao)
-        tipo_origem = _tipo_origem_apresentacao(fabricante)
-        rotulo_principal = _rotulo_principal_apresentacao(ap, categoria, unidade_pratica)
-        rotulo_secundario = _rotulo_secundario_apresentacao(ap, rotulo_principal)
-
-        desc_parts = [rotulo_principal or ap.forma]
-        desc = ' '.join(p for p in desc_parts if p)
-        if fabricante:
-            desc = f"{desc} — {fabricante}"
-
-        equiv = None
-        if (dose_media is not None and dose_unit_out == 'mg'
-                and ap.concentracao_valor and ap.concentracao_unidade):
-            cv = float(ap.concentracao_valor)
-            un_ap = (ap.concentracao_unidade or '').lower()
-            if un_ap in ('mg', 'g', 'mcg'):
-                cv_mg = cv
-                if un_ap == 'g':
-                    cv_mg = cv * 1000.0
-                elif un_ap == 'mcg':
-                    cv_mg = cv / 1000.0
-                n = dose_media / cv_mg
-                equiv = f"{_fmt_apresentacao_label(n)} × {ap.forma} de {_fmt_apresentacao_label(cv)} {un_ap} por administração"
-            elif un_ap in ('mg/ml', 'mcg/ml'):
-                cv_mg_ml = cv / 1000.0 if un_ap == 'mcg/ml' else cv
-                ml = dose_media / cv_mg_ml
-                equiv = f"{_fmt_apresentacao_label(ml)} mL por administração"
-
-        ap_info = {
-            'id': ap.id,
-            'descricao': desc,
-            'nome_variante': getattr(ap, 'nome_variante', None) or '',
-            'nome_comercial': getattr(ap, 'nome_comercial', None) or '',
-            'fabricante': fabricante,
-            'tipo_origem': tipo_origem,
-            'categoria': categoria,
-            'categoria_label': categoria_label,
-            'forma': ap.forma or '',
-            'concentracao_texto': ap.concentracao or '',
-            'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
-            'concentracao_unidade': _fmt_unidade_apresentacao(ap.concentracao_unidade),
-            'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
-            'volume_unidade': _fmt_unidade_apresentacao(ap.volume_unidade),
-            'unidade_pratica': unidade_pratica,
-            'rotulo_principal': rotulo_principal,
-            'rotulo_secundario': rotulo_secundario,
-            'concentracao_label': _concentracao_principal_apresentacao(ap),
-            'forma_label': _forma_principal_apresentacao(ap, categoria, unidade_pratica),
-            'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
-            'especie_label': _extrair_especie_apresentacao(ap),
-            'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
-            'permite_calculo_automatico': bool(ap.concentracao_valor),
-            'equivalencia': equiv,
-        }
-        if _apresentacao_tem_forca_ou_forma_util(ap_info):
-            apres_info.append(ap_info)
+    todas_info = [
+        _montar_info_apresentacao(ap, dose_unit_out, dose_media)
+        for ap in todas_apresentacoes
+    ]
+    apres_info = [info for info in todas_info if _apresentacao_tem_forca_ou_forma_util(info)]
+    if not apres_info:
+        # O filtro existe para limpar a lista, não para esvaziá-la: se nada
+        # passou, o veterinário vê o que está cadastrado em vez de "nenhuma
+        # apresentação".
+        apres_info = [info for info in todas_info if _apresentacao_tem_texto(info)]
 
     apres_unicas: Dict[tuple, Dict[str, Any]] = {}
     for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):
@@ -2249,8 +2533,15 @@ def sugerir_dose(
     indicacao: Optional[str] = None,
     nome_comercial_filtro: Optional[str] = None,
     preservar_variantes_comerciais: bool = False,
+    apresentacao_id: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     """Retorna dict com sugestão de dose, ou None se não aplicável.
+
+    Com `nome_comercial_filtro` (o produto que o veterinário escolheu), a
+    sugestão sai das doses e das apresentações daquele produto. Quando o
+    produto tem dose diferente por apresentação ("1 comprimido / 10 kg" no
+    comprimido de 660 mg, "1 / 30 kg" no de 2 g), `apresentacao_id` escolhe a
+    dose da apresentação que vai ser dispensada.
 
     Se `indicacao` não for passada e houver protocolos com indicações
     múltiplas aplicáveis ao animal, retorna um dict de modo-lista:
@@ -2301,6 +2592,12 @@ def sugerir_dose(
     if peso <= 0:
         return None
 
+    escopo = escopo_de(medicamento, nome_comercial_filtro)
+    if escopo is not None:
+        # Daqui em diante "o medicamento" é o produto: só as doses e as
+        # apresentações dele entram na conta.
+        medicamento = escopo
+
     esp_code = _especie_animal_code(animal)
     protos = [
         p for p in (getattr(medicamento, 'doses', []) or [])
@@ -2308,6 +2605,7 @@ def sugerir_dose(
     ]
     if not protos:
         return None
+    depende_da_apresentacao = any(getattr(p, 'apresentacao_ids', None) for p in protos)
 
     # Se nenhuma indicação foi escolhida, checa se temos múltiplas candidatas
     # e devolve lista pro frontend pedir escolha do vet.
@@ -2351,6 +2649,11 @@ def sugerir_dose(
             else:
                 indicacao_filtro = None
 
+    def _vale_para_apresentacao(p) -> bool:
+        """A dose é da apresentação escolhida (ou não está presa a nenhuma)."""
+        ids_variante = getattr(p, 'apresentacao_ids', None)
+        return not ids_variante or apresentacao_id is None or apresentacao_id in ids_variante
+
     # Filtra por espécie + faixa de peso + indicação
     def _aplica(p):
         if not _proto_aplica_basico(p, esp_code, peso):
@@ -2358,6 +2661,8 @@ def sugerir_dose(
         if _dose_ambigua_por_apresentacao(medicamento, p):
             return False
         if _dose_volumetrica_ambigua(medicamento, p):
+            return False
+        if not _vale_para_apresentacao(p):
             return False
         if indicacao_filtro is not None:
             p_ind = (getattr(p, 'indicacao', None) or '').strip() or None
@@ -2374,11 +2679,38 @@ def sugerir_dose(
     if not candidatos:
         # Se o filtro de indicação eliminou tudo, tenta sem filtro como fallback
         if indicacao_filtro is not None:
-            candidatos = [p for p in protos if _proto_aplica_basico(p, esp_code, peso)]
+            candidatos = [
+                p for p in protos
+                if _proto_aplica_basico(p, esp_code, peso) and _vale_para_apresentacao(p)
+            ]
         if not candidatos:
             return None
 
-    proto = min(candidatos, key=lambda p: _score_protocolo(p, medicamento))
+    def _score_variante(p) -> float:
+        """Desempate entre doses de apresentações diferentes do mesmo produto.
+
+        Sem apresentação escolhida, prefere a que dá a quantidade mais fácil
+        de administrar (0,4 comprimido de 2 g perde para 1 de 660 mg).
+        """
+        if apresentacao_id is not None or not getattr(p, 'apresentacao_ids', None):
+            return 0.0
+        unidade = (getattr(p, 'dose_unidade', None) or '').upper()
+        if not unidade.startswith(('COMPRIMIDOS', 'PIPETA')):
+            return 0.0
+        try:
+            quantidade = float(p.dose_min) * (peso if unidade.endswith('_KG') else 1.0)
+        except (TypeError, ValueError):
+            return 0.0
+        if quantidade <= 0:
+            return 9999.0
+        passo = 0.5 if unidade.startswith('COMPRIMIDOS') else 1.0
+        pratica = max(round(quantidade / passo) * passo, passo)
+        erro = abs(pratica - quantidade) / quantidade
+        excesso = 8.0 if pratica > 2 else 0.0
+        fracao = 2.0 if abs(pratica - round(pratica)) > 0.001 else 0.0
+        return excesso + fracao + erro * 100.0
+
+    proto = min(candidatos, key=lambda p: _score_protocolo(p, medicamento) + (_score_variante(p),))
 
     dose_min_v = float(proto.dose_min)
     dose_max_v = float(proto.dose_max) if proto.dose_max is not None else dose_min_v
@@ -2409,15 +2741,16 @@ def sugerir_dose(
         return f"{v:.2f}".rstrip('0').rstrip('.').replace('.', ',')
 
     def _normalizar_duracao_proto(p) -> Tuple[Optional[int], Optional[int], str]:
-        d_min = getattr(p, 'duracao_min_dias', None)
-        d_max = getattr(p, 'duracao_max_dias', None)
+        d_min, d_max = _duracao_estruturada(p)
         d_txt = (getattr(p, 'duracao', None) or '').strip()
         if d_min is None and d_max is None and d_txt:
             txt_min, txt_max = _parse_duracao_dias(d_txt)
             if txt_min is not None or txt_max is not None:
                 d_min, d_max = txt_min, txt_max
         if d_min is None and d_max is None:
-            pd_min, pd_max, _pd_desc = _duracao_produtos_vetsmart(medicamento)
+            # Protocolo que já diz a duração em texto ("Dose única", "Até o 6º
+            # mês de idade") não empresta dias da bula de produto nenhum.
+            pd_min, pd_max, _pd_desc = (None, None, None) if d_txt else _duracao_produtos_vetsmart(medicamento)
             if pd_min is None and pd_max is None:
                 pd_min, pd_max, _pd_desc = _duracao_prescritor_vetsmart(medicamento)
             if pd_min is None and pd_max is None and not d_txt:
@@ -2500,6 +2833,8 @@ def sugerir_dose(
             'duracao_bruta': getattr(p, 'duracao', None) or '',
             'tem_faixa_duracao': bool(p_dur_min and p_dur_max and p_dur_min != p_dur_max),
             'observacao': getattr(p, 'observacao', None),
+            'variante': getattr(p, 'variante', None),
+            'apresentacao_ids': list(getattr(p, 'apresentacao_ids', None) or []),
         }
 
     if dose_calc_min == dose_calc_max:
@@ -2523,6 +2858,10 @@ def sugerir_dose(
         faixa_texto = f"{_fmt(dose_min_v)} {faixa_unit_label}"
     else:
         faixa_texto = f"{_fmt(dose_min_v)}–{_fmt(dose_max_v)} {faixa_unit_label}"
+    # "1 comprimido / 30 kg" diz mais ao veterinário que "0,03 cp/kg".
+    razao_de_bula = _texto_limpo(getattr(proto, 'dose_raw_text', None))
+    if un in {'COMPRIMIDOS_KG', 'PIPETA_KG'} and razao_de_bula and _RE_RAZAO_DE_BULA.fullmatch(razao_de_bula):
+        faixa_texto = razao_de_bula
 
     # Frequência — usa faixa quando disponível
     freq_min_h = proto.intervalo_min_horas
@@ -2546,8 +2885,7 @@ def sugerir_dose(
         freq_texto = '—'
 
     # Duração textual — específica do produto ou padrão da classe
-    dur_min_d = proto.duracao_min_dias
-    dur_max_d = proto.duracao_max_dias
+    dur_min_d, dur_max_d = _duracao_estruturada(proto)
     duracao_e_padrao = False
     duracao_do_prescritor = False
     duracao_padrao_desc: Optional[str] = None
@@ -2559,7 +2897,11 @@ def sugerir_dose(
             dur_min_d, dur_max_d = txt_min, txt_max
 
     if dur_min_d is None and dur_max_d is None:
-        pd_min, pd_max, pd_desc = _duracao_produtos_vetsmart(medicamento)
+        # Protocolo que já diz a duração em texto ("Dose única", "Até o 6º mês
+        # de idade") não empresta dias da bula de produto nenhum.
+        pd_min, pd_max, pd_desc = (
+            (None, None, None) if duracao_proto_texto else _duracao_produtos_vetsmart(medicamento)
+        )
         if pd_min is not None or pd_max is not None:
             dur_min_d, dur_max_d = pd_min, pd_max
             duracao_do_prescritor = True
@@ -2611,6 +2953,18 @@ def sugerir_dose(
         nome_comercial_filtro=nome_comercial_filtro,
         preservar_variantes_comerciais=preservar_variantes_comerciais,
     )
+    ids_variante = tuple(getattr(proto, 'apresentacao_ids', None) or ())
+    if escopo is not None:
+        # Dose de bula em mL, comprimidos, pipetas ou gotas já é a quantidade
+        # a administrar: dentro do produto não depende de concentração em mg.
+        # Fora do recorte a regra não vale — o mL de uma marca não é o de outra.
+        for ap_info in apres_info:
+            da_variante = not ids_variante or ap_info.get('id') in ids_variante
+            direta = da_variante and _entrega_dose_direta(ap_info, dose_unit_out)
+            ap_info['conversao_direta'] = direta
+            ap_info['dose_nao_se_aplica'] = not da_variante
+            if direta:
+                ap_info['permite_calculo_automatico'] = True
 
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
     proto_ind = (getattr(proto, 'indicacao', None) or '').strip() or None
@@ -2667,6 +3021,7 @@ def sugerir_dose(
             opcao.get('dose_unit_out') or '',
             opcao.get('frequencia_texto') or '',
             opcao.get('duracao_texto') or '',
+            opcao.get('variante') or '',
         )
         if chave_opcao in opcoes_vistas:
             continue
@@ -2709,6 +3064,17 @@ def sugerir_dose(
                     apresentacao_preferida_id = ap.get('id')
                     apresentacao_preferida_nome = ap.get('nome_variante') or ap.get('rotulo_principal') or ap.get('concentracao_texto') or ''
                     break
+    if ids_variante:
+        # A dose escolhida é de uma apresentação específica do produto: é ela
+        # que a conversão prática tem de usar.
+        da_variante = [ap for ap in apres_info if ap.get('id') in ids_variante]
+        escolhida = next((ap for ap in da_variante if ap.get('id') == apresentacao_id), None)
+        preferida = escolhida or (da_variante[0] if da_variante else None)
+        if preferida is not None:
+            apresentacao_preferida_id = preferida.get('id')
+            apresentacao_preferida_nome = (
+                preferida.get('nome_variante') or preferida.get('rotulo_principal') or ''
+            )
 
     origem = _resumo_origem_dose(proto, duracao_e_padrao=duracao_e_padrao, proto_ind=proto_ind)
     flags_risco: List[Dict[str, str]] = []
@@ -2835,6 +3201,12 @@ def sugerir_dose(
         'apresentacao_preferida_id': apresentacao_preferida_id,
         'apresentacao_preferida_nome': apresentacao_preferida_nome,
         'apresentacoes':           apres_info,
+        # Recorte por produto: de qual produto é a dose, a qual apresentação
+        # dele ela pertence e se trocar de apresentação muda a dose.
+        'produto':                 escopo.produto_nome if escopo is not None else None,
+        'variante':                getattr(proto, 'variante', None),
+        'apresentacao_ids':        list(ids_variante),
+        'depende_da_apresentacao': depende_da_apresentacao,
         'concentracoes_conhecidas': concentracoes_conhecidas,
         'fonte':                   proto.fonte or 'SCRAPER',
         'confianca':               proto.confianca or 'MEDIA',

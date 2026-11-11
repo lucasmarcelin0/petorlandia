@@ -457,12 +457,15 @@ def bulario_sugerir_dose_api():
         nenhuma, a resposta vem em modo "multiplo" com a lista de opções.
     """
     from models.base import Medicamento, Animal
-    from services.bulario import sugerir_dose
+    from services.bulario import escopo_de, sugerir_dose
 
     med_id = request.args.get("medicamento_id", type=int)
     animal_id = request.args.get("animal_id", type=int)
     indicacao = (request.args.get("indicacao") or "").strip() or None
     nome_comercial_filtro = (request.args.get("nome_comercial_filtro") or "").strip() or None
+    # Apresentação que o veterinário escolheu: quando o produto tem dose
+    # diferente por apresentação, é ela que decide a dose.
+    apresentacao_id = request.args.get("apresentacao_id", type=int)
     if not med_id or not animal_id:
         return jsonify({
             "disponivel": False,
@@ -490,16 +493,20 @@ def bulario_sugerir_dose_api():
             "motivo": "Peso do animal não está cadastrado — preencha o peso para usar a dose pré-calculada.",
         })
 
-    if not (med.doses or []):
+    # Com um produto escolhido, valem as doses dele — que podem existir só no
+    # retrato do produto, sem linha na tabela do princípio ativo.
+    escopo = escopo_de(med, nome_comercial_filtro)
+    if not ((escopo.doses if escopo is not None else med.doses) or []):
         return jsonify({
             "disponivel": False,
             "motivo": "Este medicamento ainda não tem protocolo de dose cadastrado no bulário.",
         })
 
     sugestao = sugerir_dose(
-        med, animal,
+        escopo if escopo is not None else med, animal,
         indicacao=indicacao,
         nome_comercial_filtro=nome_comercial_filtro,
+        apresentacao_id=apresentacao_id,
     )
     if not sugestao:
         return jsonify({
