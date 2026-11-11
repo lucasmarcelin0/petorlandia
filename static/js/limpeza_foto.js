@@ -63,6 +63,7 @@
         { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
       // Depois de 3 minutos, para de gastar bateria; a última posição boa fica no formulário.
       setTimeout(function () { navigator.geolocation.clearWatch(vigia); }, 180000);
+      window.addEventListener('limpeza:saida', function () { navigator.geolocation.clearWatch(vigia); }, { once: true });
     }
 
     // ---- Foto ----
@@ -154,18 +155,38 @@
       }
     });
 
-    form.addEventListener('submit', function (ev) {
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var categorias = form.querySelectorAll('input[name=categoria]');
+      if (categorias.length && !form.querySelector('input[name=categoria]:checked')) {
+        avisar('Marque o que precisa ser limpo antes de enviar. Sua foto continua selecionada.');
+        categorias[0].focus();
+        return;
+      }
       if (!arquivoEscolhido()) {
-        ev.preventDefault();
         avisar('Tire a foto do local antes de enviar.');
         return;
       }
+      var textoBotao = botao && botao.innerHTML;
       if (botao) {
         botao.disabled = true;
         botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enviando foto…';
       }
+      try {
+        var resposta = await fetch(form.action || window.location.href, {
+          method: 'POST', body: new FormData(form), credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        });
+        var resultado = await resposta.json();
+        if (!resposta.ok || !resultado.destino) throw new Error(resultado.erro || 'Não foi possível enviar. Confira os dados e tente novamente.');
+        window.location.assign(resultado.destino);
+      } catch (erro) {
+        avisar((erro.message || 'Falha de conexão. Confira suas comunicações antes de tentar novamente.') + ' Seus dados e sua foto continuam no formulário.');
+        if (botao) { botao.disabled = false; botao.innerHTML = textoBotao; }
+      }
     });
 
-    window.addEventListener('pagehide', fecharCamera);
+    window.addEventListener('pagehide', fecharCamera, { once: true });
+    window.addEventListener('limpeza:saida', fecharCamera, { once: true });
   });
 })();

@@ -1,3 +1,5 @@
+<script defer src="{{ url_for('static', filename='js/limpeza_navegacao.js', v='1') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <style>
   .limpeza-pagina { max-width: 1180px; }
   .limpeza-cartao { background: #fff; border: 1px solid #dbe8c8; border-radius: 14px; padding: 18px; }
@@ -17,4 +19,14 @@
   .limpeza-categorias label { border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; gap: 8px; align-items: center; margin: 0; }
   .limpeza-categorias input:checked + span { font-weight: 700; color: #3f6212; }
   .limpeza-categorias label:has(input:checked) { border-color: #4d7c0f; box-shadow: 0 0 0 2px rgba(77, 124, 15, .18); }
+  .prefeitura-identidade { display:flex; align-items:center; gap:14px; background:#fff; border:1px solid #d6deec; border-left:5px solid #253e78; border-radius:14px; padding:12px 16px; color:#173064; }
+  .prefeitura-identidade img { width:52px; height:60px; object-fit:contain; }
+  .prefeitura-identidade strong, .prefeitura-identidade span { display:block; }
+  .prefeitura-identidade strong { font-size:1.18rem; }
+  .prefeitura-identidade span { font-size:.85rem; color:#53627b; }
+  .limpeza-pagina h1 { color:#173064; }
+  .limpeza-cartao { border-color:#d6deec; }
+  .limpeza-nav .btn-success, .limpeza-pagina .btn-success { background:#253e78; border-color:#253e78; }
+  .limpeza-nav .btn-outline-success, .limpeza-pagina .btn-outline-success { color:#253e78; border-color:#253e78; }
+  .limpeza-nav .btn-outline-success:hover, .limpeza-pagina .btn-outline-success:hover { background:#253e78; color:white; }
 </style>

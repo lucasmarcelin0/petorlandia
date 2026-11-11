@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Mapa da limpeza urbana{% endblock %}
+{% block page_title %}Mapa da Prefeitura integrada{% endblock %}
 {% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block head %}
@@ -26,7 +26,7 @@
   {% include "limpeza/_nav.html" %}
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
     <div>
-      <h1 class="h3 mb-1">Mapa da limpeza urbana</h1>
+      <h1 class="h3 mb-1">Mapa da Prefeitura integrada</h1>
       <p class="text-muted mb-0" id="limpeza-sub">Carregando comunicações…</p>
     </div>
     {% if pode_fiscalizar %}
@@ -66,8 +66,15 @@
   <div class="row g-2 mb-3" id="limpeza-indicadores"></div>
   <div class="alert alert-danger d-none" id="limpeza-erro"></div>
 
+  {% if eh_admin %}
+  <div class="btn-group mb-3" role="group" aria-label="Visualização das comunicações">
+    <button type="button" class="btn btn-success" id="visao-mapa" aria-pressed="true">Mapa</button>
+    <button type="button" class="btn btn-outline-success" id="visao-lista" aria-pressed="false">Todas as comunicações</button>
+  </div>
+  <div id="limpeza-lista" class="d-none" aria-live="polite"></div>
+  {% endif %}
   <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações de limpeza"></div>
-  <div class="limpeza-legenda mt-2">
+  <div class="limpeza-legenda mt-2" id="limpeza-legenda">
     <span><i style="background:#ef4444"></i>Aguardando limpeza</span>
     <span><i style="background:#f97316"></i>Aguardando há mais de 48 h</span>
     <span><i style="background:#22c55e"></i>Limpeza comprovada</span>
@@ -143,6 +150,13 @@
         numero(i.comprovacoes_longe, 'Comprovações longe do ponto'),
         numero(i.comprovacoes_recusadas, 'Comprovações recusadas'),
       ].join('');
+      if (el('limpeza-lista')) {
+        el('limpeza-lista').innerHTML = d.pontos.length ? d.pontos.map(p =>
+          `<a class="limpeza-cartao d-block text-decoration-none mb-2" href="${DETALHE}${p.id}">
+            <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
+            <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}${p.referencia ? ` · ${esc(p.referencia)}` : ''}</div></a>`
+        ).join('') : '<p>Nenhuma comunicação neste filtro.</p>';
+      }
       camada.clearLayers();
       const limites = [];
       d.pontos.forEach((p) => {
@@ -165,6 +179,22 @@
     }
   }
 
+  if (el('visao-lista')) {
+    function trocarVisao(lista) {
+      el('limpeza-lista').classList.toggle('d-none', !lista);
+      el('limpeza-mapa').classList.toggle('d-none', lista);
+      el('limpeza-legenda').classList.toggle('d-none', lista);
+      ['mapa', 'lista'].forEach(nome => {
+        const ativo = (nome === 'lista') === lista;
+        el('visao-' + nome).classList.toggle('btn-success', ativo);
+        el('visao-' + nome).classList.toggle('btn-outline-success', !ativo);
+        el('visao-' + nome).setAttribute('aria-pressed', String(ativo));
+      });
+      if (!lista) mapa.invalidateSize();
+    }
+    el('visao-lista').addEventListener('click', () => trocarVisao(true));
+    el('visao-mapa').addEventListener('click', () => trocarVisao(false));
+  }
   el('limpeza-filtros').addEventListener('submit', (ev) => {
     ev.preventDefault();
     history.replaceState(null, '', `?${parametros()}`);
@@ -173,7 +203,8 @@
   });
   el('limpeza-atualizar').addEventListener('click', carregar);
   // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
-  setInterval(() => { if (!document.hidden) carregar(); }, 60000);
+  const intervalo = setInterval(() => { if (!document.hidden) carregar(); }, 60000);
+  window.addEventListener('limpeza:saida', () => { clearInterval(intervalo); mapa.remove(); }, { once: true });
   carregar();
 })();
 </script>

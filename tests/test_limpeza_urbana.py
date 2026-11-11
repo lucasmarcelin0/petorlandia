@@ -333,9 +333,8 @@ def test_cartao_na_pagina_inicial_segue_os_papeis(app):
             login_user(user)
             area = next(w for w in current_experience().workspaces if w.key == 'limpeza')
             rotulos = [a.label for a in area.actions]
-            assert 'Comunicar limpeza' in rotulos
-            assert ('Mapa da limpeza' in rotulos) is tem_mapa
-            assert 'Quem acessa' not in rotulos
+            assert rotulos == ['Acessar Prefeitura integrada']
+            assert area.actions[0].url.endswith('/limpeza-urbana/')
 
 
 def test_paginas_renderizam_para_o_admin(client, uploads):
@@ -441,3 +440,21 @@ def test_contabilidade_vem_logo_depois_da_area_profissional(app):
         chaves = [w.key for w in resolve_experience(admin, accounting=True).workspaces]
     assert chaves.index('accounting') == chaves.index('professional') + 1
     assert chaves.index('accounting') < chaves.index('delivery')
+
+
+def test_envio_ajax_devolve_erro_sem_redirecionar_e_aceita_correcao(client, uploads):
+    user = conta('ajax@example.test')
+    dar(user, 'colaborador')
+    entrar(client, user)
+    headers = {'X-Requested-With': 'XMLHttpRequest'}
+    dados = {'foto': (foto(), 'foto.jpg'), 'latitude': str(PONTO[0]), 'longitude': str(PONTO[1])}
+    resposta = client.post('/limpeza-urbana/comunicar', data=dados, headers=headers)
+    assert resposta.status_code == 400
+    assert 'Marque' in resposta.json['erro']
+    assert not uploads
+    dados['foto'] = (foto(), 'foto.jpg')
+    dados['categoria'] = 'galhos'
+    resposta = client.post('/limpeza-urbana/comunicar', data=dados, headers=headers)
+    assert resposta.status_code == 200
+    assert resposta.json['destino'].endswith('/limpeza-urbana/minhas')
+    assert LimpezaSolicitacao.query.count() == 1
