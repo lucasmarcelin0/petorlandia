@@ -458,3 +458,15 @@ def test_envio_ajax_devolve_erro_sem_redirecionar_e_aceita_correcao(client, uplo
     assert resposta.status_code == 200
     assert resposta.json['destino'].endswith('/limpeza-urbana/minhas')
     assert LimpezaSolicitacao.query.count() == 1
+
+
+def test_estilo_do_mapa_presente_antes_da_navegacao_sem_recarregar(client):
+    admin = conta('estilo-mapa@example.test', role='admin')
+    entrar(client, admin)
+    # O JavaScript troca somente o conteúdo; o estilo precisa existir na página de origem.
+    for rota in ('mapa', 'comunicar', 'minhas', 'acessos'):
+        resposta = client.get('/limpeza-urbana/' + rota)
+        assert resposta.status_code == 200
+        html = resposta.get_data(as_text=True)
+        assert '#limpeza-mapa { height: 68vh; min-height: 420px;' in html
+        assert '.limpeza-num {' in html
