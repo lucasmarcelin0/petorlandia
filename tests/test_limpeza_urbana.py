@@ -458,3 +458,32 @@ def test_envio_ajax_devolve_erro_sem_redirecionar_e_aceita_correcao(client, uplo
     assert resposta.status_code == 200
     assert resposta.json['destino'].endswith('/limpeza-urbana/minhas')
     assert LimpezaSolicitacao.query.count() == 1
+
+
+def test_estilo_do_mapa_presente_antes_da_navegacao_sem_recarregar(client):
+    admin = conta('estilo-mapa@example.test', role='admin')
+    entrar(client, admin)
+    # O JavaScript troca somente o conteúdo; o estilo precisa existir na página de origem.
+    for rota in ('mapa', 'comunicacoes', 'comunicar', 'minhas', 'acessos'):
+        resposta = client.get('/limpeza-urbana/' + rota)
+        assert resposta.status_code == 200
+        html = resposta.get_data(as_text=True)
+        assert '#limpeza-mapa { height: 68vh; min-height: 420px;' in html
+        assert '.limpeza-num {' in html
+
+
+def test_lista_administrativa_separada_na_barra(client):
+    admin = conta('lista-admin@example.test', role='admin')
+    entrar(client, admin)
+    resposta = client.get('/limpeza-urbana/comunicacoes')
+    assert resposta.status_code == 200
+    html = resposta.get_data(as_text=True)
+    nav = html.split('<nav class="limpeza-nav', 1)[1].split('</nav>', 1)[0]
+    assert nav.index('Todas as comunicações') < nav.index('Mapa') < nav.index('Comunicar')
+    assert '<div id="limpeza-lista"' in html
+    assert '<div id="limpeza-mapa"' not in html
+    user = conta('lista-equipe@example.test')
+    dar(user, 'equipe')
+    entrar(client, user)
+    assert client.get('/limpeza-urbana/comunicacoes').status_code in NEGADO
+    assert 'Todas as comunicações</a>' not in client.get('/limpeza-urbana/mapa').get_data(as_text=True)
