@@ -103,9 +103,14 @@ def comunicar():
             db.session.commit()
         except LimpezaErro as exc:
             db.session.rollback()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify(erro=str(exc)), 400
             flash(str(exc), "danger")
             return render_template("limpeza/comunicar.html", form=form, selecionadas=form.getlist("categoria"),
                                    **_contexto_base()), 400
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
+            return jsonify(destino=url_for(".minhas"))
         flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
         return redirect(url_for(".minhas"))
     return render_template("limpeza/comunicar.html", form={}, selecionadas=[], **_contexto_base())
@@ -203,6 +208,8 @@ def comprovar(solicitacao_id):
         db.session.commit()
     except LimpezaErro as exc:
         db.session.rollback()
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(erro=str(exc)), 400
         flash(str(exc), "danger")
         return redirect(destino)
     if distancia > servico.DISTANCIA_ALERTA_M:
@@ -210,6 +217,8 @@ def comprovar(solicitacao_id):
               "A fiscalização vai conferir.", "warning")
     else:
         flash("Limpeza comprovada. Obrigado!", "success")
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(destino=destino)
     return redirect(destino)
 
 

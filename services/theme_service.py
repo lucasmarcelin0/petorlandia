@@ -304,7 +304,7 @@ WORKSPACE_THEMES: dict[str, dict[str, Any]] = {
         "prefixes": (),
     },
     "limpeza": {
-        "label": "Limpeza urbana",
+        "label": "Prefeitura integrada",
         "emoji": "🧹",
         "icon": "fa-broom",
         "area": "#3f6212",

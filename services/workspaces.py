@@ -124,14 +124,8 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
             acoes.append(action('Unidades e responsáveis', 'sfa_routes.notificacao_unidades', 'fa-hospital-user'))
         area('sinan', 'Notificação SINAN', 'fa-file-medical', *acoes)
     if limpeza or limpeza_aberta:
-        # Papéis da limpeza urbana (services.limpeza_urbana): adicionais e com período.
-        acoes = [action('Comunicar limpeza', 'limpeza_urbana.comunicar', 'fa-camera'),
-                 action('Minhas comunicações', 'limpeza_urbana.minhas', 'fa-folder-open')]
-        if limpeza & {'equipe', 'fiscal'}:
-            acoes.insert(0, action('Mapa da limpeza', 'limpeza_urbana.mapa', 'fa-map-location-dot'))
-        if admin:
-            acoes.append(action('Quem acessa', 'limpeza_urbana.acessos', 'fa-user-shield'))
-        area('limpeza', 'Limpeza urbana', 'fa-broom', *acoes)
+        area('limpeza', 'Prefeitura integrada', 'fa-building-columns',
+             action('Acessar Prefeitura integrada', 'limpeza_urbana.inicio', 'fa-building-columns'))
     if internship:
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
