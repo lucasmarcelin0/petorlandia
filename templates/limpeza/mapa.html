@@ -1,0 +1,180 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Mapa da limpeza urbana{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+{% include "limpeza/_estilo.html" %}
+<style>
+  #limpeza-mapa { height: 68vh; min-height: 420px; border-radius: 14px; border: 1px solid #dbe8c8; }
+  .limpeza-num { border: 1px solid #dbe8c8; border-radius: 12px; padding: 10px 14px; background: #fff; height: 100%; }
+  .limpeza-num .n { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+  .limpeza-num .l { font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+  .limpeza-popup { width: 250px; font-size: 12.5px; }
+  .limpeza-popup .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 6px 0; }
+  .limpeza-popup img { width: 100%; height: 86px; object-fit: cover; border-radius: 6px; background: #f3f4f6; }
+  .limpeza-legenda span { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: .85rem; }
+  .limpeza-legenda i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid rgba(0,0,0,.25); }
+</style>
+{% endblock %}
+
+{% block main %}
+<div class="container-fluid limpeza-pagina py-4">
+  {% set ativo = 'mapa' %}
+  {% include "limpeza/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Mapa da limpeza urbana</h1>
+      <p class="text-muted mb-0" id="limpeza-sub">Carregando comunicações…</p>
+    </div>
+    {% if pode_fiscalizar %}
+    <a class="btn btn-outline-success" id="limpeza-csv" href="{{ url_for('limpeza_urbana.relatorio') }}"><i class="fas fa-file-csv me-1"></i>Exportar relatório</a>
+    {% endif %}
+  </div>
+
+  <form class="row g-2 align-items-end mb-3" id="limpeza-filtros">
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-status">Situação</label>
+      <select class="form-select form-select-sm" id="f-status" name="status">
+        <option value="">Todas</option>
+        {% for chave, rotulo in STATUS.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.status == chave }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-1" for="f-categoria">Tipo</label>
+      <select class="form-select form-select-sm" id="f-categoria" name="categoria">
+        <option value="">Todos</option>
+        {% for chave, rotulo in CATEGORIAS.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.categoria == chave }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-desde">De</label>
+      <input class="form-control form-control-sm" type="date" id="f-desde" name="desde" value="{{ filtros.desde or '' }}">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-ate">Até</label>
+      <input class="form-control form-control-sm" type="date" id="f-ate" name="ate" value="{{ filtros.ate or '' }}">
+    </div>
+    <div class="col-12 col-md-3 d-flex gap-2">
+      <button class="btn btn-success btn-sm flex-fill" type="submit"><i class="fas fa-filter me-1"></i>Filtrar</button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="limpeza-atualizar" title="Atualizar"><i class="fas fa-rotate"></i></button>
+    </div>
+  </form>
+
+  <div class="row g-2 mb-3" id="limpeza-indicadores"></div>
+  <div class="alert alert-danger d-none" id="limpeza-erro"></div>
+
+  <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações de limpeza"></div>
+  <div class="limpeza-legenda mt-2">
+    <span><i style="background:#ef4444"></i>Aguardando limpeza</span>
+    <span><i style="background:#f97316"></i>Aguardando há mais de 48 h</span>
+    <span><i style="background:#22c55e"></i>Limpeza comprovada</span>
+    <span><i style="background:#a855f7"></i>Comprovada longe do ponto (&gt; {{ DISTANCIA_ALERTA_M|int }} m)</span>
+    <span><i style="background:#9ca3af"></i>Descartada</span>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script>
+(() => {
+  const DADOS = {{ url_for('limpeza_urbana.mapa_dados')|tojson }};
+  const DETALHE = {{ url_for('limpeza_urbana.solicitacao', solicitacao_id=0)|tojson }}.replace(/0$/, '');
+  const CSV = {{ (url_for('limpeza_urbana.relatorio') if pode_fiscalizar else '')|tojson }};
+  const el = (id) => document.getElementById(id);
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const urlSegura = (u) => /^(https?:\/\/|\/)/.test(String(u || '')) ? esc(u) : '';
+
+  const mapa = L.map('limpeza-mapa').setView([-20.7205, -47.8750], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
+  }).addTo(mapa);
+  let camada = L.layerGroup().addTo(mapa);
+  let primeiraVez = true;
+
+  function cor(p) {
+    if (p.status === 'descartada') return '#9ca3af';
+    if (p.status === 'concluida') return p.comprovacao && p.comprovacao.longe ? '#a855f7' : '#22c55e';
+    const horas = (Date.now() - Date.parse(p.criado_em)) / 3600000;
+    return horas > 48 ? '#f97316' : '#ef4444';
+  }
+
+  function popup(p) {
+    const c = p.comprovacao;
+    return `<div class="limpeza-popup">
+      <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong><br>
+      <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
+      <div class="fotos"><img src="${urlSegura(p.foto)}" alt="Antes" loading="lazy">
+        ${c ? `<img src="${urlSegura(c.foto)}" alt="Depois" loading="lazy">` : '<div class="small text-muted d-flex align-items-center">Sem foto da limpeza</div>'}</div>
+      Comunicada em ${esc(p.criado_local)}${p.autor ? ` por ${esc(p.autor)}` : ''}<br>
+      ${p.referencia ? `Referência: ${esc(p.referencia)}<br>` : ''}
+      ${c ? `Limpa em ${esc(c.criado_local)} (${p.horas_ate_limpeza} h) · ${Math.round(c.distancia_m)} m do ponto<br>` : ''}
+      ${p.recusas ? `<span class="text-danger">${p.recusas} comprovação(ões) recusada(s)</span><br>` : ''}
+      <a href="${DETALHE}${p.id}">Abrir</a>
+    </div>`;
+  }
+
+  function numero(n, rotulo, tom) {
+    return `<div class="col-6 col-md-4 col-xl"><div class="limpeza-num"><div class="n ${tom || ''}">${n == null ? '—' : esc(n)}</div><div class="l">${esc(rotulo)}</div></div></div>`;
+  }
+
+  function parametros() {
+    const dados = new FormData(el('limpeza-filtros'));
+    const q = new URLSearchParams();
+    for (const [k, v] of dados.entries()) if (v) q.set(k, v);
+    return q.toString();
+  }
+
+  async function carregar() {
+    const q = parametros();
+    if (CSV && el('limpeza-csv')) el('limpeza-csv').href = CSV + (q ? `?${q}` : '');
+    try {
+      const r = await fetch(DADOS + (q ? `?${q}` : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      el('limpeza-erro').classList.add('d-none');
+      const i = d.indicadores;
+      el('limpeza-indicadores').innerHTML = [
+        numero(i.abertas, 'Aguardando limpeza', 'text-danger'),
+        numero(i.abertas_48h, 'Aguardando > 48 h', 'text-warning'),
+        numero(i.concluidas, 'Limpezas comprovadas', 'text-success'),
+        numero(i.mediana_horas == null ? null : `${i.mediana_horas} h`, 'Tempo mediano até a limpeza'),
+        numero(i.comprovacoes_longe, 'Comprovações longe do ponto'),
+        numero(i.comprovacoes_recusadas, 'Comprovações recusadas'),
+      ].join('');
+      camada.clearLayers();
+      const limites = [];
+      d.pontos.forEach((p) => {
+        const c = cor(p);
+        L.circleMarker([p.lat, p.lon], { radius: 8, color: '#1f2937', weight: 1, fillColor: c, fillOpacity: .9 })
+          .bindPopup(popup(p), { maxWidth: 280 }).addTo(camada);
+        limites.push([p.lat, p.lon]);
+      });
+      el('limpeza-sub').textContent = d.pontos.length
+        ? `${d.pontos.length} comunicação(ões) no filtro${d.limite ? ' (mostrando as 2.000 mais recentes)' : ''}. Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+        : 'Nenhuma comunicação neste filtro.';
+      if (primeiraVez && limites.length) {
+        mapa.invalidateSize();
+        mapa.fitBounds(limites, { padding: [30, 30], maxZoom: 17 });
+      }
+      primeiraVez = false;
+    } catch (e) {
+      el('limpeza-erro').textContent = 'Não foi possível carregar as comunicações. Verifique a conexão e toque em atualizar.';
+      el('limpeza-erro').classList.remove('d-none');
+    }
+  }
+
+  el('limpeza-filtros').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    history.replaceState(null, '', `?${parametros()}`);
+    primeiraVez = true;
+    carregar();
+  });
+  el('limpeza-atualizar').addEventListener('click', carregar);
+  // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
+  setInterval(() => { if (!document.hidden) carregar(); }, 60000);
+  carregar();
+})();
+</script>
+{% endblock %}

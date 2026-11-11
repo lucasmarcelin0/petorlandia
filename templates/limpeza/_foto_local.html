@@ -1,0 +1,13 @@
+{# Campo de foto com localização do aparelho. Usado na comunicação e na comprovação.
+   Espera um <form data-limpeza-foto> contendo este trecho. #}
+<div class="limpeza-foto mb-3">
+  <label class="form-label fw-semibold" for="{{ prefixo }}-foto">{{ rotulo_foto }}</label>
+  <input class="form-control form-control-lg" type="file" id="{{ prefixo }}-foto" name="foto" accept="image/*" capture="environment" required>
+  <img class="limpeza-previa d-none mt-2" alt="Prévia da foto">
+  <input type="hidden" name="latitude" value="">
+  <input type="hidden" name="longitude" value="">
+  <input type="hidden" name="precisao" value="">
+  <div class="limpeza-gps small mt-2" role="status" aria-live="polite">
+    <i class="fas fa-location-crosshairs me-1"></i><span>Procurando sua localização…</span>
+  </div>
+</div>

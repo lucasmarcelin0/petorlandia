@@ -1,0 +1,147 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Comunicação nº {{ item.id }} · Limpeza urbana{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
+{% include "limpeza/_estilo.html" %}
+<style>#limpeza-mini-mapa { height: 260px; border-radius: 12px; border: 1px solid #e5e7eb; }</style>
+{% endblock %}
+
+{% block main %}
+{% set c = item.comprovacao_valida %}
+<div class="container limpeza-pagina py-4">
+  {% set ativo = '' %}
+  {% include "limpeza/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="h3 mb-0">Nº {{ item.id }} · {{ CATEGORIAS.get(item.categoria, item.categoria) }}</h1>
+    <span class="limpeza-selo {{ item.status }} fs-6">{{ STATUS.get(item.status, item.status) }}</span>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="limpeza-cartao h-100">
+        <h2 class="h6 text-uppercase text-muted">Antes · comunicação</h2>
+        <a href="{{ item.foto_url }}" target="_blank" rel="noopener"><img class="limpeza-foto-grande" src="{{ item.foto_url }}" alt="Foto da comunicação"></a>
+        <dl class="limpeza-meta row mt-3 mb-0">
+          <dt class="col-5">Recebida em</dt><dd class="col-7">{{ hora_local(item.criado_em) }}</dd>
+          {% if item.foto_capturada_em %}<dt class="col-5">Foto tirada em</dt><dd class="col-7">{{ hora_local(item.foto_capturada_em) }}</dd>{% endif %}
+          <dt class="col-5">Local</dt><dd class="col-7">{{ '%.6f'|format(item.latitude) }}, {{ '%.6f'|format(item.longitude) }}<br><span class="text-muted">{{ 'GPS gravado na foto' if item.origem_local == 'foto' else 'GPS do aparelho' }}{% if item.precisao_m %} · ± {{ item.precisao_m|round|int }} m{% endif %}</span></dd>
+          {% if item.referencia %}<dt class="col-5">Referência</dt><dd class="col-7">{{ item.referencia }}</dd>{% endif %}
+          {% if item.descricao %}<dt class="col-5">Detalhes</dt><dd class="col-7">{{ item.descricao }}</dd>{% endif %}
+          {% if pode_fiscalizar %}<dt class="col-5">Comunicada por</dt><dd class="col-7">{{ item.autor.name or item.autor.email }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="limpeza-cartao h-100">
+        <h2 class="h6 text-uppercase text-muted">Depois · comprovação da equipe</h2>
+        {% if c %}
+        <a href="{{ c.foto_url }}" target="_blank" rel="noopener"><img class="limpeza-foto-grande" src="{{ c.foto_url }}" alt="Foto da limpeza"></a>
+        <dl class="limpeza-meta row mt-3 mb-0">
+          <dt class="col-5">Comprovada em</dt><dd class="col-7">{{ hora_local(c.criado_em) }}</dd>
+          {% if c.foto_capturada_em %}<dt class="col-5">Foto tirada em</dt><dd class="col-7">{{ hora_local(c.foto_capturada_em) }}</dd>{% endif %}
+          <dt class="col-5">Distância do ponto</dt><dd class="col-7">{{ c.distancia_m|round|int }} m {% if c.distancia_m > DISTANCIA_ALERTA_M %}<span class="limpeza-selo alerta ms-1">longe do ponto</span>{% endif %}<br><span class="text-muted">{{ 'GPS gravado na foto' if c.origem_local == 'foto' else 'GPS do aparelho' }}{% if c.precisao_m %} · ± {{ c.precisao_m|round|int }} m{% endif %}</span></dd>
+          {% if c.observacao %}<dt class="col-5">Observação</dt><dd class="col-7">{{ c.observacao }}</dd>{% endif %}
+          {% if pode_mapa %}<dt class="col-5">Equipe</dt><dd class="col-7">{{ c.autor.name or c.autor.email }}</dd>{% endif %}
+        </dl>
+        {% if pode_fiscalizar %}
+        <form method="post" action="{{ url_for('limpeza_urbana.recusar_comprovacao', comprovacao_id=c.id) }}" class="mt-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label small fw-semibold" for="motivo-recusa">Fiscalização: recusar esta comprovação</label>
+          <div class="input-group">
+            <input class="form-control" id="motivo-recusa" name="motivo" maxlength="300" placeholder="Motivo (ex.: lixo continua no canteiro)" required>
+            <button class="btn btn-outline-danger" type="submit">Recusar</button>
+          </div>
+          <div class="form-text">A comunicação volta para a fila de limpeza. A foto recusada fica no histórico.</div>
+        </form>
+        {% endif %}
+        {% elif item.status == 'aberta' and pode_comprovar %}
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('limpeza_urbana.comprovar', solicitacao_id=item.id) }}" data-limpeza-foto novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% with prefixo='comprovacao', rotulo_foto='Foto do local depois da limpeza' %}{% include "limpeza/_foto_local.html" %}{% endwith %}
+          <div class="mb-3">
+            <label class="form-label" for="observacao">Observação <span class="text-muted">(opcional)</span></label>
+            <input class="form-control" id="observacao" name="observacao" maxlength="500">
+          </div>
+          <button type="submit" class="btn btn-success w-100"><i class="fas fa-check me-2"></i>Comprovar limpeza</button>
+          <p class="small text-muted mt-2 mb-0">Tire a foto agora, do mesmo ângulo da foto da comunicação. A distância até o ponto comunicado fica registrada.</p>
+        </form>
+        {% elif item.status == 'descartada' %}
+        <p class="mb-1">Descartada em {{ hora_local(item.descartada_em) }}{% if pode_fiscalizar and item.descartada_por %} por {{ item.descartada_por }}{% endif %}.</p>
+        <p class="text-muted mb-0">Motivo: {{ item.motivo_descarte }}</p>
+        {% else %}
+        <p class="text-muted mb-0">Aguardando a equipe de limpeza.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if pode_mapa %}
+  <div class="limpeza-cartao mt-3">
+    <div id="limpeza-mini-mapa" data-lat="{{ item.latitude }}" data-lon="{{ item.longitude }}"
+         {% if c %}data-clat="{{ c.latitude }}" data-clon="{{ c.longitude }}"{% endif %}></div>
+    <p class="small text-muted mt-2 mb-0">Vermelho: ponto comunicado. Verde: onde a foto da limpeza foi tirada.
+      <a href="https://www.google.com/maps/dir/?api=1&destination={{ item.latitude }},{{ item.longitude }}" target="_blank" rel="noopener">Como chegar</a></p>
+  </div>
+  {% endif %}
+
+  {% set recusadas = item.comprovacoes|selectattr('status', 'equalto', 'recusada')|list %}
+  {% if recusadas and pode_mapa %}
+  <div class="limpeza-cartao mt-3">
+    <h2 class="h6 text-uppercase text-muted">Comprovações recusadas</h2>
+    {% for r in recusadas %}
+    <div class="d-flex gap-3 align-items-start {{ 'border-top pt-2 mt-2' if not loop.first }}">
+      <a href="{{ r.foto_url }}" target="_blank" rel="noopener"><img src="{{ r.foto_url }}" alt="Foto recusada" style="width:96px;height:72px;object-fit:cover;border-radius:8px"></a>
+      <div class="limpeza-meta">Enviada em {{ hora_local(r.criado_em) }} por {{ r.autor.name or r.autor.email }} · {{ r.distancia_m|round|int }} m do ponto<br>
+        Recusada em {{ hora_local(r.recusada_em) }}{% if pode_fiscalizar %} por {{ r.recusada_por }}{% endif %}: {{ r.motivo_recusa }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if pode_fiscalizar and item.status == 'aberta' %}
+  <form method="post" action="{{ url_for('limpeza_urbana.descartar', solicitacao_id=item.id) }}" class="limpeza-cartao mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label small fw-semibold" for="motivo-descarte">Fiscalização: descartar esta comunicação</label>
+    <div class="input-group">
+      <input class="form-control" id="motivo-descarte" name="motivo" maxlength="300" placeholder="Duplicada, fora da área, foto sem relação…" required>
+      <button class="btn btn-outline-secondary" type="submit">Descartar</button>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if eventos %}
+  <div class="limpeza-cartao mt-3">
+    <h2 class="h6 text-uppercase text-muted">Histórico</h2>
+    <ul class="list-unstyled limpeza-meta mb-0">
+      {% for e in eventos %}<li>{{ hora_local(e.criado_em) }} · {{ e.tipo|replace('_', ' ') }}{% if e.detalhe %} — {{ e.detalhe }}{% endif %}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% if pode_mapa %}
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script>
+(() => {
+  const el = document.getElementById('limpeza-mini-mapa');
+  if (!el || !window.L) return;
+  const p = [Number(el.dataset.lat), Number(el.dataset.lon)];
+  const mapa = L.map(el).setView(p, 18);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
+  }).addTo(mapa);
+  L.circleMarker(p, { radius: 9, color: '#991b1b', fillColor: '#ef4444', fillOpacity: .9 }).addTo(mapa);
+  if (el.dataset.clat) {
+    const q = [Number(el.dataset.clat), Number(el.dataset.clon)];
+    L.circleMarker(q, { radius: 8, color: '#14532d', fillColor: '#22c55e', fillOpacity: .9 }).addTo(mapa);
+    L.polyline([p, q], { color: '#6b7280', dashArray: '4 4' }).addTo(mapa);
+    mapa.fitBounds(L.latLngBounds([p, q]).pad(0.6), { maxZoom: 19 });
+  }
+})();
+</script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='1') }}"></script>
+{% endblock %}

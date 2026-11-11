@@ -1,0 +1,19 @@
+<style>
+  .limpeza-pagina { max-width: 1180px; }
+  .limpeza-cartao { background: #fff; border: 1px solid #dbe8c8; border-radius: 14px; padding: 18px; }
+  .limpeza-previa { max-width: 100%; max-height: 320px; border-radius: 12px; border: 1px solid #e5e7eb; object-fit: contain; }
+  .limpeza-foto-grande { width: 100%; max-height: 420px; object-fit: contain; background: #f3f4f6; border-radius: 12px; }
+  .limpeza-selo { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: .78rem; font-weight: 600; }
+  .limpeza-selo.aberta { background: #fde68a; color: #78350f; }
+  .limpeza-selo.concluida { background: #bbf7d0; color: #14532d; }
+  .limpeza-selo.descartada { background: #e5e7eb; color: #374151; }
+  .limpeza-selo.alerta { background: #fecaca; color: #7f1d1d; }
+  .limpeza-meta { font-size: .86rem; color: #4b5563; }
+  .limpeza-meta dt { font-weight: 600; color: #374151; }
+  .limpeza-nav { flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 2px; }
+  .limpeza-nav .btn { width: auto !important; flex: 0 0 auto; white-space: nowrap; }
+  .limpeza-categorias { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .limpeza-categorias label { border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; gap: 8px; align-items: center; margin: 0; }
+  .limpeza-categorias input:checked + span { font-weight: 700; color: #3f6212; }
+  .limpeza-categorias label:has(input:checked) { border-color: #4d7c0f; box-shadow: 0 0 0 2px rgba(77, 124, 15, .18); }
+</style>
