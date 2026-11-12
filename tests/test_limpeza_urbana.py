@@ -487,3 +487,27 @@ def test_lista_administrativa_separada_na_barra(client):
     entrar(client, user)
     assert client.get('/limpeza-urbana/comunicacoes').status_code in NEGADO
     assert 'Todas as comunicações</a>' not in client.get('/limpeza-urbana/mapa').get_data(as_text=True)
+
+def test_outro_exige_descricao_e_envio_idempotente(client, uploads):
+    user = conta('offline@example.test')
+    dar(user, 'colaborador')
+    entrar(client, user)
+    headers = {'X-Requested-With': 'XMLHttpRequest'}
+    chave = 'f84b9e20-ea32-43b9-b432-b078600c9190'
+    def enviar(descricao):
+        return client.post('/limpeza-urbana/comunicar', data={
+            'categoria': 'outro', 'descricao': descricao, 'chave_envio': chave,
+            'foto': (foto(), 'foto.jpg'), 'latitude': str(PONTO[0]), 'longitude': str(PONTO[1]),
+        }, headers=headers)
+    assert enviar('').status_code == 400
+    assert LimpezaSolicitacao.query.count() == 0
+    primeiro = enviar('Ponto de atenção')
+    assert primeiro.status_code == 200
+    repetido = enviar('Ponto de atenção')
+    assert repetido.status_code == 200 and repetido.json['id'] == primeiro.json['id']
+    assert LimpezaSolicitacao.query.count() == 1
+    assert len(uploads) == 1
+    outra = conta('offline-outra@example.test')
+    dar(outra, 'colaborador')
+    entrar(client, outra)
+    assert enviar('Ponto de atenção').status_code in NEGADO

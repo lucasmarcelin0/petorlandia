@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import csv
 import io
+import uuid
+
+from sqlalchemy.exc import IntegrityError
 from datetime import date
 
 from flask import (Blueprint, Response, abort, flash, jsonify, redirect, render_template, request,
@@ -81,16 +84,29 @@ def comunicar():
     _exigir(servico.pode_comunicar(current_user))
     form = request.form
     if request.method == "POST":
+        from models.limpeza import LimpezaSolicitacao
+        chave = (form.get("chave_envio") or "").strip()
+        if chave:
+            try:
+                chave = str(uuid.UUID(chave))
+            except ValueError:
+                return jsonify(erro="Identificador de envio inválido."), 400
+            existente = LimpezaSolicitacao.query.filter_by(chave_envio=chave).first()
+            if existente:
+                _exigir(existente.autor_id == current_user.id)
+                return jsonify(destino=url_for(".minhas"), id=existente.id)
         try:
             categorias = servico.normalizar_categorias(form.getlist("categoria"))
             if not categorias:
                 raise LimpezaErro("Marque o que precisa ser limpo (pode marcar mais de um).")
+            if "outro" in categorias.split(",") and not (form.get("descricao") or "").strip():
+                raise LimpezaErro("Descreva o que precisa de atenção quando marcar Outro.")
             data, exif, nome = servico.ler_foto(request.files.getlist("foto"))
             lat, lon, precisao, origem = servico.escolher_local(form, exif)
             foto_url = servico.guardar_foto(data, nome, "limpeza/comunicacoes", upload_to_s3)
             from models.limpeza import LimpezaSolicitacao
             solicitacao = LimpezaSolicitacao(
-                autor_id=current_user.id, categorias=categorias,
+                autor_id=current_user.id, chave_envio=chave or None, categorias=categorias,
                 descricao=(form.get("descricao") or "").strip()[:500] or None,
                 referencia=(form.get("referencia") or "").strip()[:200] or None,
                 latitude=lat, longitude=lon, precisao_m=precisao, origem_local=origem,
@@ -101,6 +117,12 @@ def comunicar():
             servico.registrar_evento("comunicada", solicitacao.id, current_user,
                                      f"{servico.rotulo_categorias(categorias)} ({origem})")
             db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            existente = LimpezaSolicitacao.query.filter_by(chave_envio=chave).first() if chave else None
+            if existente and existente.autor_id == current_user.id:
+                return jsonify(destino=url_for(".minhas"), id=existente.id)
+            raise
         except LimpezaErro as exc:
             db.session.rollback()
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -110,7 +132,7 @@ def comunicar():
                                    **_contexto_base()), 400
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
-            return jsonify(destino=url_for(".minhas"))
+            return jsonify(destino=url_for(".minhas"), id=solicitacao.id)
         flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
         return redirect(url_for(".minhas"))
     return render_template("limpeza/comunicar.html", form={}, selecionadas=[], **_contexto_base())

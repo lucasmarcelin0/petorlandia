@@ -22,6 +22,8 @@
     var botao = form.querySelector('button[type=submit]');
     var melhor = null;
     var fluxo = null;
+    var localAtual = null;
+    var localFoto = false;
 
     function avisar(msg) {
       if (!aviso) return;
@@ -38,13 +40,11 @@
     // ---- Localização ----
     function guardar(pos) {
       var c = pos.coords;
-      if (melhor && c.accuracy > melhor.accuracy && (Date.now() - melhor.quando) < 60000) return;
       melhor = { accuracy: c.accuracy, quando: Date.now() };
-      lat.value = c.latitude.toFixed(7);
-      lon.value = c.longitude.toFixed(7);
-      prec.value = Math.round(c.accuracy);
+      localAtual = { latitude: c.latitude.toFixed(7), longitude: c.longitude.toFixed(7), precisao: Math.round(c.accuracy), quando: pos.timestamp };
+      if (localFoto) return;
       var ok = c.accuracy <= 50;
-      mostrar('Localização registrada (precisão de ' + Math.round(c.accuracy) + ' m)' +
+      mostrar('Localização disponível para a próxima foto (precisão de ' + Math.round(c.accuracy) + ' m)' +
         (ok ? '.' : '. Se puder, vá para céu aberto para melhorar.'), ok ? 'success' : 'warning');
     }
 
@@ -67,6 +67,17 @@
     }
 
     // ---- Foto ----
+    function fixarLocal(campo) {
+      lat.value = lon.value = prec.value = '';
+      localFoto = true;
+      if (campo === campoCamera && localAtual && Date.now() - localAtual.quando < 15000) {
+        lat.value = localAtual.latitude; lon.value = localAtual.longitude; prec.value = localAtual.precisao;
+        mostrar('Localização fixada para esta foto (precisão de ' + localAtual.precisao + ' m).', 'success');
+      } else {
+        mostrar('A foto precisa conter sua localização. Para usar o GPS do aparelho, tire outra foto no local após permitir a localização.', 'warning');
+      }
+    }
+
     function arquivoEscolhido() {
       for (var i = 0; i < arquivos.length; i++) {
         if (arquivos[i].files && arquivos[i].files.length) return arquivos[i].files[0];
@@ -89,6 +100,11 @@
         if (campo.files && campo.files.length) {
           arquivos.forEach(function (outro) { if (outro !== campo) outro.value = ''; });
           avisar('');
+          if (campo === campoCamera && !fluxo) {
+            lat.value = lon.value = prec.value = ''; localFoto = true;
+            mostrar('Na câmera do aparelho, a foto precisa ter localização gravada.', 'warning');
+          } else fixarLocal(campo);
+          if (!fluxo) form.dispatchEvent(new CustomEvent('limpeza:foto', {detail: {hora: Date.now()}}));
         }
         exibir(arquivoEscolhido());
       });
@@ -118,6 +134,9 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
+      fixarLocal(campoCamera);
+      var localCaptura = { latitude: lat.value, longitude: lon.value, precisao: prec.value };
+      var horaCaptura = Date.now();
       canvas.toBlob(function (blob) {
         if (!blob) { avisar('Não foi possível capturar a foto. Tente de novo.'); return; }
         try {
@@ -125,6 +144,8 @@
           dt.items.add(new File([blob], 'foto-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
           campoCamera.files = dt.files;
           campoCamera.dispatchEvent(new Event('change'));
+          lat.value = localCaptura.latitude; lon.value = localCaptura.longitude; prec.value = localCaptura.precisao;
+          form.dispatchEvent(new CustomEvent('limpeza:foto', {detail: {hora: horaCaptura}}));
         } catch (e) {
           avisar('Este navegador não conseguiu usar a foto da câmera. Use "Escolher da galeria".');
         }
@@ -139,7 +160,7 @@
       if (acao === 'camera') {
         // Celular: a câmera do próprio aparelho (capture). Computador: câmera dentro da página.
         var temCamera = navigator.mediaDevices && navigator.mediaDevices.getUserMedia && video;
-        if (celular || !temCamera) { campoCamera.click(); return; }
+        if (!temCamera) { campoCamera.click(); return; }
         abrirCameraNaPagina().catch(function () {
           fecharCamera();
           avisar('Não foi possível abrir a câmera deste aparelho. Permita o acesso à câmera no navegador ' +
@@ -156,11 +177,19 @@
     });
 
     form.addEventListener('submit', async function (ev) {
+      if (form.hasAttribute('data-offline-comunicacao')) return;
       ev.preventDefault();
       var categorias = form.querySelectorAll('input[name=categoria]');
       if (categorias.length && !form.querySelector('input[name=categoria]:checked')) {
         avisar('Marque o que precisa ser limpo antes de enviar. Sua foto continua selecionada.');
         categorias[0].focus();
+        return;
+      }
+      var outro = form.querySelector('input[name=categoria][value=outro]:checked');
+      var descricao = form.querySelector('[name=descricao]');
+      if (outro && descricao && !descricao.value.trim()) {
+        avisar('Descreva o que precisa de atenção quando marcar Outro.');
+        descricao.focus();
         return;
       }
       if (!arquivoEscolhido()) {

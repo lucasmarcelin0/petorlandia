@@ -39,6 +39,7 @@ class LimpezaSolicitacao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     autor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    chave_envio = db.Column(db.String(36), unique=True, nullable=True)
     # Um ou mais tipos (chaves de ``services.limpeza_urbana.CATEGORIAS``) separados por vírgula.
     categorias = db.Column(db.String(120), nullable=False)
     descricao = db.Column(db.String(500))
