@@ -1,4 +1,5 @@
 """Views do domínio pacientes_routes (migrado do app.py)."""
+from services.pmo_reforcos import filtrar_reforcos_automaticos
 import qrcode
 from flask import Blueprint
 import math, os, re, secrets, unicodedata, uuid
@@ -1079,14 +1080,14 @@ def ficha_animal(animal_id):
             .all()
         )
         proxima_vacina = (
-            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            filtrar_reforcos_automaticos(Vacina.query.filter_by(animal_id=animal.id, aplicada=False))
             .filter(Vacina.aplicada_em.isnot(None))
             .filter(Vacina.aplicada_em >= date.today())
             .order_by(Vacina.aplicada_em)
             .first()
         )
         doses_atrasadas = (
-            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            filtrar_reforcos_automaticos(Vacina.query.filter_by(animal_id=animal.id, aplicada=False))
             .filter(Vacina.aplicada_em < date.today())
             .order_by(Vacina.aplicada_em)
             .all()
@@ -1105,7 +1106,7 @@ def ficha_animal(animal_id):
     def _load_events_data():
         now = utcnow()
         vacinas_agendadas = (
-            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            filtrar_reforcos_automaticos(Vacina.query.filter_by(animal_id=animal.id, aplicada=False))
             .filter(Vacina.aplicada_em >= date.today())
             .order_by(Vacina.aplicada_em)
             .all()
@@ -1192,7 +1193,7 @@ def _resumo_ficha_animal(animal, consultas_query):
     para respeitar o mesmo recorte por clínica do histórico.
     """
     hoje = date.today()
-    pendentes = Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+    pendentes = filtrar_reforcos_automaticos(Vacina.query.filter_by(animal_id=animal.id, aplicada=False))
     proxima_vacina = (
         pendentes.filter(Vacina.aplicada_em.isnot(None))
         .filter(Vacina.aplicada_em >= hoje)
@@ -4237,7 +4238,7 @@ def carteirinha_publica(token):
         .all()
     )
     proximas_doses = (
-        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        filtrar_reforcos_automaticos(Vacina.query.filter_by(animal_id=animal.id, aplicada=False))
         .filter(Vacina.aplicada_em.isnot(None))
         .order_by(Vacina.aplicada_em)
         .all()

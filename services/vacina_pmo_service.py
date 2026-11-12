@@ -2062,8 +2062,9 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
             Vacina.nome.in_(["Reforço Vacina Antirrábica", "Reforco Vacina Antirrabica"]),
             Vacina.tipo.in_(["Reforço PMO", "Reforco PMO"]),
             Vacina.aplicada.is_(False),
-            Vacina.aplicada_em == booster_date,
+            Vacina.observacoes == "Reforço anual previsto após a campanha PMO.",
         )
+        .order_by(Vacina.aplicada_em.desc(), Vacina.id.desc())
         .first()
     )
     if not booster:
@@ -2084,6 +2085,8 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
     else:
         booster.nome = "Reforço Vacina Antirrábica"
         booster.tipo = "Reforço PMO"
+        if booster.aplicada_em is None or booster.aplicada_em < booster_date:
+            booster.aplicada_em = booster_date
 
 
 def _ensure_visit_records(visit: PmoVaccinationVisit) -> None:
