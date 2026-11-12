@@ -176,14 +176,15 @@ def test_carteirinha_mostra_vermifugacoes(app, client, monkeypatch):
 
 
 def test_carteirinha_uses_latest_clinical_vaccine_group_for_next_dose(app, client, monkeypatch):
-    from datetime import date
+    from datetime import date, timedelta
 
+    data_canina = date.today() - timedelta(days=30)
     user = _make_user()
     animal = _make_animal(user)
     db.session.add_all([
         Vacina(animal_id=animal.id, nome="Rabisin-i", tipo="Antirrábica", aplicada=True, aplicada_em=date(2024, 9, 28), intervalo_dias=365),
         Vacina(animal_id=animal.id, nome="Raiva PM", tipo="Antirrábica", aplicada=True, aplicada_em=date(2025, 9, 25)),
-        Vacina(animal_id=animal.id, nome="Nobivac Canine", aplicada=True, aplicada_em=date(2025, 11, 11), intervalo_dias=365),
+        Vacina(animal_id=animal.id, nome="Nobivac Canine", aplicada=True, aplicada_em=data_canina, intervalo_dias=365),
     ])
     db.session.commit()
     _login(monkeypatch, user)
@@ -195,7 +196,7 @@ def test_carteirinha_uses_latest_clinical_vaccine_group_for_next_dose(app, clien
     resp = client.get(f"/carteirinha/{animal.public_token}")
     current_section = resp.data.decode("utf-8").split("<details", 1)[0]
 
-    assert "11/11/2026" in current_section
+    assert (data_canina + timedelta(days=365)).strftime("%d/%m/%Y") in current_section
     assert "Rabisin-i" not in current_section
 
 
