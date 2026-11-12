@@ -63,7 +63,16 @@ def violacoes_do_medicamento(medicamento):
             ap for ap in (getattr(medicamento, 'apresentacoes', None) or [])
             if getattr(ap, 'vetsmart_produto_id', None) in pids
         ]
-        publicadas = [b for b in (produto.get('apresentacoes') or []) if _tem_conteudo(b)]
+        # O que o VetSmart publica para o produto: o catálogo do prescritor,
+        # quando já importado; senão, o retrato da página de bula.
+        do_catalogo = _esc._formas_do_catalogo(_esc.catalogo_do_produto(medicamento, produto))
+        if do_catalogo:
+            publicadas = [_esc.rotulo_do_catalogo(forma) for forma in do_catalogo]
+        else:
+            publicadas = [
+                _esc.rotulo_vetsmart(b, nome)
+                for b in (produto.get('apresentacoes') or []) if _tem_conteudo(b)
+            ]
 
         try:
             lista = bulario.listar_apresentacoes_medicamento(medicamento, nome_comercial_filtro=nome)
@@ -87,11 +96,13 @@ def violacoes_do_medicamento(medicamento):
             pid = getattr(ap, 'vetsmart_produto_id', None)
             if ap.id in ids and pid is not None and pid not in pids:
                 violacoes.append(('OUTRO_PRODUTO', nome, f'apresentacao {ap.id}'))
-        for bruta in publicadas:
-            if _esc.norm(_esc.rotulo_vetsmart(bruta, nome)) not in rotulos:
-                violacoes.append(('FALTA_VETSMART', nome, _esc.rotulo_vetsmart(bruta, nome)))
+        for rotulo in publicadas:
+            if _esc.norm(rotulo) not in rotulos:
+                violacoes.append(('FALTA_VETSMART', nome, rotulo))
         for ap in linhas:
-            if _esc.norm(_esc.rotulo_vetsmart(ap, nome)) not in rotulos:
+            # A linha aparece com o próprio id, ou representada por outra de
+            # mesmo rótulo (duplicata de importações antigas).
+            if ap.id not in ids and _esc.norm(_esc.rotulo_vetsmart(ap, nome)) not in rotulos:
                 violacoes.append(('LINHA_OCULTA', nome, f'apresentacao {ap.id}'))
 
         for paciente in PACIENTES:
@@ -120,6 +131,9 @@ def resumo_do_medicamento(medicamento) -> Counter:
             continue
         nomes_vistos.add(chave)
         contagem['produtos'] += 1
+        produto = _esc.resolver_produto(medicamento, nome) or produto
+        if _esc._formas_do_catalogo(_esc.catalogo_do_produto(medicamento, produto)):
+            contagem['com_catalogo_do_prescritor'] += 1
         escopo = _esc.escopo_de(medicamento, nome)
         if escopo is not None:
             contagem['com_apresentacoes_proprias'] += 1

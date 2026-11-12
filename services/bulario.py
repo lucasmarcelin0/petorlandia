@@ -1946,6 +1946,31 @@ def _categoria_pela_via(ap, via: Optional[str]) -> Optional[Tuple[str, str]]:
     return _CATEGORIA_POR_VIA.get(next(iter(vias)))
 
 
+_MEDIDAS_DO_PRESCRITOR = (
+    ('comprimid', 'comprimido'),
+    ('capsul', 'cápsula'),
+    ('drage', 'drágea'),
+    ('tablete', 'tablete'),
+    ('petisco', 'petisco'),
+    ('gota', 'gota'),
+    ('pipeta', 'pipeta'),
+    ('mililitro', 'mL'),
+)
+
+
+def _unidade_da_medida(medida: Optional[str]) -> Optional[str]:
+    """A "Medida" sugerida pelo prescritor do VetSmart, como unidade prática."""
+    texto = _texto_norm(medida)
+    if not texto:
+        return None
+    if texto == 'ml':
+        return 'mL'
+    for trecho, unidade in _MEDIDAS_DO_PRESCRITOR:
+        if texto.startswith(trecho):
+            return unidade
+    return None
+
+
 def _montar_info_apresentacao(
     ap,
     dose_unit_out: Optional[str] = None,
@@ -1963,6 +1988,9 @@ def _montar_info_apresentacao(
     unidade_pratica = _unidade_pratica_por_forma(ap.forma, categoria, ap.concentracao)
     if no_produto and categoria == 'outros' and unidade_pratica == 'unidade' and _volume_em_ml(ap):
         unidade_pratica = 'mL'
+    # O catálogo do prescritor diz em que medida o VetSmart prescreve a
+    # apresentação ("Gota" para um frasco conta-gotas): vale mais que o palpite.
+    unidade_pratica = _unidade_da_medida(getattr(ap, 'medida', None)) or unidade_pratica
     tipo_origem = _tipo_origem_apresentacao(fabricante)
     rotulo_principal = _rotulo_principal_apresentacao(ap, categoria, unidade_pratica)
     rotulo_secundario = _rotulo_secundario_apresentacao(ap, rotulo_principal)
@@ -2052,6 +2080,26 @@ def _apresentacao_tem_texto(ap_info: Dict[str, Any]) -> bool:
     return any(c.isalnum() for c in texto)
 
 
+#: "20 mL" e "30 un" medem a embalagem, não o que há dentro dela.
+_UNIDADES_DE_EMBALAGEM = {'ml', 'l', 'un', 'unidade', 'unidades'}
+
+
+def _avulsa_vale_no_produto(ap_info: Dict[str, Any]) -> bool:
+    """Apresentação cadastrada sem produto serve dentro de um produto?
+
+    Serve a que traz uma concentração de verdade ("comprimido 4 mg") ou é
+    de manipulação — vale para qualquer marca do princípio ativo. "Frasco
+    (20 mL)" solto, não: cadastrado para contornar a falta do frasco do
+    Vermivet Filhote, aparecia também no Vermivet Plus, que é comprimido.
+    """
+    if not _apresentacao_tem_forca_ou_forma_util(ap_info):
+        return False
+    if ap_info.get('tipo_origem') == 'manipulado':
+        return True
+    unidade = _texto_norm(ap_info.get('concentracao_unidade')).replace(' ', '')
+    return ap_info.get('concentracao_valor') is not None and unidade not in _UNIDADES_DE_EMBALAGEM
+
+
 def _listar_apresentacoes_do_produto(
     escopo,
     dose_unit_out: Optional[str] = None,
@@ -2101,7 +2149,7 @@ def _listar_apresentacoes_do_produto(
     avulsas: List[Dict[str, Any]] = []
     for ap in escopo.apresentacoes_avulsas:
         info = _montar_info_apresentacao(ap, dose_unit_out, dose_media)
-        if not _apresentacao_tem_forca_ou_forma_util(info):
+        if not _avulsa_vale_no_produto(info):
             continue
         forca = (info['categoria'], info['concentracao_valor'], (info['concentracao_unidade'] or '').lower())
         if info['concentracao_valor'] is not None and forca in forcas_proprias:
@@ -2148,6 +2196,7 @@ def listar_apresentacoes_medicamento(
         return _listar_apresentacoes_do_produto(escopo, dose_unit_out, dose_media)
 
     todas_apresentacoes = getattr(medicamento, 'apresentacoes', None) or []
+    filtrou_por_marca = False
     if nome_comercial_filtro:
         nc_lower = nome_comercial_filtro.strip().lower()
         apresentacoes_filtradas = [
@@ -2156,6 +2205,11 @@ def listar_apresentacoes_medicamento(
         ]
         if apresentacoes_filtradas:
             todas_apresentacoes = apresentacoes_filtradas
+            filtrou_por_marca = True
+    # A lista genérica do princípio ativo, quando já veio do catálogo do
+    # prescritor, abre a lista: é o que o VetSmart oferece a quem prescreve
+    # sem marca. As apresentações das marcas continuam logo depois.
+    genericas = [] if filtrou_por_marca else _listar_genericas(medicamento, dose_unit_out, dose_media)
     todas_info = [
         _montar_info_apresentacao(ap, dose_unit_out, dose_media)
         for ap in todas_apresentacoes
@@ -2195,7 +2249,51 @@ def listar_apresentacoes_medicamento(
             ap_info['fabricantes'] = existente.get('fabricantes', [])
             ap_info['source_count'] = existente.get('source_count', 1)
             apres_unicas[chave] = ap_info
-    return list(apres_unicas.values())
+    das_marcas = list(apres_unicas.values())
+    if not genericas:
+        return das_marcas
+    if not preservar_variantes_comerciais:
+        # "500 mg comprimido" de uma marca repete o genérico de mesma força.
+        forcas_genericas = {_forca_da_info(info) for info in genericas} - {None}
+        das_marcas = [info for info in das_marcas if _forca_da_info(info) not in forcas_genericas]
+    return genericas + das_marcas
+
+
+def _forca_da_info(ap_info: Dict[str, Any]) -> Optional[tuple]:
+    """(categoria, força) comparável: "1 g" e "1000 mg" são a mesma coisa."""
+    if ap_info.get('concentracao_valor') is None:
+        return None
+    valor, unidade = _esc._forca(float(ap_info['concentracao_valor']), ap_info.get('concentracao_unidade'))
+    return (ap_info.get('categoria'), round(valor, 4), unidade)
+
+
+def _listar_genericas(
+    medicamento,
+    dose_unit_out: Optional[str] = None,
+    dose_media: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """A lista genérica do princípio ativo, no formato do seletor."""
+    saida: List[Dict[str, Any]] = []
+    for ap in _esc.genericas_do_principio_ativo(medicamento):
+        info = _montar_info_apresentacao(
+            ap, dose_unit_out, dose_media,
+            via_do_produto=getattr(medicamento, 'via_administracao', None), no_produto=True,
+        )
+        rotulo = ap.rotulo_catalogo
+        info.update({
+            'descricao': rotulo,
+            'produto_nome': ap.produto_nome,
+            'rotulo_principal': rotulo,
+            'rotulo_opcao': rotulo,
+            'rotulo_secundario': '',
+            'rotulo_escolha': {'principal': '', 'secundario': '', 'especie': info.get('especie_label') or ''},
+            'origem': 'generico',
+            'fabricante': None,
+            'fabricantes': [],
+            'source_count': 1,
+        })
+        saida.append(info)
+    return saida
 
 
 _INDICACAO_STOPWORDS = {

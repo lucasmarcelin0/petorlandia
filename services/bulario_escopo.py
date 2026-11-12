@@ -377,6 +377,222 @@ def forcas_da_apresentacao(ap: Any) -> Set[Tuple[float, str]]:
     return saida
 
 
+# ───────────────────────── catálogo do prescritor ──────────────────────────
+#
+# O prescritor do VetSmart tem, para cada item, a lista de apresentações que
+# oferece ao veterinário e as dosagens já estruturadas. A página pública de
+# bula (de onde vem o retrato do produto) não traz a lista dos princípios
+# ativos genéricos: "Dipirona 500 mg, comprimido" só existe no catálogo.
+#
+# ``scripts/importar_catalogo_prescritor_vetsmart.py`` grava o que leu em
+# ``conteudo_estruturado['catalogo_prescritor'][<id do VetSmart>]``. Onde
+# existe, o catálogo é a lista do produto; onde não existe, vale o retrato.
+
+CHAVE_CATALOGO = "catalogo_prescritor"
+
+_NUM = r"(\d+(?:[.,]\d+)?)"
+_RE_CONC_POR_VOLUME = re.compile(_NUM + r"\s*(mcg|ug|mg|g|ui)\s*/\s*" + _NUM + r"\s*ml")
+_RE_CONC_POR_ML = re.compile(_NUM + r"\s*(mcg|ug|mg|g|ui)\s*/\s*ml")
+_RE_CONC_PERCENTUAL = re.compile(_NUM + r"\s*%")
+_RE_CONC_SIMPLES = re.compile(_NUM + r"\s*(mcg|ug|mg|g|ui)(?![a-z/])")
+_RE_QUANTIDADE = re.compile(_NUM + r"\s*(ml|l|kg|g|mg|un|unidades?|comprimidos?|capsulas?|drageas?|doses?)\b")
+
+
+def _numero(texto: str) -> float:
+    return float(texto.replace(",", "."))
+
+
+def catalogo_do_medicamento(medicamento: Any) -> Dict[str, Any]:
+    conteudo = getattr(medicamento, "conteudo_estruturado", None)
+    catalogo = conteudo.get(CHAVE_CATALOGO) if isinstance(conteudo, dict) else None
+    return catalogo if isinstance(catalogo, dict) else {}
+
+
+def catalogo_do_produto(medicamento: Any, produto: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """O item do catálogo do prescritor para o produto, se já foi importado."""
+    catalogo = catalogo_do_medicamento(medicamento)
+    achado = None
+    for pid in sorted(pids_do_produto(produto)):
+        item = catalogo.get(str(pid))
+        if not isinstance(item, dict):
+            continue
+        if item.get("apresentacoes"):
+            return item
+        achado = achado or item
+    return achado
+
+
+def parse_concentracao(texto: Any) -> Tuple[Optional[float], Optional[str]]:
+    """("250 mg / 5 mL") → (50.0, "mg/ml"). Associação de ativos não tem uma concentração só."""
+    t = norm(texto)
+    if not t or "+" in t:
+        return (None, None)
+    try:
+        m = _RE_CONC_POR_VOLUME.search(t)
+        if m and _numero(m.group(3)) > 0:
+            valor, unidade = _forca(_numero(m.group(1)) / _numero(m.group(3)), m.group(2) + "/ml")
+            return (round(valor, 4), unidade)
+        m = _RE_CONC_POR_ML.search(t)
+        if m:
+            return _forca(_numero(m.group(1)), m.group(2) + "/ml")
+        m = _RE_CONC_PERCENTUAL.search(t)
+        if m:
+            return (_numero(m.group(1)), "%")
+        m = _RE_CONC_SIMPLES.search(t)
+        if m:
+            unidade = "mcg" if m.group(2) == "ug" else m.group(2)
+            return (_numero(m.group(1)), unidade)
+    except ValueError:
+        pass
+    return (None, None)
+
+
+def parse_quantidade(texto: Any) -> Tuple[Optional[float], Optional[str]]:
+    """("4 un") → (4.0, "un"); ("20 mL") → (20.0, "ml")."""
+    m = _RE_QUANTIDADE.search(norm(texto))
+    if not m:
+        return (None, None)
+    unidade = m.group(2)
+    if unidade not in {"ml", "l", "kg", "g", "mg"}:
+        unidade = "un"
+    try:
+        return (_numero(m.group(1)), unidade)
+    except ValueError:
+        return (None, None)
+
+
+def rotulo_do_catalogo(forma: Dict[str, Any]) -> str:
+    """ "Frasco (20 mL)" + "com seringa dosadora" → "Frasco (20 mL), com seringa dosadora"."""
+    rotulo = str(forma.get("rotulo") or "").strip()
+    info = str(forma.get("info") or "").strip(_SEPARADORES)
+    if info and norm(info) not in norm(rotulo):
+        rotulo = f"{rotulo}, {info}" if rotulo else info
+    return rotulo[:1].upper() + rotulo[1:]
+
+
+def _formas_do_catalogo(catalogo: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    formas = (catalogo or {}).get("apresentacoes")
+    validas = [f for f in (formas if isinstance(formas, list) else []) if isinstance(f, dict) and rotulo_do_catalogo(f)]
+    return sorted(validas, key=lambda f: (f.get("ordem") or 0))
+
+
+def _apresentacao_do_catalogo(
+    medicamento: Any,
+    produto: Dict[str, Any],
+    forma: Dict[str, Any],
+    posicao: int,
+) -> SimpleNamespace:
+    nome = (produto.get("nome") or "").strip()
+    pid = pid_do_produto(produto) or 0
+    rotulo = rotulo_do_catalogo(forma)
+    valor, unidade = parse_concentracao(forma.get("concentracao"))
+    volume, volume_unidade = parse_quantidade(forma.get("quantidade"))
+    ordem = forma.get("ordem") if isinstance(forma.get("ordem"), int) else posicao + 1
+    return SimpleNamespace(
+        # Faixa própria (50–99) para não colidir com as do retrato (0–49).
+        id=ID_SINTETICO_BASE + pid * 100 + 50 + (ordem % 50),
+        medicamento_id=getattr(medicamento, "id", None),
+        forma=str(forma.get("forma") or "")[:50],
+        concentracao=rotulo,
+        nome_variante=str(forma.get("completo") or f"{nome} {rotulo}").strip(),
+        concentracao_valor=valor,
+        concentracao_unidade=unidade,
+        volume_valor=volume,
+        volume_unidade=volume_unidade,
+        nome_comercial=nome,
+        fabricante=produto.get("fabricante"),
+        vetsmart_produto_id=pid or None,
+        sintetica=True,
+        rotulo_catalogo=rotulo,
+        medida=str(forma.get("medida") or ""),
+    )
+
+
+_CAMPOS_APRESENTACAO = (
+    "id", "medicamento_id", "forma", "concentracao", "nome_variante",
+    "concentracao_valor", "concentracao_unidade", "volume_valor", "volume_unidade",
+    "nome_comercial", "fabricante", "vetsmart_produto_id",
+)
+
+
+def _linha_com_catalogo(linha: Any, do_catalogo: SimpleNamespace) -> SimpleNamespace:
+    """Cópia da linha real (mantém o id) com o rótulo e a medida do catálogo."""
+    copia = SimpleNamespace(**{campo: getattr(linha, campo, None) for campo in _CAMPOS_APRESENTACAO})
+    copia.rotulo_catalogo = do_catalogo.rotulo_catalogo
+    copia.medida = do_catalogo.medida
+    if copia.concentracao_valor is None and do_catalogo.concentracao_valor is not None:
+        copia.concentracao_valor = do_catalogo.concentracao_valor
+        copia.concentracao_unidade = do_catalogo.concentracao_unidade
+    if copia.volume_valor is None and do_catalogo.volume_valor is not None:
+        copia.volume_valor = do_catalogo.volume_valor
+        copia.volume_unidade = do_catalogo.volume_unidade
+    return copia
+
+
+def _chave_rotulo(texto: Any) -> str:
+    return re.sub(r"[\s,;.]+", " ", norm(texto)).strip()
+
+
+def _fmt_dose(valor: Any) -> str:
+    numero = float(valor)
+    return (str(int(numero)) if numero.is_integer() else f"{numero:g}").replace(".", ",")
+
+
+def dosagens_do_catalogo(catalogo: Optional[Dict[str, Any]]) -> List[Dict[str, Optional[str]]]:
+    """As dosagens estruturadas do catálogo, no formato de ``linhas_de_dosagem``."""
+    brutas = (catalogo or {}).get("dosagens")
+    saida: List[Dict[str, Optional[str]]] = []
+    for d in sorted((x for x in (brutas if isinstance(brutas, list) else []) if isinstance(x, dict)),
+                    key=lambda x: (x.get("ordem") or 0)):
+        try:
+            minimo = float(d["min"])
+            maximo = float(d["max"]) if d.get("max") is not None else minimo
+            por = float(d.get("por") or 1)
+        except (KeyError, TypeError, ValueError):
+            continue
+        faixa = _fmt_dose(minimo) if maximo == minimo else f"{_fmt_dose(minimo)} - {_fmt_dose(maximo)}"
+        referencia = str(d.get("por_unidade") or "animal")
+        if por != 1:
+            referencia = f"{_fmt_dose(por)} {referencia}"
+        caes, gatos = bool(d.get("caes")), bool(d.get("gatos"))
+        saida.append({
+            "grupo": str(d.get("grupo") or "").strip() or None,
+            "especie": "Cães e Gatos" if caes and gatos else "Cães" if caes else "Gatos" if gatos else None,
+            "rotulo": str(d.get("subgrupo") or "").strip() or None,
+            "dose": f"{faixa} {str(d.get('unidade') or '').strip()} / {referencia}",
+        })
+    return saida
+
+
+def genericas_do_principio_ativo(medicamento: Any) -> List[SimpleNamespace]:
+    """A lista genérica do princípio ativo ("Dipirona 500 mg, comprimido"...).
+
+    É a que o VetSmart oferece quando o veterinário prescreve pelo princípio
+    ativo, sem marca. Só existe depois de importada do catálogo.
+    """
+    candidatos = [p for p in produtos(medicamento) if (p.get("tipo") or "") == "principio_ativo"]
+    nomes = {norm(getattr(medicamento, "nome", None)), norm(getattr(medicamento, "principio_ativo", None))} - {""}
+    preferidos = [p for p in candidatos if norm(p.get("nome")) in nomes]
+    if not preferidos and len(candidatos) == 1:
+        preferidos = candidatos
+    for produto in preferidos:
+        formas = _formas_do_catalogo(catalogo_do_produto(medicamento, produto))
+        if not formas:
+            continue
+        saida: List[SimpleNamespace] = []
+        vistos: Set[str] = set()
+        for posicao, forma in enumerate(formas):
+            ap = _apresentacao_do_catalogo(medicamento, produto, forma, posicao)
+            chave = _chave_rotulo(ap.rotulo_catalogo)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            ap.produto_nome = (produto.get("nome") or "").strip()
+            saida.append(ap)
+        return saida
+    return []
+
+
 # ───────────────────────── apresentações do produto ────────────────────────
 
 _FORMAS_VAZIAS = {"n/a", "na", "apresentacao", "-", "."}
@@ -388,6 +604,9 @@ def rotulo_vetsmart(ap: Any, produto_nome: Any) -> str:
     "Vermivet Filhote, frasco (20 mL), com seringa dosadora" vira
     "Frasco (20 mL), com seringa dosadora".
     """
+    do_catalogo = _ler(ap, "rotulo_catalogo")
+    if do_catalogo:
+        return str(do_catalogo)
     forma = str(_ler(ap, "forma") or "").strip()
     texto = str(_ler(ap, "concentracao") or "").strip() or str(_ler(ap, "nome_variante") or "").strip()
     resto = remover_prefixo_nome(texto, produto_nome)
@@ -461,11 +680,68 @@ def separar_linhas(medicamento: Any, produto: Dict[str, Any]) -> Tuple[List[Any]
     return proprias, avulsas
 
 
+def _apresentacoes_pelo_catalogo(
+    medicamento: Any,
+    produto: Dict[str, Any],
+    formas: List[Dict[str, Any]],
+    proprias: List[Any],
+) -> List[Any]:
+    """A lista do catálogo, na ordem dele, reaproveitando as linhas reais.
+
+    Linha do produto que o catálogo não lista (cadastrada na clínica, por
+    exemplo) continua aparecendo, depois das do catálogo.
+    """
+    nome = produto.get("nome")
+
+    def _estrutura(ap: Any) -> Tuple[str, Any, str, Any, str]:
+        valor = getattr(ap, "concentracao_valor", None)
+        volume = getattr(ap, "volume_valor", None)
+        return (
+            norm(getattr(ap, "forma", None)),
+            round(float(valor), 4) if valor is not None else None,
+            norm(getattr(ap, "concentracao_unidade", None)),
+            round(float(volume), 4) if volume is not None else None,
+            norm(getattr(ap, "volume_unidade", None)),
+        )
+
+    livres = sorted(proprias, key=lambda ap: getattr(ap, "id", 0) or 0)
+    lista: List[Any] = []
+    vistos: Set[str] = set()
+    for posicao, forma in enumerate(formas):
+        do_catalogo = _apresentacao_do_catalogo(medicamento, produto, forma, posicao)
+        chave = _chave_rotulo(do_catalogo.rotulo_catalogo)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        linha = next(
+            (ap for ap in livres if _chave_rotulo(rotulo_vetsmart(ap, nome)) == chave),
+            None,
+        ) or next(
+            (ap for ap in livres
+             if _estrutura(ap) == _estrutura(do_catalogo) and _estrutura(ap)[1:] != (None, "", None, "")),
+            None,
+        )
+        if linha is None:
+            lista.append(do_catalogo)
+            continue
+        livres.remove(linha)
+        lista.append(_linha_com_catalogo(linha, do_catalogo))
+    for ap in livres:
+        chave = _chave_rotulo(rotulo_vetsmart(ap, nome))
+        if chave and chave not in vistos:
+            vistos.add(chave)
+            lista.append(ap)
+    return lista
+
+
 def apresentacoes_do_produto(medicamento: Any, produto: Dict[str, Any]) -> Tuple[List[Any], List[Any]]:
     """Apresentações do produto (linhas reais + retrato) e as linhas sem dono."""
     proprias, avulsas = separar_linhas(medicamento, produto)
     nome = produto.get("nome")
     pid = pid_do_produto(produto)
+    formas = _formas_do_catalogo(catalogo_do_produto(medicamento, produto))
+    if formas:
+        return _apresentacoes_pelo_catalogo(medicamento, produto, formas, proprias), avulsas
     vistos: Dict[Tuple[str, str], Any] = {}
     lista: List[Any] = []
 
@@ -661,12 +937,14 @@ def doses_do_produto(
     medicamento: Any,
     produto: Dict[str, Any],
     apresentacoes: List[Any],
+    dosagens: Optional[List[Dict[str, Optional[str]]]] = None,
 ) -> List[SimpleNamespace]:
     """Doses que valem para o produto.
 
     A tabela ``dose_medicamento`` é a referência (é nela que a curadoria
     acontece); o retrato do produto diz quais linhas são dele e completa o que
-    a tabela não tem.
+    a tabela não tem. ``dosagens`` são as linhas publicadas pelo VetSmart
+    (da seção de bula ou do catálogo do prescritor).
     """
     alvo = norm(produto.get("nome"))
     outros = [p for p in produtos(medicamento) if norm(p.get("nome")) != alvo]
@@ -674,7 +952,8 @@ def doses_do_produto(
     brutas = [d for d in (produto.get("doses") or []) if isinstance(d, dict)]
     pid = pid_do_produto(produto) or 0
     admin = administracao_do_produto(produto)
-    dosagens = linhas_de_dosagem(admin["dosagens"])
+    if dosagens is None:
+        dosagens = linhas_de_dosagem(admin["dosagens"])
 
     def _sinteticas(itens: List[Dict[str, Any]]) -> List[SimpleNamespace]:
         return [
@@ -735,8 +1014,11 @@ class MedicamentoEscopado:
         self.apresentacoes = apresentacoes
         self.apresentacoes_avulsas = avulsas
         admin = administracao_do_produto(produto)
-        self.dosagens = linhas_de_dosagem(admin["dosagens"])
-        self.doses = doses_do_produto(base, produto, apresentacoes)
+        catalogo = catalogo_do_produto(base, produto) or {}
+        # A bula publicada tem prioridade; sem ela, as dosagens estruturadas
+        # do catálogo do prescritor contam a mesma história.
+        self.dosagens = linhas_de_dosagem(admin["dosagens"]) or dosagens_do_catalogo(catalogo)
+        self.doses = doses_do_produto(base, produto, apresentacoes, self.dosagens)
 
         def _preferir(*valores: Any) -> Any:
             for valor in valores:
@@ -748,6 +1030,7 @@ class MedicamentoEscopado:
 
         self.via_administracao = _preferir(
             " / ".join(admin["via"]),
+            catalogo.get("via"),
             produto.get("via_administracao"),
             getattr(base, "via_administracao", None),
         )
