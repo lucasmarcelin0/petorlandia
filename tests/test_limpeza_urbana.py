@@ -511,3 +511,34 @@ def test_outro_exige_descricao_e_envio_idempotente(client, uploads):
     dar(outra, 'colaborador')
     entrar(client, outra)
     assert enviar('Ponto de atenção').status_code in NEGADO
+
+
+def test_tela_offline_guarda_as_mesmas_versoes_dos_scripts_que_a_pagina_carrega():
+    """Sem internet a página só funciona se o cache guardou exatamente os scripts que ela pede."""
+    import re
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[1]
+    pagina = (raiz / 'templates/limpeza/comunicar.html').read_text(encoding='utf-8')
+    offline = (raiz / 'static/js/limpeza_offline.js').read_text(encoding='utf-8')
+    pedidos = re.findall(r"filename='js/(limpeza_(?:foto|offline)\.js)', v='(\d+)'", pagina)
+    assert len(pedidos) == 2
+    for nome, versao in pedidos:
+        assert f"/static/js/{nome}?v={versao}" in offline, nome
+
+
+def test_gps_da_foto_e_do_instante_da_captura_e_nao_desliga_sozinho():
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / 'static/js/limpeza_foto.js').read_text(encoding='utf-8')
+    # Antes o acompanhamento parava após 3 minutos e a foto seguinte ficava sem posição.
+    assert 'clearWatch(vigia); }, 180000' not in js
+    assert 'visibilitychange' in js
+    # Na captura, pede uma leitura nova do GPS (aparelho parado não atualiza sozinho).
+    assert 'getCurrentPosition' in js and 'maximumAge: 5000' in js
+    # O envio espera a posição da foto ficar pronta.
+    assert 'await localPronto' in js
+    offline = (Path(__file__).resolve().parents[1] / 'static/js/limpeza_offline.js').read_text(encoding='utf-8')
+    assert 'limpezaLocalPronto' in offline
+    # Uma pendência recusada não trava as demais.
+    assert 'respostaEnvio.status === 400' in offline and 'continue;' in offline

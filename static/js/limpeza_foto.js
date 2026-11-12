@@ -56,26 +56,66 @@
       mostrar(msg, 'danger');
     }
 
+    // O GPS fica ligado enquanto a tela está à vista: em campo a pessoa passa vários
+    // minutos nesta página entre uma foto e outra. Com a tela oculta, pausa (bateria).
+    var vigia = null;
+    function ligarGps() {
+      if (vigia !== null || !('geolocation' in navigator) || document.hidden) return;
+      vigia = navigator.geolocation.watchPosition(guardar, falhou,
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+    }
+    function desligarGps() {
+      if (vigia !== null) navigator.geolocation.clearWatch(vigia);
+      vigia = null;
+    }
     if (!('geolocation' in navigator)) {
       mostrar('Este navegador não informa a localização. Use uma foto com localização gravada.', 'danger');
     } else {
-      var vigia = navigator.geolocation.watchPosition(guardar, falhou,
-        { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
-      // Depois de 3 minutos, para de gastar bateria; a última posição boa fica no formulário.
-      setTimeout(function () { navigator.geolocation.clearWatch(vigia); }, 180000);
-      window.addEventListener('limpeza:saida', function () { navigator.geolocation.clearWatch(vigia); }, { once: true });
+      ligarGps();
+      document.addEventListener('visibilitychange', function () { if (document.hidden) desligarGps(); else ligarGps(); });
+      window.addEventListener('limpeza:saida', desligarGps, { once: true });
     }
 
-    // ---- Foto ----
-    function fixarLocal(campo) {
+    // Posição do instante da captura. Parado no mesmo lugar, o aparelho não manda
+    // posição nova sozinho; por isso, ao capturar, pedimos uma leitura agora
+    // (no máximo 5 s de idade). A última leitura recente vale até a nova chegar.
+    var RESERVA_MS = 60000;
+    var localPronto = Promise.resolve();
+    function preencher(l, origem) {
+      lat.value = l.latitude; lon.value = l.longitude; prec.value = l.precisao;
+      mostrar('Localização da foto registrada (' + origem + ', precisão de ' + l.precisao + ' m).',
+        l.precisao <= 50 ? 'success' : 'warning');
+      // O rascunho guardado no aparelho (limpeza_offline.js) acompanha a posição.
+      lat.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function localDaCaptura(horaCaptura) {
       lat.value = lon.value = prec.value = '';
       localFoto = true;
-      if (campo === campoCamera && localAtual && Date.now() - localAtual.quando < 15000) {
-        lat.value = localAtual.latitude; lon.value = localAtual.longitude; prec.value = localAtual.precisao;
-        mostrar('Localização fixada para esta foto (precisão de ' + localAtual.precisao + ' m).', 'success');
-      } else {
-        mostrar('A foto precisa conter sua localização. Para usar o GPS do aparelho, tire outra foto no local após permitir a localização.', 'warning');
-      }
+      if (localAtual && horaCaptura - localAtual.quando < RESERVA_MS) preencher(localAtual, 'última leitura do GPS');
+      if (!('geolocation' in navigator)) return Promise.resolve();
+      mostrar('Registrando a localização desta foto…', 'muted');
+      localPronto = new Promise(function (resolve) {
+        navigator.geolocation.getCurrentPosition(function (pos) {
+          guardar(pos);
+          preencher(localAtual, 'GPS no momento da foto');
+          resolve();
+        }, function (erro) {
+          if (!lat.value) falhou(erro);
+          resolve();
+        }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+      });
+      return localPronto;
+    }
+    // O envio (aqui ou em limpeza_offline.js) espera a posição da foto ficar pronta.
+    form.limpezaLocalPronto = function () { return localPronto; };
+
+    // ---- Foto ----
+    function localDaGaleria() {
+      // Foto antiga da galeria: o GPS de agora não é o da foto. Vale só o gravado na imagem.
+      lat.value = lon.value = prec.value = '';
+      localFoto = true;
+      localPronto = Promise.resolve();
+      mostrar('Foto da galeria: a localização gravada na própria foto será usada. Sem ela, a comunicação é recusada.', 'warning');
     }
 
     function arquivoEscolhido() {
@@ -100,10 +140,10 @@
         if (campo.files && campo.files.length) {
           arquivos.forEach(function (outro) { if (outro !== campo) outro.value = ''; });
           avisar('');
-          if (campo === campoCamera && !fluxo) {
-            lat.value = lon.value = prec.value = ''; localFoto = true;
-            mostrar('Na câmera do aparelho, a foto precisa ter localização gravada.', 'warning');
-          } else fixarLocal(campo);
+          // Câmera nativa: a foto acabou de ser tirada (o arquivo chega ao fechar a câmera).
+          // A captura pela câmera da página já cuidou da posição em capturar().
+          if (campo === campoCamera && !fluxo) localDaCaptura(Date.now());
+          else if (campo !== campoCamera) localDaGaleria();
           if (!fluxo) form.dispatchEvent(new CustomEvent('limpeza:foto', {detail: {hora: Date.now()}}));
         }
         exibir(arquivoEscolhido());
@@ -134,9 +174,8 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
-      fixarLocal(campoCamera);
-      var localCaptura = { latitude: lat.value, longitude: lon.value, precisao: prec.value };
       var horaCaptura = Date.now();
+      localDaCaptura(horaCaptura);
       canvas.toBlob(function (blob) {
         if (!blob) { avisar('Não foi possível capturar a foto. Tente de novo.'); return; }
         try {
@@ -144,7 +183,6 @@
           dt.items.add(new File([blob], 'foto-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
           campoCamera.files = dt.files;
           campoCamera.dispatchEvent(new Event('change'));
-          lat.value = localCaptura.latitude; lon.value = localCaptura.longitude; prec.value = localCaptura.precisao;
           form.dispatchEvent(new CustomEvent('limpeza:foto', {detail: {hora: horaCaptura}}));
         } catch (e) {
           avisar('Este navegador não conseguiu usar a foto da câmera. Use "Escolher da galeria".');
@@ -202,6 +240,7 @@
         botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enviando foto…';
       }
       try {
+        await localPronto;
         var resposta = await fetch(form.action || window.location.href, {
           method: 'POST', body: new FormData(form), credentials: 'same-origin',
           headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }

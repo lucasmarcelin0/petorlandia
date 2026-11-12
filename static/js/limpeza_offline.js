@@ -56,14 +56,17 @@
   }
   async function atualizarStatus() {
     var itens = (await todos()).filter(function (x) { return x.usuario === usuario && x.id !== draftId; });
-    status(itens.length ? itens.length + ' comunicação(ões) guardada(s) neste aparelho, aguardando envio.' : 'Nenhuma comunicação pendente de envio neste aparelho.');
+    var comErro = itens.filter(function (x) { return x.erro; }).length;
+    status(itens.length ? itens.length + ' comunicação(ões) guardada(s) neste aparelho, aguardando envio' +
+      (comErro ? ' (' + comErro + ' precisa(m) de correção: toque em "Editar primeira pendente").' : '.')
+      : 'Nenhuma comunicação pendente de envio neste aparelho.');
     return itens;
   }
   async function sincronizar() {
     if (!db || enviando || !navigator.onLine) return;
     enviando = true;
     try {
-      var itens = (await atualizarStatus()).filter(function (item) { return item.id !== pendenteEditada; });
+      var itens = (await atualizarStatus()).filter(function (item) { return item.id !== pendenteEditada && !item.erro; });
       if (!itens.length) return;
       status('Enviando ' + itens.length + ' comunicação(ões) pendente(s)…');
       var resposta = await fetch(form.action || location.pathname, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}});
@@ -72,17 +75,25 @@
       var novoForm = pagina.querySelector('[data-offline-comunicacao]');
       if (!novoForm || novoForm.dataset.usuario !== usuario) throw new Error('Entre na conta que criou as pendências para enviá-las.');
       var token = novoForm.querySelector('[name=csrf_token]').value;
+      var recusadas = [];
       for (var item of itens) {
         var body = new FormData();
         Object.keys(item.campos).forEach(function (k) { var v = item.campos[k]; (Array.isArray(v) ? v : [v]).forEach(function (x) { body.append(k, x); }); });
         body.set('csrf_token', token); body.set('chave_envio', item.id); body.append('foto', item.foto, item.foto.name || 'foto.jpg');
         var respostaEnvio = await fetch(form.action || location.pathname, {method: 'POST', body: body, credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}});
         var resultado = await respostaEnvio.json().catch(function () { return {}; });
+        if (respostaEnvio.status === 400 && resultado.erro) {
+          // Recusada pelo conteúdo (ex.: foto sem localização): fica guardada para correção
+          // e não impede o envio das próximas.
+          item.erro = resultado.erro; await salvar(item); recusadas.push(resultado.erro); continue;
+        }
         if (!respostaEnvio.ok || !resultado.destino) throw new Error(resultado.erro || 'Envio não confirmado. As fotos continuam guardadas neste aparelho.');
         await apagar(item.id);
       }
       await atualizarStatus();
-      status('Comunicações enviadas e confirmadas pelo servidor.');
+      status(recusadas.length
+        ? recusadas.length + ' comunicação(ões) precisa(m) de correção: ' + recusadas[0] + ' Toque em "Editar primeira pendente".'
+        : 'Comunicações enviadas e confirmadas pelo servidor.');
     } catch (e) { status((e.message || 'Sem conexão.') + ' Pendências continuam guardadas neste aparelho.'); }
     finally { enviando = false; }
   }
@@ -101,8 +112,12 @@
     if (!foto) { erro('Tire a foto do local antes de salvar.'); return; }
     botao.disabled = true;
     try {
+      if (form.limpezaLocalPronto) {
+        status('Registrando a localização da foto…');
+        await form.limpezaLocalPronto();
+      }
       await agendarRascunho();
-      await salvar({id: pendenteEditada || uuid(), usuario: usuario, foto: foto, campos: dados()});
+      await salvar({id: pendenteEditada || uuid(), usuario: usuario, foto: foto, campos: dados()});  // sem .erro: volta à fila
       await apagar(draftId);
       foto = null; pendenteEditada = null; form.reset(); form.querySelector('.limpeza-previa').classList.add('d-none'); aviso.classList.add('d-none');
       await atualizarStatus();
@@ -116,13 +131,14 @@
     if (foto) { erro('Salve a foto atual antes de editar uma pendência.'); return; }
     var itens = await atualizarStatus();
     if (!itens.length) { status('Nenhuma comunicação pendente para editar.'); return; }
-    var item = itens[0];
+    var item = itens.filter(function (x) { return x.erro; })[0] || itens[0];
     item.pendenteEditada = item.id;
     restaurar(item);
     await agendarRascunho();
-    status('Pendência carregada. Corrija os dados e toque em salvar para tentar novamente.');
+    status((item.erro ? 'Motivo da recusa: ' + item.erro + ' ' : '') +
+      'Pendência carregada. Corrija os dados (ou tire a foto de novo) e toque em salvar.');
   });
   window.addEventListener('online', sincronizar);
-  if ('serviceWorker' in navigator && 'caches' in window) navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) { return cache.addAll(['/static/js/limpeza_foto.js?v=6', '/static/js/limpeza_offline.js?v=1', '/static/bootstrap.min.css']); }).catch(function () {});
+  if ('serviceWorker' in navigator && 'caches' in window) navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) { return cache.addAll(['/static/js/limpeza_foto.js?v=7', '/static/js/limpeza_offline.js?v=2', '/static/bootstrap.min.css']); }).catch(function () {});
   abrir().then(async function (banco) { db = banco; var r = await operar('readonly', function (s) { return s.get(draftId); }); await atualizarStatus(); if (r) restaurar(r); sincronizar(); }).catch(function () { status('Armazenamento do aparelho indisponível. Verifique o espaço e as configurações do navegador.'); });
 })();
