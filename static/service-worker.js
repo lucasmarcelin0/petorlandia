@@ -3,6 +3,8 @@ const CACHE_NAME = 'petorlandia-cache-v10';
 // Casa a casa (combate à dengue): a tela de campo precisa abrir sem internet. A própria página guarda aqui a
 // sua casca e os arquivos de que precisa (static/js/casa_a_casa.js); os dados ficam no segundo cache.
 const CASA_A_CASA = '/sfa/entomologia/casa-a-casa';
+const LIMPEZA_COMUNICAR = '/limpeza-urbana/comunicar';
+const CACHE_LIMPEZA = 'petorlandia-limpeza-offline-v1';
 const CACHES_CASA_A_CASA = ['petorlandia-casa-a-casa-v1', 'petorlandia-casa-a-casa-dados-v1'];
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
@@ -28,7 +30,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME && !CACHES_CASA_A_CASA.includes(k)).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE_NAME && !CACHES_CASA_A_CASA.includes(k) && k !== CACHE_LIMPEZA).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -77,6 +79,17 @@ self.addEventListener('fetch', event => {
         .then(cache => cache.match(CASA_A_CASA, { ignoreSearch: true, ignoreVary: true }))
         .then(cached => cached || caches.match('/static/offline.html')))
     );
+    return;
+  }
+
+  if (event.request.mode === 'navigate' && new URL(event.request.url).pathname === LIMPEZA_COMUNICAR) {
+    event.respondWith(fetch(event.request).then(response => {
+      if (response.ok && !response.redirected) {
+        const copy = response.clone();
+        caches.open(CACHE_LIMPEZA).then(cache => cache.put(LIMPEZA_COMUNICAR, copy)).catch(() => {});
+      }
+      return response;
+    }).catch(() => caches.open(CACHE_LIMPEZA).then(cache => cache.match(LIMPEZA_COMUNICAR)).then(cached => cached || caches.match('/static/offline.html'))));
     return;
   }
 
