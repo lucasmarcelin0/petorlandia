@@ -136,8 +136,10 @@ def _vermivet():
                 valor=2, unidade='g', volume=2, volume_unidade='un', fabricante='Biovet'),
             _ap(6093, 'comprimido', 'Vermivet Plus 330 mg (2 un)', pid=2588, variante='Vermivet Plus',
                 valor=330, unidade='mg', volume=2, volume_unidade='un', fabricante='Biovet'),
-            # Cadastro manual feito na tentativa de contornar a lista errada.
+            # Cadastros manuais feitos na tentativa de contornar a lista errada.
+            # O segundo teve "(20 mL)" lido como concentração de 20 mL.
             _ap(12871, 'Frasco (20 mL)', '.', fabricante='.'),
+            _ap(12872, 'Frasco', '(20 mL)', valor=20, unidade='mL'),
         ],
         doses=[
             _dose(2269, '1 mL/kg', 1.0, 1.0, 'ML_KG', especie_code='AMBOS', bruto='1 mL /  kg',
@@ -256,7 +258,7 @@ def test_produto_de_comprimidos_nao_recebe_o_frasco_do_vizinho():
 def test_principio_ativo_continua_juntando_as_marcas():
     lista = bulario.listar_apresentacoes_medicamento(_vermivet())
 
-    assert {ap['id'] for ap in lista} == {6091, 6092, 6093}
+    assert {ap['id'] for ap in lista} == {6091, 6092, 6093, 12872}
     assert all('rotulo_opcao' not in ap for ap in lista)
 
 
@@ -277,10 +279,14 @@ def test_apresentacao_cadastrada_sem_produto_fica_em_grupo_separado():
     assert avulsas[0]['categoria_label'] == 'Outras cadastradas'
 
 
-def test_cadastro_manual_sem_conteudo_nao_polui_o_produto():
-    lista = bulario.listar_apresentacoes_medicamento(_vermivet(), nome_comercial_filtro='Vermivet Filhote')
+@pytest.mark.parametrize('produto', ['Vermivet Filhote', 'Vermivet Plus'])
+def test_cadastro_manual_de_embalagem_nao_entra_no_produto(produto):
+    """ "Frasco (20 mL)" solto não diz o que há no frasco: não é do Plus, que é
+    comprimido, e no Filhote só repete o frasco que o fabricante publica."""
+    lista = bulario.listar_apresentacoes_medicamento(_vermivet(), nome_comercial_filtro=produto)
 
-    assert 12871 not in {ap['id'] for ap in lista}
+    assert not {12871, 12872} & {ap['id'] for ap in lista}
+    assert all(ap['origem'] == 'produto' for ap in lista)
 
 
 def test_produto_sem_apresentacao_avisa_que_a_lista_e_de_outras_marcas():
