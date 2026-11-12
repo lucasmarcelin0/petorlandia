@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Quem acessa · Prefeitura integrada{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% include "limpeza/_estilo.html" %}
+{% endblock %}
+
+{% block main %}
+<div class="container limpeza-pagina py-4">
+  {% set ativo = 'acessos' %}
+  {% include "limpeza/_nav.html" %}
+  <h1 class="h3 mb-1">Quem acessa a Prefeitura integrada</h1>
+  <p class="text-muted">Os papéis são adicionais: a conta continua com os acessos que já tinha. Use as datas para liberar o acesso só no período certo (uma operação, um mutirão, a vigência do contrato).</p>
+
+  <div class="row g-3">
+    <div class="col-lg-5">
+      <form method="post" class="limpeza-cartao h-100">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h2 class="h5">Atribuir acesso</h2>
+        <div class="mb-3">
+          <label class="form-label" for="email">E-mail da conta</label>
+          <input class="form-control" type="email" id="email" name="email" required placeholder="pessoa@exemplo.com">
+          <div class="form-text">A pessoa precisa já ter conta no PetOrlândia com este e-mail.</div>
+        </div>
+        <fieldset class="mb-3">
+          <legend class="form-label fs-6">Papéis</legend>
+          {% for chave, (rotulo, descricao) in PAPEIS.items() %}
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="papel" value="{{ chave }}" id="papel-{{ chave }}" {{ 'checked' if chave == 'colaborador' }}>
+            <label class="form-check-label" for="papel-{{ chave }}"><strong>{{ rotulo }}</strong><br><span class="small text-muted">{{ descricao }}</span></label>
+          </div>
+          {% endfor %}
+        </fieldset>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label" for="inicio">A partir de</label><input class="form-control" type="date" id="inicio" name="inicio"></div>
+          <div class="col-6"><label class="form-label" for="fim">Até</label><input class="form-control" type="date" id="fim" name="fim"></div>
+          <div class="col-12 form-text mt-0">Em branco: vale desde hoje e sem data para acabar.</div>
+        </div>
+        <button class="btn btn-success w-100" type="submit"><i class="fas fa-user-plus me-1"></i>Atribuir</button>
+      </form>
+    </div>
+    <div class="col-lg-7">
+      <div class="limpeza-cartao mb-3">
+        <h2 class="h5">Comunicação aberta à população</h2>
+        <p class="mb-2">{% if comunicacao_aberta %}<span class="limpeza-selo concluida">Ligada</span> Qualquer pessoa com conta no PetOrlândia pode comunicar pontos para limpeza. O mapa continua restrito à equipe e à fiscalização.
+          {% else %}<span class="limpeza-selo descartada">Desligada</span> Só quem tem papel atribuído aqui pode comunicar.{% endif %}</p>
+        <form method="post" action="{{ url_for('limpeza_urbana.comunicacao_aberta') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="aberta" value="{{ '0' if comunicacao_aberta else '1' }}">
+          <button class="btn btn-sm {{ 'btn-outline-secondary' if comunicacao_aberta else 'btn-outline-success' }}" type="submit">{{ 'Restringir a quem tem papel' if comunicacao_aberta else 'Abrir para qualquer conta' }}</button>
+        </form>
+      </div>
+
+      <div class="limpeza-cartao">
+        <h2 class="h5">Acessos atribuídos</h2>
+        {% if not ativos %}
+        <p class="text-muted mb-0">Nenhum acesso atribuído ainda.</p>
+        {% else %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Pessoa</th><th>Papel</th><th>Período</th><th></th></tr></thead>
+            <tbody>
+              {% for a in ativos %}
+              <tr>
+                <td>{{ a.user.name or '—' }}<br><span class="small text-muted">{{ a.user.email }}</span></td>
+                <td>{{ PAPEIS.get(a.papel, (a.papel,))[0] }}</td>
+                <td class="small">
+                  {% if a.inicio or a.fim %}{{ a.inicio.strftime('%d/%m/%Y') if a.inicio else 'desde já' }} → {{ a.fim.strftime('%d/%m/%Y') if a.fim else 'sem fim' }}{% else %}Sem limite{% endif %}<br>
+                  {% if vigente(a, dia) %}<span class="limpeza-selo concluida">Vale hoje</span>{% elif a.inicio and dia < a.inicio %}<span class="limpeza-selo aberta">Ainda não começou</span>{% else %}<span class="limpeza-selo descartada">Encerrado</span>{% endif %}
+                </td>
+                <td class="text-end">
+                  <form method="post" action="{{ url_for('limpeza_urbana.revogar_acesso', acesso_id=a.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger text-nowrap" type="submit">Revogar</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if historico %}
+      <details class="limpeza-cartao mt-3">
+        <summary class="fw-semibold">Histórico de acessos</summary>
+        <ul class="list-unstyled limpeza-meta mt-2 mb-0">
+          {% for e in historico %}<li>{{ hora_local(e.criado_em) }} · {{ e.tipo|replace('_', ' ') }} — {{ e.detalhe }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

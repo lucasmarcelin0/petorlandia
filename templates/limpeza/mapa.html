@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+
+{% block page_title %}{{ 'Todas as comunicações' if visao_lista else 'Mapa da Prefeitura integrada' }}{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% include "limpeza/_estilo.html" %}
+
+{% endblock %}
+
+{% block main %}
+<div class="container-fluid limpeza-pagina py-4">
+  {% set ativo = 'lista' if visao_lista else 'mapa' %}
+  {% include "limpeza/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">{{ "Todas as comunicações" if visao_lista else "Mapa da Prefeitura integrada" }}</h1>
+      <p class="text-muted mb-0" id="limpeza-sub">Carregando comunicações…</p>
+    </div>
+    {% if pode_fiscalizar %}
+    <a class="btn btn-outline-success" id="limpeza-csv" href="{{ url_for('limpeza_urbana.relatorio') }}"><i class="fas fa-file-csv me-1"></i>Exportar relatório</a>
+    {% endif %}
+  </div>
+
+  <form class="row g-2 align-items-end mb-3" id="limpeza-filtros">
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-status">Situação</label>
+      <select class="form-select form-select-sm" id="f-status" name="status">
+        <option value="">Todas</option>
+        {% for chave, rotulo in STATUS.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.status == chave }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-1" for="f-categoria">Tipo (contém)</label>
+      <select class="form-select form-select-sm" id="f-categoria" name="categoria">
+        <option value="">Todos</option>
+        {% for chave, rotulo in CATEGORIAS.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.categoria == chave }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-desde">De</label>
+      <input class="form-control form-control-sm" type="date" id="f-desde" name="desde" value="{{ filtros.desde or '' }}">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-1" for="f-ate">Até</label>
+      <input class="form-control form-control-sm" type="date" id="f-ate" name="ate" value="{{ filtros.ate or '' }}">
+    </div>
+    <div class="col-12 col-md-3 d-flex gap-2">
+      <button class="btn btn-success btn-sm flex-fill" type="submit"><i class="fas fa-filter me-1"></i>Filtrar</button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="limpeza-atualizar" title="Atualizar"><i class="fas fa-rotate"></i></button>
+    </div>
+  </form>
+
+  <div class="row g-2 mb-3" id="limpeza-indicadores"></div>
+  <div class="alert alert-danger d-none" id="limpeza-erro"></div>
+
+  {% if visao_lista %}
+  <div id="limpeza-lista" aria-live="polite"></div>
+  {% else %}
+  <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações de limpeza"></div>
+  <div class="limpeza-legenda mt-2" id="limpeza-legenda">
+    <span><i style="background:#ef4444"></i>Aguardando limpeza</span>
+    <span><i style="background:#f97316"></i>Aguardando há mais de 48 h</span>
+    <span><i style="background:#22c55e"></i>Limpeza comprovada</span>
+    <span><i style="background:#a855f7"></i>Comprovada longe do ponto (&gt; {{ DISTANCIA_ALERTA_M|int }} m)</span>
+    <span><i style="background:#9ca3af"></i>Descartada</span>
+  </div>
+  {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script>
+(() => {
+  const DADOS = {{ url_for('limpeza_urbana.mapa_dados')|tojson }};
+  const DETALHE = {{ url_for('limpeza_urbana.solicitacao', solicitacao_id=0)|tojson }}.replace(/0$/, '');
+  const CSV = {{ (url_for('limpeza_urbana.relatorio') if pode_fiscalizar else '')|tojson }};
+  const el = (id) => document.getElementById(id);
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const urlSegura = (u) => /^(https?:\/\/|\/)/.test(String(u || '')) ? esc(u) : '';
+
+  const mapa = el('limpeza-mapa') ? L.map('limpeza-mapa').setView([-20.7205, -47.8750], 14) : null;
+  if (mapa) L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
+  }).addTo(mapa);
+  let camada = mapa ? L.layerGroup().addTo(mapa) : null;
+  let primeiraVez = true;
+
+  function cor(p) {
+    if (p.status === 'descartada') return '#9ca3af';
+    if (p.status === 'concluida') return p.comprovacao && p.comprovacao.longe ? '#a855f7' : '#22c55e';
+    const horas = (Date.now() - Date.parse(p.criado_em)) / 3600000;
+    return horas > 48 ? '#f97316' : '#ef4444';
+  }
+
+  function popup(p) {
+    const c = p.comprovacao;
+    return `<div class="limpeza-popup">
+      <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong><br>
+      <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
+      <div class="fotos"><img src="${urlSegura(p.foto)}" alt="Antes" loading="lazy">
+        ${c ? `<img src="${urlSegura(c.foto)}" alt="Depois" loading="lazy">` : '<div class="small text-muted d-flex align-items-center">Sem foto da limpeza</div>'}</div>
+      Comunicada em ${esc(p.criado_local)}${p.autor ? ` por ${esc(p.autor)}` : ''}<br>
+      ${p.referencia ? `Referência: ${esc(p.referencia)}<br>` : ''}
+      ${c ? `Limpa em ${esc(c.criado_local)} (${p.horas_ate_limpeza} h) · ${Math.round(c.distancia_m)} m do ponto<br>` : ''}
+      ${p.recusas ? `<span class="text-danger">${p.recusas} comprovação(ões) recusada(s)</span><br>` : ''}
+      <a href="${DETALHE}${p.id}">Abrir</a>
+    </div>`;
+  }
+
+  function numero(n, rotulo, tom) {
+    return `<div class="col-6 col-md-4 col-xl"><div class="limpeza-num"><div class="n ${tom || ''}">${n == null ? '—' : esc(n)}</div><div class="l">${esc(rotulo)}</div></div></div>`;
+  }
+
+  function parametros() {
+    const dados = new FormData(el('limpeza-filtros'));
+    const q = new URLSearchParams();
+    for (const [k, v] of dados.entries()) if (v) q.set(k, v);
+    return q.toString();
+  }
+
+  async function carregar() {
+    const q = parametros();
+    if (CSV && el('limpeza-csv')) el('limpeza-csv').href = CSV + (q ? `?${q}` : '');
+    try {
+      const r = await fetch(DADOS + (q ? `?${q}` : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      el('limpeza-erro').classList.add('d-none');
+      const i = d.indicadores;
+      el('limpeza-indicadores').innerHTML = [
+        numero(i.abertas, 'Aguardando limpeza', 'text-danger'),
+        numero(i.abertas_48h, 'Aguardando > 48 h', 'text-warning'),
+        numero(i.concluidas, 'Limpezas comprovadas', 'text-success'),
+        numero(i.mediana_horas == null ? null : `${i.mediana_horas} h`, 'Tempo mediano até a limpeza'),
+        numero(i.comprovacoes_longe, 'Comprovações longe do ponto'),
+        numero(i.comprovacoes_recusadas, 'Comprovações recusadas'),
+      ].join('');
+      if (el('limpeza-lista')) {
+        el('limpeza-lista').innerHTML = d.pontos.length ? d.pontos.map(p =>
+          `<a class="limpeza-cartao d-block text-decoration-none mb-2" href="${DETALHE}${p.id}">
+            <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
+            <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}${p.referencia ? ` · ${esc(p.referencia)}` : ''}</div></a>`
+        ).join('') : '<p>Nenhuma comunicação neste filtro.</p>';
+      }
+      if (camada) camada.clearLayers();
+      const limites = [];
+      if (mapa) d.pontos.forEach((p) => {
+        const c = cor(p);
+        L.circleMarker([p.lat, p.lon], { radius: 8, color: '#1f2937', weight: 1, fillColor: c, fillOpacity: .9 })
+          .bindPopup(popup(p), { maxWidth: 280 }).addTo(camada);
+        limites.push([p.lat, p.lon]);
+      });
+      el('limpeza-sub').textContent = d.pontos.length
+        ? `${d.pontos.length} comunicação(ões) no filtro${d.limite ? ' (mostrando as 2.000 mais recentes)' : ''}. Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+        : 'Nenhuma comunicação neste filtro.';
+      if (mapa && primeiraVez && limites.length) {
+        mapa.invalidateSize();
+        mapa.fitBounds(limites, { padding: [30, 30], maxZoom: 17 });
+      }
+      primeiraVez = false;
+    } catch (e) {
+      el('limpeza-erro').textContent = 'Não foi possível carregar as comunicações. Verifique a conexão e toque em atualizar.';
+      el('limpeza-erro').classList.remove('d-none');
+    }
+  }
+
+  el('limpeza-filtros').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    history.replaceState(null, '', `?${parametros()}`);
+    primeiraVez = true;
+    carregar();
+  });
+  el('limpeza-atualizar').addEventListener('click', carregar);
+  // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
+  const intervalo = setInterval(() => { if (!document.hidden) carregar(); }, 60000);
+  window.addEventListener('limpeza:saida', () => { clearInterval(intervalo); if (mapa) mapa.remove(); }, { once: true });
+  carregar();
+})();
+</script>
+{% endblock %}

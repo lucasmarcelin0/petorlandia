@@ -1,0 +1,11 @@
+<div class="prefeitura-identidade mb-3">
+  <img src="{{ url_for('static', filename='img/brasao_orlandia.png') }}" alt="Brasão de Orlândia">
+  <div><strong>Prefeitura integrada</strong><span>Prefeitura Municipal de Orlândia</span></div>
+</div>
+<nav class="limpeza-nav d-flex gap-2 mb-3" aria-label="Prefeitura integrada">
+  {% if eh_admin %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'lista' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.todas_comunicacoes') }}"><i class="fas fa-list me-1"></i>Todas as comunicações</a>{% endif %}
+  {% if pode_mapa %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'mapa' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.mapa') }}"><i class="fas fa-map-location-dot me-1"></i>Mapa</a>{% endif %}
+  {% if pode_comunicar %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'comunicar' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.comunicar') }}"><i class="fas fa-camera me-1"></i>Comunicar</a>
+  <a class="btn btn-sm {{ 'btn-success' if ativo == 'minhas' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.minhas') }}"><i class="fas fa-folder-open me-1"></i>Minhas comunicações</a>{% endif %}
+  {% if eh_admin %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'acessos' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.acessos') }}"><i class="fas fa-user-shield me-1"></i>Quem acessa</a>{% endif %}
+</nav>

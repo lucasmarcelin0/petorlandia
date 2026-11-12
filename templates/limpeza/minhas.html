@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Minhas comunicações · Prefeitura integrada{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% include "limpeza/_estilo.html" %}
+{% endblock %}
+
+{% block main %}
+<div class="container limpeza-pagina py-4">
+  {% set ativo = 'minhas' %}
+  {% include "limpeza/_nav.html" %}
+  <h1 class="h3 mb-3">Minhas comunicações</h1>
+  {% if not itens %}
+  <div class="limpeza-cartao text-center">
+    <p class="mb-3">Você ainda não comunicou nenhum ponto.</p>
+    <a class="btn btn-success" href="{{ url_for('limpeza_urbana.comunicar') }}"><i class="fas fa-camera me-1"></i>Comunicar agora</a>
+  </div>
+  {% else %}
+  <div class="row g-3">
+    {% for s in itens %}
+    {% set c = s.comprovacao_valida %}
+    <div class="col-md-6 col-lg-4">
+      <a class="limpeza-cartao d-block h-100 text-decoration-none text-reset" href="{{ url_for('limpeza_urbana.solicitacao', solicitacao_id=s.id) }}">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>Nº {{ s.id }} · {{ rotulo_categorias(s.categorias) }}</strong>
+          <span class="limpeza-selo {{ s.status }}">{{ STATUS.get(s.status, s.status) }}</span>
+        </div>
+        <div class="row g-2">
+          <div class="col-6"><img class="limpeza-previa w-100" style="height:130px;object-fit:cover" src="{{ s.foto_url }}" alt="Foto da comunicação" loading="lazy"></div>
+          <div class="col-6">{% if c %}<img class="limpeza-previa w-100" style="height:130px;object-fit:cover" src="{{ c.foto_url }}" alt="Foto da limpeza" loading="lazy">{% else %}<div class="h-100 d-flex align-items-center justify-content-center text-muted small border rounded-3">Aguardando a foto da limpeza</div>{% endif %}</div>
+        </div>
+        <div class="limpeza-meta mt-2">Comunicada em {{ hora_local(s.criado_em) }}{% if c %} · limpa em {{ hora_local(c.criado_em) }}{% endif %}</div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

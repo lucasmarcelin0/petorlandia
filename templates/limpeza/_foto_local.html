@@ -1,0 +1,27 @@
+{# Foto com localização do aparelho. Usado na comunicação e na comprovação.
+   Espera um <form data-limpeza-foto> contendo este trecho. Os dois campos de arquivo
+   se chamam "foto": o servidor usa o que chegar com conteúdo. #}
+<div class="limpeza-foto mb-3">
+  <div class="form-label fw-semibold">{{ rotulo_foto }}</div>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-success btn-lg flex-fill" data-limpeza-acao="camera"><i class="fas fa-camera me-2"></i>Tirar foto agora</button>
+    {% if galeria|default(true) %}<button type="button" class="btn btn-outline-secondary flex-fill" data-limpeza-acao="galeria"><i class="fas fa-images me-2"></i>Escolher da galeria</button>{% endif %}
+  </div>
+  <input class="d-none" type="file" name="foto" accept="image/*" capture="environment" data-limpeza-arquivo="camera" aria-label="Tirar foto agora">
+  {% if galeria|default(true) %}<input class="d-none" type="file" name="foto" accept="image/*" data-limpeza-arquivo="galeria" aria-label="Escolher foto da galeria">{% endif %}
+  <div class="limpeza-camera d-none mt-2">
+    <video playsinline muted autoplay></video>
+    <div class="d-flex gap-2 mt-2">
+      <button type="button" class="btn btn-success flex-fill" data-limpeza-acao="capturar"><i class="fas fa-circle-dot me-2"></i>Capturar</button>
+      <button type="button" class="btn btn-outline-secondary" data-limpeza-acao="fechar">Cancelar</button>
+    </div>
+  </div>
+  <img class="limpeza-previa d-none mt-2" alt="Prévia da foto">
+  <div class="limpeza-aviso-foto small text-danger mt-1 d-none" role="alert"></div>
+  <input type="hidden" name="latitude" value="">
+  <input type="hidden" name="longitude" value="">
+  <input type="hidden" name="precisao" value="">
+  <div class="limpeza-gps small mt-2" role="status" aria-live="polite">
+    <i class="fas fa-location-crosshairs me-1"></i><span>Procurando sua localização…</span>
+  </div>
+</div>

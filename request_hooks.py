@@ -58,6 +58,13 @@ def _set_request_id_header(response):
             response.headers.setdefault(
                 "Permissions-Policy", "camera=(self), microphone=(), geolocation=(self)"
             )
+        elif request.path.startswith("/limpeza-urbana/"):
+            # Comunicação e comprovação de limpeza: "Tirar foto agora" abre a
+            # câmera dentro da página no computador (no celular é a câmera do
+            # próprio aparelho). Mesmo motivo da rota do PMO acima.
+            response.headers.setdefault(
+                "Permissions-Policy", "camera=(self), microphone=(), geolocation=(self)"
+            )
         else:
             response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
         response.headers.setdefault(

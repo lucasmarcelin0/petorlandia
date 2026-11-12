@@ -107,6 +107,12 @@ from .entomologia import (
     EntomologiaSolicitacaoCategoria,
     EntomologiaVisitaDomiciliar,
 )
+from .limpeza import (
+    LimpezaAcesso,
+    LimpezaComprovacao,
+    LimpezaEvento,
+    LimpezaSolicitacao,
+)
 from .petsitter import (
     CareerApplication,
     PetsitterProfile,
