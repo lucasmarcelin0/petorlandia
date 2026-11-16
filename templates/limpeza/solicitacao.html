@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Comunicação nº {{ item.id }} · Prefeitura integrada{% endblock %}
+{% block page_title %}Comunicação nº {{ item.num }} · Prefeitura integrada{% endblock %}
 {% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block head %}
@@ -16,7 +16,7 @@
   {% set ativo = '' %}
   {% include "limpeza/_nav.html" %}
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <h1 class="h3 mb-0">Nº {{ item.id }} · {{ rotulo_categorias(item.categorias) }}</h1>
+    <h1 class="h3 mb-0">Nº {{ item.num }} · {{ rotulo_categorias(item.categorias) }}</h1>
     <span class="limpeza-selo {{ item.status }} fs-6">{{ STATUS.get(item.status, item.status) }}</span>
   </div>
 

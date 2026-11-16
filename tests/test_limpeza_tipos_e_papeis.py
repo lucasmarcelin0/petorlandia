@@ -262,3 +262,44 @@ def test_rotas_de_administracao_sao_so_do_admin(client):
         assert client.post(rota, data={'rotulo': 'X', 'nome': 'X', 'permissao': 'mapa', 'texto': 'x',
                                        'destino': 'lixo'}).status_code in NEGADO, rota
     assert LimpezaTipo.query.count() == 0 and LimpezaPapel.query.count() == 0
+
+
+def test_lista_paginada_de_10_em_10_e_mapa_com_todos(client, uploads):
+    for _ in range(12):
+        _comunicar_como(client, 'a@example.test', 'lixo')
+    _admin(client)
+    tudo = client.get('/limpeza-urbana/mapa/dados').get_json()
+    assert len(tudo['pontos']) == 12 and tudo['total'] == 12 and 'pagina' not in tudo
+    primeira = client.get('/limpeza-urbana/mapa/dados?pagina=1').get_json()
+    assert (len(primeira['pontos']), primeira['pagina'], primeira['paginas'], primeira['total']) == (10, 1, 2, 12)
+    assert primeira['indicadores']['abertas'] == 12  # os números contam o filtro inteiro
+    segunda = client.get('/limpeza-urbana/mapa/dados?pagina=2').get_json()
+    assert len(segunda['pontos']) == 2
+    assert {p['id'] for p in primeira['pontos']}.isdisjoint({p['id'] for p in segunda['pontos']})
+    # As mais recentes vêm primeiro; página fora do intervalo cai na última.
+    assert primeira['pontos'][0]['id'] > segunda['pontos'][-1]['id']
+    assert client.get('/limpeza-urbana/mapa/dados?pagina=99').get_json()['pagina'] == 2
+    pagina = client.get('/limpeza-urbana/comunicacoes').get_data(as_text=True)
+    assert 'id="limpeza-paginacao"' in pagina and 'Mais antigas' in pagina
+
+
+def test_numero_da_comunicacao_nao_pula_quando_o_id_pula(client, uploads):
+    primeira = _comunicar_como(client, 'a@example.test', 'lixo')
+    segunda = _comunicar_como(client, 'a@example.test', 'galhos')
+    assert (primeira.numero, segunda.numero) == (1, 2)
+    # Simula o id gasto por gravações desfeitas: o próximo id salta, o número não.
+    db.session.add(LimpezaSolicitacao(id=40, numero=3, autor_id=primeira.autor_id, categorias='lixo',
+                                      latitude=-20.72, longitude=-47.87, origem_local='aparelho',
+                                      foto_url='https://x.test/f.jpg', status='aberta'))
+    db.session.commit()
+    # Comunicação recusada (sem localização) não gasta número.
+    assert comunicar(client, categoria='lixo', lat=None).status_code == 400
+    quarta = _comunicar_como(client, 'a@example.test', 'entulho')
+    assert quarta.id == 41 and quarta.numero == 4
+    assert 'Nº 4 ·' in client.get(f'/limpeza-urbana/solicitacao/{quarta.id}').get_data(as_text=True)
+    assert 'Nº 4 ·' in client.get('/limpeza-urbana/minhas').get_data(as_text=True)
+    _admin(client)
+    pontos = client.get('/limpeza-urbana/mapa/dados?pagina=1').get_json()['pontos']
+    assert [(p['id'], p['numero']) for p in pontos][:2] == [(41, 4), (40, 3)]
+    linhas = client.get('/limpeza-urbana/relatorio.csv').get_data(as_text=True).strip().splitlines()
+    assert linhas[1].lstrip('\ufeff').startswith('4;')

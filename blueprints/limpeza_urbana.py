@@ -114,7 +114,7 @@ def comunicar():
             foto_url = servico.guardar_foto(data, nome, "limpeza/comunicacoes", upload_to_s3)
             from models.limpeza import LimpezaSolicitacao
             solicitacao = LimpezaSolicitacao(
-                autor_id=current_user.id, chave_envio=chave or None, categorias=categorias,
+                numero=servico.proximo_numero(), autor_id=current_user.id, chave_envio=chave or None, categorias=categorias,
                 descricao=(form.get("descricao") or "").strip()[:500] or None,
                 referencia=(form.get("referencia") or "").strip()[:200] or None,
                 latitude=lat, longitude=lon, precisao_m=precisao, origem_local=origem,
@@ -139,9 +139,9 @@ def comunicar():
             return render_template("limpeza/comunicar.html", form=form, selecionadas=form.getlist("categoria"),
                                    **_contexto_base()), 400
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
-            return jsonify(destino=url_for(".minhas"), id=solicitacao.id)
-        flash(f"Comunicação nº {solicitacao.id} registrada. Obrigado por colaborar!", "success")
+            flash(f"Comunicação nº {solicitacao.num} registrada. Obrigado por colaborar!", "success")
+            return jsonify(destino=url_for(".minhas"), id=solicitacao.id, numero=solicitacao.num)
+        flash(f"Comunicação nº {solicitacao.num} registrada. Obrigado por colaborar!", "success")
         return redirect(url_for(".minhas"))
     return render_template("limpeza/comunicar.html", form={}, selecionadas=[], **_contexto_base())
 
@@ -177,6 +177,9 @@ def todas_comunicacoes():
     return render_template("limpeza/mapa.html", filtros=_filtros(), visao_lista=True, **_contexto_base())
 
 
+POR_PAGINA = 10
+
+
 @bp.route("/mapa/dados")
 @login_required
 def mapa_dados():
@@ -184,11 +187,15 @@ def mapa_dados():
     filtros = _filtros()
     itens = servico.consultar(**filtros, tipos=servico.tipos_visiveis(current_user))
     ver_autor = servico.pode_fiscalizar(current_user)
-    resposta = jsonify({
-        "pontos": [servico.como_ponto(s, ver_autor=ver_autor) for s in itens],
-        "indicadores": servico.indicadores(itens),
-        "limite": len(itens) >= 2000,
-    })
+    dados = {"indicadores": servico.indicadores(itens), "limite": len(itens) >= 2000, "total": len(itens)}
+    if request.args.get("pagina"):
+        # Lista: só uma página de cartões (com fotos) por vez; o mapa recebe todos os pontos.
+        paginas = max(1, -(-len(itens) // POR_PAGINA))
+        pagina = min(max(request.args.get("pagina", 1, type=int) or 1, 1), paginas)
+        itens = itens[(pagina - 1) * POR_PAGINA:pagina * POR_PAGINA]
+        dados.update(pagina=pagina, paginas=paginas, por_pagina=POR_PAGINA)
+    dados["pontos"] = [servico.como_ponto(s, ver_autor=ver_autor) for s in itens]
+    resposta = jsonify(dados)
     resposta.headers["Cache-Control"] = "no-store"
     return resposta
 
@@ -324,7 +331,7 @@ def relatorio():
     for s in itens:
         c = s.comprovacao_valida
         escritor.writerow([
-            s.id, servico.rotulo_categorias(s.categorias), servico.STATUS.get(s.status, s.status),
+            s.num, servico.rotulo_categorias(s.categorias), servico.STATUS.get(s.status, s.status),
             servico.hora_local(s.criado_em), s.latitude, s.longitude, s.origem_local,
             s.precisao_m if s.precisao_m is not None else "", s.foto_url, s.referencia or "", s.descricao or "",
             servico.nome_da_conta(s.autor),

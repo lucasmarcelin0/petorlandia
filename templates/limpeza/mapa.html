@@ -57,6 +57,11 @@
 
   {% if visao_lista %}
   <div id="limpeza-lista" aria-live="polite"></div>
+  <nav class="limpeza-paginacao d-none" id="limpeza-paginacao" aria-label="Páginas das comunicações">
+    <button class="btn btn-sm btn-outline-success" type="button" data-pagina="anterior"><i class="fas fa-chevron-left me-1"></i>Mais recentes</button>
+    <span class="small text-muted text-center" id="limpeza-pagina-texto"></span>
+    <button class="btn btn-sm btn-outline-success" type="button" data-pagina="proxima">Mais antigas<i class="fas fa-chevron-right ms-1"></i></button>
+  </nav>
   {% else %}
   <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações de limpeza"></div>
   <div class="limpeza-legenda mt-2" id="limpeza-legenda">
@@ -85,6 +90,8 @@
   }).addTo(mapa);
   let camada = mapa ? L.layerGroup().addTo(mapa) : null;
   let primeiraVez = true;
+  const LISTA = !!el('limpeza-lista');
+  let pagina = Math.max(1, Number(new URLSearchParams(location.search).get('pagina')) || 1);
 
   function cor(p) {
     if (p.status === 'descartada') return '#9ca3af';
@@ -96,7 +103,7 @@
   function popup(p) {
     const c = p.comprovacao;
     return `<div class="limpeza-popup">
-      <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong><br>
+      <strong>Nº ${p.numero} · ${esc(p.categoria_rotulo)}</strong><br>
       <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
       <div class="fotos"><img src="${urlSegura(p.foto)}" alt="Antes" loading="lazy">
         ${c ? `<img src="${urlSegura(c.foto)}" alt="Depois" loading="lazy">` : '<div class="small text-muted d-flex align-items-center">Sem foto da limpeza</div>'}</div>
@@ -119,11 +126,35 @@
     return q.toString();
   }
 
+  function cartao(p) {
+    const c = p.comprovacao;
+    const foto = (u, alt) => u ? `<img src="${urlSegura(u)}" alt="${alt}" loading="lazy" decoding="async">` : '';
+    const texto = [p.referencia, p.descricao].filter(Boolean).map(esc).join(' · ');
+    return `<a class="limpeza-cartao limpeza-item mb-2" href="${DETALHE}${p.id}">
+      <div class="limpeza-item-fotos${c ? ' duas' : ''}">${foto(p.foto, 'Foto da comunicação')}${c ? foto(c.foto, 'Foto da limpeza') : ''}</div>
+      <div class="limpeza-item-corpo">
+        <div class="limpeza-item-titulo"><strong>Nº ${p.numero} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>${c && c.longe ? ' <span class="limpeza-selo alerta">longe do ponto</span>' : ''}</div>
+        <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}</div>
+        ${texto ? `<div class="limpeza-item-texto">${texto}</div>` : ''}
+        ${c ? `<div class="limpeza-meta">Limpa em ${esc(c.criado_local)} · ${Math.round(c.distancia_m)} m do ponto</div>` : ''}
+      </div></a>`;
+  }
+
+  function paginacao(d) {
+    const nav = el('limpeza-paginacao');
+    if (!nav) return;
+    nav.classList.toggle('d-none', !d.paginas || d.paginas < 2);
+    el('limpeza-pagina-texto').textContent = `Página ${d.pagina} de ${d.paginas} · ${d.total} comunicações`;
+    nav.querySelector('[data-pagina="anterior"]').disabled = d.pagina <= 1;
+    nav.querySelector('[data-pagina="proxima"]').disabled = d.pagina >= d.paginas;
+  }
+
   async function carregar() {
     const q = parametros();
     if (CSV && el('limpeza-csv')) el('limpeza-csv').href = CSV + (q ? `?${q}` : '');
+    const qDados = LISTA ? [q, `pagina=${pagina}`].filter(Boolean).join('&') : q;
     try {
-      const r = await fetch(DADOS + (q ? `?${q}` : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const r = await fetch(DADOS + (qDados ? `?${qDados}` : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       el('limpeza-erro').classList.add('d-none');
@@ -136,12 +167,10 @@
         numero(i.comprovacoes_longe, 'Comprovações longe do ponto'),
         numero(i.comprovacoes_recusadas, 'Comprovações recusadas'),
       ].join('');
-      if (el('limpeza-lista')) {
-        el('limpeza-lista').innerHTML = d.pontos.length ? d.pontos.map(p =>
-          `<a class="limpeza-cartao d-block text-decoration-none mb-2" href="${DETALHE}${p.id}">
-            <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
-            <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}${p.referencia ? ` · ${esc(p.referencia)}` : ''}</div></a>`
-        ).join('') : '<p>Nenhuma comunicação neste filtro.</p>';
+      if (LISTA) {
+        pagina = d.pagina || 1;
+        el('limpeza-lista').innerHTML = d.pontos.length ? d.pontos.map(cartao).join('') : '<p>Nenhuma comunicação neste filtro.</p>';
+        paginacao(d);
       }
       if (camada) camada.clearLayers();
       const limites = [];
@@ -151,8 +180,8 @@
           .bindPopup(popup(p), { maxWidth: 280 }).addTo(camada);
         limites.push([p.lat, p.lon]);
       });
-      el('limpeza-sub').textContent = d.pontos.length
-        ? `${d.pontos.length} comunicação(ões) no filtro${d.limite ? ' (mostrando as 2.000 mais recentes)' : ''}. Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+      el('limpeza-sub').textContent = d.total
+        ? `${d.total} comunicação(ões) no filtro${d.limite ? ' (mostrando as 2.000 mais recentes)' : ''}. Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
         : 'Nenhuma comunicação neste filtro.';
       if (mapa && primeiraVez && limites.length) {
         mapa.invalidateSize();
@@ -167,9 +196,18 @@
 
   el('limpeza-filtros').addEventListener('submit', (ev) => {
     ev.preventDefault();
+    pagina = 1;
     history.replaceState(null, '', `?${parametros()}`);
     primeiraVez = true;
     carregar();
+  });
+  if (el('limpeza-paginacao')) el('limpeza-paginacao').addEventListener('click', (ev) => {
+    const botao = ev.target.closest('[data-pagina]');
+    if (!botao || botao.disabled) return;
+    pagina += botao.dataset.pagina === 'proxima' ? 1 : -1;
+    const q = [parametros(), pagina > 1 ? `pagina=${pagina}` : ''].filter(Boolean).join('&');
+    history.replaceState(null, '', q ? `?${q}` : location.pathname);
+    carregar().then(() => el('limpeza-lista').scrollIntoView({ block: 'start', behavior: 'smooth' }));
   });
   el('limpeza-atualizar').addEventListener('click', carregar);
   // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
