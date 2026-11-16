@@ -515,7 +515,14 @@ def public_user(user: SimUser | None) -> dict | None:
 
 
 def get_state() -> dict:
+    global _ready
     row = db.session.get(SimProcessState, PROCESS_ID)
+    if row is None:
+        # ``_ready`` vale para o processo, não para o banco: um banco recriado depois
+        # da primeira preparação (testes, restauração) chega aqui sem a linha do processo.
+        _ready = False
+        ensure_ready()
+        row = db.session.get(SimProcessState, PROCESS_ID)
     state = json.loads(row.state_json)
     state["documents"] = [
         doc for doc in state.get("documents", [])

@@ -115,3 +115,19 @@ def test_sim_admin_can_list_accounts_without_sensitive_credentials(app):
     }
     assert preview.get_json()["state"]["role"] == "establishment"
     assert all(not document.get("internal") for document in preview.get_json()["state"]["documents"])
+
+
+def test_estado_do_sim_se_recompoe_quando_o_banco_foi_recriado(app):
+    """O preparo do SIM é memorizado no processo; um banco novo não pode dar erro 500."""
+    import blueprints.sim as sim
+
+    with app.app_context():
+        sim.ensure_ready()
+        linha = db.session.get(SimProcessState, PROCESS_ID)
+        if linha is not None:
+            db.session.delete(linha)
+            db.session.commit()
+        sim._ready = True  # preparo memorizado de um banco anterior
+        estado = sim.get_state()
+        assert estado["documents"]
+        assert db.session.get(SimProcessState, PROCESS_ID) is not None
