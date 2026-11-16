@@ -303,3 +303,46 @@ def test_numero_da_comunicacao_nao_pula_quando_o_id_pula(client, uploads):
     assert [(p['id'], p['numero']) for p in pontos][:2] == [(41, 4), (40, 3)]
     linhas = client.get('/limpeza-urbana/relatorio.csv').get_data(as_text=True).strip().splitlines()
     assert linhas[1].lstrip('\ufeff').startswith('4;')
+
+
+def test_admin_ve_como_cada_papel_sem_gravar_nada(client, uploads):
+    galhos = _comunicar_como(client, 'a@example.test', 'galhos')
+    lixo = _comunicar_como(client, 'b@example.test', 'lixo')
+    _admin(client)
+    _papel(client, 'Equipe de poda', ['comprovar'], ['galhos'])
+    pagina = client.get('/limpeza-urbana/acessos').get_data(as_text=True)
+    assert 'Ver como Equipe de poda' in pagina and 'Ver como Colaborador' in pagina
+
+    resposta = client.post('/limpeza-urbana/papeis/equipe-de-poda/ver-como')
+    assert resposta.headers['Location'].endswith('/limpeza-urbana/mapa')
+    mapa = client.get('/limpeza-urbana/mapa').get_data(as_text=True)
+    assert 'Você está vendo como' in mapa and 'Equipe de poda' in mapa
+    nav = mapa[mapa.index('limpeza-nav'):mapa.index('</nav>', mapa.index('limpeza-nav'))]
+    assert 'Quem acessa' not in nav and 'Todas as comunicações' not in nav and 'Comunicar' not in nav
+    assert [p['id'] for p in client.get('/limpeza-urbana/mapa/dados').get_json()['pontos']] == [galhos.id]
+    assert client.get(f'/limpeza-urbana/solicitacao/{lixo.id}').status_code in NEGADO
+    assert client.get('/limpeza-urbana/relatorio.csv').status_code in NEGADO
+    ficha = client.get(f'/limpeza-urbana/solicitacao/{galhos.id}').get_data(as_text=True)
+    assert 'Comprovar limpeza' in ficha and 'disabled' in ficha
+    # Nada é gravado em nome do papel simulado.
+    assert comprovar(client, galhos.id).status_code == 302
+    assert db.session.get(LimpezaSolicitacao, galhos.id).status == 'aberta'
+    assert client.post('/limpeza-urbana/papeis', data={'nome': 'X', 'permissao': 'comunicar'}).status_code == 302
+    assert LimpezaPapel.query.filter_by(nome='X').count() == 0
+
+    client.post('/limpeza-urbana/ver-como/sair')
+    assert len(client.get('/limpeza-urbana/mapa/dados').get_json()['pontos']) == 2
+    # Abrir "Quem acessa" também encerra o modo.
+    client.post('/limpeza-urbana/papeis/colaborador/ver-como')
+    assert client.get('/limpeza-urbana/mapa').status_code in NEGADO
+    client.get('/limpeza-urbana/acessos')
+    assert client.get('/limpeza-urbana/mapa').status_code == 200
+
+    # Quem não é administrador não entra no modo.
+    gari = conta('gari@example.test')
+    dar(gari, 'equipe')
+    entrar(client, gari)
+    assert client.post('/limpeza-urbana/papeis/fiscal/ver-como').status_code in NEGADO
+    with client.session_transaction() as s:
+        s[servico.SESSAO_VER_COMO] = 'fiscal'
+    assert client.get('/limpeza-urbana/relatorio.csv').status_code in NEGADO

@@ -2,6 +2,15 @@
   <img src="{{ url_for('static', filename='img/brasao_orlandia.png') }}" alt="Brasão de Orlândia">
   <div><strong>Prefeitura integrada</strong><span>Prefeitura Municipal de Orlândia</span></div>
 </div>
+{% if ver_como %}
+<div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2 limpeza-ver-como" role="status">
+  <div><i class="fas fa-eye me-1"></i>Você está vendo como <strong>{{ ver_como.nome }}</strong><span class="small"> · {{ resumo_do_papel(ver_como) }}</span><br><span class="small">Só para conferir: nada do que fizer aqui é gravado.</span></div>
+  <form method="post" action="{{ url_for('limpeza_urbana.sair_ver_como') }}" class="flex-shrink-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-dark" type="submit">Sair do modo</button>
+  </form>
+</div>
+{% endif %}
 <nav class="limpeza-nav d-flex gap-2 mb-3" aria-label="Prefeitura integrada">
   {% if eh_admin %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'lista' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.todas_comunicacoes') }}"><i class="fas fa-list me-1"></i>Todas as comunicações</a>{% endif %}
   {% if pode_mapa %}<a class="btn btn-sm {{ 'btn-success' if ativo == 'mapa' else 'btn-outline-success' }}" href="{{ url_for('limpeza_urbana.mapa') }}"><i class="fas fa-map-location-dot me-1"></i>Mapa</a>{% endif %}

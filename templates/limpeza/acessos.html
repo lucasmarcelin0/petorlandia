@@ -88,6 +88,7 @@
                 <span class="small text-muted">{{ p.resumo }}</span>
                 {% if p.uso %}<br><span class="small text-muted">{{ p.uso }} pessoa{{ 's' if p.uso != 1 }} com este papel</span>{% endif %}
               </label>
+              <button class="btn btn-sm btn-link text-secondary px-1" type="submit" form="ver-como-{{ p.chave }}" aria-label="Ver como {{ p.nome }}" title="Ver como quem tem este papel"><i class="fas fa-eye"></i></button>
               {% if p.id %}
               <button class="btn btn-sm btn-link text-secondary px-1" type="button" data-bs-toggle="collapse" data-bs-target="#papel-{{ p.id }}-painel" aria-label="Editar {{ p.nome }}" title="Editar"><i class="fas fa-pen"></i></button>
               <button class="btn btn-sm btn-link text-danger px-1" type="submit" form="papel-{{ p.id }}-excluir" aria-label="Excluir {{ p.nome }}" title="Excluir"
@@ -108,6 +109,9 @@
       </form>
       {# Formulários dos papéis: ficam fora do formulário de atribuir (HTML não aceita formulário dentro de formulário). #}
       <form method="post" action="{{ url_for('limpeza_urbana.criar_papel') }}" id="papel-novo" data-form-papel><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      {% for p in papeis_lista %}
+      <form method="post" action="{{ url_for('limpeza_urbana.ver_como', chave=p.chave) }}" id="ver-como-{{ p.chave }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      {% endfor %}
       {% for p in papeis_lista if p.id %}
       <form method="post" action="{{ url_for('limpeza_urbana.editar_papel', papel_id=p.id) }}" id="papel-{{ p.id }}" data-form-papel><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
       <form method="post" action="{{ url_for('limpeza_urbana.excluir_papel', papel_id=p.id) }}" id="papel-{{ p.id }}-excluir"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>

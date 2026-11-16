@@ -53,7 +53,7 @@
           <label class="form-label small fw-semibold" for="motivo-recusa">Recusar esta comprovação</label>
           <div class="input-group">
             <input class="form-control" id="motivo-recusa" name="motivo" maxlength="300" placeholder="Motivo (ex.: lixo continua no canteiro)" required>
-            <button class="btn btn-outline-danger" type="submit">Recusar</button>
+            <button class="btn btn-outline-danger" type="submit" {{ 'disabled' if ver_como }}>Recusar</button>
           </div>
           <div class="form-text">A comunicação volta para a fila de limpeza. A foto recusada fica no histórico.</div>
         </form>
@@ -66,7 +66,7 @@
             <label class="form-label" for="observacao">Observação <span class="text-muted">(opcional)</span></label>
             <input class="form-control" id="observacao" name="observacao" maxlength="500">
           </div>
-          <button type="submit" class="btn btn-success w-100"><i class="fas fa-check me-2"></i>Comprovar limpeza</button>
+          <button type="submit" class="btn btn-success w-100" {{ 'disabled' if ver_como }}><i class="fas fa-check me-2"></i>Comprovar limpeza</button>
           <p class="small text-muted mt-2 mb-0">Tire a foto agora, do mesmo ângulo da foto da comunicação. A distância até o ponto comunicado fica registrada.</p>
         </form>
         {% elif item.status == 'descartada' %}
@@ -108,7 +108,7 @@
     <label class="form-label small fw-semibold" for="motivo-descarte">Descartar esta comunicação</label>
     <div class="input-group">
       <input class="form-control" id="motivo-descarte" name="motivo" maxlength="300" placeholder="Duplicada, fora da área, foto sem relação…" required>
-      <button class="btn btn-outline-secondary" type="submit">Descartar</button>
+      <button class="btn btn-outline-secondary" type="submit" {{ 'disabled' if ver_como }}>Descartar</button>
     </div>
   </form>
   {% endif %}

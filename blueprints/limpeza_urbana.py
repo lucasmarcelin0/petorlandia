@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from datetime import date
 
-from flask import (Blueprint, Response, abort, flash, jsonify, redirect, render_template, request,
+from flask import (Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session,
                    url_for)
 from flask_login import current_user, login_required
 
@@ -57,7 +57,10 @@ def _data(texto):
 def _contexto_base():
     tipos = servico.tipos_visiveis(current_user)
     todos = servico.catalogo(incluir_inativos=True)
+    simulado = servico.papel_simulado(current_user)
     return dict(
+        ver_como=simulado,
+        resumo_do_papel=servico.resumo_do_papel,
         papeis=servico.papeis_de(current_user),
         pode_mapa=servico.pode_ver_mapa(current_user),
         pode_comunicar=servico.pode_comunicar(current_user),
@@ -66,7 +69,7 @@ def _contexto_base():
         pode_recusar=servico.pode_recusar(current_user),
         pode_descartar=servico.pode_descartar(current_user),
         pode_exportar=servico.pode_exportar(current_user),
-        eh_admin=servico.eh_admin(current_user),
+        eh_admin=servico.eh_admin(current_user) and simulado is None,
         CATEGORIAS=servico.catalogo(),
         CATEGORIAS_FILTRO={c: r for c, r in todos.items() if tipos is None or c in tipos},
         tipos_recortados=tipos is not None,
@@ -74,6 +77,44 @@ def _contexto_base():
         rotulo_categorias=servico.rotulo_categorias,
         DISTANCIA_ALERTA_M=servico.DISTANCIA_ALERTA_M,
     )
+
+
+# Em "ver como" o administrador só olha: nenhuma ação grava em nome do papel simulado.
+_LIVRES_NO_VER_COMO = {"limpeza_urbana.ver_como", "limpeza_urbana.sair_ver_como"}
+
+
+@bp.before_request
+def _bloquear_acoes_no_ver_como():
+    if request.method != "POST" or request.endpoint in _LIVRES_NO_VER_COMO:
+        return None
+    if not getattr(current_user, "is_authenticated", False) or servico.papel_simulado(current_user) is None:
+        return None
+    mensagem = "Você está vendo como outro papel: nada é gravado nesse modo. Saia do modo para agir."
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(erro=mensagem), 409
+    flash(mensagem, "warning")
+    return redirect(request.referrer or url_for(".inicio"))
+
+
+@bp.route("/papeis/<chave>/ver-como", methods=["POST"])
+@login_required
+def ver_como(chave):
+    _exigir(servico.eh_admin(current_user))
+    papel = servico.papeis_catalogo().get(chave)
+    if papel is None:
+        abort(404)
+    session[servico.SESSAO_VER_COMO] = chave
+    servico._limpar_cache()
+    destino = ".mapa" if "mapa" in papel["permissoes"] else ".comunicar"
+    return redirect(url_for(destino))
+
+
+@bp.route("/ver-como/sair", methods=["POST"])
+@login_required
+def sair_ver_como():
+    session.pop(servico.SESSAO_VER_COMO, None)
+    servico._limpar_cache()
+    return redirect(url_for(".acessos") + "#form-atribuir")
 
 
 @bp.route("/")
@@ -350,6 +391,8 @@ def relatorio():
 @login_required
 def acessos():
     _exigir(servico.eh_admin(current_user))
+    if session.pop(servico.SESSAO_VER_COMO, None):
+        servico._limpar_cache()
     if request.method == "POST":
         por = servico.nome_da_conta(current_user)
         form = request.form
