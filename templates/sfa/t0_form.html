@@ -336,6 +336,37 @@
       line-height: 1.45;
     }
 
+    /* "Não sei"/"Nenhum" ficam na mesma linha da resposta, como alternativa a ela. */
+    .answer-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .answer-row > input {
+      flex: 1 1 9rem;
+      width: auto;
+      min-width: 0;
+    }
+
+    .answer-or {
+      color: var(--sfa-muted, #5b6b70);
+      font-size: 0.92rem;
+    }
+
+    .answer-row .choices {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .answer-row .choice {
+      padding: 0.7rem 0.85rem;
+      white-space: nowrap;
+    }
+
     .field-error {
       color: var(--sfa-warn);
       font-size: 0.86rem;
@@ -432,6 +463,10 @@
 
         <div class="field-grid">
           {% for field in section.fields %}
+          {% set juntos = section.fields | selectattr("inline_with", "equalto", field.key) | list %}
+          {% if field.inline_with and section.fields | selectattr("key", "equalto", field.inline_with) | list %}
+          {# "Não sei"/"Nenhum": aparece dentro da pergunta principal. #}
+          {% else %}
           {% set current = values.get(field.key, [] if field.type == "checkboxes" else "") %}
           <div class="field {% if field.type in ['textarea', 'checkboxes', 'radio'] %}full{% endif %}"{% if field.visible_if %} data-visible-if='{{ field.visible_if | tojson }}'{% endif %}>
             <label class="field-label" for="{{ field.key }}">
@@ -486,6 +521,7 @@
             </div>
 
             {% else %}
+            {% if juntos %}<div class="answer-row">{% endif %}
             <input
               id="{{ field.key }}"
               type="{{ field.type }}"
@@ -498,12 +534,28 @@
               {% if field.max is defined %}max="{{ field.max }}"{% endif %}
               {% if field.step is defined %}step="{{ field.step }}"{% endif %}
             >
+            {% if juntos %}
+              <div class="choices" role="group" aria-label="{{ juntos[0].label }}">
+                <span class="answer-or" aria-hidden="true">ou</span>
+                {% for extra in juntos %}{% set extra_current = values.get(extra.key, []) %}
+                {% for option in extra.options %}
+                <label class="choice">
+                  <input type="checkbox" name="{{ extra.key }}" value="{{ option }}" data-inline-with="{{ field.key }}" {% if option in extra_current %}checked{% endif %}>
+                  <span>{{ option }}</span>
+                </label>
+                {% endfor %}{% endfor %}
+              </div>
+            </div>
+            {% endif %}
             {% endif %}
 
-            {% if errors.get(field.key) %}
-            <div class="field-error">{{ errors[field.key] }}</div>
+            {% for erro_key in [field.key] + (juntos | map(attribute="key") | list) %}
+            {% if errors.get(erro_key) %}
+            <div class="field-error">{{ errors[erro_key] }}</div>
             {% endif %}
+            {% endfor %}
           </div>
+          {% endif %}
           {% endfor %}
         </div>
       </section>
@@ -519,6 +571,6 @@
       </div>
     </form>
   </div>
-  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20261116"></script>
+  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20261116c"></script>
 </body>
 </html>

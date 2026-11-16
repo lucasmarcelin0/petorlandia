@@ -1,5 +1,5 @@
 {
-  "instrument_version": "sfa-2026-11-16b",
+  "instrument_version": "sfa-2026-11-16c",
   "title": "T7 — Acompanhamento aos sete dias",
   "subtitle": "Instrumento revisado em 16/11/2026. Data-alvo do acompanhamento: 7 dias após a entrevista inicial (T0).",
   "submit_label": "Registrar T7",
@@ -214,7 +214,8 @@
           "options": [
             "Nenhum",
             "Não sei"
-          ]
+          ],
+          "inline_with": "dias_incap_novos"
         }
       ],
       "description": "Nesta primeira apuração, contar todo o período do D0 até hoje, inclusive os dias anteriores à entrevista T0. Não contar duas vezes o mesmo dia."
@@ -260,7 +261,8 @@
             "key": "novos_casos_semelhantes",
             "operator": "equals",
             "value": "Sim"
-          }
+          },
+          "inline_with": "novos_casos_quantidade"
         },
         {
           "key": "novos_casos_relacao",

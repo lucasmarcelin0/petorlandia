@@ -192,6 +192,30 @@
           "sha256": "a5eaefa7d1e34e7a518878704b7eaa7b3f51735008f2db564bf503fca20b22b6"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-16b",
+      "label": "Instrumentos revisados em 16/11/2026 (tarde)",
+      "status": "archived",
+      "archived_at": "2026-11-16",
+      "description": "Foco só na saúde, com 21 perguntas no T0. A seguinte tira do T0 o local e o período das exposições e a suspeita em comum, que não entravam em nenhuma análise, e mostra o \"Não sei\" dentro da pergunta do número ou da data.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-16b/t0.json",
+          "field_count": 39,
+          "sha256": "84237b64ddb5647c18c727e5f8b98f93eb87ee1ea2a294417379efe25a11ce8b"
+        },
+        "t7": {
+          "file": "sfa-2026-11-16b/t7.json",
+          "field_count": 23,
+          "sha256": "6ae81cfa7bc7a5df2a6a61cf967e846f0a545429dfe7c1cb81eb8418f30f4f7f"
+        },
+        "t30": {
+          "file": "sfa-2026-11-16b/t30.json",
+          "field_count": 22,
+          "sha256": "66cef729e9c317463a4d2279bde9ca541a44ce3d30a1efc3f510312b4fd25fe4"
+        }
+      }
     }
   ]
 }
