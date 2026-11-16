@@ -1,7 +1,8 @@
 # Deploy no Heroku
 
-**O caminho normal é mesclar na `main`**: o Heroku publica sozinho depois que
-os testes passam (veja "Automatico: merge na main publica" abaixo). Os
+**O caminho normal é mesclar na `main`**: o Heroku publica sozinho no push
+(veja "Automatico: merge na main publica" abaixo). Deploy primeiro, suíte
+completa depois. Os
 caminhos manuais desta página ficam para emergência.
 
 ## Pelo celular: Codex Cloud e Claude Code Cloud
@@ -25,9 +26,15 @@ PetOrlandia-Publish: true
 
 O workflow **Publicar correcao solicitada** reconhece esse marcador (ou a
 label `publicar`), aceita somente PRs do próprio repositório de autores com
-permissão de escrita e integra após `pytest` e `authorization-tests` aprovados.
-Sem o marcador/label, não integra automaticamente. Rascunhos com pedido
-explícito são convertidos para prontos. Conflitos e testes reprovados bloqueiam.
+permissão de escrita e integra assim que a trava rápida `authorization-tests`
+aprova (~1 min: preflight de migrations/imports/Procfile, rotas sensíveis e
+testes de autorização). Não espera o `pytest`; só bloqueia se ele já tiver
+terminado reprovado. Sem o marcador/label, não integra automaticamente.
+Rascunhos com pedido explícito são convertidos para prontos. Conflitos bloqueiam.
+
+Depois do deploy a suíte completa roda na `main` (e segue no PR). Se reprovar
+em código já publicado, o `tests.yml` abre um issue com a label
+`suite-pos-deploy` e comenta no PR: corrija em seguida com um PR novo.
 
 O merge usa `GITHUB_TOKEN`; por isso o workflow dispara explicitamente os dois
 CI na `main` via `workflow_dispatch` (eventos de push gerados pelo token de
@@ -40,8 +47,11 @@ idêntica (a `main` não andou nesse meio-tempo), o workflow registra os checks
 repetir a suíte, e o Heroku publica em seguida. Qualquer diferença, status
 ausente ou erro cai no caminho normal acima. A suíte roda em paralelo
 (`pytest-xdist`, `--dist loadfile`).
-Após aprovação, a integração nativa publica e **Confirmar publicacao no Heroku**
-confere o SHA do slug, o release concluído e a resposta HTTP 200 do site.
+A integração nativa publica no push e **Confirmar publicacao no Heroku**
+confere o SHA do slug, o release concluído e a resposta HTTP 200 do site. Se o
+release sair e o site não responder 200 em 5 minutos, ele volta ao release
+anterior bem-sucedido (só o código; o banco não é revertido), desde que
+ninguém tenha publicado por cima.
 Esse último workflow também pode ser executado manualmente para diagnosticar.
 
 No celular:
@@ -95,9 +105,11 @@ powershell -File scripts/deploy_heroku.ps1 -TestPath tests -PytestArgs "-q"
 ## Automatico: merge na main publica
 
 O app usa a integracao GitHub do Heroku (Dashboard > app > Deploy > Automatic
-deploys from `main`), com **Wait for GitHub checks to pass** marcado. Todo
-merge na `main` vira release sozinho, mas so depois que os checks do commit
-(Test Suite e authorization-gate) passam; se algum falhar, nada vai para o ar.
+deploys from `main`), com **Wait for GitHub checks to pass** desmarcado
+(16/11/2026): todo push na `main` vira release em ~2 minutos. A trava antes do
+ar fica no merge (authorization-gate); a suíte completa confere depois.
+Se o release phase (migration) falhar, o release não é aplicado e o código
+anterior continua no ar.
 O release phase (`flask db upgrade`) roda como em qualquer deploy, e o
 andamento fica na aba Activity do app.
 

@@ -2,6 +2,11 @@
 // Nunca executa arquivos, comandos ou expressões fornecidos pelo PR.
 const MARKER = /^PetOrlandia-Publish: true\s*$/m;
 const REQUIRED = ['pytest', 'authorization-tests'];
+// Deploy primeiro, suíte depois: só a trava rápida (~1 min) segura o merge.
+// A integração do Heroku publica no push da main; a suíte completa corre em
+// paralelo e, se falhar depois do deploy, abre um issue (tests.yml).
+const GATE = ['authorization-tests'];
+const FULL_SUITE = 'pytest';
 
 // O dispatch pode falhar na leitura da resposta mesmo tendo criado o run:
 // antes de repetir, confere se já existe run desse workflow para o SHA.
@@ -79,9 +84,14 @@ async function publish({ github, context, core }) {
     }
     const checks = await github.paginate(github.rest.checks.listForRef,
       { ...repo, ref: pr.head.sha, filter: 'latest', per_page: 100 });
-    const approved = REQUIRED.every(name => checks.some(check => check.name === name &&
+    const approved = GATE.every(name => checks.some(check => check.name === name &&
       check.app?.id === 15368 && check.status === 'completed' && check.conclusion === 'success'));
-    if (!approved) { core.info(`PR #${pull_number}: aguardando os dois testes obrigatórios.`); continue; }
+    if (!approved) { core.info(`PR #${pull_number}: aguardando a trava rápida (${GATE.join(', ')}).`); continue; }
+    // A suíte completa não é esperada, mas se já terminou reprovada o defeito
+    // é conhecido: não publica.
+    const suiteFailed = checks.some(check => check.name === FULL_SUITE && check.app?.id === 15368 &&
+      check.status === 'completed' && !['success', 'skipped', 'neutral'].includes(check.conclusion));
+    if (suiteFailed) { core.warning(`PR #${pull_number}: suíte completa reprovada; não publica.`); continue; }
     // Revalida o head para não publicar uma atualização que não foi examinada.
     const current = (await github.rest.pulls.get({ ...repo, pull_number })).data;
     if (current.head.sha !== pr.head.sha || current.merge_commit_sha !== pr.merge_commit_sha) continue;
@@ -95,9 +105,10 @@ async function publish({ github, context, core }) {
     }
     if (!result.merged) { core.warning(`PR #${pull_number}: merge não concluído.`); continue; }
     core.info(`PR #${pull_number} integrado: ${result.sha}`);
+    // O push do merge já dispara o deploy no Heroku (sem esperar CI).
     // Merges feitos pelo GITHUB_TOKEN não disparam eventos push em outros
     // workflows. workflow_dispatch é a exceção oficial: dispara os dois CI
-    // na main, cujos checks liberam a integração nativa do Heroku.
+    // na main, que conferem depois o que foi ao ar.
     // Uma falha aqui deixava a main sem checks e o Heroku esperando para
     // sempre (06/11/2026: "Unexpected end of JSON input" no dispatch, que
     // responde sem corpo). Tenta de novo e só desiste avisando.
@@ -118,7 +129,7 @@ async function publish({ github, context, core }) {
     }
     await core.summary.addHeading('Correção integrada').addRaw(reused
       ? `PR #${pull_number}: ${result.sha}\n\nÁrvore idêntica à testada no PR; checks registrados na main. A integração GitHub do Heroku publica agora.\n`
-      : `PR #${pull_number}: ${result.sha}\n\nTestes da main iniciados. A integração GitHub do Heroku publica após aprovação.\n`).write();
+      : `PR #${pull_number}: ${result.sha}\n\nA integração GitHub do Heroku publica agora. Suíte completa iniciada na main; se falhar, abre issue.\n`).write();
   }
 }
-module.exports = { publish, dispatchMain, reuseTestedTree, MARKER, REQUIRED };
+module.exports = { publish, dispatchMain, reuseTestedTree, MARKER, REQUIRED, GATE };

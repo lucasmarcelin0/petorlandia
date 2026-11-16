@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from check_cloud_deploy import matches, check, heroku
+from check_cloud_deploy import matches, check, heroku, rollback, SiteDown
 
 
 class DeploymentTests(unittest.TestCase):
@@ -26,8 +26,30 @@ class DeploymentTests(unittest.TestCase):
             [{'version': 2, 'status': 'succeeded', 'slug': {'id': 's'}}],
             {'commit': 'a'}, {'web_url': 'https://example.com/'},
         ]), patch('urllib.request.urlopen', side_effect=TimeoutError):
-            with self.assertRaises(TimeoutError):
+            with self.assertRaises(SiteDown):
                 check('token', 'app', 'a', timeout=0)
+
+    def _releases(self, items):
+        from unittest.mock import MagicMock
+        import json
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(items).encode()
+        return response
+
+    def test_rollback_volta_ao_ultimo_release_bom(self):
+        items = [{'id': 'r3', 'version': 3, 'status': 'succeeded'},
+                 {'id': 'r2', 'version': 2, 'status': 'failed'},
+                 {'id': 'r1', 'version': 1, 'status': 'succeeded'}]
+        with patch('urllib.request.urlopen', return_value=self._releases(items)), patch('check_cloud_deploy.heroku_send') as sending:
+            self.assertEqual(rollback('t', 'app', {'version': 3})['id'], 'r1')
+            sending.assert_called_once_with('/apps/app/releases', 't', 'POST', {'release': 'r1'})
+
+    def test_rollback_nao_passa_por_cima_de_release_mais_novo(self):
+        items = [{'id': 'r4', 'version': 4, 'status': 'succeeded'},
+                 {'id': 'r3', 'version': 3, 'status': 'succeeded'}]
+        with patch('urllib.request.urlopen', return_value=self._releases(items)), patch('check_cloud_deploy.heroku_send') as sending:
+            self.assertIsNone(rollback('t', 'app', {'version': 3}))
+            sending.assert_not_called()
 
 
 if __name__ == '__main__':

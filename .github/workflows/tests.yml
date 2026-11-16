@@ -6,12 +6,15 @@ on:
   push:
     branches: [ main, master ]
 
-# statuses: write so serve para registrar no head do PR qual arvore foi
-# testada (passo final). O publicador compara com o merge e, se for a mesma,
-# nao repete a suite na main.
+# A publicacao nao espera esta suite: ela roda depois do deploy e, se falhar
+# em codigo que ja foi ao ar, abre um issue "Suite falhou apos publicacao" e
+# comenta no PR, para a correcao vir em seguida.
+# statuses: write registra no head do PR qual arvore foi testada.
 permissions:
   contents: read
   statuses: write
+  issues: write
+  pull-requests: write
 
 jobs:
   pytest:
@@ -66,3 +69,32 @@ jobs:
           gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
             -f state=success -f context=arvore-testada/pytest -f description="$tree" > /dev/null
           echo "Arvore testada: $tree"
+
+      - name: Avisar falha em codigo publicado
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            const run = `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${context.runId}`;
+            let sha = context.sha, prs = [];
+            if (context.payload.pull_request) {
+              const pr = (await github.rest.pulls.get({ ...repo, pull_number: context.payload.pull_request.number })).data;
+              if (!pr.merged) return; // PR ainda não publicado: o check vermelho basta.
+              sha = pr.merge_commit_sha; prs = [pr.number];
+            } else {
+              if (context.ref !== 'refs/heads/main') return;
+              prs = (await github.rest.repos.listPullRequestsAssociatedWithCommit({ ...repo, commit_sha: sha })).data.map(p => p.number);
+            }
+            const title = `Suíte falhou após publicação (${sha.slice(0, 8)})`;
+            await github.rest.issues.createLabel({ ...repo, name: 'suite-pos-deploy', color: 'd93f0b' }).catch(() => {});
+            const open = await github.paginate(github.rest.issues.listForRepo, { ...repo, state: 'open', labels: 'suite-pos-deploy', per_page: 100 });
+            const body = `A suíte completa falhou em código que já está em produção.\n\n- Commit: ${sha}\n- Execução: ${run}\n` +
+              (prs.length ? `- PR: ${prs.map(n => '#' + n).join(', ')}\n` : '') +
+              `\nCorrija em seguida com um PR novo (marcador \`PetOrlandia-Publish: true\`). Se o problema afetar usuários, reverta pelo Heroku (Releases > Roll back).`;
+            if (!open.some(issue => issue.title === title)) {
+              await github.rest.issues.create({ ...repo, title, body, labels: ['suite-pos-deploy'] });
+            }
+            for (const number of prs) {
+              await github.rest.issues.createComment({ ...repo, issue_number: number, body: `⚠️ ${title}: ${run}` });
+            }
