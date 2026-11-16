@@ -105,6 +105,7 @@ def _payload_t7():
         "novos_casos_quantidade": "4",
         "novos_casos_local_periodo": "Local injetado",
         "novos_casos_relacao": ["Vizinho(a)"],
+        "internacao_desde_ultima": "Sim",
         "nova_pista_exposicao": "Não",
         "nova_pista_tipo": ["Animal"],
         "nova_pista_detalhe": "Pista injetada",
@@ -222,7 +223,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16"
+    assert captured["_instrument_version"] == "sfa-2026-11-16b"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -318,8 +319,9 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t7_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16"
+    assert captured["_instrument_version"] == "sfa-2026-11-16b"
     assert captured["dias_incap_novos"] == "3"
+    assert captured["internacao_desde_ultima"] == ""  # só aparece se procurou atendimento
     assert captured["diagnostico_medico_qual"] == []
     assert captured["novos_casos_relacao"] == []
     assert captured["nova_pista_tipo"] == []
@@ -376,7 +378,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16"
+    assert captured["_instrument_version"] == "sfa-2026-11-16b"
     assert captured["sintoma_novo_agravado"] == "Sim"
     assert captured["sintomas_persistentes"] == ["Cansaço ou fraqueza"]
     assert captured["situacao_participante"] == ""

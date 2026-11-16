@@ -81,7 +81,7 @@ def test_regras_do_t30_explicam_obito_e_sintomas(anexos):
     # Desde 16/11/2026 o T30 não tem mais perguntas que dependem do T0/T7 (fonte ainda ativa).
     assert "fonte_ainda_ativa" not in perguntas
     diagnostico = perguntas["diagnostico_medico"]["numero"]
-    assert str(diagnostico) in str(perguntas["diagnostico_confirmado_exame"]["condicao"])
+    assert str(diagnostico) in str(perguntas["diagnostico_medico_qual"]["condicao"])
 
 
 def test_resumo_do_tcle_do_site_aparece_no_anexo_do_t0(anexos_html):

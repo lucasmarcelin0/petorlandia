@@ -1,0 +1,482 @@
+{
+  "instrument_version": "sfa-2026-11-16",
+  "title": "T30 — Encerramento do seguimento",
+  "subtitle": "Instrumento revisado em 16/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
+  "submit_label": "Registrar T30",
+  "sections": [
+    {
+      "title": "Registro da entrevista",
+      "description": "Preenchido pela equipe quando a entrevista é presencial ou por telefone.",
+      "fields": [
+        {
+          "key": "modo_entrevista",
+          "label": "Como esta entrevista está sendo feita?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Presencial",
+            "Telefone",
+            "Pela própria pessoa, pelo link"
+          ],
+          "help_text": "Data e hora do registro ficam gravadas automaticamente pelo sistema."
+        },
+        {
+          "key": "entrevistador",
+          "label": "Entrevistador(a)",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        },
+        {
+          "key": "local_servico",
+          "label": "Local/serviço",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "modo_entrevista",
+            "operator": "selected_any",
+            "values": [
+              "Presencial",
+              "Telefone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Quem responde e situação atual",
+      "fields": [
+        {
+          "key": "respondent_role",
+          "label": "1. Quem está respondendo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "A própria pessoa",
+            "Pai, mãe ou responsável",
+            "Outra pessoa autorizada"
+          ]
+        },
+        {
+          "key": "respondent_name",
+          "label": "2. Nome e relação com a pessoa acompanhada",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "respondent_role",
+            "operator": "selected_any",
+            "values": [
+              "Pai, mãe ou responsável",
+              "Outra pessoa autorizada"
+            ]
+          }
+        },
+        {
+          "key": "situacao_participante",
+          "label": "3. A pessoa acompanhada está viva?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Sim",
+            "Não, faleceu",
+            "Não sei informar"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "respondent_role",
+            "operator": "selected_any",
+            "values": [
+              "Pai, mãe ou responsável",
+              "Outra pessoa autorizada"
+            ]
+          },
+          "help_text": "Se a pessoa estiver viva, aplicar as perguntas 5 a 10. Em caso de óbito ou situação vital desconhecida, pular 5 e 6. Com respondente autorizado, seguir da 7 em diante e registrar apenas o que souber. Em caso de óbito, limitar os eventos e impactos individuais ao período até o falecimento."
+        },
+        {
+          "key": "data_obito",
+          "label": "4. Qual foi a data do falecimento, se souber?",
+          "type": "date",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "situacao_participante",
+            "operator": "equals",
+            "value": "Não, faleceu"
+          }
+        }
+      ],
+      "description": "Parte 1 — Informações individuais."
+    },
+    {
+      "title": "Sintomas e atividades hoje",
+      "fields": [
+        {
+          "key": "sintoma_novo_agravado",
+          "label": "5. Hoje, você ainda sente algum sintoma relacionado a esse episódio que começou com a doença ou ficou pior do que era antes de você adoecer?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "equals",
+                "value": "A própria pessoa"
+              },
+              {
+                "all": [
+                  {
+                    "source": "current",
+                    "key": "respondent_role",
+                    "operator": "selected_any",
+                    "values": [
+                      "Pai, mãe ou responsável",
+                      "Outra pessoa autorizada"
+                    ]
+                  },
+                  {
+                    "source": "current",
+                    "key": "situacao_participante",
+                    "operator": "equals",
+                    "value": "Sim"
+                  }
+                ]
+              }
+            ]
+          },
+          "help_text": "Registrar a resposta mesmo se a pessoa já se declarou recuperada no T7. Se respondeu “Sim”, preencher os dois detalhes abaixo."
+        },
+        {
+          "key": "sintomas_persistentes",
+          "label": "Quais sintomas você sente hoje?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Dor ou inchaço nas articulações",
+            "Cansaço ou fraqueza",
+            "Dor de cabeça",
+            "Dor no corpo ou nos músculos",
+            "Queda de cabelo",
+            "Dificuldade de memória ou concentração",
+            "Outro"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "any": [
+                  {
+                    "source": "current",
+                    "key": "respondent_role",
+                    "operator": "equals",
+                    "value": "A própria pessoa"
+                  },
+                  {
+                    "all": [
+                      {
+                        "source": "current",
+                        "key": "respondent_role",
+                        "operator": "selected_any",
+                        "values": [
+                          "Pai, mãe ou responsável",
+                          "Outra pessoa autorizada"
+                        ]
+                      },
+                      {
+                        "source": "current",
+                        "key": "situacao_participante",
+                        "operator": "equals",
+                        "value": "Sim"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "source": "current",
+                "key": "sintoma_novo_agravado",
+                "operator": "equals",
+                "value": "Sim"
+              }
+            ]
+          },
+          "help_text": "Pode marcar mais de uma opção."
+        },
+        {
+          "key": "sintomas_persistentes_outro",
+          "label": "Qual outro sintoma?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "sintomas_persistentes",
+            "operator": "selected_any",
+            "values": [
+              "Outro"
+            ]
+          }
+        },
+        {
+          "key": "sinais_alerta_atuais",
+          "label": "Sinais de alerta agora",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Muita falta de ar",
+            "Desmaio ou confusão",
+            "Sangramento importante",
+            "Piora muito forte ou preocupação urgente",
+            "Nenhum destes sinais agora"
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "any": [
+                  {
+                    "source": "current",
+                    "key": "respondent_role",
+                    "operator": "equals",
+                    "value": "A própria pessoa"
+                  },
+                  {
+                    "all": [
+                      {
+                        "source": "current",
+                        "key": "respondent_role",
+                        "operator": "selected_any",
+                        "values": [
+                          "Pai, mãe ou responsável",
+                          "Outra pessoa autorizada"
+                        ]
+                      },
+                      {
+                        "source": "current",
+                        "key": "situacao_participante",
+                        "operator": "equals",
+                        "value": "Sim"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "source": "current",
+                "key": "sintoma_novo_agravado",
+                "operator": "equals",
+                "value": "Sim"
+              }
+            ]
+          },
+          "help_text": "Se houver sinal de urgência, priorizar a avaliação assistencial. Em emergência, procurar atendimento presencial ou ligar 192."
+        },
+        {
+          "key": "retorno_atividades_normais",
+          "label": "6. Hoje, você já voltou às suas atividades habituais?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Totalmente",
+            "Em parte",
+            "Ainda não",
+            "Não sei informar"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "respondent_role",
+                "operator": "equals",
+                "value": "A própria pessoa"
+              },
+              {
+                "all": [
+                  {
+                    "source": "current",
+                    "key": "respondent_role",
+                    "operator": "selected_any",
+                    "values": [
+                      "Pai, mãe ou responsável",
+                      "Outra pessoa autorizada"
+                    ]
+                  },
+                  {
+                    "source": "current",
+                    "key": "situacao_participante",
+                    "operator": "equals",
+                    "value": "Sim"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Diagnóstico e atendimento",
+      "fields": [
+        {
+          "key": "diagnostico_medico",
+          "label": "7. Você recebeu de um profissional de saúde o diagnóstico desta doença?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Ainda aguardo resultado",
+            "Não sei informar"
+          ],
+          "help_text": "A equipe confere a informação nos registros disponíveis."
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual(is) doença(s)?",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Virose",
+            "Febre sem causa definida",
+            "Intoxicação alimentar",
+            "Outra",
+            "Não lembro"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "diagnostico_medico_qual_outro",
+          "label": "Qual outra doença?",
+          "type": "text",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico_qual",
+            "operator": "selected_any",
+            "values": [
+              "Outra"
+            ]
+          }
+        },
+        {
+          "key": "diagnostico_confirmado_exame",
+          "label": "Esse diagnóstico foi confirmado por exame de laboratório?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "dias_incap_novos",
+          "label": "8. Desde a última entrevista, por quantos dias você ficou totalmente sem conseguir realizar suas atividades habituais?",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "help_text": "Em caso de óbito, contar só até o falecimento."
+        },
+        {
+          "key": "dias_incap_novos_sem_numero",
+          "label": "Se não houver número de dias",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Nenhum",
+            "Não sei"
+          ]
+        },
+        {
+          "key": "internacao_desde_ultima",
+          "label": "9. Desde a última entrevista, você precisou ficar internado(a) por causa desta doença?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Informações coletivas",
+      "fields": [
+        {
+          "key": "novos_casos_semelhantes",
+          "label": "10. Desde a última entrevista, você soube de outras pessoas com sintomas parecidos?",
+          "type": "radio",
+          "required": false,
+          "options": [
+            "Sim",
+            "Não",
+            "Não sei"
+          ],
+          "help_text": "Conte só as pessoas novas, que você ainda não tinha mencionado nas entrevistas anteriores."
+        },
+        {
+          "key": "novos_casos_quantidade",
+          "label": "Quantas pessoas, aproximadamente?",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          },
+          "min": 0
+        },
+        {
+          "key": "novos_casos_quantidade_ignorada",
+          "label": "Se não souber quantas",
+          "type": "checkboxes",
+          "required": false,
+          "options": [
+            "Não sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "observacoes_entrevistador",
+          "label": "Observações do entrevistador",
+          "type": "textarea",
+          "required": false
+        }
+      ],
+      "description": "Parte 2 — Informações coletivas. Agora, algumas perguntas sobre outras pessoas e situações que podem estar ligadas à sua doença."
+    }
+  ]
+}

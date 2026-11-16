@@ -1,5 +1,5 @@
 {
-  "instrument_version": "sfa-2026-11-16",
+  "instrument_version": "sfa-2026-11-16b",
   "title": "T30 — Encerramento do seguimento",
   "subtitle": "Instrumento revisado em 16/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
   "submit_label": "Registrar T30",
@@ -79,7 +79,8 @@
               "Pai, mãe ou responsável",
               "Outra pessoa autorizada"
             ]
-          }
+          },
+          "help_text": "Nas próximas perguntas, “você” é a pessoa que adoeceu."
         },
         {
           "key": "situacao_participante",
@@ -122,7 +123,7 @@
       "fields": [
         {
           "key": "sintoma_novo_agravado",
-          "label": "5. Hoje, você ainda sente algum sintoma relacionado a esse episódio que começou com a doença ou ficou pior do que era antes de você adoecer?",
+          "label": "5. Hoje, você ainda sente algum sintoma que começou com esta doença ou que piorou por causa dela?",
           "type": "radio",
           "required": true,
           "options": [
@@ -351,6 +352,9 @@
             "Dengue",
             "Chikungunya",
             "Zika",
+            "Leptospirose",
+            "Febre maculosa",
+            "COVID-19 ou gripe",
             "Virose",
             "Febre sem causa definida",
             "Intoxicação alimentar",
@@ -376,23 +380,6 @@
             "values": [
               "Outra"
             ]
-          }
-        },
-        {
-          "key": "diagnostico_confirmado_exame",
-          "label": "Esse diagnóstico foi confirmado por exame de laboratório?",
-          "type": "radio",
-          "required": false,
-          "options": [
-            "Sim",
-            "Não",
-            "Não sei"
-          ],
-          "visible_if": {
-            "source": "current",
-            "key": "diagnostico_medico",
-            "operator": "equals",
-            "value": "Sim"
           }
         },
         {

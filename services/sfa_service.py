@@ -1153,6 +1153,8 @@ def pistas_coletivas_anteriores(prior_payloads: list[dict[str, object]]) -> list
                 if valor in doentes_animal]
         if quem:
             add(f"{_juntar_itens(quem)} ligados aos animais com que você teve contato também adoeceram")
+        if sim("exposicao_animal_doentes"):  # desde sfa-2026-11-16b
+            add("algum dos animais com que você teve contato estava doente ou morreu")
         if sim("exposicao_alimentar_outros_doentes"):
             add("outras pessoas que consumiram o mesmo alimento, água ou produto também adoeceram")
         suspeita = _citar_resposta(payload.get("vinculo_exposicao_suspeita"))
