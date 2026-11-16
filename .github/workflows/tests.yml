@@ -6,6 +6,13 @@ on:
   push:
     branches: [ main, master ]
 
+# statuses: write so serve para registrar no head do PR qual arvore foi
+# testada (passo final). O publicador compara com o merge e, se for a mesma,
+# nao repete a suite na main.
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
@@ -29,19 +36,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-flask
+          pip install pytest pytest-flask pytest-xdist==3.8.0
 
       - name: Sensitive artifact guard
         run: python scripts/check_sensitive_artifacts.py
 
+      # Em paralelo, um processo por nucleo. Cada processo tem o proprio
+      # SQLite em memoria; loadfile mantem os testes de um arquivo juntos,
+      # na ordem de sempre, para nao misturar fixtures de modulo.
       - name: Run full test suite
         env:
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
-          python -m pytest tests/ -q -p no:cacheprovider
+          python -m pytest tests/ -q -p no:cacheprovider -n auto --dist loadfile
 
       - name: Route contract (url_map snapshot)
         env:
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
           python -m pytest tests/test_url_map_contract.py -q -p no:cacheprovider
+
+      - name: Registrar arvore testada
+        if: success() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state=success -f context=arvore-testada/pytest -f description="$tree" > /dev/null
+          echo "Arvore testada: $tree"

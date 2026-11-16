@@ -24,6 +24,27 @@ async function dispatchMain(github, repo, workflow_id, sha, core, delay = 5000) 
   }
 }
 
+// Os dois CI do PR gravam, no head do PR, a árvore (git tree) do merge de
+// teste que examinaram. Só vale status criado pelo próprio GitHub Actions.
+// Uma falha nos checks registrados não pode ficar escondida: se o create
+// falhar no meio, a exceção cai no caminho normal (suíte completa na main).
+const TESTED_TREE = name => `arvore-testada/${name}`;
+async function reuseTestedTree(github, repo, headSha, mergedSha, core) {
+  const merged = (await github.rest.git.getCommit({ ...repo, commit_sha: mergedSha })).data.tree?.sha;
+  if (!merged) return false;
+  const statuses = (await github.rest.repos.getCombinedStatusForRef({ ...repo, ref: headSha, per_page: 100 })).data.statuses;
+  const same = REQUIRED.every(name => statuses.some(status => status.context === TESTED_TREE(name) &&
+    status.state === 'success' && status.creator?.login === 'github-actions[bot]' && status.description === merged));
+  if (!same) { core.info(`Árvore ${merged} difere da testada no PR; a suíte roda de novo na main.`); return false; }
+  for (const name of REQUIRED) {
+    await github.rest.checks.create({ ...repo, name, head_sha: mergedSha, status: 'completed', conclusion: 'success',
+      output: { title: 'Mesma árvore testada no PR',
+        summary: `A árvore ${merged} deste commit é idêntica à do merge de teste aprovado no PR (head ${headSha}).` } });
+  }
+  core.info(`Árvore ${merged} idêntica à testada no PR; checks registrados em ${mergedSha}.`);
+  return true;
+}
+
 async function publish({ github, context, core }) {
   const repo = context.repo;
   const payload = context.payload;
@@ -80,11 +101,24 @@ async function publish({ github, context, core }) {
     // Uma falha aqui deixava a main sem checks e o Heroku esperando para
     // sempre (06/11/2026: "Unexpected end of JSON input" no dispatch, que
     // responde sem corpo). Tenta de novo e só desiste avisando.
-    for (const workflow_id of ['tests.yml', 'authorization-gate.yml']) {
-      await dispatchMain(github, repo, workflow_id, result.sha, core);
+    // Atalho seguro: se a árvore integrada é exatamente a que os dois CI do
+    // PR testaram (a main não andou nesse meio-tempo), repetir a suíte daria o
+    // mesmo resultado. Registra os checks na main e o Heroku publica já.
+    // Qualquer diferença ou dúvida cai no caminho normal: rodar tudo de novo.
+    let reused = false;
+    try {
+      reused = await reuseTestedTree(github, repo, pr.head.sha, result.sha, core);
+    } catch (error) {
+      core.warning(`PR #${pull_number}: atalho indisponível (${error.message}); rodando a suíte na main.`);
     }
-    await core.summary.addHeading('Correção integrada').addRaw(
-      `PR #${pull_number}: ${result.sha}\n\nTestes da main iniciados. A integração GitHub do Heroku publica após aprovação.\n`).write();
+    if (!reused) {
+      for (const workflow_id of ['tests.yml', 'authorization-gate.yml']) {
+        await dispatchMain(github, repo, workflow_id, result.sha, core);
+      }
+    }
+    await core.summary.addHeading('Correção integrada').addRaw(reused
+      ? `PR #${pull_number}: ${result.sha}\n\nÁrvore idêntica à testada no PR; checks registrados na main. A integração GitHub do Heroku publica agora.\n`
+      : `PR #${pull_number}: ${result.sha}\n\nTestes da main iniciados. A integração GitHub do Heroku publica após aprovação.\n`).write();
   }
 }
-module.exports = { publish, dispatchMain, MARKER, REQUIRED };
+module.exports = { publish, dispatchMain, reuseTestedTree, MARKER, REQUIRED };

@@ -16,7 +16,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  checks: read
+  checks: write
+  statuses: read
   actions: write
 
 concurrency:
