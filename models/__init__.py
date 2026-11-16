@@ -111,7 +111,9 @@ from .limpeza import (
     LimpezaAcesso,
     LimpezaComprovacao,
     LimpezaEvento,
+    LimpezaPerfil,
     LimpezaSolicitacao,
+    LimpezaTipo,
 )
 from .petsitter import (
     CareerApplication,

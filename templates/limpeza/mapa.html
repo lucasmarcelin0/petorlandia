@@ -35,7 +35,7 @@
       <label class="form-label small mb-1" for="f-categoria">Tipo (contém)</label>
       <select class="form-select form-select-sm" id="f-categoria" name="categoria">
         <option value="">Todos</option>
-        {% for chave, rotulo in CATEGORIAS.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.categoria == chave }}>{{ rotulo }}</option>{% endfor %}
+        {% for chave, rotulo in CATEGORIAS_FILTRO.items() %}<option value="{{ chave }}" {{ 'selected' if filtros.categoria == chave }}>{{ rotulo }}</option>{% endfor %}
       </select>
     </div>
     <div class="col-6 col-md-2">

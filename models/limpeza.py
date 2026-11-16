@@ -17,7 +17,8 @@ class LimpezaAcesso(db.Model):
 
     ``papel``: ``colaborador`` (comunica), ``equipe`` (vê o mapa e comprova)
     ou ``fiscal`` (vê o mapa, recusa comprovações e exporta). ``inicio`` e
-    ``fim`` (datas locais, inclusivas) limitam o período em que vale.
+    ``fim`` (datas locais, inclusivas) limitam o período em que vale. ``tipos``
+    restringe equipe e fiscalização a alguns tipos de problema.
     """
     __tablename__ = "limpeza_acesso"
 
@@ -26,12 +27,58 @@ class LimpezaAcesso(db.Model):
     papel = db.Column(db.String(20), nullable=False)
     inicio = db.Column(db.Date)
     fim = db.Column(db.Date)
+    # Tipos de problema (chaves de ``LimpezaTipo``) que a pessoa vê no mapa, comprova
+    # e fiscaliza, separados por vírgula. Vazio = todos os tipos.
+    tipos = db.Column(db.String(300))
+    # Nome do perfil usado ao conceder (só para leitura na tela; o perfil é um modelo).
+    perfil = db.Column(db.String(80))
     concedido_por = db.Column(db.String(160), nullable=False)
     concedido_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     revogado_em = db.Column(db.DateTime(timezone=True))
     revogado_por = db.Column(db.String(160))
 
     user = db.relationship("User", foreign_keys=[user_id])
+
+    @property
+    def lista_tipos(self):
+        return [t for t in (self.tipos or "").split(",") if t]
+
+
+class LimpezaTipo(db.Model):
+    """Tipo de problema que a população marca ao comunicar. Cadastrado pelo administrador.
+
+    Nunca é apagado: desativado, some da tela de comunicar e continua nomeando o histórico.
+    """
+    __tablename__ = "limpeza_tipo"
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(30), unique=True, nullable=False)
+    rotulo = db.Column(db.String(80), nullable=False)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class LimpezaPerfil(db.Model):
+    """Combinação salva de papéis e tipos ("Equipe de poda") para atribuir com um clique."""
+    __tablename__ = "limpeza_perfil"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(80), nullable=False)
+    papeis = db.Column(db.String(60), nullable=False)
+    tipos = db.Column(db.String(300))
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    @property
+    def lista_papeis(self):
+        return [p for p in (self.papeis or "").split(",") if p]
+
+    @property
+    def lista_tipos(self):
+        return [t for t in (self.tipos or "").split(",") if t]
 
 
 class LimpezaSolicitacao(db.Model):
@@ -41,7 +88,7 @@ class LimpezaSolicitacao(db.Model):
     autor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     chave_envio = db.Column(db.String(36), unique=True, nullable=True)
     # Um ou mais tipos (chaves de ``services.limpeza_urbana.CATEGORIAS``) separados por vírgula.
-    categorias = db.Column(db.String(120), nullable=False)
+    categorias = db.Column(db.String(300), nullable=False)
     descricao = db.Column(db.String(500))
     referencia = db.Column(db.String(200))
     latitude = db.Column(db.Float, nullable=False)

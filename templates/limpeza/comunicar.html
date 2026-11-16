@@ -28,6 +28,10 @@
         {% endfor %}
       </div>
     </fieldset>
+    <div class="mb-3" data-detalhes>
+      <label class="form-label" for="descricao"><span data-detalhes-rotulo>Detalhes</span> <span class="text-muted" data-detalhes-dica>(obrigatório ao marcar Outro)</span></label>
+      <textarea class="form-control" id="descricao" name="descricao" rows="2" maxlength="500" placeholder="">{{ form.get('descricao', '') }}</textarea>
+    </div>
 
     {% with prefixo='comunicacao', rotulo_foto='Foto do local' %}{% include "limpeza/_foto_local.html" %}{% endwith %}
 
@@ -35,16 +39,32 @@
       <label class="form-label" for="referencia">Ponto de referência <span class="text-muted">(opcional)</span></label>
       <input class="form-control" id="referencia" name="referencia" maxlength="200" value="{{ form.get('referencia', '') }}" placeholder="Ex.: em frente ao nº 1200, canteiro central da avenida">
     </div>
-    <div class="mb-3">
-      <label class="form-label" for="descricao">Detalhes <span class="text-muted">(obrigatório ao marcar Outro)</span></label>
-      <textarea class="form-control" id="descricao" name="descricao" rows="2" maxlength="500">{{ form.get('descricao', '') }}</textarea>
-    </div>
     <button type="submit" class="btn btn-success btn-lg w-100"><i class="fas fa-paper-plane me-2"></i>Salvar comunicação</button>
     <p class="small text-muted mt-2 mb-0">Evite fotografar rostos e placas de veículos. A foto é vista pela equipe de limpeza e pela fiscalização.</p>
   </form>
   <button type="button" class="btn btn-outline-primary mt-3" id="limpeza-sincronizar">Enviar pendentes</button>
   <button type="button" class="btn btn-outline-secondary mt-3" id="limpeza-recuperar">Editar primeira pendente</button>
 </div>
+<script>
+(function () {
+  var form = document.querySelector('.limpeza-pagina form[data-offline-comunicacao]');
+  if (!form) return;
+  var outro = form.querySelector('input[name=categoria][value=outro]');
+  var campo = form.querySelector('#descricao');
+  var rotulo = form.querySelector('[data-detalhes-rotulo]'), dica = form.querySelector('[data-detalhes-dica]');
+  if (!outro || !campo) return;
+  function atualizar(focar) {
+    var marcado = outro.checked;
+    rotulo.textContent = marcado ? 'Qual é o problema?' : 'Detalhes';
+    dica.textContent = marcado ? '(obrigatório em Outro)' : '(opcional; obrigatório ao marcar Outro)';
+    campo.placeholder = marcado ? 'Ex.: pneus velhos, animal morto, mato alto' : '';
+    campo.closest('[data-detalhes]').classList.toggle('limpeza-detalhes-outro', marcado);
+    if (marcado && focar && !campo.value.trim()) campo.focus();
+  }
+  outro.addEventListener('change', function () { atualizar(true); });
+  atualizar(false);
+})();
+</script>
 <script src="{{ url_for('static', filename='js/limpeza_foto.js', v='7') }}"></script>
 <script src="{{ url_for('static', filename='js/limpeza_offline.js', v='2') }}"></script>
 {% endblock %}

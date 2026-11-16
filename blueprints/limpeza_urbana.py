@@ -55,6 +55,8 @@ def _data(texto):
 
 
 def _contexto_base():
+    tipos = servico.tipos_visiveis(current_user)
+    todos = servico.catalogo(incluir_inativos=True)
     return dict(
         papeis=servico.papeis_de(current_user),
         pode_mapa=servico.pode_ver_mapa(current_user),
@@ -62,7 +64,10 @@ def _contexto_base():
         pode_comprovar=servico.pode_comprovar(current_user),
         pode_fiscalizar=servico.pode_fiscalizar(current_user),
         eh_admin=servico.eh_admin(current_user),
-        CATEGORIAS=servico.CATEGORIAS, STATUS=servico.STATUS, hora_local=servico.hora_local,
+        CATEGORIAS=servico.catalogo(),
+        CATEGORIAS_FILTRO={c: r for c, r in todos.items() if tipos is None or c in tipos},
+        tipos_recortados=tipos is not None,
+        STATUS=servico.STATUS, hora_local=servico.hora_local,
         rotulo_categorias=servico.rotulo_categorias,
         DISTANCIA_ALERTA_M=servico.DISTANCIA_ALERTA_M,
     )
@@ -174,7 +179,7 @@ def todas_comunicacoes():
 def mapa_dados():
     _exigir(servico.pode_ver_mapa(current_user))
     filtros = _filtros()
-    itens = servico.consultar(**filtros)
+    itens = servico.consultar(**filtros, tipos=servico.tipos_visiveis(current_user))
     ver_autor = servico.pode_fiscalizar(current_user)
     resposta = jsonify({
         "pontos": [servico.como_ponto(s, ver_autor=ver_autor) for s in itens],
@@ -190,7 +195,7 @@ def _solicitacao_visivel(solicitacao_id):
     solicitacao = db.session.get(LimpezaSolicitacao, solicitacao_id)
     if solicitacao is None:
         abort(404)
-    if not (servico.pode_ver_mapa(current_user) or solicitacao.autor_id == current_user.id):
+    if not (servico.ve_solicitacao_do_mapa(current_user, solicitacao) or solicitacao.autor_id == current_user.id):
         abort(403)
     return solicitacao
 
@@ -304,7 +309,7 @@ def descartar(solicitacao_id):
 @login_required
 def relatorio():
     _exigir(servico.pode_fiscalizar(current_user))
-    itens = servico.consultar(**_filtros())
+    itens = servico.consultar(**_filtros(), tipos=servico.tipos_visiveis(current_user))
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";")
     escritor.writerow([
@@ -337,26 +342,156 @@ def acessos():
     _exigir(servico.eh_admin(current_user))
     if request.method == "POST":
         por = servico.nome_da_conta(current_user)
+        form = request.form
         try:
-            conta = servico.buscar_conta(request.form.get("email"))
-            inicio, fim = _data(request.form.get("inicio")), _data(request.form.get("fim"))
-            gravados = servico.conceder(conta, request.form.getlist("papel"), inicio, fim, por)
+            emails = servico.separar_emails(" ".join(form.getlist("emails") + form.getlist("email")))
+            if not emails:
+                raise LimpezaErro("Informe o e-mail da conta (pode colar vários, um por linha).")
+            contas, sem_conta = [], []
+            for email in emails:
+                try:
+                    contas.append(servico.buscar_conta(email))
+                except LimpezaErro:
+                    sem_conta.append(email)
+            if not contas:
+                if len(emails) == 1:
+                    servico.buscar_conta(emails[0])  # devolve a mensagem detalhada de um e-mail só
+                raise LimpezaErro("Nenhum desses e-mails tem conta no PetOrlândia: " + ", ".join(sem_conta)
+                                  + ". Peça para as pessoas criarem a conta e tente de novo.")
+            inicio, fim = _data(form.get("inicio")), _data(form.get("fim"))
+            papeis, tipos = form.getlist("papel"), ([] if form.get("tipos_todos") else form.getlist("tipo"))
+            perfil = (form.get("perfil_nome") or "").strip()
+            if form.get("salvar_perfil"):
+                perfil = servico.salvar_perfil(form.get("novo_perfil"), papeis, tipos, por).nome
+            gravados = []
+            for conta in contas:
+                gravados += servico.conceder(conta, papeis, inicio, fim, por, tipos=tipos, perfil=perfil)
             db.session.commit()
         except LimpezaErro as exc:
             db.session.rollback()
             flash(str(exc), "danger")
         else:
-            rotulos = ", ".join(servico.PAPEIS[g.papel][0] for g in gravados)
-            flash(f"{conta.name or conta.email}: acesso de {rotulos} concedido.", "success")
+            rotulos = ", ".join(servico.PAPEIS[p][0] for p in servico.PAPEIS if p in {g.papel for g in gravados})
+            quem = (contas[0].name or contas[0].email) if len(contas) == 1 else f"{len(contas)} contas"
+            flash(f"{quem}: acesso de {rotulos} concedido.", "success")
+            if sem_conta:
+                flash("Sem conta no PetOrlândia (nada foi concedido a estes): " + ", ".join(sem_conta)
+                      + ". Peça para criarem a conta com esse e-mail.", "warning")
         return redirect(url_for(".acessos"))
     from models.limpeza import LimpezaEvento
     ativos = servico.acessos_ativos()
     dia = servico.hoje()
-    historico = (LimpezaEvento.query.filter(LimpezaEvento.tipo.in_(["acesso_concedido", "acesso_revogado"]))
-                 .order_by(LimpezaEvento.criado_em.desc()).limit(30).all())
+    historico = (LimpezaEvento.query.filter(LimpezaEvento.solicitacao_id.is_(None),
+                                            LimpezaEvento.tipo.in_(EVENTOS_DE_ACESSO))
+                 .order_by(LimpezaEvento.criado_em.desc()).limit(40).all())
+    tipos = servico.tipos_cadastrados()
+    db.session.commit()  # grava o conjunto inicial de tipos, se ainda não estava no banco
     return render_template("limpeza/acessos.html", ativos=ativos, dia=dia, historico=historico,
                            vigente=servico.acesso_vigente, PAPEIS=servico.PAPEIS,
+                           tipos=tipos, perfis=servico.perfis_salvos(), sugestoes=servico.sugestoes_outro(),
+                           TODOS_TIPOS=servico.catalogo(incluir_inativos=True), CHAVE_OUTRO=servico.CHAVE_OUTRO,
+                           texto_tipos=servico.texto_tipos,
                            comunicacao_aberta=servico.comunicacao_aberta(), **_contexto_base())
+
+
+EVENTOS_DE_ACESSO = ["acesso_concedido", "acesso_revogado", "acesso_alterado", "tipo_criado", "tipo_renomeado",
+                     "tipo_desativado", "tipo_reativado", "perfil_salvo", "perfil_removido"]
+
+
+def _voltar_acessos(ancora=""):
+    return redirect(url_for(".acessos") + (f"#{ancora}" if ancora else ""))
+
+
+@bp.route("/acessos/<int:acesso_id>/alterar", methods=["POST"])
+@login_required
+def alterar_acesso(acesso_id):
+    _exigir(servico.eh_admin(current_user))
+    form = request.form
+    try:
+        tipos = [] if form.get("tipos_todos") else form.getlist("tipo")
+        novo = servico.alterar_acesso(acesso_id, tipos, _data(form.get("inicio")), _data(form.get("fim")),
+                                      servico.nome_da_conta(current_user))
+        if novo is None:
+            abort(404)
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash("Acesso alterado. A versão anterior ficou no histórico.", "success")
+    return _voltar_acessos("acessos-atribuidos")
+
+
+@bp.route("/tipos", methods=["POST"])
+@login_required
+def criar_tipo():
+    _exigir(servico.eh_admin(current_user))
+    try:
+        tipo = servico.criar_tipo(request.form.get("rotulo"), servico.nome_da_conta(current_user))
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash(f"“{tipo.rotulo}” já aparece na tela de comunicar.", "success")
+    return _voltar_acessos("tipos")
+
+
+@bp.route("/tipos/<int:tipo_id>", methods=["POST"])
+@login_required
+def alterar_tipo(tipo_id):
+    _exigir(servico.eh_admin(current_user))
+    por = servico.nome_da_conta(current_user)
+    try:
+        if "ativo" in request.form:
+            tipo = servico.ativar_tipo(tipo_id, request.form.get("ativo") == "1", por)
+            mensagem = (f"“{tipo.rotulo}” voltou para a tela de comunicar." if tipo.ativo else
+                        f"“{tipo.rotulo}” saiu da tela de comunicar. As comunicações antigas continuam com esse nome.")
+        else:
+            tipo = servico.renomear_tipo(tipo_id, request.form.get("rotulo"), por)
+            mensagem = f"Nome atualizado: “{tipo.rotulo}”."
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash(mensagem, "success")
+    return _voltar_acessos("tipos")
+
+
+@bp.route("/tipos/outro", methods=["POST"])
+@login_required
+def classificar_outro():
+    """Leva o que veio em "Outro" para um tipo existente ou cria o tipo na hora."""
+    _exigir(servico.eh_admin(current_user))
+    por = servico.nome_da_conta(current_user)
+    form = request.form
+    try:
+        destino = form.get("destino") or ""
+        if destino == "novo":
+            tipo = servico.criar_tipo(form.get("rotulo"), por)
+            destino, nome = tipo.chave, tipo.rotulo
+        else:
+            nome = servico.catalogo(incluir_inativos=True).get(destino, "")
+        total = servico.reclassificar_outro(form.get("texto"), destino, por)
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash(f"{total} comunicação(ões) agora em “{nome}”.", "success")
+    return _voltar_acessos("tipos")
+
+
+@bp.route("/perfis/<int:perfil_id>/remover", methods=["POST"])
+@login_required
+def remover_perfil(perfil_id):
+    _exigir(servico.eh_admin(current_user))
+    if servico.remover_perfil(perfil_id, servico.nome_da_conta(current_user)) is None:
+        abort(404)
+    db.session.commit()
+    flash("Perfil removido. Quem já recebeu acesso por ele continua com o acesso.", "info")
+    return _voltar_acessos()
 
 
 @bp.route("/acessos/<int:acesso_id>/revogar", methods=["POST"])
