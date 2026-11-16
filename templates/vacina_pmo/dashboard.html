@@ -1786,7 +1786,7 @@
   <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-3 mb-4">
     <div>
       <h1 class="h3 mb-1">Vacina PMO</h1>
-      <p class="text-muted mb-0">Campanha de vacinação antirrábica com lista do aplicador, carteirinha digital e links de WhatsApp.</p>
+      <p class="text-muted mb-0">Vacinação antirrábica com lista do aplicador, carteirinha digital e links de WhatsApp.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
       <button type="button" class="btn btn-outline-secondary" id="pmo-clear">
@@ -3053,6 +3053,7 @@
           tutor: row.tutor || '',
           date: row.date || selectedVideoReferenceDate(),
           imageSrc,
+          fallbackSrc: animal.imageUrl || '',
         });
       });
     });
@@ -3089,6 +3090,7 @@
         species: item.species || 'cao',
         date: item.date || '',
         imageSrc: item.imageProxyUrl || item.imageUrl || '',
+        fallbackSrc: item.imageUrl || '',
       })).filter((item) => item.imageSrc),
       meta: payload,
     };
@@ -3124,6 +3126,56 @@
     });
   }
 
+  // Foto de celular chega com 3000-4000 px. Desenhar esse original 30 vezes
+  // por segundo derrubava quadros (vídeo travado) e o redimensionamento rápido
+  // do navegador serrilhava a foto. Reduzimos uma vez, com qualidade alta, e o
+  // vídeo passa a desenhar só esta cópia leve.
+  const VIDEO_IMAGE_MAX_SIDE = 1600;
+
+  async function prepareVideoImage(img) {
+    if (typeof img.decode === 'function') {
+      try { await img.decode(); } catch (error) { /* onload já garantiu os dados */ }
+    }
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) throw new Error('Foto vazia.');
+    const ratio = Math.min(1, VIDEO_IMAGE_MAX_SIDE / Math.max(w, h));
+    if (ratio >= 1) return img;
+    const scaled = document.createElement('canvas');
+    scaled.width = Math.round(w * ratio);
+    scaled.height = Math.round(h * ratio);
+    const scaledCtx = scaled.getContext('2d');
+    if (!scaledCtx) return img;
+    scaledCtx.imageSmoothingEnabled = true;
+    scaledCtx.imageSmoothingQuality = 'high';
+    scaledCtx.drawImage(img, 0, 0, scaled.width, scaled.height);
+    // As funções de desenho leem naturalWidth/naturalHeight.
+    Object.defineProperty(scaled, 'naturalWidth', { value: scaled.width });
+    Object.defineProperty(scaled, 'naturalHeight', { value: scaled.height });
+    img.src = '';
+    return scaled;
+  }
+
+  // Cada foto passa pelo servidor (/photo-src busca no S3 com até 8 s). Com
+  // 4,5 s de limite no navegador e sem nova tentativa, um compilado semanal ou
+  // mensal perdia em silêncio as fotos que demoravam. Agora: limite maior, uma
+  // nova tentativa e, por último, o endereço direto da foto.
+  async function loadVideoImageWithRetry(item) {
+    const sources = [item.imageSrc, item.imageSrc, item.fallbackSrc]
+      .filter((src, index, list) => src && (index < 2 || !list.slice(0, index).includes(src)));
+    let lastError = null;
+    for (let attempt = 0; attempt < sources.length; attempt += 1) {
+      try {
+        const img = await loadVideoImage(sources[attempt], attempt === 0 ? 15000 : 20000);
+        return await prepareVideoImage(img);
+      } catch (error) {
+        lastError = error;
+        if (attempt < sources.length - 1) await delay(400 * (attempt + 1));
+      }
+    }
+    throw lastError || new Error('Não foi possível carregar uma das fotos do vídeo.');
+  }
+
   function fitCenterText(ctx, text, x, y, maxWidth, fontSize, weight = 800) {
     let size = fontSize;
     do {
@@ -3134,6 +3186,35 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y);
+  }
+
+  // Como fitCenterText, mas alinhado à esquerda e sem mexer no textBaseline
+  // escolhido por quem chama.
+  function fitLeftText(ctx, text, x, y, maxWidth, fontSize, weight = 800, minSize = 22) {
+    let size = fontSize;
+    ctx.font = `${weight} ${size}px Arial, sans-serif`;
+    while (ctx.measureText(text).width > maxWidth && size > minSize) {
+      size -= 1;
+      ctx.font = `${weight} ${size}px Arial, sans-serif`;
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText(text, x, y, maxWidth);
+  }
+
+  // Sinal de "ok" desenhado: o caractere ✓ não existe na Arial e cada aparelho
+  // trocava por uma fonte diferente (ou um quadradinho).
+  function drawCheckMark(ctx, cx, cy, size, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(3, size * 0.38);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.9, cy);
+    ctx.lineTo(cx - size * 0.25, cy + size * 0.65);
+    ctx.lineTo(cx + size, cy - size * 0.7);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawCoverImage(ctx, img, x, y, w, h) {
@@ -3382,6 +3463,7 @@
   }
 
   const VIDEO_CAPTURE_FPS = 30;
+  const VIDEO_BITS_PER_SECOND = 10_000_000;
   const RAPID_PHOTO_MIN_MS = 90;
   const RAPID_PHOTO_MAX_MS = 420;
   const RAPID_BATCH_SIZE = 12;
@@ -3542,7 +3624,7 @@
     });
   }
 
-  function drawCinematicBrand(ctx, canvas, eyebrow = 'CAMPANHA MUNICIPAL') {
+  function drawCinematicBrand(ctx, canvas, eyebrow = 'VACINAÇÃO ANTIRRÁBICA') {
     ctx.save();
     ctx.fillStyle = 'rgba(7, 13, 28, .68)';
     ctx.beginPath();
@@ -4059,9 +4141,9 @@
 
   function drawBadgeIntro(ctx, canvas, items) {
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#eaf2f9');
-    gradient.addColorStop(0.4, '#eef5fb');
-    gradient.addColorStop(1, '#dfeaf5');
+    gradient.addColorStop(0, '#cfe2f5');
+    gradient.addColorStop(0.4, '#d9e9f7');
+    gradient.addColorStop(1, '#b9d3ec');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -4092,10 +4174,10 @@
 
     ctx.fillStyle = '#087f5b';
     fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'ANIMAL PROTEGIDO' : 'ANIMAIS PROTEGIDOS'}`, canvas.width / 2, 990, canvas.width - 120, 58, 900);
-    ctx.fillStyle = '#5d687a';
+    ctx.fillStyle = '#3b4658';
     fitCenterText(ctx, 'VACINAÇÃO ANTIRRÁBICA EM DIA', canvas.width / 2, 1070, canvas.width - 130, 42, 700);
 
-    ctx.fillStyle = '#5d687a';
+    ctx.fillStyle = '#3b4658';
     fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1160, canvas.width - 140, 36, 600);
 
     ctx.fillStyle = '#ffffff';
@@ -4110,14 +4192,14 @@
     ctx.font = '800 28px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('✓ petorlandia.com.br/vacina-pmo', canvas.width / 2, 1462);
+    ctx.fillText('petorlandia.com.br/vacina-pmo', canvas.width / 2, 1462);
   }
 
   function drawBadgePetFrame(ctx, canvas, item, img, focus, index, total, progress) {
     const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    bgGradient.addColorStop(0, '#eaf2f9');
-    bgGradient.addColorStop(0.5, '#eef5fb');
-    bgGradient.addColorStop(1, '#dfe8f3');
+    bgGradient.addColorStop(0, '#cfe2f5');
+    bgGradient.addColorStop(0.5, '#d9e9f7');
+    bgGradient.addColorStop(1, '#b9d3ec');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -4158,8 +4240,8 @@
     // Top Hero Band (estilo hero-band de public_pet_card.html)
     const bandH = 200;
     const bandGrad = ctx.createLinearGradient(x, y, x + cardW, y + bandH);
-    bandGrad.addColorStop(0, '#e7f8f5');
-    bandGrad.addColorStop(1, '#edf4ff');
+    bandGrad.addColorStop(0, '#c9efe6');
+    bandGrad.addColorStop(1, '#d6e5ff');
     ctx.fillStyle = bandGrad;
     ctx.beginPath();
     addRoundedRect(ctx, x, y, cardW, bandH, 26);
@@ -4173,37 +4255,38 @@
     ctx.lineTo(x + cardW, y + bandH);
     ctx.stroke();
 
-    // Título e subtítulo do animal na banda
+    // Título e subtítulo do animal na banda. Cada texto define o próprio
+    // alinhamento: antes o subtítulo herdava "center" do título e metade dele
+    // saía para fora do cartão.
     ctx.fillStyle = '#14213d';
-    ctx.font = '900 44px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    const petTitle = `Carteirinha de ${item.name || 'Animal'}`;
-    fitCenterText(ctx, petTitle, x + 44 + Math.min(ctx.measureText(petTitle).width, 580) / 2, y + 42, 580, 44, 900);
+    ctx.textBaseline = 'middle';
+    fitLeftText(ctx, `Carteirinha de ${item.name || 'Animal'}`, x + 44, y + 58, 640, 46, 900);
 
-    ctx.fillStyle = '#5d687a';
-    ctx.font = '600 22px Arial, sans-serif';
-    ctx.fillText('Comprovante digital da campanha de vacinação', x + 44, y + 96);
+    ctx.fillStyle = '#3b4658';
+    ctx.font = '700 24px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Comprovante digital de vacinação antirrábica', x + 44, y + 106);
 
     // Pill verde de status na banda
-    ctx.fillStyle = '#e6fcf5';
-    ctx.beginPath();
-    addRoundedRect(ctx, x + 44, y + 134, 185, 42, 21);
-    ctx.fill();
-    ctx.strokeStyle = '#bbf7d0';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
     ctx.fillStyle = '#087f5b';
-    ctx.font = '800 20px Arial, sans-serif';
+    ctx.beginPath();
+    addRoundedRect(ctx, x + 44, y + 134, 190, 44, 22);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 21px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('✓ Vacinado', x + 44 + 92, y + 155);
+    drawCheckMark(ctx, x + 72, y + 156, 9, '#ffffff');
+    ctx.fillText('Vacinado', x + 44 + 108, y + 157);
 
-    ctx.fillStyle = '#5d687a';
-    ctx.font = '700 20px Arial, sans-serif';
+    ctx.fillStyle = '#3b4658';
+    ctx.font = '700 21px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(item.species === 'gato' ? '· Felino (Gato)' : '· Canino (Cão)', x + 242, y + 155);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.species === 'gato' ? '· Felino (Gato)' : '· Canino (Cão)', x + 250, y + 157);
 
     // Selo circular "Vacina em dia" (estilo seal do site)
     const sealCenterX = x + cardW - 100;
@@ -4248,19 +4331,6 @@
     addRoundedRect(ctx, photoX, photoY, photoW, photoH, 20);
     ctx.stroke();
 
-    // Ícone discreto de ampliação ⤢ no canto da foto (reproduzindo o site)
-    ctx.save();
-    ctx.fillStyle = 'rgba(20, 33, 61, .65)';
-    ctx.beginPath();
-    ctx.arc(photoX + photoW - 36, photoY + photoH - 36, 20, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 20px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('⤢', photoX + photoW - 36, photoY + photoH - 35);
-    ctx.restore();
-
     // 3 Cards de Detalhes Reais (estilo detail-card de public_pet_card.html)
     const detailsY = y + 1045;
     const colGap = 16;
@@ -4282,15 +4352,15 @@
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.fillStyle = '#5d687a';
-      ctx.font = '800 17px Arial, sans-serif';
+      ctx.fillStyle = '#3b4658';
+      ctx.font = '800 18px Arial, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText(cardsData[c].label, cx + 18, detailsY + 18);
 
       ctx.fillStyle = '#14213d';
-      ctx.font = '900 24px Arial, sans-serif';
-      ctx.fillText(cardsData[c].val, cx + 18, detailsY + 54);
+      ctx.textBaseline = 'top';
+      fitLeftText(ctx, cardsData[c].val, cx + 18, detailsY + 54, colW - 36, 26, 900, 18);
     }
 
     // Bloco de Orientação e Status Oficial (estilo booster-card / status-message)
@@ -4307,27 +4377,25 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = '#e6fcf5';
-    ctx.beginPath();
-    ctx.arc(photoX + 54, infoBoxY + infoBoxH / 2, 28, 0, Math.PI * 2);
-    ctx.fill();
+    // Emoji (🛡️) não existe na fonte do canvas em vários aparelhos e saía como
+    // quadradinho; o escudo agora é desenhado.
     ctx.fillStyle = '#087f5b';
-    ctx.font = '900 24px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🛡️', photoX + 54, infoBoxY + infoBoxH / 2);
+    ctx.beginPath();
+    ctx.arc(photoX + 54, infoBoxY + infoBoxH / 2, 30, 0, Math.PI * 2);
+    ctx.fill();
+    drawCheckMark(ctx, photoX + 54, infoBoxY + infoBoxH / 2 + 1, 13, '#ffffff');
 
     ctx.fillStyle = '#14213d';
-    ctx.font = '800 22px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('Campanha de Vacinação Antirrábica · Prefeitura de Orlândia', photoX + 102, infoBoxY + 30);
+    fitLeftText(ctx, 'Vacinação Antirrábica · Prefeitura de Orlândia', photoX + 102, infoBoxY + 28, photoW - 130, 25, 800, 18);
 
-    ctx.fillStyle = '#5d687a';
-    ctx.font = '600 18px Arial, sans-serif';
-    ctx.fillText('Animal protegido e registrado oficialmente no sistema municipal.', photoX + 102, infoBoxY + 66);
+    ctx.fillStyle = '#3b4658';
+    ctx.textBaseline = 'top';
+    fitLeftText(ctx, 'Animal protegido e registrado oficialmente no sistema municipal.', photoX + 102, infoBoxY + 68, photoW - 130, 20, 600, 16);
 
-    // Efeito suave de luz holográfica atravessando a carteirinha
+    // Efeito suave de luz atravessando a carteirinha. Era 25% de branco sobre o
+    // cartão inteiro, o que lavava as cores durante boa parte de cada cena.
     const sweepProgress = (progress * 2.2) - 0.5;
     if (sweepProgress >= 0 && sweepProgress <= 1.2) {
       ctx.save();
@@ -4337,7 +4405,7 @@
       const sweepX = x - 200 + sweepProgress * (cardW + 400);
       const sweepGrad = ctx.createLinearGradient(sweepX, y, sweepX + 180, y + cardH);
       sweepGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      sweepGrad.addColorStop(0.5, 'rgba(255,255,255,0.25)');
+      sweepGrad.addColorStop(0.5, 'rgba(255,255,255,0.10)');
       sweepGrad.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = sweepGrad;
       ctx.fillRect(x, y, cardW, cardH);
@@ -4346,7 +4414,7 @@
 
     ctx.restore();
 
-    ctx.fillStyle = '#5d687a';
+    ctx.fillStyle = '#3b4658';
     ctx.font = '800 25px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`CARTEIRINHA ${index + 1} DE ${total}  ·  PREFEITURA DE ORLÂNDIA`, canvas.width / 2, canvas.height - 85);
@@ -4355,9 +4423,9 @@
   function drawBadgeOutro(ctx, canvas, items) {
     const summary = videoItemSummary(items);
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#eaf2f9');
-    gradient.addColorStop(0.4, '#eef5fb');
-    gradient.addColorStop(1, '#dfeaf5');
+    gradient.addColorStop(0, '#cfe2f5');
+    gradient.addColorStop(0.4, '#d9e9f7');
+    gradient.addColorStop(1, '#b9d3ec');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -4384,7 +4452,7 @@
     ctx.fillStyle = '#14213d';
     fitCenterText(ctx, 'A carteirinha de vacinação é a maior prova de amor.', canvas.width / 2, 1310, canvas.width - 140, 44, 800);
     ctx.font = '700 30px Arial, sans-serif';
-    ctx.fillStyle = '#5d687a';
+    ctx.fillStyle = '#3b4658';
     ctx.fillText('Prefeitura Municipal de Orlândia · petorlandia.com.br', canvas.width / 2, 1480);
   }
 
@@ -4824,7 +4892,11 @@
   // O WhatsApp recusa WebM ("formato incompatível"): aceita MP4/H.264. Por isso
   // o MP4 vem primeiro e o WebM fica só como último recurso para navegadores
   // antigos — nesse caso o usuário é avisado de que o envio pode falhar.
+  // Perfil High (avc1.64…) antes do Baseline (avc1.42…): mesma compatibilidade
+  // com o WhatsApp e bem menos borrão em texto pequeno e em degradês.
   const VIDEO_FORMAT_CANDIDATES = [
+    'video/mp4;codecs=avc1.640028',
+    'video/mp4;codecs=avc1.4D0028',
     'video/mp4;codecs=avc1.42E01E',
     'video/mp4;codecs=avc1',
     'video/mp4',
@@ -4852,23 +4924,27 @@
 
   async function preloadVideoImages(targetItems, onProgress) {
     const loaded = [];
+    const failed = [];
     const total = targetItems.length;
     const concurrency = 4;
     for (let i = 0; i < total; i += concurrency) {
       const slice = targetItems.slice(i, i + concurrency);
       if (onProgress) onProgress(i, total);
       const results = await Promise.allSettled(slice.map(async (item) => {
-        const image = await loadVideoImage(item.imageSrc, 4500);
+        const image = await loadVideoImageWithRetry(item);
         const focus = estimatePetFocus(image);
         return { item, image, focus };
       }));
-      for (const res of results) {
+      results.forEach((res, index) => {
         if (res.status === 'fulfilled' && res.value) {
           loaded.push(res.value);
+        } else {
+          failed.push(slice[index]);
         }
-      }
+      });
     }
     if (onProgress) onProgress(total, total);
+    loaded.failed = failed;
     return loaded;
   }
 
@@ -4957,7 +5033,9 @@
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     try {
       municipalLogoImage = await loadVideoImage(municipalLogoSrc);
     } catch (error) {
@@ -4967,7 +5045,17 @@
     const stream = canvas.captureStream(VIDEO_CAPTURE_FPS);
     const captureTrack = stream.getVideoTracks()[0];
     const mimeType = mediaRecorderMimeType();
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    // Sem taxa de bits explícita o Chrome grava 1080x1920 a ~2,5 Mbps: o texto
+    // da carteirinha borrava e as cores claras viravam um bloco desbotado,
+    // piorando ainda mais quando o WhatsApp recomprime o arquivo.
+    const recorderOptions = { videoBitsPerSecond: VIDEO_BITS_PER_SECOND };
+    if (mimeType) recorderOptions.mimeType = mimeType;
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, recorderOptions);
+    } catch (error) {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    }
     recorder.ondataavailable = (event) => {
       if (event.data && event.data.size) chunks.push(event.data);
     };
@@ -5125,9 +5213,13 @@
     videoDownload.removeAttribute('aria-disabled');
 
     const totalLabel = `${generatedVideoTotalItems} ${generatedVideoTotalItems === 1 ? 'animal' : 'animais'}`;
-    const highlightsLabel = recordedItems.length < generatedVideoTotalItems
-      ? ` ${recordedItems.length} aparecem como destaques no modo ${selectedStyleDetails.label}.`
-      : '';
+    const failedCount = (loadedPairs.failed || []).length;
+    const highlightsLabel = (targetItems.length < generatedVideoTotalItems
+      ?` ${recordedItems.length} aparecem como destaques no modo ${selectedStyleDetails.label}.`
+      : '')
+      + (failedCount
+        ? ` Atenção: ${failedCount} ${failedCount === 1 ? 'foto não carregou e ficou' : 'fotos não carregaram e ficaram'} fora (${(loadedPairs.failed || []).slice(0, 5).map((it) => it.name).join(', ')}${failedCount > 5 ? '…' : ''}). Gere de novo para tentar incluí-las.`
+        : '');
     const played = await previewGeneratedVideo();
     const base = played
       ? `Vídeo pronto com ${totalLabel}.${highlightsLabel}`

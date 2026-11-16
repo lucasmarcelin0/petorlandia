@@ -1461,8 +1461,9 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     response = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}")
     assert response.status_code == 200
     assert b"Carteirinha de Lua" in response.data
-    assert b"Comprovante digital da campanha" in response.data
-    assert b"Status da campanha" in response.data
+    assert "Comprovante digital de vacinação antirrábica".encode() in response.data
+    assert "Status da vacinação".encode() in response.data
+    assert b"campanha" not in response.data.lower()
     assert b"Dose registrada. Guarde este comprovante" in response.data
     assert b"Orientacoes depois da vacina" in response.data
     assert b"mordida ou arranhao" in response.data
