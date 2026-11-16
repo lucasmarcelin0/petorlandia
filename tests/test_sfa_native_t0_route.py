@@ -68,7 +68,6 @@ def _payload_t0():
         "vinculo_exposicao_suspeita": "Produto injetado",
         "exposicao_ambiental": ["Nenhuma dessas"],
         "exposicao_ambiental_detalhe": "Detalhe injetado",
-        "exposicao_ambiental_quando": ["Não sei"],
         "trabalho_estudo": "Não trabalho nem estudo fora de casa",
         "trabalho_estudo_local": "Local injetado",
         "exposicao_ambiental_outros_doentes": "Sim",
@@ -168,6 +167,9 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
     assert 'name="ficha_sinan"' not in html
     assert 'name="data_nascimento"' not in html
     assert 'name="data_inicio_sintomas"' in html
+    # "Não sabe informar" fica ao lado da data, não como pergunta separada.
+    assert 'data-inline-with="data_inicio_sintomas"' in html
+    assert 'for="data_inicio_sintomas_ignorada"' not in html
     assert "TCLE_SFA_Orlandia_v3.docx" in html
     assert "será registrado quem consentiu" in html
 
@@ -223,7 +225,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16c"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -232,7 +234,6 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["respondent_name"] == ""
     assert captured["outras_pessoas_quantidade"] == ""
     assert "exposicao_ambiental_detalhe" not in captured
-    assert captured["exposicao_ambiental_quando"] == []
     assert captured["trabalho_estudo"] == "Não trabalho nem estudo fora de casa"
     assert captured["trabalho_estudo_local"] == ""
     assert "diagnostico_medico_qual" not in captured
@@ -319,7 +320,7 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t7_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16c"
     assert captured["dias_incap_novos"] == "3"
     assert captured["internacao_desde_ultima"] == ""  # só aparece se procurou atendimento
     assert captured["diagnostico_medico_qual"] == []
@@ -378,7 +379,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-16b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16c"
     assert captured["sintoma_novo_agravado"] == "Sim"
     assert captured["sintomas_persistentes"] == ["Cansaço ou fraqueza"]
     assert captured["situacao_participante"] == ""

@@ -135,6 +135,12 @@
       border-radius: 12px;
       background: white;
     }
+    /* "Não sei"/"Nenhum" na mesma linha da resposta, como alternativa a ela. */
+    .answer-row { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+    .answer-row > input { flex: 1 1 9rem; width: auto; min-width: 0; }
+    .answer-or { color: #5b6b70; font-size: .9rem; }
+    .answer-row .choices { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: 0; }
+    .answer-row .choice { white-space: nowrap; }
     .review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
     .full { grid-column: 1 / -1; }
     .actions {
@@ -216,6 +222,10 @@
         </div>
 
         {% for field in section.fields %}
+        {% set juntos = section.fields | selectattr("inline_with", "equalto", field.key) | list %}
+        {% if field.inline_with and section.fields | selectattr("key", "equalto", field.inline_with) | list %}
+        {# "Não sei"/"Nenhum": aparece dentro da pergunta principal. #}
+        {% else %}
         <article
           class="question{% if field.visible_if %} is-conditional{% endif %}"
           data-review-question
@@ -254,14 +264,24 @@
               {% endfor %}
             </div>
             {% else %}
+            {% if juntos %}<div class="answer-row">{% endif %}
             <input
               name="answer__{{ field.key }}"
               type="{{ field.type }}"
-              placeholder="{{ field.placeholder or 'Teste uma resposta, se fizer sentido' }}"
+              placeholder="{{ field.placeholder or ('Número' if juntos else 'Teste uma resposta, se fizer sentido') }}"
               {% if field.min is defined %}min="{{ field.min }}"{% endif %}
               {% if field.max is defined %}max="{{ field.max }}"{% endif %}
               {% if field.step is defined %}step="{{ field.step }}"{% endif %}
             >
+            {% if juntos %}
+              <div class="choices" role="group" aria-label="{{ juntos[0].label }}">
+                <span class="answer-or" aria-hidden="true">ou</span>
+                {% for extra in juntos %}{% for option in extra.options %}
+                <label class="choice"><input type="checkbox" name="answer__{{ extra.key }}" value="{{ option }}" data-inline-with="answer__{{ field.key }}"> <span>{{ option }}</span></label>
+                {% endfor %}{% endfor %}
+              </div>
+            </div>
+            {% endif %}
             {% endif %}
           </div>
 
@@ -300,6 +320,7 @@
             </div>
           </div>
         </article>
+        {% endif %}
         {% endfor %}
       </section>
       {% endfor %}
@@ -314,7 +335,7 @@
       </div>
     </form>
   </main>
-  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20260831b"></script>
+  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20261116c"></script>
   <script src="{{ url_for('static', filename='js/sfa_review_conditions.js') }}?v=20260831a"></script>
 </body>
 </html>

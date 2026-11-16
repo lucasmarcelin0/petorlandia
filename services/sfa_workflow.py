@@ -6,10 +6,10 @@ import json
 
 
 VERSION = "collective-v3-disease-clock"
-INTERVIEW_VERSION = "sfa-2026-11-16b"
+INTERVIEW_VERSION = "sfa-2026-11-16c"
 # Instrumentos que agendam T7/T30 pela entrevista T0 e contam o impacto desde D0.
 INTERVIEW_VERSIONS = frozenset({
-    "sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b", "sfa-2026-11-16",
+    "sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b", "sfa-2026-11-16", "sfa-2026-11-16b",
     INTERVIEW_VERSION,
 })
 

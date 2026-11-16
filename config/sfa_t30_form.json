@@ -1,5 +1,5 @@
 {
-  "instrument_version": "sfa-2026-11-16b",
+  "instrument_version": "sfa-2026-11-16c",
   "title": "T30 — Encerramento do seguimento",
   "subtitle": "Instrumento revisado em 16/11/2026. Data-alvo do acompanhamento: 30 dias após a entrevista inicial (T0). Encerramento individual e coletivo.",
   "submit_label": "Registrar T30",
@@ -398,7 +398,8 @@
           "options": [
             "Nenhum",
             "Não sei"
-          ]
+          ],
+          "inline_with": "dias_incap_novos"
         },
         {
           "key": "internacao_desde_ultima",
@@ -454,7 +455,8 @@
             "key": "novos_casos_semelhantes",
             "operator": "equals",
             "value": "Sim"
-          }
+          },
+          "inline_with": "novos_casos_quantidade"
         },
         {
           "key": "observacoes_entrevistador",

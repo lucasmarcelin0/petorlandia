@@ -1727,7 +1727,6 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
                 ("t0", "vinculo_compartilhado", "descreve o que o grupo compartilhou"),
                 ("t0", "atividade_comum", "atividade, evento ou refeicao em comum"),
                 ("t0", "inicio_outros_relativo", "sequencia temporal entre os casos"),
-                ("t0", "exposicao_suspeita_comum", "registra a hipotese inicial"),
                 ("t7", "novos_casos_semelhantes", "atualiza novos casos"),
                 ("t7", "novos_casos_relacao", "relacao com os novos casos"),
                 ("t7", "nova_pista_exposicao", "registra pista surgida depois do T0"),
@@ -1760,15 +1759,12 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "items": ["Ambiental", "Animal", "Alimentar, hidrica ou produto"],
             "questions": _review_question_refs(
                 ("t0", "exposicao_ambiental", "porta ambiental"),
-                ("t0", "exposicao_ambiental_local", "Orlandia ou outro municipio"),
-                ("t0", "exposicao_ambiental_quando", "janela antes dos sintomas"),
                 ("t0", "contato_animal", "porta animal"),
                 ("t0", "exposicao_animal", "espécies com contato"),
                 ("t0", "exposicao_animal_detalhe", "especie, evento, local e periodo"),
                 ("t0", "exposicao_animal_doentes", "animal doente ou morto"),
                 ("t0", "exposicao_alimentar", "porta alimentar, hidrica ou produto"),
                 ("t0", "exposicao_alimentar_item", "identifica o item"),
-                ("t0", "exposicao_alimentar_quando", "janela antes dos sintomas"),
             ),
         },
         {

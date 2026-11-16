@@ -424,14 +424,14 @@ def test_link_da_simulacao_e_o_formulario_do_morador(app, client, hoje):
     video.close()
 
     t0_com_pista = _t0(outras_pessoas_com_sintomas="Sim", outras_pessoas_quantidade="2",
-                       exposicao_suspeita_comum_outro="Feijoada no domingo")
-    t0_com_pista.setlist("exposicao_suspeita_comum", ["Alimento ou bebida", "Outro"])
+                       contato_animal="Sim", exposicao_animal="Bovinos",
+                       tipo_contato_animal="Trabalhou com animais", exposicao_animal_doentes="Sim")
     assert client.post(f"{base}/t0", data=t0_com_pista).status_code == 302
 
     t7 = client.get(f"{base}/t7").get_data(as_text=True)
     assert "Relação com o T0" not in t7 and "Registro da entrevista" not in t7
     assert "Na primeira entrevista, você contou que outras pessoas tiveram febre ou sintomas parecidos" in t7
-    assert "suspeitava de algo em comum: alimento ou bebida e Feijoada no domingo" in t7
+    assert "algum dos animais com que você teve contato estava doente ou morreu" in t7
     assert client.post(f"{base}/t7", data=_t7()).status_code == 302
 
     t30 = client.get(f"{base}/t30").get_data(as_text=True)
@@ -446,4 +446,4 @@ def test_link_da_simulacao_e_o_formulario_do_morador(app, client, hoje):
     assert t0_payload["data_aceite"] == "29/09/2026"
     assert t7_payload["modo_entrevista"] == sfa_service.MODO_ENTREVISTA_LINK
     assert t7_payload["pista_coletiva_confirmada"] == "Sim"
-    assert "Feijoada no domingo" in t7_payload["pista_coletiva_descricao"]
+    assert "animais com que você teve contato estava doente" in t7_payload["pista_coletiva_descricao"]

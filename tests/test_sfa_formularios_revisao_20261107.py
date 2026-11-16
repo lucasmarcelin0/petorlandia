@@ -70,9 +70,7 @@ def test_t0_tem_as_opcoes_nao_sei_do_documento_e_sem_temperatura():
 
     assert campos["data_inicio_sintomas_ignorada"]["options"] == ["Não sabe informar"]
     assert campos["outras_pessoas_quantidade_ignorada"]["options"] == ["Não sei"]
-    for chave in ("exposicao_ambiental_local", "exposicao_ambiental_quando", "exposicao_alimentar_quando",
-                  "inicio_outros_relativo"):
-        assert campos[chave]["options"][-1] == "Não sei", chave
+    assert campos["inicio_outros_relativo"]["options"][-1] == "Não sei"
     assert "temperatura_medida" not in campos
     assert "data_temperatura" not in campos
     assert "Não sei" not in campos["tipo_contato_animal"]["options"]
@@ -105,7 +103,7 @@ def test_ajustes_de_16_11_tarde():
     assert t0["exposicao_animal_doentes"]["options"] == ["Sim", "Não", "Não sei"]
     assert "Cavalos" in t0["exposicao_animal"]["options"]
     numeradas = [f["label"] for f in t0.values() if f["label"][:1].isdigit()]
-    assert numeradas[-1].startswith("21. ")
+    assert numeradas[-1].startswith("17. ")
     # Diagnósticos frequentes em síndrome febril saem do texto livre.
     for campos in (t7, t30):
         opcoes = campos["diagnostico_medico_qual"]["options"]
@@ -200,6 +198,24 @@ def test_as_duas_revisoes_de_novembro_usam_o_calendario_pela_entrevista(versao):
                "situacao_participante": "Sim", "sintoma_novo_agravado": "Sim"}
 
     assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b",
-                                               "sfa-2026-11-16", "sfa-2026-11-16b"}
+                                               "sfa-2026-11-16", "sfa-2026-11-16b", "sfa-2026-11-16c"}
     assert sfa_service.classificar_desfecho_primario_t30(payload) == "Sim"
     assert sfa_service.normalizar_payload_t0_exposicoes(payload) == payload
+
+
+def test_ajustes_de_16_11_noite():
+    t0, t7, t30 = (_campos(_schema(stage)) for stage in ("t0", "t7", "t30"))
+
+    # Local e período das exposições e a suspeita em comum não entravam em nenhuma análise.
+    for retirado in ("exposicao_ambiental_local", "exposicao_ambiental_quando", "exposicao_alimentar_quando",
+                     "exposicao_suspeita_comum", "exposicao_suspeita_comum_outro"):
+        assert retirado not in t0, retirado
+    # T7 e T30 mantêm as perguntas sobre novos casos.
+    assert {"novos_casos_relacao", "nova_pista_tipo"} <= set(t7)
+    assert "novos_casos_quantidade" in t30
+    # "Não sei"/"Nenhum" é alternativa ao número ou à data, na mesma pergunta.
+    assert t0["data_inicio_sintomas_ignorada"]["inline_with"] == "data_inicio_sintomas"
+    assert t0["outras_pessoas_quantidade_ignorada"]["inline_with"] == "outras_pessoas_quantidade"
+    for campos in (t7, t30):
+        assert campos["dias_incap_novos_sem_numero"]["inline_with"] == "dias_incap_novos"
+        assert campos["novos_casos_quantidade_ignorada"]["inline_with"] == "novos_casos_quantidade"

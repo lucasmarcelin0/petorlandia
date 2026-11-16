@@ -163,6 +163,21 @@
     });
   };
 
+  // "Não sei"/"Nenhum" ao lado de um número ou data: é uma resposta ou a outra.
+  const installInlineAlternatives = (documentObj) => {
+    documentObj.querySelectorAll("input[data-inline-with]").forEach((box) => {
+      const main = Array.from(documentObj.querySelectorAll("input"))
+        .find((field) => field.name === box.dataset.inlineWith);
+      if (!main) return;
+      box.addEventListener("change", () => {
+        if (box.checked) main.value = "";
+      });
+      main.addEventListener("input", () => {
+        if (String(main.value || "").trim()) box.checked = false;
+      });
+    });
+  };
+
   const init = (documentObj) => {
     if (!documentObj) return;
     documentObj.querySelectorAll("[data-visible-if]").forEach((container) => {
@@ -171,6 +186,7 @@
       });
     });
     installNoneExclusivity(documentObj);
+    installInlineAlternatives(documentObj);
     documentObj.addEventListener("change", () => updateConditionalFields(documentObj));
     documentObj.addEventListener("input", () => updateConditionalFields(documentObj));
     updateConditionalFields(documentObj);
