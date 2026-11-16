@@ -28,9 +28,9 @@ BANNED_VISIBLE_KEYS = {
 }
 
 CONDITIONAL_KEYS = {
-    "t0": {"respondent_name", "trabalho_estudo_local", "exposicao_animal", "vinculo_compartilhado", "exposicao_ambiental_quando", "exposicao_alimentar_quando", "inicio_outros_relativo"},
-    "t7": {"diagnostico_medico_qual", "atendimento_local", "novos_casos_relacao", "nova_pista_tipo"},
-    "t30": {"sintoma_novo_agravado", "sintomas_persistentes", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "diagnostico_medico_qual", "diagnostico_confirmado_exame", "novos_casos_quantidade"},
+    "t0": {"respondent_name", "trabalho_estudo_local", "exposicao_animal", "exposicao_animal_doentes", "vinculo_compartilhado", "exposicao_ambiental_quando", "exposicao_alimentar_quando", "inicio_outros_relativo"},
+    "t7": {"diagnostico_medico_qual", "internacao_desde_ultima", "novos_casos_relacao", "nova_pista_tipo"},
+    "t30": {"sintoma_novo_agravado", "sintomas_persistentes", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "diagnostico_medico_qual", "novos_casos_quantidade"},
 }
 
 ATOMIC_OPERATORS = {
@@ -120,7 +120,7 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
 def test_active_sfa_schema_is_november_revision(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "sfa-2026-11-16"
+    assert schema.get("instrument_version") == "sfa-2026-11-16b"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 

@@ -95,6 +95,28 @@ def test_t0_de_16_11_so_tem_perguntas_fechadas_exceto_o_local_de_trabalho_ou_est
     assert campos["trabalho_estudo_local"]["visible_if"]["values"] == ["Trabalho", "Estudo", "Trabalho e estudo"]
 
 
+def test_ajustes_de_16_11_tarde():
+    t0, t7, t30 = (_campos(_schema(stage)) for stage in ("t0", "t7", "t30"))
+
+    # Febre já está na ficha SINAN (campo 33); "outros doentes" fica só na pergunta geral.
+    for retirado in ("febre", "exposicao_ambiental_outros_doentes", "exposicao_alimentar_outros_doentes",
+                     "exposicao_animal_outros_doentes"):
+        assert retirado not in t0, retirado
+    assert t0["exposicao_animal_doentes"]["options"] == ["Sim", "Não", "Não sei"]
+    assert "Cavalos" in t0["exposicao_animal"]["options"]
+    numeradas = [f["label"] for f in t0.values() if f["label"][:1].isdigit()]
+    assert numeradas[-1].startswith("21. ")
+    # Diagnósticos frequentes em síndrome febril saem do texto livre.
+    for campos in (t7, t30):
+        opcoes = campos["diagnostico_medico_qual"]["options"]
+        assert {"Leptospirose", "Febre maculosa", "COVID-19 ou gripe"} <= set(opcoes)
+        assert opcoes[-2:] == ["Outra", "Não lembro"]
+    # Quem responde por outra pessoa é avisado de que "você" é quem adoeceu.
+    for campos in (t0, t7, t30):
+        assert campos["respondent_name"]["help_text"] == "Nas próximas perguntas, “você” é a pessoa que adoeceu."
+        assert "visible_if" in campos["respondent_name"]
+
+
 def test_t7_nao_pergunta_a_relacao_com_o_t0():
     schema = _schema("t7")
     campos = _campos(schema)
@@ -108,7 +130,10 @@ def test_t7_nao_pergunta_a_relacao_com_o_t0():
     # A relação com o T0 é calculada pelo sistema (ver test_sfa_link_morador_20261109).
     assert "pista_coletiva_confirmada" not in campos
     assert campos["dias_incap_novos_sem_numero"]["options"] == ["Nenhum", "Não sei"]
-    assert "Hospital" in campos["atendimento_local"]["options"]
+    # 16/11/2026 (tarde): como no T30, sem "onde foi atendido"; só se precisou de internação.
+    assert campos["internacao_desde_ultima"]["visible_if"]["key"] == "retornou_servico_saude"
+    assert "atendimento_local" not in campos
+    assert campos["nova_pista_exposicao"]["label"] == "11. Você soube de algo novo que possa explicar esses casos?"
     # Foco na saúde (16/11/2026): sem gasto, renda, cuidador nem perguntas de fonte ativa.
     for retirado in ("atendimento_detalhe", "houve_novos_gastos", "perda_renda", "ausencia_familiar",
                      "dias_cuidador", "fonte_ainda_ativa", "outras_pessoas_ainda_expostas",
@@ -130,9 +155,11 @@ def test_t30_usa_as_situacoes_do_documento():
                      "sintomas_atuais_detalhe", "nova_informacao_fonte", "fonte_ainda_ativa",
                      "outras_pessoas_ainda_expostas", "novos_casos_local_periodo", "novos_casos_vinculo"):
         assert retirado not in campos, retirado
-    # Pergunta 7 direta: a doença em opções e a confirmação por exame.
+    # Pergunta 7 direta: a doença em opções. A confirmação laboratorial vem do GAL, não da pessoa.
     assert campos["diagnostico_medico_qual"]["type"] == "checkboxes"
-    assert campos["diagnostico_confirmado_exame"]["visible_if"]["key"] == "diagnostico_medico"
+    assert "diagnostico_confirmado_exame" not in campos
+    assert campos["sintoma_novo_agravado"]["label"] == (
+        "5. Hoje, você ainda sente algum sintoma que começou com esta doença ou que piorou por causa dela?")
     assert "pista_coletiva_confirmada" not in campos
     for retirado in ("data_retorno", "retorno_sem_data", "impacto_item_desconhecido"):
         assert retirado not in campos
@@ -173,6 +200,6 @@ def test_as_duas_revisoes_de_novembro_usam_o_calendario_pela_entrevista(versao):
                "situacao_participante": "Sim", "sintoma_novo_agravado": "Sim"}
 
     assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b",
-                                               "sfa-2026-11-16"}
+                                               "sfa-2026-11-16", "sfa-2026-11-16b"}
     assert sfa_service.classificar_desfecho_primario_t30(payload) == "Sim"
     assert sfa_service.normalizar_payload_t0_exposicoes(payload) == payload

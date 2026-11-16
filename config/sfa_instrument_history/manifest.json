@@ -168,6 +168,30 @@
           "sha256": "5e870eb832a692bb6322ed1dfc2bc71f8fff1ce1e919cbc2178b3cebc9910e7d"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-16",
+      "label": "Instrumentos revisados em 16/11/2026 (manhã)",
+      "status": "archived",
+      "archived_at": "2026-11-16",
+      "description": "Primeira versão com foco só na saúde. A seguinte tira a febre do T0 (já está na ficha SINAN), junta as perguntas de outros doentes, tira a confirmação por exame do T30 e acrescenta opções de diagnóstico e de animais.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-16/t0.json",
+          "field_count": 42,
+          "sha256": "00618b287589e922559d8455c8ae041b69bc1437552209aea2cb3cf0c4361a85"
+        },
+        "t7": {
+          "file": "sfa-2026-11-16/t7.json",
+          "field_count": 24,
+          "sha256": "51dd088f740847b4607128329267b691514db0e2a0126d8b147e47f197443667"
+        },
+        "t30": {
+          "file": "sfa-2026-11-16/t30.json",
+          "field_count": 23,
+          "sha256": "a5eaefa7d1e34e7a518878704b7eaa7b3f51735008f2db564bf503fca20b22b6"
+        }
+      }
     }
   ]
 }

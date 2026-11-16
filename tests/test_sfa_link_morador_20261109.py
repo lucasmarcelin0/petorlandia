@@ -101,6 +101,8 @@ def test_pistas_das_opcoes_fechadas_de_16_11():
         "surgiu uma nova informação sobre animal e festa, evento ou viagem",
     ]
     assert sfa_service.pistas_coletivas_anteriores([{"exposicao_suspeita_comum": ["Nenhuma suspeita"]}]) == []
+    assert sfa_service.pistas_coletivas_anteriores([{"exposicao_animal_doentes": "Sim"}]) == [
+        "algum dos animais com que você teve contato estava doente ou morreu"]
 
 
 def test_link_do_morador_tira_registro_da_entrevista_e_grava_o_modo():
