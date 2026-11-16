@@ -207,12 +207,25 @@ def _vinculos(user):
     return cache[user.id]
 
 
+SESSAO_VER_COMO = "limpeza_ver_como"
+
+
+def papel_simulado(user):
+    """Papel que o administrador escolheu para "ver como"; ``None`` fora desse modo."""
+    if not has_request_context() or not eh_admin(user):
+        return None
+    from flask import session
+    chave = session.get(SESSAO_VER_COMO)
+    return papeis_catalogo().get(chave) if chave else None
+
+
 def papeis_de(user) -> frozenset[str]:
     """Chaves dos papéis vigentes hoje; memorizado por requisição (navegação + rota)."""
     if not getattr(user, "is_authenticated", False) or not getattr(user, "id", None):
         return frozenset()
     if eh_admin(user):
-        return frozenset(papeis_catalogo())
+        simulado = papel_simulado(user)
+        return frozenset([simulado["chave"]]) if simulado else frozenset(papeis_catalogo())
     return _vinculos(user)[0]
 
 
@@ -220,13 +233,19 @@ def permissoes_de(user) -> frozenset[str]:
     if not getattr(user, "is_authenticated", False) or not getattr(user, "id", None):
         return frozenset()
     if eh_admin(user):
-        return frozenset(PERMISSOES)
+        simulado = papel_simulado(user)
+        return simulado["permissoes"] if simulado else frozenset(PERMISSOES)
     return _vinculos(user)[1]
 
 
 def tipos_visiveis(user):
     """Tipos que a pessoa vê no mapa, comprova e fiscaliza. ``None`` = todos."""
-    if eh_admin(user) or not getattr(user, "id", None):
+    if not getattr(user, "id", None):
+        return None
+    if eh_admin(user):
+        simulado = papel_simulado(user)
+        if simulado and "mapa" in simulado["permissoes"] and simulado["tipos"]:
+            return frozenset(simulado["tipos"])
         return None
     return _vinculos(user)[2]
 
