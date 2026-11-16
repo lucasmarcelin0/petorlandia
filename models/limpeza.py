@@ -60,6 +60,26 @@ class LimpezaTipo(db.Model):
     criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class LimpezaPapel(db.Model):
+    """Papel criado pelo administrador: o que a pessoa pode fazer e quais tipos vê.
+
+    ``chave`` é o que ``LimpezaAcesso.papel`` guarda. Excluir desativa o papel
+    (e revoga os acessos dele); a linha fica para o histórico.
+    """
+    __tablename__ = "limpeza_papel"
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(20), unique=True, nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    # comunicar, mapa, comprovar, recusar, descartar, exportar — separados por vírgula.
+    permissoes = db.Column(db.String(120), nullable=False)
+    # Tipos que vê no mapa (chaves de ``LimpezaTipo``); vazio = todos.
+    tipos = db.Column(db.String(300))
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por = db.Column(db.String(160))
+    criado_em = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class LimpezaPerfil(db.Model):
     """Combinação salva de papéis e tipos ("Equipe de poda") para atribuir com um clique."""
     __tablename__ = "limpeza_perfil"

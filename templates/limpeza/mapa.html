@@ -18,7 +18,7 @@
       <h1 class="h3 mb-1">{{ "Todas as comunicações" if visao_lista else "Mapa da Prefeitura integrada" }}</h1>
       <p class="text-muted mb-0" id="limpeza-sub">Carregando comunicações…</p>
     </div>
-    {% if pode_fiscalizar %}
+    {% if pode_exportar %}
     <a class="btn btn-outline-success" id="limpeza-csv" href="{{ url_for('limpeza_urbana.relatorio') }}"><i class="fas fa-file-csv me-1"></i>Exportar relatório</a>
     {% endif %}
   </div>
@@ -74,7 +74,7 @@
 (() => {
   const DADOS = {{ url_for('limpeza_urbana.mapa_dados')|tojson }};
   const DETALHE = {{ url_for('limpeza_urbana.solicitacao', solicitacao_id=0)|tojson }}.replace(/0$/, '');
-  const CSV = {{ (url_for('limpeza_urbana.relatorio') if pode_fiscalizar else '')|tojson }};
+  const CSV = {{ (url_for('limpeza_urbana.relatorio') if pode_exportar else '')|tojson }};
   const el = (id) => document.getElementById(id);
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const urlSegura = (u) => /^(https?:\/\/|\/)/.test(String(u || '')) ? esc(u) : '';

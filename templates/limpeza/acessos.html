@@ -8,21 +8,37 @@
 {% include "limpeza/_estilo.html" %}
 {% endblock %}
 
-{% macro escolher_tipos(prefixo, marcados) -%}
-{# marcados: lista de chaves; vazia = todos os tipos #}
-<div class="form-check mb-2">
-  <input class="form-check-input" type="checkbox" name="tipos_todos" value="1" id="{{ prefixo }}-todos" data-tipos-todos {{ 'checked' if not marcados }}>
-  <label class="form-check-label" for="{{ prefixo }}-todos"><strong>Todos os tipos</strong> <span class="small text-muted">(inclusive os que forem criados depois)</span></label>
-</div>
-<div class="limpeza-categorias limpeza-categorias-compacta">
-  {% for chave, rotulo in TODOS_TIPOS.items() if chave in CATEGORIAS or chave in marcados %}
-  <label><input class="form-check-input" type="checkbox" name="tipo" value="{{ chave }}" data-tipo {{ 'checked' if chave in marcados }}><span>{{ rotulo }}</span></label>
+{% macro editor_papel(form_id, papel=None) -%}
+{# Campos ligados ao formulário form_id (fica fora do formulário de atribuir). #}
+{% set perms = papel.permissoes if papel else ['comunicar'] %}
+{% set marcados = (papel.tipos or []) if papel else [] %}
+<div class="limpeza-papel-editor" data-papel-editor>
+  <label class="form-label small mb-1" for="{{ form_id }}-nome">Nome do papel</label>
+  <input class="form-control form-control-sm" id="{{ form_id }}-nome" name="nome" form="{{ form_id }}" maxlength="80" required value="{{ papel.nome if papel else '' }}" placeholder="Ex.: Equipe de poda">
+  <div class="form-label small mt-3 mb-1">O que pode fazer</div>
+  {% for chave in ('comunicar', 'mapa', 'comprovar') %}
+  <div class="form-check"><input class="form-check-input" type="checkbox" name="permissao" value="{{ chave }}" form="{{ form_id }}" id="{{ form_id }}-{{ chave }}" data-permissao="{{ chave }}" {{ 'checked' if chave in perms }}><label class="form-check-label" for="{{ form_id }}-{{ chave }}">{{ PERMISSOES[chave] }}</label></div>
   {% endfor %}
+  <div class="form-check"><input class="form-check-input" type="checkbox" id="{{ form_id }}-fiscalizar" data-fiscalizar><label class="form-check-label" for="{{ form_id }}-fiscalizar">Fiscalizar</label></div>
+  <div class="ms-4">
+    {% for chave in FISCALIZACAO %}
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="permissao" value="{{ chave }}" form="{{ form_id }}" id="{{ form_id }}-{{ chave }}" data-permissao="{{ chave }}" {{ 'checked' if chave in perms }}><label class="form-check-label small" for="{{ form_id }}-{{ chave }}">{{ PERMISSOES[chave] }}</label></div>
+    {% endfor %}
+  </div>
+  <div data-bloco-tipos>
+    <div class="form-label small mt-3 mb-1">Quais problemas vê</div>
+    <div class="limpeza-categorias limpeza-categorias-compacta">
+      <label><input class="form-check-input" type="checkbox" name="tipos_todos" value="1" form="{{ form_id }}" data-tipos-todos {{ 'checked' if not marcados }}><span>Todos</span></label>
+      {% for chave, rotulo in TODOS_TIPOS.items() if chave in CATEGORIAS or chave in marcados %}
+      <label><input class="form-check-input" type="checkbox" name="tipo" value="{{ chave }}" form="{{ form_id }}" data-tipo {{ 'checked' if chave in marcados }}><span>{{ rotulo }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 mt-3 limpeza-btn-auto">
+    <button class="btn btn-sm btn-success" type="submit" form="{{ form_id }}">Salvar papel</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#{{ form_id }}-painel">Cancelar</button>
+  </div>
 </div>
-{%- endmacro %}
-
-{% macro nomes_papeis(lista) -%}
-{% for x in lista %}{{ PAPEIS.get(x, (x,))[0] }}{{ ', ' if not loop.last }}{% endfor %}
 {%- endmacro %}
 
 {% macro prazo(prefixo, inicio=None, fim=None) -%}
@@ -49,77 +65,53 @@
     <div class="col-lg-5">
       <form method="post" class="limpeza-cartao" id="form-atribuir" data-form-acesso>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="perfil_nome" value="" data-perfil-nome>
         <h2 class="h5">Atribuir acesso</h2>
-
-        <div class="mb-3">
-          <div class="form-label mb-1">Começar por um perfil</div>
-          <div class="d-flex flex-wrap gap-1 limpeza-btn-auto">
-            {% for chave, (rotulo, descricao) in PAPEIS.items() %}
-            <button type="button" class="btn btn-sm btn-outline-success" data-perfil data-papeis="{{ chave }}" data-tipos="" data-nome="" title="{{ descricao }}">{{ rotulo }}</button>
-            {% endfor %}
-            {% for p in perfis %}
-            <button type="button" class="btn btn-sm btn-outline-primary" data-perfil data-papeis="{{ p.papeis }}" data-tipos="{{ p.tipos or '' }}" data-nome="{{ p.nome }}" title="{{ nomes_papeis(p.lista_papeis) }} · {{ texto_tipos(p.tipos) }}"><i class="fas fa-bookmark me-1"></i>{{ p.nome }}</button>
-            {% endfor %}
-          </div>
-          <div class="form-text" data-perfil-aviso>Um clique preenche papéis e tipos. Dá para ajustar antes de atribuir.</div>
-        </div>
 
         <div class="mb-3">
           <label class="form-label" for="emails">E-mail da conta</label>
           <textarea class="form-control" id="emails" name="emails" rows="2" required placeholder="pessoa@exemplo.com" autocomplete="off"></textarea>
-          <div class="form-text">A pessoa precisa já ter conta no PetOrlândia com este e-mail. Para uma equipe inteira, cole vários (um por linha ou separados por vírgula).</div>
+          <div class="form-text">A pessoa precisa já ter conta no PetOrlândia com este e-mail. Pode colar vários, um por linha.</div>
         </div>
 
-        <fieldset class="mb-3">
-          <legend class="form-label fs-6">Papéis</legend>
-          {% for chave, (rotulo, descricao) in PAPEIS.items() %}
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" name="papel" value="{{ chave }}" id="papel-{{ chave }}" data-papel {{ 'checked' if chave == 'colaborador' }}>
-            <label class="form-check-label" for="papel-{{ chave }}"><strong>{{ rotulo }}</strong><br><span class="small text-muted">{{ descricao }}</span></label>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1 limpeza-btn-auto">
+            <span class="form-label mb-0">Papéis</span>
+            <button class="btn btn-sm btn-outline-success" type="button" data-bs-toggle="collapse" data-bs-target="#papel-novo-painel" aria-expanded="false" aria-controls="papel-novo-painel" aria-label="Criar papel" title="Criar papel"><i class="fas fa-plus"></i></button>
           </div>
-          {% endfor %}
-        </fieldset>
-
-        <fieldset class="mb-3" data-bloco-tipos>
-          <legend class="form-label fs-6 mb-1">Quais problemas?</legend>
-          <p class="small text-muted mb-2">Vale para a equipe de limpeza e a fiscalização: só esses tipos aparecem no mapa, na comprovação e no relatório. O colaborador comunica qualquer tipo.</p>
-          {{ escolher_tipos('novo', []) }}
-        </fieldset>
+          <div class="collapse" id="papel-novo-painel"><div class="limpeza-papel-painel">{{ editor_papel('papel-novo') }}</div></div>
+          <div class="limpeza-papeis" data-destructive-confirmation>
+            {% for p in papeis_lista %}
+            <div class="limpeza-papel-linha">
+              <input class="form-check-input mt-1" type="checkbox" name="papel" value="{{ p.chave }}" id="atribuir-{{ p.chave }}" {{ 'checked' if loop.first }}>
+              <label class="flex-grow-1" for="atribuir-{{ p.chave }}">
+                <strong>{{ p.nome }}</strong><br>
+                <span class="small text-muted">{{ p.resumo }}</span>
+                {% if p.uso %}<br><span class="small text-muted">{{ p.uso }} pessoa{{ 's' if p.uso != 1 }} com este papel</span>{% endif %}
+              </label>
+              {% if p.id %}
+              <button class="btn btn-sm btn-link text-secondary px-1" type="button" data-bs-toggle="collapse" data-bs-target="#papel-{{ p.id }}-painel" aria-label="Editar {{ p.nome }}" title="Editar"><i class="fas fa-pen"></i></button>
+              <button class="btn btn-sm btn-link text-danger px-1" type="submit" form="papel-{{ p.id }}-excluir" aria-label="Excluir {{ p.nome }}" title="Excluir"
+                      data-confirmar="Excluir o papel “{{ p.nome }}”?{% if p.uso %} {{ p.uso }} pessoa{{ 's' if p.uso != 1 }} perde{{ 'm' if p.uso != 1 }} esse acesso.{% endif %}"><i class="fas fa-trash"></i></button>
+              {% endif %}
+            </div>
+            {% if p.id %}<div class="collapse" id="papel-{{ p.id }}-painel"><div class="limpeza-papel-painel">{{ editor_papel('papel-' ~ p.id, p) }}</div></div>{% endif %}
+            {% endfor %}
+          </div>
+        </div>
 
         <div class="mb-3">
           {{ prazo('novo') }}
           <div class="form-text mt-1">Em branco: vale desde hoje e sem data para acabar.</div>
         </div>
 
-        <details class="mb-3">
-          <summary class="small fw-semibold">Salvar esta combinação como perfil</summary>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" name="salvar_perfil" value="1" id="salvar-perfil">
-            <label class="form-check-label small" for="salvar-perfil">Salvar papéis e tipos para usar com um clique da próxima vez</label>
-          </div>
-          <input class="form-control form-control-sm mt-2" name="novo_perfil" maxlength="80" placeholder="Nome do perfil (ex.: Equipe de poda)" aria-label="Nome do perfil">
-        </details>
-
         <button class="btn btn-success w-100" type="submit"><i class="fas fa-user-plus me-1"></i>Atribuir</button>
       </form>
-
-      {% if perfis %}
-      <div class="limpeza-cartao mt-3">
-        <h2 class="h6">Perfis salvos</h2>
-        <ul class="list-unstyled mb-0">
-          {% for p in perfis %}
-          <li class="d-flex justify-content-between align-items-center gap-2 py-1 border-bottom">
-            <span><strong>{{ p.nome }}</strong><br><span class="small text-muted">{{ nomes_papeis(p.lista_papeis) }} · {{ texto_tipos(p.tipos) }}</span></span>
-            <form method="post" action="{{ url_for('limpeza_urbana.remover_perfil', perfil_id=p.id) }}" class="flex-shrink-0">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit">Remover</button>
-            </form>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
+      {# Formulários dos papéis: ficam fora do formulário de atribuir (HTML não aceita formulário dentro de formulário). #}
+      <form method="post" action="{{ url_for('limpeza_urbana.criar_papel') }}" id="papel-novo" data-form-papel><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      {% for p in papeis_lista if p.id %}
+      <form method="post" action="{{ url_for('limpeza_urbana.editar_papel', papel_id=p.id) }}" id="papel-{{ p.id }}" data-form-papel><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      <form method="post" action="{{ url_for('limpeza_urbana.excluir_papel', papel_id=p.id) }}" id="papel-{{ p.id }}-excluir"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+      {% endfor %}
     </div>
 
     <div class="col-lg-7">
@@ -145,13 +137,12 @@
             <div class="d-flex justify-content-between gap-2 flex-wrap">
               <div>
                 <strong>{{ a.user.name or '—' }}</strong> <span class="small text-muted">{{ a.user.email }}</span><br>
-                <span class="fw-semibold">{{ PAPEIS.get(a.papel, (a.papel,))[0] }}</span>{% if a.perfil %} <span class="small text-muted">· perfil {{ a.perfil }}</span>{% endif %}
-                {% if a.papel in ('equipe', 'fiscal') %}<br><span class="small">{{ texto_tipos(a.tipos)|capitalize }}</span>{% endif %}
+                <span class="fw-semibold">{{ nome_do_papel(a.papel) }}</span>
                 <br><span class="small">{% if a.inicio or a.fim %}{{ a.inicio.strftime('%d/%m/%Y') if a.inicio else 'desde já' }} → {{ a.fim.strftime('%d/%m/%Y') if a.fim else 'sem fim' }}{% else %}Sem limite{% endif %}</span>
                 {% if vigente(a, dia) %}<span class="limpeza-selo concluida">Vale hoje</span>{% elif a.inicio and dia < a.inicio %}<span class="limpeza-selo aberta">Ainda não começou</span>{% else %}<span class="limpeza-selo descartada">Encerrado</span>{% endif %}
               </div>
               <div class="d-flex gap-1 align-items-start flex-shrink-0 limpeza-btn-auto">
-                <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-bs-toggle="collapse" data-bs-target="#editar-{{ a.id }}" aria-expanded="false" aria-controls="editar-{{ a.id }}">Editar</button>
+                <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-bs-toggle="collapse" data-bs-target="#editar-{{ a.id }}" aria-expanded="false" aria-controls="editar-{{ a.id }}">Prazo</button>
                 <form method="post" action="{{ url_for('limpeza_urbana.revogar_acesso', acesso_id=a.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-outline-danger text-nowrap" type="submit">Revogar</button>
@@ -160,13 +151,8 @@
             </div>
             <form method="post" action="{{ url_for('limpeza_urbana.alterar_acesso', acesso_id=a.id) }}" class="collapse mt-2 p-2 rounded bg-light" id="editar-{{ a.id }}" data-form-acesso>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              {% if a.papel in ('equipe', 'fiscal') %}
-              <div class="mb-2">{{ escolher_tipos('editar-' ~ a.id, a.lista_tipos) }}</div>
-              {% else %}
-              <input type="hidden" name="tipos_todos" value="1">
-              {% endif %}
               <div class="mb-2">{{ prazo('editar-' ~ a.id, a.inicio, a.fim) }}</div>
-              <button class="btn btn-sm btn-success" type="submit">Salvar alteração</button>
+              <button class="btn btn-sm btn-success" type="submit">Salvar prazo</button>
             </form>
           </li>
           {% endfor %}
@@ -252,6 +238,8 @@
   var pagina = document.querySelector('[data-acessos]');
   if (!pagina) return;
   var hoje = pagina.dataset.hoje;
+  var EXIGEM_MAPA = ['comprovar', 'recusar', 'descartar', 'exportar'];
+  var FISCAL = ['recusar', 'descartar', 'exportar'];
 
   function somarDias(iso, dias) {
     var d = new Date(iso + 'T12:00:00');
@@ -259,36 +247,7 @@
     return d.toISOString().slice(0, 10);
   }
 
-  function ligarTipos(form) {
-    var todos = form.querySelector('[data-tipos-todos]');
-    var tipos = form.querySelectorAll('[data-tipo]');
-    if (!todos) return;
-    todos.addEventListener('change', function () {
-      if (todos.checked) tipos.forEach(function (t) { t.checked = false; });
-    });
-    tipos.forEach(function (t) {
-      t.addEventListener('change', function () {
-        var algum = Array.prototype.some.call(tipos, function (x) { return x.checked; });
-        todos.checked = !algum;
-      });
-    });
-  }
-
-  function mostrarTipos(form) {
-    var bloco = form.querySelector('[data-bloco-tipos]');
-    if (!bloco) return;
-    var precisa = Array.prototype.some.call(form.querySelectorAll('[data-papel]'), function (p) {
-      return p.checked && (p.value === 'equipe' || p.value === 'fiscal');
-    });
-    bloco.classList.toggle('d-none', !precisa);
-  }
-
   pagina.querySelectorAll('[data-form-acesso]').forEach(function (form) {
-    ligarTipos(form);
-    mostrarTipos(form);
-    form.querySelectorAll('[data-papel]').forEach(function (p) {
-      p.addEventListener('change', function () { mostrarTipos(form); });
-    });
     form.querySelectorAll('[data-prazo]').forEach(function (botao) {
       botao.addEventListener('click', function () {
         var inicio = form.querySelector('[data-inicio]'), fim = form.querySelector('[data-fim]');
@@ -299,23 +258,43 @@
     });
   });
 
-  var atribuir = document.getElementById('form-atribuir');
-  if (atribuir) {
-    atribuir.querySelectorAll('[data-perfil]').forEach(function (botao) {
-      botao.addEventListener('click', function () {
-        var papeis = botao.dataset.papeis.split(','), tipos = botao.dataset.tipos ? botao.dataset.tipos.split(',') : [];
-        atribuir.querySelectorAll('[data-papel]').forEach(function (p) { p.checked = papeis.indexOf(p.value) >= 0; });
-        atribuir.querySelectorAll('[data-tipo]').forEach(function (t) { t.checked = tipos.indexOf(t.value) >= 0; });
-        atribuir.querySelector('[data-tipos-todos]').checked = !tipos.length;
-        atribuir.querySelector('[data-perfil-nome]').value = botao.dataset.nome || '';
-        atribuir.querySelectorAll('[data-perfil]').forEach(function (b) { b.classList.toggle('active', b === botao); });
-        mostrarTipos(atribuir);
-        var aviso = atribuir.querySelector('[data-perfil-aviso]');
-        aviso.textContent = 'Perfil “' + botao.textContent.trim() + '” aplicado. Confira e informe o e-mail.';
-        atribuir.querySelector('#emails').focus();
+  pagina.querySelectorAll('[data-papel-editor]').forEach(function (ed) {
+    var perm = function (k) { return ed.querySelector('[data-permissao="' + k + '"]'); };
+    var fiscalizar = ed.querySelector('[data-fiscalizar]');
+    var bloco = ed.querySelector('[data-bloco-tipos]');
+    var todos = ed.querySelector('[data-tipos-todos]'), tipos = ed.querySelectorAll('[data-tipo]');
+    function atualizar() {
+      if (EXIGEM_MAPA.some(function (k) { return perm(k).checked; })) perm('mapa').checked = true;
+      var n = FISCAL.filter(function (k) { return perm(k).checked; }).length;
+      fiscalizar.checked = n === FISCAL.length;
+      fiscalizar.indeterminate = n > 0 && n < FISCAL.length;
+      bloco.classList.toggle('d-none', !perm('mapa').checked);
+    }
+    fiscalizar.addEventListener('change', function () {
+      FISCAL.forEach(function (k) { perm(k).checked = fiscalizar.checked; });
+      atualizar();
+    });
+    ed.querySelectorAll('[data-permissao]').forEach(function (c) {
+      c.addEventListener('change', function () {
+        if (c.dataset.permissao === 'mapa' && !c.checked) EXIGEM_MAPA.forEach(function (k) { perm(k).checked = false; });
+        atualizar();
       });
     });
-  }
+    todos.addEventListener('change', function () { if (todos.checked) tipos.forEach(function (t) { t.checked = false; }); });
+    tipos.forEach(function (t) {
+      t.addEventListener('change', function () { todos.checked = !Array.prototype.some.call(tipos, function (x) { return x.checked; }); });
+    });
+    atualizar();
+  });
+
+  pagina.querySelectorAll('[data-confirmar]').forEach(function (botao) {
+    botao.addEventListener('click', function (evento) {
+      if (!window.confirm(botao.dataset.confirmar)) evento.preventDefault();
+    });
+  });
+
+  var novo = document.getElementById('papel-novo-painel');
+  if (novo) novo.addEventListener('shown.bs.collapse', function () { document.getElementById('papel-novo-nome').focus(); });
 
   pagina.querySelectorAll('[data-classificar-outro]').forEach(function (form) {
     var destino = form.querySelector('[name=destino]'), rotulo = form.querySelector('[data-rotulo-novo]');

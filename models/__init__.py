@@ -111,6 +111,7 @@ from .limpeza import (
     LimpezaAcesso,
     LimpezaComprovacao,
     LimpezaEvento,
+    LimpezaPapel,
     LimpezaPerfil,
     LimpezaSolicitacao,
     LimpezaTipo,

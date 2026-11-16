@@ -1,16 +1,14 @@
 """Regras da área de limpeza urbana: quem acessa, onde a foto foi tirada e a auditoria.
 
-Papéis (adicionais, concedidos por um administrador, com período opcional):
+Papéis (adicionais, concedidos por um administrador, com período opcional) são
+criados, editados e excluídos pelo administrador na tabela ``limpeza_papel``.
+Cada papel diz o que a pessoa pode fazer (``PERMISSOES``: comunicar, ver o
+mapa, comprovar com foto, recusar, descartar, exportar) e quais tipos de
+problema vê (vazio = todos). Os papéis iniciais são Colaborador, Equipe de
+limpeza e Fiscalização.
 
-* ``colaborador`` — comunica lixo, entulho, móveis e galhos e acompanha as suas;
-* ``equipe`` — equipe contratada: vê o mapa e comprova a limpeza com foto no local;
-* ``fiscal`` — fiscalização do contrato: vê o mapa, recusa comprovação, descarta
-  comunicação indevida e exporta o relatório.
-
-Os tipos de problema (lixo, entulho…) são cadastrados pelo administrador na
-tabela ``limpeza_tipo``; ``CATEGORIAS`` é só o conjunto inicial. Cada acesso de
-equipe ou fiscalização pode ficar restrito a alguns tipos (vazio = todos), e
-combinações usadas sempre podem ser salvas como perfis.
+Os tipos de problema (lixo, entulho…) também são cadastrados pelo
+administrador, na tabela ``limpeza_tipo``; ``CATEGORIAS`` é só o conjunto inicial.
 
 Administrador tem tudo. Com a chave ``limpeza_comunicacao_aberta`` ligada,
 qualquer conta pode comunicar, sem precisar de papel.
@@ -27,11 +25,26 @@ from flask import g, has_request_context
 
 from time_utils import now_in_brazil, utcnow
 
-PAPEIS = {
-    "colaborador": ("Colaborador", "Comunica pontos que precisam de limpeza e acompanha as próprias comunicações."),
-    "equipe": ("Equipe de limpeza", "Vê o mapa das comunicações e comprova a limpeza com foto tirada no local."),
-    "fiscal": ("Fiscalização", "Vê o mapa completo, recusa comprovações, descarta comunicações e exporta o relatório."),
+# O que um papel pode permitir. Os três últimos formam a fiscalização.
+PERMISSOES = {
+    "comunicar": "Comunicar problemas",
+    "mapa": "Ver o mapa",
+    "comprovar": "Comprovar com foto",
+    "recusar": "Recusar comprovação",
+    "descartar": "Descartar comunicação",
+    "exportar": "Exportar relatório",
 }
+FISCALIZACAO = ("recusar", "descartar", "exportar")
+# Quem comprova ou fiscaliza trabalha a partir do mapa.
+EXIGEM_MAPA = ("comprovar",) + FISCALIZACAO
+
+# Papéis iniciais (a migration grava estes na tabela). Valem enquanto a tabela estiver vazia.
+PAPEIS = {
+    "colaborador": ("Colaborador", ("comunicar",)),
+    "equipe": ("Equipe de limpeza", ("comunicar", "mapa", "comprovar")),
+    "fiscal": ("Fiscalização", ("comunicar", "mapa", "recusar", "descartar", "exportar")),
+}
+
 
 # Conjunto inicial (a migration grava estes na tabela). Vale enquanto a tabela estiver vazia.
 CATEGORIAS = {
@@ -130,8 +143,48 @@ def acesso_vigente(acesso, dia: date | None = None) -> bool:
     return True
 
 
+def _linhas_papeis():
+    """{chave: dict(nome, permissoes, tipos, id, ativo)}; memorizado por requisição."""
+    if has_request_context() and "_limpeza_papeis_cat" in g:
+        return g._limpeza_papeis_cat
+    from models.limpeza import LimpezaPapel
+    try:
+        linhas = {p.chave: dict(id=p.id, chave=p.chave, nome=p.nome, ativo=bool(p.ativo),
+                                permissoes=frozenset(x for x in (p.permissoes or "").split(",") if x),
+                                tipos=tuple(t for t in (p.tipos or "").split(",") if t) or None)
+                  for p in LimpezaPapel.query.order_by(LimpezaPapel.id).all()}
+    except Exception:  # tabela ausente antes da migration: valem os papéis iniciais
+        from extensions import db
+        db.session.rollback()
+        linhas = {}
+    if not linhas:
+        linhas = {chave: dict(id=None, chave=chave, nome=nome, ativo=True, permissoes=frozenset(perms), tipos=None)
+                  for chave, (nome, perms) in PAPEIS.items()}
+    if has_request_context():
+        g._limpeza_papeis_cat = linhas
+    return linhas
+
+
+def papeis_catalogo(incluir_inativos: bool = False) -> dict:
+    return {c: p for c, p in _linhas_papeis().items() if p["ativo"] or incluir_inativos}
+
+
+def nome_do_papel(chave) -> str:
+    papel = _linhas_papeis().get(chave)
+    return papel["nome"] if papel else str(chave or "")
+
+
+def resumo_do_papel(papel) -> str:
+    """"Comunicar problemas, ver o mapa · Galhos e poda" para a lista do administrador."""
+    perms = [PERMISSOES[k] for k in PERMISSOES if k in papel["permissoes"]]
+    texto = ", ".join(perms[:1] + [x[0].lower() + x[1:] for x in perms[1:]])
+    if papel["permissoes"] & set(("mapa",) + EXIGEM_MAPA):
+        texto += " · " + (rotulo_categorias(",".join(papel["tipos"])) if papel["tipos"] else "todos os tipos")
+    return texto
+
+
 def _vinculos(user):
-    """(papéis vigentes, tipos visíveis ou None = todos); memorizado por requisição."""
+    """(chaves vigentes, permissões, tipos visíveis ou None = todos); memorizado por requisição."""
     cache = g.setdefault("_limpeza_papeis", {}) if has_request_context() else {}
     if user.id not in cache:
         from models.limpeza import LimpezaAcesso
@@ -142,29 +195,40 @@ def _vinculos(user):
             from extensions import db
             db.session.rollback()
             linhas = []
-        do_mapa = [a for a in linhas if a.papel in ("equipe", "fiscal")]
-        if any(not a.lista_tipos for a in do_mapa):
+        catalogo_papeis = papeis_catalogo()
+        papeis = [catalogo_papeis[a.papel] for a in linhas if a.papel in catalogo_papeis]
+        permissoes = frozenset(p for papel in papeis for p in papel["permissoes"])
+        do_mapa = [papel for papel in papeis if "mapa" in papel["permissoes"]]
+        if any(papel["tipos"] is None for papel in do_mapa):
             tipos = None
         else:
-            tipos = frozenset(t for a in do_mapa for t in a.lista_tipos)
-        cache[user.id] = (frozenset(a.papel for a in linhas), tipos)
+            tipos = frozenset(t for papel in do_mapa for t in papel["tipos"])
+        cache[user.id] = (frozenset(papel["chave"] for papel in papeis), permissoes, tipos)
     return cache[user.id]
 
 
 def papeis_de(user) -> frozenset[str]:
-    """Papéis vigentes hoje; memorizado por requisição (navegação + rota)."""
+    """Chaves dos papéis vigentes hoje; memorizado por requisição (navegação + rota)."""
     if not getattr(user, "is_authenticated", False) or not getattr(user, "id", None):
         return frozenset()
     if eh_admin(user):
-        return frozenset(PAPEIS)
+        return frozenset(papeis_catalogo())
     return _vinculos(user)[0]
+
+
+def permissoes_de(user) -> frozenset[str]:
+    if not getattr(user, "is_authenticated", False) or not getattr(user, "id", None):
+        return frozenset()
+    if eh_admin(user):
+        return frozenset(PERMISSOES)
+    return _vinculos(user)[1]
 
 
 def tipos_visiveis(user):
     """Tipos que a pessoa vê no mapa, comprova e fiscaliza. ``None`` = todos."""
     if eh_admin(user) or not getattr(user, "id", None):
         return None
-    return _vinculos(user)[1]
+    return _vinculos(user)[2]
 
 
 def ve_solicitacao_do_mapa(user, solicitacao) -> bool:
@@ -182,19 +246,32 @@ def comunicacao_aberta() -> bool:
 def pode_comunicar(user) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
-    return bool(papeis_de(user)) or comunicacao_aberta()
+    return "comunicar" in permissoes_de(user) or comunicacao_aberta()
 
 
 def pode_ver_mapa(user) -> bool:
-    return bool(papeis_de(user) & {"equipe", "fiscal"})
+    return "mapa" in permissoes_de(user)
 
 
 def pode_comprovar(user) -> bool:
-    return "equipe" in papeis_de(user)
+    return "comprovar" in permissoes_de(user)
+
+
+def pode_recusar(user) -> bool:
+    return "recusar" in permissoes_de(user)
+
+
+def pode_descartar(user) -> bool:
+    return "descartar" in permissoes_de(user)
+
+
+def pode_exportar(user) -> bool:
+    return "exportar" in permissoes_de(user)
 
 
 def pode_fiscalizar(user) -> bool:
-    return "fiscal" in papeis_de(user)
+    """Alguma permissão de fiscalização: vê quem comunicou, quem comprovou e o histórico."""
+    return bool(permissoes_de(user) & set(FISCALIZACAO))
 
 
 def nome_da_conta(user) -> str:
@@ -204,6 +281,7 @@ def nome_da_conta(user) -> str:
 def _limpar_cache():
     if has_request_context():
         g.pop("_limpeza_papeis", None)
+        g.pop("_limpeza_papeis_cat", None)
         g.pop("_limpeza_tipos", None)
         g.pop("user_experience", None)
 
@@ -231,48 +309,37 @@ def buscar_conta(email):
     return user
 
 
-def normalizar_tipos_do_acesso(valores) -> str | None:
-    """Tipos de um acesso; ``None`` (todos) quando nada foi marcado."""
-    return normalizar_categorias(valores, incluir_inativos=True) or None
-
-
 def texto_tipos(tipos) -> str:
     return rotulo_categorias(tipos) if tipos else "todos os tipos"
 
 
-def conceder(user, papeis, inicio: date | None, fim: date | None, por: str, tipos=None, perfil=None):
-    """Concede (ou reabre com o novo período) cada papel. Devolve os vínculos gravados.
-
-    ``tipos``: chaves que equipe e fiscalização enxergam; vazio = todos.
-    """
+def conceder(user, papeis, inicio: date | None, fim: date | None, por: str):
+    """Concede (ou reabre com o novo período) cada papel. Devolve os vínculos gravados."""
     from extensions import db
     from models.limpeza import LimpezaAcesso
-    papeis = [p for p in PAPEIS if p in set(papeis or [])]
+    disponiveis = papeis_catalogo()
+    papeis = [c for c in disponiveis if c in set(papeis or [])]
     if not papeis:
         raise LimpezaErro("Marque pelo menos um papel.")
     if inicio and fim and fim < inicio:
         raise LimpezaErro("A data final do acesso é anterior à inicial.")
-    tipos = normalizar_tipos_do_acesso(tipos)
-    perfil = (perfil or "").strip()[:80] or None
     gravados = []
     for papel in papeis:
         # Um vínculo ativo por papel: o novo período substitui o anterior.
         for antigo in LimpezaAcesso.query.filter_by(user_id=user.id, papel=papel, revogado_em=None):
             antigo.revogado_em, antigo.revogado_por = utcnow(), por
-        vinculo = LimpezaAcesso(user_id=user.id, papel=papel, inicio=inicio, fim=fim, concedido_por=por,
-                                tipos=tipos, perfil=perfil)
+        vinculo = LimpezaAcesso(user_id=user.id, papel=papel, inicio=inicio, fim=fim, concedido_por=por)
         db.session.add(vinculo)
         gravados.append(vinculo)
-    recorte = f" ({texto_tipos(tipos)})" if tipos and set(papeis) & {"equipe", "fiscal"} else ""
     registrar_evento("acesso_concedido", None, None,
-                     f"{', '.join(PAPEIS[p][0] for p in papeis)}{recorte} para a conta #{user.id}"
+                     f"{', '.join(disponiveis[p]['nome'] for p in papeis)} para a conta #{user.id}"
                      f"{_periodo_texto(inicio, fim)} por {por}")
     _limpar_cache()
     return gravados
 
 
-def alterar_acesso(acesso_id: int, tipos, inicio: date | None, fim: date | None, por: str):
-    """Troca tipos e período de um acesso. O vínculo antigo fica no histórico como revogado."""
+def alterar_acesso(acesso_id: int, inicio: date | None, fim: date | None, por: str):
+    """Troca o período de um acesso. O vínculo antigo fica no histórico como revogado."""
     from extensions import db
     from models.limpeza import LimpezaAcesso
     antigo = db.session.get(LimpezaAcesso, acesso_id)
@@ -280,16 +347,15 @@ def alterar_acesso(acesso_id: int, tipos, inicio: date | None, fim: date | None,
         return None
     if inicio and fim and fim < inicio:
         raise LimpezaErro("A data final do acesso é anterior à inicial.")
-    tipos = normalizar_tipos_do_acesso(tipos)
-    if (tipos, inicio, fim) == (antigo.tipos or None, antigo.inicio, antigo.fim):
+    if (inicio, fim) == (antigo.inicio, antigo.fim):
         return antigo
     antigo.revogado_em, antigo.revogado_por = utcnow(), por
-    novo = LimpezaAcesso(user_id=antigo.user_id, papel=antigo.papel, inicio=inicio, fim=fim,
-                         concedido_por=por, tipos=tipos, perfil=antigo.perfil)
+    novo = LimpezaAcesso(user_id=antigo.user_id, papel=antigo.papel, inicio=inicio, fim=fim, concedido_por=por,
+                         tipos=antigo.tipos, perfil=antigo.perfil)
     db.session.add(novo)
     registrar_evento("acesso_alterado", None, None,
-                     f"{PAPEIS.get(antigo.papel, (antigo.papel,))[0]} da conta #{antigo.user_id}: "
-                     f"{texto_tipos(tipos)}{_periodo_texto(inicio, fim) or ', sem limite de data'} por {por}")
+                     f"{nome_do_papel(antigo.papel)} da conta #{antigo.user_id}: "
+                     f"{(_periodo_texto(inicio, fim) or ' sem limite de data').strip()} por {por}")
     _limpar_cache()
     return novo
 
@@ -302,7 +368,7 @@ def revogar(acesso_id: int, por: str):
         return None
     acesso.revogado_em, acesso.revogado_por = utcnow(), por
     registrar_evento("acesso_revogado", None, None,
-                     f"{PAPEIS.get(acesso.papel, (acesso.papel,))[0]} da conta #{acesso.user_id} por {por}")
+                     f"{nome_do_papel(acesso.papel)} da conta #{acesso.user_id} por {por}")
     _limpar_cache()
     return acesso
 
@@ -465,47 +531,106 @@ def reclassificar_outro(texto, destino, por: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Perfis de acesso (combinações salvas)
+# Papéis (cadastro do administrador)
 # ---------------------------------------------------------------------------
 
-def perfis_salvos():
-    from models.limpeza import LimpezaPerfil
-    try:
-        return LimpezaPerfil.query.filter_by(ativo=True).order_by(LimpezaPerfil.nome).all()
-    except Exception:
-        from extensions import db
-        db.session.rollback()
-        return []
-
-
-def salvar_perfil(nome, papeis, tipos, por: str):
+def _semear_papeis():
     from extensions import db
-    from models.limpeza import LimpezaPerfil
+    from models.limpeza import LimpezaPapel
+    if LimpezaPapel.query.first() is None:
+        for chave, (nome, perms) in PAPEIS.items():
+            db.session.add(LimpezaPapel(chave=chave, nome=nome, permissoes=",".join(perms), criado_por="Sistema"))
+        db.session.flush()
+        _limpar_cache()
+
+
+def papeis_cadastrados():
+    """Papéis ativos para a tela do administrador, com quantas pessoas têm cada um."""
+    from sqlalchemy import func
+
+    from extensions import db
+    from models.limpeza import LimpezaAcesso
+    _semear_papeis()
+    uso = dict(db.session.query(LimpezaAcesso.papel, func.count(LimpezaAcesso.id))
+               .filter(LimpezaAcesso.revogado_em.is_(None)).group_by(LimpezaAcesso.papel).all())
+    return [dict(p, uso=uso.get(c, 0), resumo=resumo_do_papel(p)) for c, p in papeis_catalogo().items()]
+
+
+def _dados_do_papel(nome, permissoes, tipos, ignorar_id=None):
+    from models.limpeza import LimpezaPapel
     nome = " ".join(str(nome or "").split())[:80]
     if len(nome) < 2:
-        raise LimpezaErro("Dê um nome ao perfil (ex.: Equipe de poda).")
-    papeis = [p for p in PAPEIS if p in set(papeis or [])]
-    if not papeis:
-        raise LimpezaErro("Marque pelo menos um papel para o perfil.")
-    tipos = normalizar_tipos_do_acesso(tipos)
-    existente = next((p for p in perfis_salvos() if p.nome.lower() == nome.lower()), None)
-    perfil = existente or LimpezaPerfil(nome=nome, criado_por=por)
-    perfil.papeis, perfil.tipos, perfil.ativo = ",".join(papeis), tipos, True
-    db.session.add(perfil)
-    registrar_evento("perfil_salvo", None, None,
-                     f"{nome}: {', '.join(PAPEIS[p][0] for p in papeis)}, {texto_tipos(tipos)} por {por}")
-    return perfil
+        raise LimpezaErro("Dê um nome ao papel.")
+    simples = _texto_simples(nome)
+    for outro in LimpezaPapel.query.filter_by(ativo=True).all():
+        if outro.id != ignorar_id and _texto_simples(outro.nome) == simples:
+            raise LimpezaErro(f"Já existe o papel “{outro.nome}”.")
+    escolhidas = set(permissoes or [])
+    if escolhidas & set(EXIGEM_MAPA):
+        escolhidas.add("mapa")
+    escolhidas = [p for p in PERMISSOES if p in escolhidas]
+    if not escolhidas:
+        raise LimpezaErro("Marque pelo menos uma coisa que o papel pode fazer.")
+    tipos = normalizar_categorias(tipos or [], incluir_inativos=True) if "mapa" in escolhidas else ""
+    return nome, ",".join(escolhidas), tipos or None
 
 
-def remover_perfil(perfil_id, por: str):
+def criar_papel(nome, permissoes, tipos, por: str):
     from extensions import db
-    from models.limpeza import LimpezaPerfil
-    perfil = db.session.get(LimpezaPerfil, perfil_id)
-    if perfil is None or not perfil.ativo:
-        return None
-    perfil.ativo = False
-    registrar_evento("perfil_removido", None, None, f"{perfil.nome} por {por}")
-    return perfil
+    from models.limpeza import LimpezaPapel
+    _semear_papeis()
+    nome, permissoes, tipos = _dados_do_papel(nome, permissoes, tipos)
+    usadas = {c for (c,) in db.session.query(LimpezaPapel.chave).all()}
+    base = "-".join(_texto_simples(nome).split())[:20].strip("-") or "papel"
+    chave, n = base, 2
+    while chave in usadas:
+        chave, n = f"{base[:17]}-{n}", n + 1
+    papel = LimpezaPapel(chave=chave, nome=nome, permissoes=permissoes, tipos=tipos, criado_por=por)
+    db.session.add(papel)
+    db.session.flush()
+    registrar_evento("papel_criado", None, None, f"{nome}: {resumo_do_papel(_como_dict(papel))} por {por}")
+    _limpar_cache()
+    return papel
+
+
+def _como_dict(papel):
+    return dict(id=papel.id, chave=papel.chave, nome=papel.nome, ativo=bool(papel.ativo),
+                permissoes=frozenset(x for x in (papel.permissoes or "").split(",") if x),
+                tipos=tuple(t for t in (papel.tipos or "").split(",") if t) or None)
+
+
+def _papel_ativo(papel_id):
+    from extensions import db
+    from models.limpeza import LimpezaPapel
+    _semear_papeis()
+    papel = db.session.get(LimpezaPapel, papel_id)
+    if papel is None or not papel.ativo:
+        raise LimpezaErro("Papel não encontrado.")
+    return papel
+
+
+def editar_papel(papel_id, nome, permissoes, tipos, por: str):
+    """Muda nome, permissões e tipos. Vale na hora para todos que têm o papel."""
+    papel = _papel_ativo(papel_id)
+    papel.nome, papel.permissoes, papel.tipos = _dados_do_papel(nome, permissoes, tipos, ignorar_id=papel.id)
+    registrar_evento("papel_editado", None, None, f"{papel.nome}: {resumo_do_papel(_como_dict(papel))} por {por}")
+    _limpar_cache()
+    return papel
+
+
+def excluir_papel(papel_id, por: str) -> tuple[str, int]:
+    """Desativa o papel e revoga os acessos dele. Devolve (nome, acessos revogados)."""
+    from models.limpeza import LimpezaAcesso
+    papel = _papel_ativo(papel_id)
+    agora, revogados = utcnow(), 0
+    for acesso in LimpezaAcesso.query.filter_by(papel=papel.chave, revogado_em=None):
+        acesso.revogado_em, acesso.revogado_por = agora, por
+        revogados += 1
+    papel.ativo = False
+    registrar_evento("papel_excluido", None, None,
+                     f"{papel.nome} ({revogados} acesso(s) revogado(s)) por {por}")
+    _limpar_cache()
+    return papel.nome, revogados
 
 
 # ---------------------------------------------------------------------------

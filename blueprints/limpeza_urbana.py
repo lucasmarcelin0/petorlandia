@@ -63,6 +63,9 @@ def _contexto_base():
         pode_comunicar=servico.pode_comunicar(current_user),
         pode_comprovar=servico.pode_comprovar(current_user),
         pode_fiscalizar=servico.pode_fiscalizar(current_user),
+        pode_recusar=servico.pode_recusar(current_user),
+        pode_descartar=servico.pode_descartar(current_user),
+        pode_exportar=servico.pode_exportar(current_user),
         eh_admin=servico.eh_admin(current_user),
         CATEGORIAS=servico.catalogo(),
         CATEGORIAS_FILTRO={c: r for c, r in todos.items() if tipos is None or c in tipos},
@@ -259,7 +262,7 @@ def comprovar(solicitacao_id):
 @bp.route("/comprovacao/<int:comprovacao_id>/recusar", methods=["POST"])
 @login_required
 def recusar_comprovacao(comprovacao_id):
-    _exigir(servico.pode_fiscalizar(current_user))
+    _exigir(servico.pode_recusar(current_user))
     from models.limpeza import LimpezaComprovacao
     comprovacao = db.session.get(LimpezaComprovacao, comprovacao_id)
     if comprovacao is None:
@@ -287,7 +290,7 @@ def recusar_comprovacao(comprovacao_id):
 @bp.route("/solicitacao/<int:solicitacao_id>/descartar", methods=["POST"])
 @login_required
 def descartar(solicitacao_id):
-    _exigir(servico.pode_fiscalizar(current_user))
+    _exigir(servico.pode_descartar(current_user))
     item = _solicitacao_visivel(solicitacao_id)
     destino = url_for(".solicitacao", solicitacao_id=item.id)
     motivo = (request.form.get("motivo") or "").strip()
@@ -308,7 +311,7 @@ def descartar(solicitacao_id):
 @bp.route("/relatorio.csv")
 @login_required
 def relatorio():
-    _exigir(servico.pode_fiscalizar(current_user))
+    _exigir(servico.pode_exportar(current_user))
     itens = servico.consultar(**_filtros(), tipos=servico.tipos_visiveis(current_user))
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";")
@@ -359,19 +362,16 @@ def acessos():
                 raise LimpezaErro("Nenhum desses e-mails tem conta no PetOrlândia: " + ", ".join(sem_conta)
                                   + ". Peça para as pessoas criarem a conta e tente de novo.")
             inicio, fim = _data(form.get("inicio")), _data(form.get("fim"))
-            papeis, tipos = form.getlist("papel"), ([] if form.get("tipos_todos") else form.getlist("tipo"))
-            perfil = (form.get("perfil_nome") or "").strip()
-            if form.get("salvar_perfil"):
-                perfil = servico.salvar_perfil(form.get("novo_perfil"), papeis, tipos, por).nome
+            papeis = form.getlist("papel")
             gravados = []
             for conta in contas:
-                gravados += servico.conceder(conta, papeis, inicio, fim, por, tipos=tipos, perfil=perfil)
+                gravados += servico.conceder(conta, papeis, inicio, fim, por)
             db.session.commit()
         except LimpezaErro as exc:
             db.session.rollback()
             flash(str(exc), "danger")
         else:
-            rotulos = ", ".join(servico.PAPEIS[p][0] for p in servico.PAPEIS if p in {g.papel for g in gravados})
+            rotulos = ", ".join(dict.fromkeys(servico.nome_do_papel(g.papel) for g in gravados))
             quem = (contas[0].name or contas[0].email) if len(contas) == 1 else f"{len(contas)} contas"
             flash(f"{quem}: acesso de {rotulos} concedido.", "success")
             if sem_conta:
@@ -385,17 +385,20 @@ def acessos():
                                             LimpezaEvento.tipo.in_(EVENTOS_DE_ACESSO))
                  .order_by(LimpezaEvento.criado_em.desc()).limit(40).all())
     tipos = servico.tipos_cadastrados()
-    db.session.commit()  # grava o conjunto inicial de tipos, se ainda não estava no banco
+    papeis_lista = servico.papeis_cadastrados()
+    db.session.commit()  # grava os tipos e papéis iniciais, se ainda não estavam no banco
     return render_template("limpeza/acessos.html", ativos=ativos, dia=dia, historico=historico,
-                           vigente=servico.acesso_vigente, PAPEIS=servico.PAPEIS,
-                           tipos=tipos, perfis=servico.perfis_salvos(), sugestoes=servico.sugestoes_outro(),
+                           vigente=servico.acesso_vigente, papeis_lista=papeis_lista,
+                           PERMISSOES=servico.PERMISSOES, FISCALIZACAO=servico.FISCALIZACAO,
+                           nome_do_papel=servico.nome_do_papel,
+                           tipos=tipos, sugestoes=servico.sugestoes_outro(),
                            TODOS_TIPOS=servico.catalogo(incluir_inativos=True), CHAVE_OUTRO=servico.CHAVE_OUTRO,
                            texto_tipos=servico.texto_tipos,
                            comunicacao_aberta=servico.comunicacao_aberta(), **_contexto_base())
 
 
 EVENTOS_DE_ACESSO = ["acesso_concedido", "acesso_revogado", "acesso_alterado", "tipo_criado", "tipo_renomeado",
-                     "tipo_desativado", "tipo_reativado", "perfil_salvo", "perfil_removido"]
+                     "tipo_desativado", "tipo_reativado", "papel_criado", "papel_editado", "papel_excluido"]
 
 
 def _voltar_acessos(ancora=""):
@@ -408,8 +411,7 @@ def alterar_acesso(acesso_id):
     _exigir(servico.eh_admin(current_user))
     form = request.form
     try:
-        tipos = [] if form.get("tipos_todos") else form.getlist("tipo")
-        novo = servico.alterar_acesso(acesso_id, tipos, _data(form.get("inicio")), _data(form.get("fim")),
+        novo = servico.alterar_acesso(acesso_id, _data(form.get("inicio")), _data(form.get("fim")),
                                       servico.nome_da_conta(current_user))
         if novo is None:
             abort(404)
@@ -483,15 +485,56 @@ def classificar_outro():
     return _voltar_acessos("tipos")
 
 
-@bp.route("/perfis/<int:perfil_id>/remover", methods=["POST"])
+def _form_papel():
+    form = request.form
+    tipos = [] if form.get("tipos_todos") else form.getlist("tipo")
+    return form.get("nome"), form.getlist("permissao"), tipos
+
+
+@bp.route("/papeis", methods=["POST"])
 @login_required
-def remover_perfil(perfil_id):
+def criar_papel():
     _exigir(servico.eh_admin(current_user))
-    if servico.remover_perfil(perfil_id, servico.nome_da_conta(current_user)) is None:
-        abort(404)
-    db.session.commit()
-    flash("Perfil removido. Quem já recebeu acesso por ele continua com o acesso.", "info")
-    return _voltar_acessos()
+    try:
+        papel = servico.criar_papel(*_form_papel(), servico.nome_da_conta(current_user))
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash(f"Papel “{papel.nome}” criado. Já dá para atribuir.", "success")
+    return _voltar_acessos("form-atribuir")
+
+
+@bp.route("/papeis/<int:papel_id>", methods=["POST"])
+@login_required
+def editar_papel(papel_id):
+    _exigir(servico.eh_admin(current_user))
+    try:
+        papel = servico.editar_papel(papel_id, *_form_papel(), servico.nome_da_conta(current_user))
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash(f"Papel “{papel.nome}” atualizado. Vale na hora para quem tem esse papel.", "success")
+    return _voltar_acessos("form-atribuir")
+
+
+@bp.route("/papeis/<int:papel_id>/excluir", methods=["POST"])
+@login_required
+def excluir_papel(papel_id):
+    _exigir(servico.eh_admin(current_user))
+    try:
+        nome, revogados = servico.excluir_papel(papel_id, servico.nome_da_conta(current_user))
+        db.session.commit()
+    except LimpezaErro as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        extra = f" {revogados} acesso(s) com esse papel foram revogados." if revogados else ""
+        flash(f"Papel “{nome}” excluído.{extra}", "info")
+    return _voltar_acessos("form-atribuir")
 
 
 @bp.route("/acessos/<int:acesso_id>/revogar", methods=["POST"])
