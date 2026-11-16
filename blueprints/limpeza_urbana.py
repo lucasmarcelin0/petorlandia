@@ -177,6 +177,9 @@ def todas_comunicacoes():
     return render_template("limpeza/mapa.html", filtros=_filtros(), visao_lista=True, **_contexto_base())
 
 
+POR_PAGINA = 10
+
+
 @bp.route("/mapa/dados")
 @login_required
 def mapa_dados():
@@ -184,11 +187,15 @@ def mapa_dados():
     filtros = _filtros()
     itens = servico.consultar(**filtros, tipos=servico.tipos_visiveis(current_user))
     ver_autor = servico.pode_fiscalizar(current_user)
-    resposta = jsonify({
-        "pontos": [servico.como_ponto(s, ver_autor=ver_autor) for s in itens],
-        "indicadores": servico.indicadores(itens),
-        "limite": len(itens) >= 2000,
-    })
+    dados = {"indicadores": servico.indicadores(itens), "limite": len(itens) >= 2000, "total": len(itens)}
+    if request.args.get("pagina"):
+        # Lista: só uma página de cartões (com fotos) por vez; o mapa recebe todos os pontos.
+        paginas = max(1, -(-len(itens) // POR_PAGINA))
+        pagina = min(max(request.args.get("pagina", 1, type=int) or 1, 1), paginas)
+        itens = itens[(pagina - 1) * POR_PAGINA:pagina * POR_PAGINA]
+        dados.update(pagina=pagina, paginas=paginas, por_pagina=POR_PAGINA)
+    dados["pontos"] = [servico.como_ponto(s, ver_autor=ver_autor) for s in itens]
+    resposta = jsonify(dados)
     resposta.headers["Cache-Control"] = "no-store"
     return resposta
 

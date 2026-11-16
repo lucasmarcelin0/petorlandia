@@ -262,3 +262,22 @@ def test_rotas_de_administracao_sao_so_do_admin(client):
         assert client.post(rota, data={'rotulo': 'X', 'nome': 'X', 'permissao': 'mapa', 'texto': 'x',
                                        'destino': 'lixo'}).status_code in NEGADO, rota
     assert LimpezaTipo.query.count() == 0 and LimpezaPapel.query.count() == 0
+
+
+def test_lista_paginada_de_10_em_10_e_mapa_com_todos(client, uploads):
+    for _ in range(12):
+        _comunicar_como(client, 'a@example.test', 'lixo')
+    _admin(client)
+    tudo = client.get('/limpeza-urbana/mapa/dados').get_json()
+    assert len(tudo['pontos']) == 12 and tudo['total'] == 12 and 'pagina' not in tudo
+    primeira = client.get('/limpeza-urbana/mapa/dados?pagina=1').get_json()
+    assert (len(primeira['pontos']), primeira['pagina'], primeira['paginas'], primeira['total']) == (10, 1, 2, 12)
+    assert primeira['indicadores']['abertas'] == 12  # os números contam o filtro inteiro
+    segunda = client.get('/limpeza-urbana/mapa/dados?pagina=2').get_json()
+    assert len(segunda['pontos']) == 2
+    assert {p['id'] for p in primeira['pontos']}.isdisjoint({p['id'] for p in segunda['pontos']})
+    # As mais recentes vêm primeiro; página fora do intervalo cai na última.
+    assert primeira['pontos'][0]['id'] > segunda['pontos'][-1]['id']
+    assert client.get('/limpeza-urbana/mapa/dados?pagina=99').get_json()['pagina'] == 2
+    pagina = client.get('/limpeza-urbana/comunicacoes').get_data(as_text=True)
+    assert 'id="limpeza-paginacao"' in pagina and 'Mais antigas' in pagina
