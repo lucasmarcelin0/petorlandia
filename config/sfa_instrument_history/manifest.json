@@ -144,6 +144,30 @@
           "sha256": "4632be29c60774c4181c8d26d2297f0365b06a0967d8e0956540ec3130436bd6"
         }
       }
+    },
+    {
+      "id": "sfa-2026-11-09b",
+      "label": "Instrumentos revisados em 09/11/2026 (tarde)",
+      "status": "archived",
+      "archived_at": "2026-11-16",
+      "description": "Cópia dos instrumentos T0, T7 e T30 de 09/11/2026 que ainda perguntavam renda, gastos e cuidador e tinham perguntas abertas sobre local, data e origem das exposições; a versão seguinte foca na saúde individual e coletiva, com respostas fechadas.",
+      "stages": {
+        "t0": {
+          "file": "sfa-2026-11-09b/t0.json",
+          "field_count": 49,
+          "sha256": "26e7a358132453a204151f8ad5fc8efbac05236e7d9a39257f53e3d6ffd4fe65"
+        },
+        "t7": {
+          "file": "sfa-2026-11-09b/t7.json",
+          "field_count": 26,
+          "sha256": "f916fc9e9145c43428a3efce1d2fc8c6ecda31e240939b99f614ba1d127bf884"
+        },
+        "t30": {
+          "file": "sfa-2026-11-09b/t30.json",
+          "field_count": 29,
+          "sha256": "5e870eb832a692bb6322ed1dfc2bc71f8fff1ce1e919cbc2178b3cebc9910e7d"
+        }
+      }
     }
   ]
 }
