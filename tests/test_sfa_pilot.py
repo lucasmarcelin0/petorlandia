@@ -93,7 +93,7 @@ def test_linked_timing_real_interview_and_no_duplicate(app, client, pilot, monke
     assert client.post(f'/sfa/piloto/{token}/t7',data={'action':'answer'}).status_code==409
     monkeypatch.setattr(service,'hoje_local',lambda:date(2025,1,13))
     response=client.get(f'/sfa/piloto/{token}/t7')
-    assert b'answer__fonte_ainda_ativa' in response.data
+    assert b'answer__nova_pista_exposicao' in response.data
     assert client.post(f'/sfa/piloto/{token}/t7',data={'action':'answer','answer__classificacao_melhora':'Melhorando'}).status_code==200
     monkeypatch.setattr(service,'hoje_local',lambda:date(2025,2,11))
     assert client.post(f'/sfa/piloto/{token}/t30',data={'action':'answer'}).status_code==200

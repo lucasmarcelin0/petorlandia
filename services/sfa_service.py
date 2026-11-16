@@ -1106,6 +1106,28 @@ def _juntar_itens(itens: list[str]) -> str:
     return ", ".join(itens[:-1]) + " e " + itens[-1]
 
 
+def _opcoes_marcadas(
+    payload: dict,
+    key: str,
+    excluir: frozenset[str] | set[str] = frozenset(),
+    minusculas: bool = True,
+) -> list[str]:
+    """Opções marcadas; "Outro"/"Outra" vira o texto digitado no campo ao lado."""
+    itens = []
+    for valor in _valores_regra(payload.get(key)):
+        texto = " ".join(str(valor).split())
+        if not texto or texto in excluir:
+            continue
+        if texto in {"Outro", "Outra"}:
+            # O texto digitado pela pessoa fica como ela escreveu.
+            digitado = " ".join(str(payload.get(f"{key}_outro") or "").split())
+            if digitado:
+                itens.append(digitado)
+            continue
+        itens.append(texto[:1].lower() + texto[1:] if minusculas else texto)
+    return itens
+
+
 def pistas_coletivas_anteriores(prior_payloads: list[dict[str, object]]) -> list[str]:
     """O que a pessoa já contou, no T0 e no T7, que aponta para outros casos.
 
@@ -1136,11 +1158,19 @@ def pistas_coletivas_anteriores(prior_payloads: list[dict[str, object]]) -> list
         suspeita = _citar_resposta(payload.get("vinculo_exposicao_suspeita"))
         if suspeita:
             add(f"suspeitava de {suspeita}")
+        # Desde sfa-2026-11-16 a suspeita e a nova pista são marcadas em opções.
+        suspeitas = _opcoes_marcadas(payload, "exposicao_suspeita_comum", excluir={"Nenhuma suspeita"})
+        if suspeitas:
+            add(f"suspeitava de algo em comum: {_juntar_itens(suspeitas)}")
         if sim("novos_casos_semelhantes"):
             add("depois da primeira entrevista, soube de novas pessoas com sintomas parecidos")
         if sim("nova_pista_exposicao"):
+            tipos = _opcoes_marcadas(payload, "nova_pista_tipo")
             detalhe = _citar_resposta(payload.get("nova_pista_detalhe"))
-            add(f"surgiu uma nova informação: {detalhe}" if detalhe else "surgiu uma nova informação sobre a possível origem")
+            if tipos:
+                add(f"surgiu uma nova informação sobre {_juntar_itens(tipos)}")
+            else:
+                add(f"surgiu uma nova informação: {detalhe}" if detalhe else "surgiu uma nova informação sobre a possível origem")
         if sim("pista_coletiva_confirmada") and not payload.get("_pista_coletiva_automatica"):
             # T7 da versão de 07/11, em que a equipe registrava a pista à mão.
             descricao = _citar_resposta(payload.get("pista_coletiva_descricao"))
@@ -1219,6 +1249,21 @@ def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> 
             for field in iterar_campos_form(filtered):
                 if field["key"] == "impacto_periodo":
                     field["label"] = field["label"].replace("No período de referência", f"Desde {desde:%d/%m/%Y}")
+                elif field["key"] == "dias_incap_novos":
+                    # sfa-2026-11-16: a contagem de dias substitui o antigo impacto_periodo.
+                    field["label"] = field["label"].replace("Desde a última entrevista", f"Desde {desde:%d/%m/%Y}")
+        diagnosticos_t7 = (
+            _opcoes_marcadas(payload or {}, "diagnostico_medico_qual", excluir={"Não lembro"}, minusculas=False)
+            if resposta else []
+        )
+        if diagnosticos_t7:
+            lembrete = (
+                f"No acompanhamento de 7 dias, você informou: {_juntar_itens(diagnosticos_t7)}. "
+                "Se continua o mesmo, marque de novo."
+            )
+            for field in iterar_campos_form(filtered):
+                if field["key"] == "diagnostico_medico":
+                    field["help_text"] = " ".join(filter(None, [lembrete, field.get("help_text")]))
     sections = []
 
     for section in filtered.get("sections", []):

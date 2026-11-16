@@ -57,6 +57,7 @@ def test_t0_segue_a_ordem_de_blocos_do_documento():
     assert titulos == [
         "Registro da entrevista",
         "Participação e início dos sintomas",
+        "Trabalho e estudo",
         "Ambiente e deslocamento da pessoa",
         "Contato com animais",
         "Alimentos, água e produtos consumidos",
@@ -68,13 +69,30 @@ def test_t0_tem_as_opcoes_nao_sei_do_documento_e_sem_temperatura():
     campos = _campos(_schema("t0"))
 
     assert campos["data_inicio_sintomas_ignorada"]["options"] == ["Não sabe informar"]
-    for chave in ("exposicao_alimentar_data_ignorada", "exposicao_alimentar_quantidades_ignoradas",
-                  "outras_pessoas_quantidade_ignorada", "inicio_outros_ignorado"):
-        assert campos[chave]["options"] == ["Não sei"], chave
+    assert campos["outras_pessoas_quantidade_ignorada"]["options"] == ["Não sei"]
+    for chave in ("exposicao_ambiental_local", "exposicao_ambiental_quando", "exposicao_alimentar_quando",
+                  "inicio_outros_relativo"):
+        assert campos[chave]["options"][-1] == "Não sei", chave
     assert "temperatura_medida" not in campos
     assert "data_temperatura" not in campos
     assert "Não sei" not in campos["tipo_contato_animal"]["options"]
-    assert "onde dormiu" in campos["exposicao_ambiental_detalhe"]["help_text"]
+
+
+def test_t0_de_16_11_so_tem_perguntas_fechadas_exceto_o_local_de_trabalho_ou_estudo():
+    """Orientação das professoras: abertas dificultam a estatística; renda sai (foco na saúde)."""
+    campos = _campos(_schema("t0"))
+    abertas = {
+        key for key, field in campos.items()
+        if field["type"] in {"text", "textarea"} and not key.endswith("_outro")
+    }
+
+    assert abertas == {"entrevistador", "local_servico", "respondent_name", "trabalho_estudo_local",
+                       "observacoes_entrevistador"}
+    for retirado in ("perda_renda", "tipos_animais", "exposicao_alimentar_origem", "exposicao_alimentar_expostos",
+                     "exposicao_alimentar_doentes", "vinculo_local", "vinculo_data_periodo",
+                     "exposicao_ambiental_detalhe", "inicio_outros", "vinculo_exposicao_suspeita"):
+        assert retirado not in campos, retirado
+    assert campos["trabalho_estudo_local"]["visible_if"]["values"] == ["Trabalho", "Estudo", "Trabalho e estudo"]
 
 
 def test_t7_nao_pergunta_a_relacao_com_o_t0():
@@ -90,24 +108,31 @@ def test_t7_nao_pergunta_a_relacao_com_o_t0():
     # A relação com o T0 é calculada pelo sistema (ver test_sfa_link_morador_20261109).
     assert "pista_coletiva_confirmada" not in campos
     assert campos["dias_incap_novos_sem_numero"]["options"] == ["Nenhum", "Não sei"]
-    ajuda = campos["atendimento_detalhe"]["help_text"]
-    assert "particulares ou fora de Orlândia" in ajuda
-    assert "Hospital" not in ajuda  # sem nome de serviço específico como exemplo
+    assert "Hospital" in campos["atendimento_local"]["options"]
+    # Foco na saúde (16/11/2026): sem gasto, renda, cuidador nem perguntas de fonte ativa.
+    for retirado in ("atendimento_detalhe", "houve_novos_gastos", "perda_renda", "ausencia_familiar",
+                     "dias_cuidador", "fonte_ainda_ativa", "outras_pessoas_ainda_expostas",
+                     "novos_casos_local_periodo", "novos_casos_vinculo", "nova_pista_detalhe"):
+        assert retirado not in campos, retirado
 
 
 def test_t30_usa_as_situacoes_do_documento():
     campos = _campos(_schema("t30"))
-    opcoes = campos["impacto_periodo"]["options"]
 
-    assert opcoes[:3] == [
-        "Houve dias em que não consegui realizar minhas atividades habituais",
-        "Minha família ou eu tivemos gastos",
-        "Perdi renda ou deixei de ganhar dinheiro",
-    ]
-    assert campos["dias_incap_novos"]["visible_if"]["values"] == [opcoes[0]]
-    # Gasto só Sim/Não, sem valor (decisão da equipe, 09/11/2026).
+    # 16/11/2026: sem gastos e renda; a pergunta 8 conta só os dias sem atividades.
+    assert "impacto_periodo" not in campos
+    assert "visible_if" not in campos["dias_incap_novos"]
+    assert campos["dias_incap_novos_sem_numero"]["options"] == ["Nenhum", "Não sei"]
     assert "custo_outros" not in campos and "custo_outros_ignorado" not in campos
-    assert campos["retornou_servico_saude"]["options"] == ["Sim", "Não"]
+    # Pergunta 9: só a internação, sem serviços, municípios e datas.
+    assert campos["internacao_desde_ultima"]["options"] == ["Sim", "Não", "Não sei"]
+    for retirado in ("retornou_servico_saude", "numero_reconsultas", "numero_internacoes", "atendimento_detalhe",
+                     "sintomas_atuais_detalhe", "nova_informacao_fonte", "fonte_ainda_ativa",
+                     "outras_pessoas_ainda_expostas", "novos_casos_local_periodo", "novos_casos_vinculo"):
+        assert retirado not in campos, retirado
+    # Pergunta 7 direta: a doença em opções e a confirmação por exame.
+    assert campos["diagnostico_medico_qual"]["type"] == "checkboxes"
+    assert campos["diagnostico_confirmado_exame"]["visible_if"]["key"] == "diagnostico_medico"
     assert "pista_coletiva_confirmada" not in campos
     for retirado in ("data_retorno", "retorno_sem_data", "impacto_item_desconhecido"):
         assert retirado not in campos
@@ -120,7 +145,26 @@ def test_t30_mostra_a_data_inicial_do_periodo_na_pergunta_8(monkeypatch):
 
     filtrado = sfa_service.filtrar_form_schema_condicional(_schema("t30"), paciente, "t30")
 
-    assert _campos(filtrado)["impacto_periodo"]["label"].startswith("8. Desde 20/10/2026,")
+    assert _campos(filtrado)["dias_incap_novos"]["label"].startswith("8. Desde 20/10/2026,")
+
+
+def test_t30_lembra_o_diagnostico_informado_no_t7(monkeypatch):
+    resposta_t7 = SimpleNamespace()
+    monkeypatch.setattr(
+        sfa_service, "obter_payload_formulario",
+        lambda paciente, stage: (resposta_t7, {"diagnostico_medico_qual": ["Dengue", "Outra"],
+                                               "diagnostico_medico_qual_outro": "Leptospirose"}),
+    )
+    monkeypatch.setattr(sfa_service, "_data_resposta_stage", lambda stage, resposta, payload: date(2026, 10, 27))
+    paciente = SimpleNamespace(resposta_t0=None, respostas_t7=[], respostas_t10=[], respostas_t30=[])
+
+    filtrado = sfa_service.filtrar_form_schema_condicional(_schema("t30"), paciente, "t30")
+    campos = _campos(filtrado)
+
+    assert campos["dias_incap_novos"]["label"].startswith("8. Desde 28/10/2026,")
+    assert campos["diagnostico_medico"]["help_text"].startswith(
+        "No acompanhamento de 7 dias, você informou: Dengue e Leptospirose."
+    )
 
 
 @pytest.mark.parametrize("versao", sorted(sfa_workflow.INTERVIEW_VERSIONS))
@@ -128,6 +172,7 @@ def test_as_duas_revisoes_de_novembro_usam_o_calendario_pela_entrevista(versao):
     payload = {"_instrument_version": versao, "respondent_role": "A própria pessoa",
                "situacao_participante": "Sim", "sintoma_novo_agravado": "Sim"}
 
-    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b"}
+    assert sfa_workflow.INTERVIEW_VERSIONS == {"sfa-2026-11-06", "sfa-2026-11-07", "sfa-2026-11-09", "sfa-2026-11-09b",
+                                               "sfa-2026-11-16"}
     assert sfa_service.classificar_desfecho_primario_t30(payload) == "Sim"
     assert sfa_service.normalizar_payload_t0_exposicoes(payload) == payload

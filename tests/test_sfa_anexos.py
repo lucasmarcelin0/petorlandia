@@ -78,9 +78,10 @@ def test_regras_do_t30_explicam_obito_e_sintomas(anexos):
     assert "A própria pessoa" in str(perguntas["sintoma_novo_agravado"]["condicao"])
     assert str(obito) in str(perguntas["sintoma_novo_agravado"]["condicao"])
     assert "Outra pessoa autorizada" in str(perguntas["respondent_name"]["condicao"])
-    fonte = perguntas["fonte_ainda_ativa"]["condicao"]
-    assert fonte["texto"] == "Aparece se ocorrer pelo menos uma destas situações:"
-    assert any(item.startswith('no T7, "') for item in fonte["itens"])
+    # Desde 16/11/2026 o T30 não tem mais perguntas que dependem do T0/T7 (fonte ainda ativa).
+    assert "fonte_ainda_ativa" not in perguntas
+    diagnostico = perguntas["diagnostico_medico"]["numero"]
+    assert str(diagnostico) in str(perguntas["diagnostico_confirmado_exame"]["condicao"])
 
 
 def test_resumo_do_tcle_do_site_aparece_no_anexo_do_t0(anexos_html):

@@ -68,6 +68,9 @@ def _payload_t0():
         "vinculo_exposicao_suspeita": "Produto injetado",
         "exposicao_ambiental": ["Nenhuma dessas"],
         "exposicao_ambiental_detalhe": "Detalhe injetado",
+        "exposicao_ambiental_quando": ["Não sei"],
+        "trabalho_estudo": "Não trabalho nem estudo fora de casa",
+        "trabalho_estudo_local": "Local injetado",
         "exposicao_ambiental_outros_doentes": "Sim",
         "exposicao_animal": ["Nenhum contato animal relevante"],
         "exposicao_animal_detalhe": "Animal injetado",
@@ -101,7 +104,9 @@ def _payload_t7():
         "novos_casos_semelhantes": "Não",
         "novos_casos_quantidade": "4",
         "novos_casos_local_periodo": "Local injetado",
+        "novos_casos_relacao": ["Vizinho(a)"],
         "nova_pista_exposicao": "Não",
+        "nova_pista_tipo": ["Animal"],
         "nova_pista_detalhe": "Pista injetada",
         "fonte_ainda_ativa": "Sim",
         "outras_pessoas_ainda_expostas": "Sim",
@@ -122,6 +127,7 @@ def _payload_t30():
         "sintomas_atuais": ["Cansaco ou fraqueza", "Dor nas juntas (articulacoes)"],
         "sintomas_atuais_outro": "Sintoma injetado",
         "sintomas_atuais_origem": "Comecaram com esta doenca",
+        "sintomas_persistentes": ["Cansaço ou fraqueza"],
         "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
         "sintoma_novo_agravado": "Sim",
         "retorno_atividades_normais": "Totalmente",
@@ -216,7 +222,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-09b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -224,7 +230,10 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["ficha_sinan"] == "3032976"
     assert captured["respondent_name"] == ""
     assert captured["outras_pessoas_quantidade"] == ""
-    assert captured["exposicao_ambiental_detalhe"] == ""
+    assert "exposicao_ambiental_detalhe" not in captured
+    assert captured["exposicao_ambiental_quando"] == []
+    assert captured["trabalho_estudo"] == "Não trabalho nem estudo fora de casa"
+    assert captured["trabalho_estudo_local"] == ""
     assert "diagnostico_medico_qual" not in captured
     assert "custo_total" not in captured
 
@@ -309,18 +318,20 @@ def test_public_native_t7_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t7_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-09b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16"
     assert captured["dias_incap_novos"] == "3"
     assert captured["diagnostico_medico_qual"] == []
-    assert captured["novos_casos_local_periodo"] == ""
-    assert captured["nova_pista_detalhe"] == ""
-    assert captured["fonte_ainda_ativa"] == ""
+    assert captured["novos_casos_relacao"] == []
+    assert captured["nova_pista_tipo"] == []
+    for retirado in ("novos_casos_local_periodo", "nova_pista_detalhe", "fonte_ainda_ativa", "houve_novos_gastos",
+                     "perda_renda"):
+        assert retirado not in captured, retirado
     assert "custo_outros" not in captured  # gasto só Sim/Não, mesmo que o navegador envie valor
     assert "perda_renda_valor" not in captured
 
 
 @pytest.mark.parametrize("stage", ["t7", "t30"])
-def test_public_native_followup_registra_perda_de_renda_sem_valor_monetario(native_t0_app, monkeypatch, stage):
+def test_public_native_followup_descarta_renda_mesmo_se_enviada(native_t0_app, monkeypatch, stage):
     app, paciente, _schema_holder = native_t0_app
     paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="01/07/2026", dados_json="{}")
     client = app.test_client()
@@ -340,11 +351,9 @@ def test_public_native_followup_registra_perda_de_renda_sem_valor_monetario(nati
     response = client.post(f"/sfa/p/{paciente.token_acesso}/{stage}", data=payload)
 
     assert response.status_code == 200
-    if stage == "t7":
-        assert captured["perda_renda"] == "Sim"
-    else:
-        assert "Perdi renda ou deixei de ganhar dinheiro" in captured["impacto_periodo"]
-    assert "perda_renda_valor" not in captured
+    # 16/11/2026: foco exclusivo na saúde; renda fica para outro momento.
+    for retirado in ("perda_renda", "perda_renda_valor", "impacto_periodo"):
+        assert retirado not in captured, retirado
 
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -367,11 +376,12 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["_instrument_version"] == "sfa-2026-11-09b"
+    assert captured["_instrument_version"] == "sfa-2026-11-16"
     assert captured["sintoma_novo_agravado"] == "Sim"
+    assert captured["sintomas_persistentes"] == ["Cansaço ou fraqueza"]
     assert captured["situacao_participante"] == ""
     assert captured["data_obito"] == ""
-    assert captured["diagnostico_medico_qual"] == ""
+    assert captured["diagnostico_medico_qual"] == []
     assert captured["novos_casos_quantidade"] == ""
     assert "custo_outros" not in captured  # gasto só Sim/Não, mesmo que o navegador envie valor
     assert "perda_renda_valor" not in captured
@@ -403,8 +413,9 @@ def test_public_native_t30_obito_informado_por_familiar_nao_vira_ausencia_de_sin
     assert "Obrigado pela sua participacao" in response.get_data(as_text=True)
     assert captured["situacao_participante"] == "Não, faleceu"
     assert captured["data_obito"] == "10/08/2026"
-    for key in ("sintoma_novo_agravado", "retorno_atividades_normais", "sintomas_atuais_detalhe"):
+    for key in ("sintoma_novo_agravado", "retorno_atividades_normais"):
         assert captured[key] == ""
+    assert captured["sintomas_persistentes"] == []
     assert "sintomas_atuais" not in captured
     assert captured["sinais_alerta_atuais"] == []
     # O familiar ainda informa o que diz respeito ao risco coletivo.

@@ -133,10 +133,15 @@
     });
     const onsetLabel = documentObj.querySelector?.('[data-onset-others-label]');
     if (onsetLabel) {
+      // O número da pergunta vem do próprio formulário; só a concordância muda.
+      if (!onsetLabel.dataset.baseLabel) onsetLabel.dataset.baseLabel = onsetLabel.textContent.trim();
+      const base = onsetLabel.dataset.baseLabel;
+      const prefix = (base.match(/^\d+\.\s*/) || [""])[0];
+      const relative = onsetLabel.dataset.onsetOthersLabel === "inicio_outros_relativo";
       const count = Number(getValue("outras_pessoas_quantidade"));
-      onsetLabel.textContent = count === 1 ? "26. Quando essa pessoa começou a passar mal?"
-        : count > 1 ? "26. Quando essas pessoas começaram a passar mal?"
-        : "26. Quando começaram os sintomas entre as outras pessoas?";
+      const one = relative ? "Os sintomas dessa pessoa começaram antes ou depois dos seus?" : "Quando essa pessoa começou a passar mal?";
+      const many = relative ? "Os sintomas dessas pessoas começaram antes ou depois dos seus?" : "Quando essas pessoas começaram a passar mal?";
+      onsetLabel.textContent = count === 1 ? prefix + one : count > 1 ? prefix + many : base;
     }
     updateSections(documentObj);
   };

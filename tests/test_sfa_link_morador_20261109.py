@@ -84,11 +84,23 @@ def test_t7_abre_o_bloco_coletivo_lembrando_o_que_a_pessoa_contou():
         "alguma novidade."
     )
     assert _descricao_coletiva(sem_pista) == _descricao_coletiva(base)
-    # As perguntas 17 e 18 seguem a pista do T0 sem pergunta intermediária: com pista
-    # aparecem sempre; sem pista, só se a pessoa contar novos casos ou nova informação.
-    assert "visible_if" not in _campos(com_pista)["fonte_ainda_ativa"]
-    regra = json.dumps(_campos(sem_pista)["fonte_ainda_ativa"]["visible_if"])
-    assert "novos_casos_semelhantes" in regra and "pista_coletiva_confirmada" not in regra
+    # 16/11/2026: as antigas 17 e 18 ("a situação ainda continua?", "outras pessoas
+    # ainda expostas?") saíram; o morador não tem como saber.
+    assert "fonte_ainda_ativa" not in _campos(com_pista)
+    assert "outras_pessoas_ainda_expostas" not in _campos(com_pista)
+
+
+def test_pistas_das_opcoes_fechadas_de_16_11():
+    t0 = {"outras_pessoas_com_sintomas": "Sim", "exposicao_suspeita_comum": ["Água", "Outro"],
+          "exposicao_suspeita_comum_outro": "Poço da chácara"}
+    t7 = {"nova_pista_exposicao": "Sim", "nova_pista_tipo": ["Animal", "Festa, evento ou viagem"]}
+
+    assert sfa_service.pistas_coletivas_anteriores([t0, t7]) == [
+        "outras pessoas tiveram febre ou sintomas parecidos",
+        "suspeitava de algo em comum: água e Poço da chácara",
+        "surgiu uma nova informação sobre animal e festa, evento ou viagem",
+    ]
+    assert sfa_service.pistas_coletivas_anteriores([{"exposicao_suspeita_comum": ["Nenhuma suspeita"]}]) == []
 
 
 def test_link_do_morador_tira_registro_da_entrevista_e_grava_o_modo():
@@ -141,8 +153,14 @@ def test_gasto_e_so_sim_ou_nao_sem_valor():
             assert "R$" not in campo["label"], (stage, campo["key"])
             assert "valor" not in campo["label"].lower(), (stage, campo["key"])
             assert not any("estimar" in str(opcao).lower() for opcao in campo.get("options", [])), (stage, campo["key"])
-    assert _campos(sfa_service.carregar_form_schema("t7"))["houve_novos_gastos"]["options"] == ["Sim", "Não", "Não sei"]
-    assert "Minha família ou eu tivemos gastos" in _campos(sfa_service.carregar_form_schema("t30"))["impacto_periodo"]["options"]
+    # 16/11/2026: foco exclusivo na saúde; gasto, renda e cuidador saíram de vez.
+    for stage, chaves in (("t0", {"perda_renda"}),
+                          ("t7", {"houve_novos_gastos", "perda_renda", "ausencia_familiar", "dias_cuidador"}),
+                          ("t30", {"impacto_periodo"})):
+        assert not chaves & set(_campos(sfa_service.carregar_form_schema(stage))), stage
+    # A versão de 09/11 (tarde), que ainda perguntava, continua abrindo as respostas antigas.
+    t7_antigo = sfa_service.carregar_schema_para_payload("t7", {"_instrument_version": "sfa-2026-11-09b"})
+    assert _campos(t7_antigo)["houve_novos_gastos"]["options"] == ["Sim", "Não", "Não sei"]
 
 
 def test_versao_que_pedia_valor_continua_aberta_para_respostas_antigas():

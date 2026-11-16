@@ -13,9 +13,9 @@ SCHEMA_PATHS = {
 }
 
 ESSENTIAL_KEYS = {
-    "t0": {"respondent_role", "aceite_tcle", "perda_renda", "exposicao_animal", "exposicao_ambiental", "exposicao_alimentar", "outras_pessoas_com_sintomas"},
-    "t7": {"classificacao_melhora", "diagnostico_medico", "perda_renda", "nova_pista_exposicao"},
-    "t30": {"sintoma_novo_agravado", "situacao_participante", "impacto_periodo", "retorno_atividades_normais", "numero_internacoes", "numero_reconsultas", "novos_casos_semelhantes"},
+    "t0": {"respondent_role", "aceite_tcle", "trabalho_estudo", "trabalho_estudo_local", "exposicao_animal", "exposicao_ambiental", "exposicao_alimentar", "outras_pessoas_com_sintomas"},
+    "t7": {"classificacao_melhora", "diagnostico_medico", "dias_incap_novos", "nova_pista_exposicao"},
+    "t30": {"sintoma_novo_agravado", "sintomas_persistentes", "situacao_participante", "diagnostico_medico", "dias_incap_novos", "retorno_atividades_normais", "internacao_desde_ultima", "novos_casos_semelhantes"},
 }
 
 BANNED_VISIBLE_KEYS = {
@@ -28,9 +28,9 @@ BANNED_VISIBLE_KEYS = {
 }
 
 CONDITIONAL_KEYS = {
-    "t0": {"respondent_name", "exposicao_animal", "vinculo_compartilhado", "vinculo_local", "exposicao_alimentar_doentes"},
-    "t7": {"diagnostico_medico_qual", "dias_cuidador", "nova_pista_detalhe", "fonte_ainda_ativa"},
-    "t30": {"sintoma_novo_agravado", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "novos_casos_quantidade", "outras_pessoas_ainda_expostas"},
+    "t0": {"respondent_name", "trabalho_estudo_local", "exposicao_animal", "vinculo_compartilhado", "exposicao_ambiental_quando", "exposicao_alimentar_quando", "inicio_outros_relativo"},
+    "t7": {"diagnostico_medico_qual", "atendimento_local", "novos_casos_relacao", "nova_pista_tipo"},
+    "t30": {"sintoma_novo_agravado", "sintomas_persistentes", "respondent_name", "situacao_participante", "data_obito", "sinais_alerta_atuais", "diagnostico_medico_qual", "diagnostico_confirmado_exame", "novos_casos_quantidade"},
 }
 
 ATOMIC_OPERATORS = {
@@ -120,7 +120,7 @@ def _assert_rule_structure(rule: object, *, stage: str, known_keys: dict[str, se
 def test_active_sfa_schema_is_november_revision(stage):
     schema = _load_schema(stage)
 
-    assert schema.get("instrument_version") == "sfa-2026-11-09b"
+    assert schema.get("instrument_version") == "sfa-2026-11-16"
     assert schema.get("sections"), f"{stage}: schema essencial sem secoes"
 
 

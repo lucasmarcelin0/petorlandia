@@ -424,13 +424,14 @@ def test_link_da_simulacao_e_o_formulario_do_morador(app, client, hoje):
     video.close()
 
     t0_com_pista = _t0(outras_pessoas_com_sintomas="Sim", outras_pessoas_quantidade="2",
-                       vinculo_exposicao_suspeita="Feijoada no domingo")
+                       exposicao_suspeita_comum_outro="Feijoada no domingo")
+    t0_com_pista.setlist("exposicao_suspeita_comum", ["Alimento ou bebida", "Outro"])
     assert client.post(f"{base}/t0", data=t0_com_pista).status_code == 302
 
     t7 = client.get(f"{base}/t7").get_data(as_text=True)
     assert "Relação com o T0" not in t7 and "Registro da entrevista" not in t7
     assert "Na primeira entrevista, você contou que outras pessoas tiveram febre ou sintomas parecidos" in t7
-    assert "Feijoada no domingo" in t7
+    assert "suspeitava de algo em comum: alimento ou bebida e Feijoada no domingo" in t7
     assert client.post(f"{base}/t7", data=_t7()).status_code == 302
 
     t30 = client.get(f"{base}/t30").get_data(as_text=True)
