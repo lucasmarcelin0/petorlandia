@@ -47,10 +47,10 @@
           {% if c.observacao %}<dt class="col-5">Observação</dt><dd class="col-7">{{ c.observacao }}</dd>{% endif %}
           {% if pode_mapa %}<dt class="col-5">Equipe</dt><dd class="col-7">{{ c.autor.name or c.autor.email }}</dd>{% endif %}
         </dl>
-        {% if pode_fiscalizar %}
+        {% if pode_recusar %}
         <form method="post" action="{{ url_for('limpeza_urbana.recusar_comprovacao', comprovacao_id=c.id) }}" class="mt-3">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="form-label small fw-semibold" for="motivo-recusa">Fiscalização: recusar esta comprovação</label>
+          <label class="form-label small fw-semibold" for="motivo-recusa">Recusar esta comprovação</label>
           <div class="input-group">
             <input class="form-control" id="motivo-recusa" name="motivo" maxlength="300" placeholder="Motivo (ex.: lixo continua no canteiro)" required>
             <button class="btn btn-outline-danger" type="submit">Recusar</button>
@@ -102,10 +102,10 @@
   </div>
   {% endif %}
 
-  {% if pode_fiscalizar and item.status == 'aberta' %}
+  {% if pode_descartar and item.status == 'aberta' %}
   <form method="post" action="{{ url_for('limpeza_urbana.descartar', solicitacao_id=item.id) }}" class="limpeza-cartao mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="form-label small fw-semibold" for="motivo-descarte">Fiscalização: descartar esta comunicação</label>
+    <label class="form-label small fw-semibold" for="motivo-descarte">Descartar esta comunicação</label>
     <div class="input-group">
       <input class="form-control" id="motivo-descarte" name="motivo" maxlength="300" placeholder="Duplicada, fora da área, foto sem relação…" required>
       <button class="btn btn-outline-secondary" type="submit">Descartar</button>
