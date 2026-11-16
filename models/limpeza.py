@@ -105,6 +105,9 @@ class LimpezaSolicitacao(db.Model):
     __tablename__ = "limpeza_solicitacao"
 
     id = db.Column(db.Integer, primary_key=True)
+    # Número mostrado às pessoas (1, 2, 3…): só avança quando a comunicação é gravada,
+    # ao contrário do ``id``, que o Postgres gasta também em gravações desfeitas.
+    numero = db.Column(db.Integer, unique=True)
     autor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     chave_envio = db.Column(db.String(36), unique=True, nullable=True)
     # Um ou mais tipos (chaves de ``services.limpeza_urbana.CATEGORIAS``) separados por vírgula.
@@ -135,6 +138,10 @@ class LimpezaSolicitacao(db.Model):
     @property
     def lista_categorias(self):
         return [c for c in (self.categorias or "").split(",") if c]
+
+    @property
+    def num(self):
+        return self.numero or self.id
 
     @property
     def comprovacao_valida(self):

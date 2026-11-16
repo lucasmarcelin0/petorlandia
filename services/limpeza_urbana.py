@@ -286,6 +286,19 @@ def _limpar_cache():
         g.pop("user_experience", None)
 
 
+def proximo_numero() -> int:
+    """Próximo número de comunicação, sem saltos.
+
+    No Postgres, uma trava da transação faz duas gravações simultâneas esperarem
+    uma pela outra; ela some no commit ou no rollback, e um rollback não gasta número.
+    """
+    from extensions import db
+    from models.limpeza import LimpezaSolicitacao
+    if db.session.get_bind().dialect.name == "postgresql":
+        db.session.execute(db.text("SELECT pg_advisory_xact_lock(724501)"))
+    return (db.session.query(db.func.max(LimpezaSolicitacao.numero)).scalar() or 0) + 1
+
+
 def separar_emails(texto) -> list[str]:
     """E-mails colados de uma lista (vírgula, ponto e vírgula, espaço ou linha), sem repetir."""
     vistos = []
@@ -857,7 +870,7 @@ def consultar(status=None, categoria=None, desde: date | None = None, ate: date 
 def como_ponto(s, *, ver_autor: bool):
     comprovacao = s.comprovacao_valida
     ponto = {
-        "id": s.id, "status": s.status, "status_rotulo": STATUS.get(s.status, s.status),
+        "id": s.id, "numero": s.num, "status": s.status, "status_rotulo": STATUS.get(s.status, s.status),
         "categorias": s.lista_categorias, "categoria_rotulo": rotulo_categorias(s.categorias),
         "descricao": s.descricao or "", "referencia": s.referencia or "",
         "lat": s.latitude, "lon": s.longitude, "precisao_m": s.precisao_m, "origem_local": s.origem_local,

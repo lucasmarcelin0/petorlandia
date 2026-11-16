@@ -103,7 +103,7 @@
   function popup(p) {
     const c = p.comprovacao;
     return `<div class="limpeza-popup">
-      <strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong><br>
+      <strong>Nº ${p.numero} · ${esc(p.categoria_rotulo)}</strong><br>
       <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>
       <div class="fotos"><img src="${urlSegura(p.foto)}" alt="Antes" loading="lazy">
         ${c ? `<img src="${urlSegura(c.foto)}" alt="Depois" loading="lazy">` : '<div class="small text-muted d-flex align-items-center">Sem foto da limpeza</div>'}</div>
@@ -133,7 +133,7 @@
     return `<a class="limpeza-cartao limpeza-item mb-2" href="${DETALHE}${p.id}">
       <div class="limpeza-item-fotos${c ? ' duas' : ''}">${foto(p.foto, 'Foto da comunicação')}${c ? foto(c.foto, 'Foto da limpeza') : ''}</div>
       <div class="limpeza-item-corpo">
-        <div class="limpeza-item-titulo"><strong>Nº ${p.id} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>${c && c.longe ? ' <span class="limpeza-selo alerta">longe do ponto</span>' : ''}</div>
+        <div class="limpeza-item-titulo"><strong>Nº ${p.numero} · ${esc(p.categoria_rotulo)}</strong> <span class="limpeza-selo ${esc(p.status)}">${esc(p.status_rotulo)}</span>${c && c.longe ? ' <span class="limpeza-selo alerta">longe do ponto</span>' : ''}</div>
         <div class="limpeza-meta">${esc(p.criado_local)}${p.autor ? ` · ${esc(p.autor)}` : ''}</div>
         ${texto ? `<div class="limpeza-item-texto">${texto}</div>` : ''}
         ${c ? `<div class="limpeza-meta">Limpa em ${esc(c.criado_local)} · ${Math.round(c.distancia_m)} m do ponto</div>` : ''}
