@@ -234,8 +234,11 @@ def test_budget_widget_links_point_to_medical_pages(app, clinic_setup):
         assert bloco_pagamento in html
 
 
-def test_accounting_home_recovers_when_notifications_table_missing(app, clinic_setup):
+def test_accounting_home_recovers_when_notifications_table_missing(app, clinic_setup, monkeypatch):
     client = app.test_client()
+    # A conferência da tabela fica guardada no processo; outro teste do mesmo
+    # processo (suíte em paralelo) pode já tê-la marcado. Simula processo novo.
+    monkeypatch.setattr(app_module, "_clinic_notifications_table_checked", False)
     with app.app_context():
         ClinicNotification.__table__.drop(bind=db.engine, checkfirst=True)
         inspector = inspect(db.engine)

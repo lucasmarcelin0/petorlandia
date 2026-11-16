@@ -6,16 +6,20 @@ function fixture(overrides = {}) {
   const pr = { number: 1, node_id: 'PR_1', state: 'open', base: {ref: 'main'},
     head: {sha: 'head1', repo: {full_name: 'owner/repo'}}, merge_commit_sha: 'merge1',
     mergeable: true, user: {login: 'owner'}, draft: false, labels: [], ...overrides };
-  const calls = { merges: [], dispatches: [], ready: 0 };
+  const calls = { merges: [], dispatches: [], ready: 0, created: [] };
   const f = { pr, calls, message: 'Correção\n\nPetOrlandia-Publish: true', permission: 'admin',
     checks: ['pytest', 'authorization-tests'].map(name =>
-      ({name, app: {id: 15368}, status: 'completed', conclusion: 'success'})) };
+      ({name, app: {id: 15368}, status: 'completed', conclusion: 'success'})),
+    mergedTree: 'tree-merge', statuses: [], createFails: false };
   const github = {rest: {
     pulls: {get: async () => ({data: f.pr}), list: async () => ({data: [f.pr]}),
       merge: async args => {calls.merges.push(args); return {data: {merged: true, sha: 'published'}};}},
     repos: {getCommit: async () => ({data: {commit: {message: f.message}}}),
-      getCollaboratorPermissionLevel: async () => ({data: {permission: f.permission}})},
-    checks: {listForRef: () => {}},
+      getCollaboratorPermissionLevel: async () => ({data: {permission: f.permission}}),
+      getCombinedStatusForRef: async () => ({data: {statuses: f.statuses}})},
+    checks: {listForRef: () => {}, create: async args => {
+      if (f.createFails) throw new Error('sem permissão'); calls.created.push(args);}},
+    git: {getCommit: async () => ({data: {tree: {sha: f.mergedTree}}})},
     actions: {createWorkflowDispatch: async args => calls.dispatches.push(args)}},
     paginate: async () => f.checks, graphql: async () => {calls.ready++;} };
   const summary = {addHeading() {return this;}, addRaw() {return this;}, async write() {}};
@@ -61,6 +65,28 @@ test('workflow_run só trata PRs do próprio repositório', async () => {
   assert.equal(f.calls.merges.length, 0);
   await f.run({workflow_run: {event: 'pull_request', head_repository: {full_name: 'owner/repo'}, head_branch: 'claude/fix'}});
   assert.equal(f.calls.merges.length, 1);
+});
+const tested = (tree, extra = {}) => ['pytest', 'authorization-tests'].map(name =>
+  ({context: `arvore-testada/${name}`, state: 'success', description: tree, creator: {login: 'github-actions[bot]'}, ...extra}));
+test('árvore integrada idêntica à testada no PR registra checks e não repete a suíte', async () => {
+  const f = fixture(); f.statuses = tested('tree-merge'); await f.run();
+  assert.equal(f.calls.dispatches.length, 0);
+  assert.deepEqual(f.calls.created.map(x => [x.name, x.head_sha, x.status, x.conclusion]),
+    [['pytest', 'published', 'completed', 'success'], ['authorization-tests', 'published', 'completed', 'success']]);
+});
+test('árvore diferente, status incompleto, falho ou de outro autor roda a suíte na main', async () => {
+  for (const statuses of [[], tested('tree-antiga'), tested('tree-merge').slice(0, 1),
+    tested('tree-merge', {creator: {login: 'alguem'}}), tested('tree-merge', {state: 'failure'})]) {
+    const f = fixture(); f.statuses = statuses; await f.run();
+    assert.equal(f.calls.created.length, 0);
+    assert.deepEqual(f.calls.dispatches.map(x => x.workflow_id), ['tests.yml', 'authorization-gate.yml']);
+  }
+});
+test('erro ao registrar os checks cai no caminho normal', async () => {
+  const f = fixture(); f.statuses = tested('tree-merge'); f.createFails = true; await f.run();
+  assert.equal(f.calls.dispatches.length, 2);
+  const g = fixture(); g.statuses = tested(undefined); g.mergedTree = undefined; await g.run();
+  assert.equal(g.calls.created.length, 0); assert.equal(g.calls.dispatches.length, 2);
 });
 test('dispatch que falha na resposta mas criou o run não é repetido', async () => {
   const calls = []; const warnings = [];

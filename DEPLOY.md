@@ -32,6 +32,14 @@ explícito são convertidos para prontos. Conflitos e testes reprovados bloqueia
 O merge usa `GITHUB_TOKEN`; por isso o workflow dispara explicitamente os dois
 CI na `main` via `workflow_dispatch` (eventos de push gerados pelo token de
 automação não disparam outros workflows). Não precisa de PAT pessoal adicional.
+
+Atalho: os dois CI do PR gravam no head do PR (status `arvore-testada/*`) a
+árvore git do merge de teste que aprovaram. Se a árvore do merge na `main` for
+idêntica (a `main` não andou nesse meio-tempo), o workflow registra os checks
+`pytest` e `authorization-tests` na `main` com essa justificativa em vez de
+repetir a suíte, e o Heroku publica em seguida. Qualquer diferença, status
+ausente ou erro cai no caminho normal acima. A suíte roda em paralelo
+(`pytest-xdist`, `--dist loadfile`).
 Após aprovação, a integração nativa publica e **Confirmar publicacao no Heroku**
 confere o SHA do slug, o release concluído e a resposta HTTP 200 do site.
 Esse último workflow também pode ser executado manualmente para diagnosticar.

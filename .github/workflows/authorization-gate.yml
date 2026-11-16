@@ -6,6 +6,10 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   authorization-tests:
     runs-on: ubuntu-latest
@@ -31,3 +35,14 @@ jobs:
       - name: Run authorization integration suite (merge gate)
         run: |
           pytest -q tests/test_sensitive_endpoints_authorization.py tests/test_security_authorization.py tests/test_clinic_staff_permissions.py
+
+      - name: Registrar arvore testada
+        if: success() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state=success -f context=arvore-testada/authorization-tests -f description="$tree" > /dev/null
+          echo "Arvore testada: $tree"
