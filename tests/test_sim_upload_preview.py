@@ -181,6 +181,41 @@ def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     assert "let persistQueue = Promise.resolve();" in script
 
 
+def test_anexo_i_prints_the_jornal_oficial_letterhead_and_guides_govbr_signing():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    assets = project_root / "static" / "sim_portal" / "assets"
+
+    # Timbre e brasão recortados do modelo publicado (Decreto 5.374/2024, ed. 1871).
+    assert (assets / "timbre-prefeitura-orlandia-jornal-oficial.png").stat().st_size > 10_000
+    assert (assets / "brasao-orlandia-pb.png").exists()
+
+    anexo_i = script[script.index("function printAnexoI()"):]
+    anexo_i = anexo_i[:anexo_i.index("\nfunction ", 10)]
+    assert 'jornalOficialFormHeader("I", "SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.")' in anexo_i
+    assert "${jornalOficialLetterhead()}" in anexo_i  # repetido na segunda folha
+    assert "officialDocumentHeader(" not in anexo_i
+    assert "Renova&ccedil;&atilde;o do t&iacute;tulo de registro" in anexo_i
+    assert "signerIdentity(state.legalResponsible" in anexo_i
+
+    assert "https://assinador.iti.br/" in script
+    assert "data-anexo-i-checklist" in script
+
+
+def test_anexo_i_word_export_uses_jornal_oficial_letterhead():
+    state = deepcopy(SEED_STATE)
+    document = build_form_docx("anexoI", state)
+
+    header_images = document.sections[0].header._element.xpath(".//pic:pic")
+    assert header_images, "timbre do Jornal Oficial deve ir no cabeçalho de todas as folhas"
+    text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+    assert "SERVIÇO DE INSPEÇÃO MUNICIPAL" in text
+    assert "ATENDIMENTO DO SIM" not in text
+
+    other = build_form_docx("mtse", state)
+    assert not other.sections[0].header._element.xpath(".//pic:pic")
+
+
 def test_annexes_ii_to_vii_use_editable_official_a4_pages():
     project_root = Path(__file__).resolve().parents[1]
     script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")

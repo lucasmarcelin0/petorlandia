@@ -1211,6 +1211,109 @@ table select:disabled {
   font-size: 9.5pt;
 }
 
+/* Anexo I: cabecalho igual ao modelo publicado no Jornal Oficial de Orlandia
+   (Decreto 5.374/2024, ed. 1871). Timbre da Prefeitura em todas as folhas. */
+.official-do-header {
+  margin-bottom: 3mm;
+  text-align: center;
+}
+
+.official-do-letterhead {
+  padding-bottom: 1.5mm;
+}
+
+.official-do-letterhead img {
+  display: block;
+  width: 100%;
+  max-width: 156mm;
+  height: auto;
+  margin: 0 auto;
+}
+
+.official-anexo-i-page-two > .official-do-letterhead {
+  margin-bottom: 4mm;
+}
+
+.official-do-annex {
+  margin: 3mm 0 1.5mm;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 11pt;
+  font-weight: 700;
+}
+
+.official-do-identity {
+  display: grid;
+  justify-items: center;
+  gap: .4mm;
+  font-size: 8.5pt;
+  line-height: 1.2;
+}
+
+.official-do-identity img {
+  display: block;
+  width: 14mm;
+  height: auto;
+  margin-bottom: 1mm;
+}
+
+.official-do-title {
+  display: block;
+  width: 100%;
+  margin-top: 1mm;
+  padding-top: 1mm;
+  border-top: 1px solid #111;
+  font-weight: 700;
+}
+
+.official-signer-identity {
+  display: block;
+  margin-top: .6mm;
+  font-size: 7pt;
+  font-weight: 400;
+}
+
+/* Espaco para o selo da assinatura gov.br sobre cada linha. */
+.official-anexo-i .official-signature-line {
+  min-height: 16mm;
+}
+
+.anexo-i-assistant {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #c9ddd6;
+  border-radius: 12px;
+  background: #f5faf8;
+  color: #18312f;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.anexo-i-checklist {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7d6;
+}
+
+.anexo-i-checklist.is-complete {
+  background: #e3f4ea;
+}
+
+.anexo-i-govbr-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+@media screen {
+  .official-form .official-fill-input.official-missing {
+    background: #fff7d6;
+    box-shadow: inset 0 0 0 1px #e0b100;
+  }
+}
+
 .official-section-title {
   margin: 4mm 0 1.2mm;
   font-size: 11pt;

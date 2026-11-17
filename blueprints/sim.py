@@ -774,7 +774,7 @@ def _kv_table(doc, pairs) -> None:
         response_run.font.size = Pt(12)
 
 
-def _docx_configure_official_form(doc, title: str) -> None:
+def _docx_configure_official_form(doc, title: str, jornal_oficial_header: bool = False) -> None:
     """Aplica a identidade estrutural do formulário oficial ao arquivo Word."""
     from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -789,6 +789,36 @@ def _docx_configure_official_form(doc, title: str) -> None:
     normal = doc.styles["Normal"]
     normal.font.name = "Arial"
     normal.font.size = Pt(12)
+
+    letterhead_path = PORTAL_STATIC_DIR / "assets" / "timbre-prefeitura-orlandia-jornal-oficial.png"
+    if jornal_oficial_header and letterhead_path.exists():
+        # Anexo I: mesmo cabeçalho do modelo publicado no Jornal Oficial
+        # (Decreto 5.374/2024): timbre da Prefeitura repetido em todas as folhas.
+        top = section.header.paragraphs[0]
+        top.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        top.add_run().add_picture(str(letterhead_path), width=Cm(15.6))
+        identity = doc.add_paragraph()
+        identity.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        identity.paragraph_format.space_after = Pt(0)
+        crest_path = PORTAL_STATIC_DIR / "assets" / "brasao-orlandia-pb.png"
+        if crest_path.exists():
+            identity.add_run().add_picture(str(crest_path), width=Cm(1.4))
+            identity.add_run("\n")
+        for text in (
+            "PREFEITURA MUNICIPAL DE ORLÂNDIA-SP",
+            "SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECONÔMICO E TURISMO",
+            "SERVIÇO DE INSPEÇÃO MUNICIPAL",
+        ):
+            run = identity.add_run(text + "\n")
+            run.bold = True
+            run.font.size = Pt(9)
+        heading = doc.add_paragraph()
+        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        heading.paragraph_format.space_after = Pt(6)
+        run = heading.add_run(title)
+        run.bold = True
+        run.font.size = Pt(12)
+        return
 
     header = doc.add_table(rows=1, cols=3)
     header.style = "Table Grid"
@@ -863,7 +893,11 @@ def build_form_docx(form: str, state: dict):
     from docx import Document
 
     doc = Document()
-    _docx_configure_official_form(doc, FORM_TITLES.get(form, "FORMULÁRIO S.I.M."))
+    _docx_configure_official_form(
+        doc,
+        FORM_TITLES.get(form, "FORMULÁRIO S.I.M."),
+        jornal_oficial_header=form == "anexoI",
+    )
 
     e = state.get("establishment", {})
     lr = state.get("legalResponsible", {})
