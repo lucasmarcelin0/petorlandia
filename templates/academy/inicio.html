@@ -1,0 +1,38 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'inicio' %}
+{% block page_title %}Marcelino Academy · PetOrlândia{% endblock %}
+{% block conteudo %}
+<h1 class="h3 mb-1">Marcelino Academy</h1>
+<p class="text-muted mb-4">Curso de inglês: lições, testes com correção e aulas ao vivo.</p>
+
+{% if not materias %}
+<div class="academy-cartao text-center text-muted">Nenhuma matéria ainda.</div>
+{% else %}
+<div class="row g-3">
+  {% for m in materias %}
+  <div class="col-md-6">
+    <a class="academy-cartao d-block h-100 text-decoration-none text-reset" href="{{ url_for('academy.materia', materia_id=m.id) }}">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <strong class="fs-5">{{ m.nome }}</strong>
+        {% if not m.ativo %}<span class="academy-selo">Desativada</span>{% endif %}
+      </div>
+      {% if m.horario %}<div class="small text-muted mt-1"><i class="far fa-clock me-1"></i>{{ m.horario }}</div>{% endif %}
+      {% if m.descricao %}<p class="small mt-2 mb-0 text-muted">{{ m.descricao|truncate(160) }}</p>{% endif %}
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if academy_admin %}
+<div class="academy-cartao mt-4">
+  <h2 class="h6">Nova matéria</h2>
+  <form method="post" action="{{ url_for('academy.criar_materia') }}" class="d-flex gap-2 flex-wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="form-control" style="max-width:420px" name="nome" maxlength="150" placeholder="Ex.: Inglês básico — turma da noite" required>
+    <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Criar</button>
+  </form>
+  <p class="small text-muted mt-2 mb-0">Depois de criar, nomeie o professor pelo e-mail da conta dele no PetOrlândia. O professor matricula os alunos.</p>
+</div>
+{% endif %}
+{% endblock %}

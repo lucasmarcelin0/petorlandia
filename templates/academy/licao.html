@@ -1,0 +1,71 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'licao' %}
+{% block page_title %}{{ licao.titulo }} · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<a class="small text-decoration-none" href="{{ url_for('academy.materia', materia_id=licao.materia_id) }}"><i class="fas fa-arrow-left me-1"></i>{{ licao.materia.nome }}</a>
+<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mt-2 mb-3">
+  <h1 class="h3 mb-0">{{ licao.titulo }} {% if not licao.publicada %}<span class="academy-selo align-middle">Rascunho</span>{% endif %}</h1>
+  {% if professor %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('academy.editar_licao', licao_id=licao.id) }}"><i class="fas fa-pen me-1"></i>Editar lição e testes</a>{% endif %}
+</div>
+{% if licao.link_video %}
+<a class="btn btn-outline-danger btn-sm mb-3" href="{{ licao.link_video }}" target="_blank" rel="noopener noreferrer"><i class="fab fa-youtube me-1"></i>Ver vídeo da lição</a>
+{% endif %}
+{% if licao.conteudo %}<div class="academy-cartao academy-texto mb-4">{{ licao.conteudo }}</div>{% endif %}
+
+{% for teste in testes %}
+{% set questoes = teste.questoes.all()|selectattr('ativa')|list %}
+{% if questoes %}
+<section class="mb-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <h2 class="h5 mb-0"><i class="fas fa-list-check me-1"></i>Teste: {{ teste.nome }}</h2>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('academy.resultado', teste_id=teste.id) }}">Meu resultado</a>
+  </div>
+  {% for q in questoes %}
+  {% set r = respostas.get(q.id) %}
+  <div class="academy-cartao mb-2" id="questao-{{ q.id }}">
+    <div class="fw-semibold mb-2">{{ loop.index }}. <span class="academy-texto">{{ q.enunciado }}</span></div>
+    {% if r %}
+      {% if q.tipo == 'aberta' %}<div class="small text-muted">Sua resposta:</div><div class="academy-texto">{{ r.texto }}</div>
+      {% else %}<div class="small text-muted">Você marcou:</div><div class="academy-texto">{{ r.opcoes }}</div>{% endif %}
+      <div class="mt-2 fw-semibold {% if r.nota == 1 %}academy-certa{% elif r.nota == 0 %}academy-errada{% else %}academy-pendente{% endif %}">
+        {% if r.nota == 1 %}<i class="fas fa-check me-1"></i>Certa{% elif r.nota == 0 %}<i class="fas fa-xmark me-1"></i>Errada{% else %}<i class="far fa-hourglass me-1"></i>Aguardando correção do professor{% endif %}
+      </div>
+      {% if r.nota == 0 and q.tipo != 'aberta' %}<div class="small mt-1">Gabarito: {{ q.opcoes|selectattr('correta')|map(attribute='texto')|join(' · ') }}</div>{% endif %}
+      {% if r.observacao %}<div class="small mt-1"><strong>Professor:</strong> {{ r.observacao }}</div>{% endif %}
+    {% else %}
+    <form method="post" action="{{ url_for('academy.responder', questao_id=q.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if q.tipo == 'aberta' %}
+        <textarea class="form-control" name="texto" rows="2" maxlength="2000" required placeholder="Escreva sua resposta"></textarea>
+      {% else %}
+        {% if q.tipo == 'multipla' %}<div class="small text-muted mb-1">Marque todas as corretas.</div>{% endif %}
+        {% for o in q.opcoes %}
+        <label class="academy-opcao"><input type="{{ 'checkbox' if q.tipo == 'multipla' else 'radio' }}" name="opcao" value="{{ o.id }}" {% if q.tipo == 'unica' %}required{% endif %} class="mt-1"><span>{{ o.texto }}</span></label>
+        {% endfor %}
+      {% endif %}
+      <button class="btn btn-success btn-sm mt-2">Enviar resposta</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endfor %}
+
+<section id="comentarios" class="mt-4">
+  <h2 class="h5">Comentários e dúvidas</h2>
+  <form method="post" class="academy-cartao mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <textarea class="form-control" name="comentario" rows="2" maxlength="2000" required placeholder="Escreva sua dúvida ou comentário"></textarea>
+    <button class="btn btn-primary btn-sm mt-2">Publicar</button>
+  </form>
+  {% for c in comentarios %}
+  <div class="academy-cartao mb-2">
+    <div class="small text-muted">{{ c.user.name or 'Aluno' }} · {{ c.criado_em|format_datetime_brazil('%d/%m/%Y %H:%M') if c.criado_em else '' }}</div>
+    <div class="academy-texto">{{ c.texto }}</div>
+  </div>
+  {% else %}
+  <p class="text-muted small">Nenhum comentário ainda.</p>
+  {% endfor %}
+</section>
+{% endblock %}

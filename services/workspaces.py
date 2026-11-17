@@ -35,7 +35,8 @@ class Experience:
 
 
 def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False,
-                       sinan=False, loja_operada=None, limpeza=frozenset(), limpeza_aberta=False):
+                       sinan=False, loja_operada=None, limpeza=frozenset(), limpeza_aberta=False,
+                       academy=False):
     from helpers import active_internship_staff, can_start_consulta
 
     if not getattr(user, 'is_authenticated', False):
@@ -126,6 +127,10 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
     if limpeza or limpeza_aberta:
         area('limpeza', 'Prefeitura integrada', 'fa-building-columns',
              action('Acessar Prefeitura integrada', 'limpeza_urbana.inicio', 'fa-building-columns'))
+    if academy:
+        # Marcelino Academy (services.academy): administrador, professores e alunos matriculados.
+        area('academy', 'Marcelino Academy', 'fa-language',
+             action('Meus cursos de inglês', 'academy.inicio', 'fa-book-open'))
     if internship:
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
@@ -156,6 +161,7 @@ def current_experience():
         from context_processors import inject_has_clinic_access, inject_minha_casa_de_racao, loja_operada_do_usuario
         from helpers import _user_can_access_accounting, is_veterinarian
         from services.entomologia_acesso import membro_equipe
+        from services.academy import tem_acesso as academy_tem_acesso
         from services.limpeza_urbana import comunicacao_aberta, papeis_de
         from services.sfa_notificacao import pode_acessar as pode_acessar_sinan
 
@@ -170,6 +176,7 @@ def current_experience():
             loja_operada=loja_operada_do_usuario(),
             limpeza=papeis_de(current_user),
             limpeza_aberta=_limpeza_aberta(comunicacao_aberta),
+            academy=academy_tem_acesso(current_user),
         )
     return g.user_experience
 
