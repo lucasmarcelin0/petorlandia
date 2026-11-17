@@ -107,6 +107,16 @@ from .entomologia import (
     EntomologiaSolicitacaoCategoria,
     EntomologiaVisitaDomiciliar,
 )
+from .academy import (
+    AcademyComentario,
+    AcademyLicao,
+    AcademyMateria,
+    AcademyOpcao,
+    AcademyQuestao,
+    AcademyResposta,
+    AcademyTeste,
+    AcademyVinculo,
+)
 from .limpeza import (
     LimpezaAcesso,
     LimpezaComprovacao,

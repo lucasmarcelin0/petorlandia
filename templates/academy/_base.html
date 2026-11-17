@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+  .academy-pagina { max-width: 980px; }
+  .academy-cartao { background: #fff; border: 1px solid #e3e6ef; border-radius: 14px; padding: 1rem 1.1rem; }
+  .academy-texto { white-space: pre-wrap; line-height: 1.6; font-size: 1.02rem; }
+  .academy-nav .nav-link { border-radius: 999px; }
+  .academy-nav .nav-link.active { background: #1e3a8a; color: #fff; }
+  .academy-selo { font-size: .75rem; border-radius: 999px; padding: .15rem .55rem; background: #eef2ff; color: #1e3a8a; }
+  .academy-certa { color: #166534; } .academy-errada { color: #991b1b; } .academy-pendente { color: #92400e; }
+  .academy-opcao { display: flex; gap: .5rem; align-items: flex-start; padding: .45rem .6rem; border: 1px solid #e3e6ef; border-radius: 10px; margin-bottom: .4rem; cursor: pointer; }
+</style>
+{% endblock %}
+{% block main %}
+<div class="container academy-pagina py-4">
+  <nav class="academy-nav mb-3">
+    <ul class="nav nav-pills gap-1 flex-wrap small">
+      <li class="nav-item"><a class="nav-link {% if ativo == 'inicio' %}active{% endif %}" href="{{ url_for('academy.inicio') }}"><i class="fas fa-graduation-cap me-1"></i>Marcelino Academy</a></li>
+      {% if academy_professor %}
+      <li class="nav-item"><a class="nav-link {% if ativo == 'correcoes' %}active{% endif %}" href="{{ url_for('academy.correcoes') }}"><i class="fas fa-pen-to-square me-1"></i>Correções</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% block conteudo %}{% endblock %}
+</div>
+{% endblock %}

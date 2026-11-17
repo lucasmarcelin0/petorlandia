@@ -1,0 +1,32 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'licao' %}
+{% block page_title %}Editar questão · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<a class="small text-decoration-none" href="{{ url_for('academy.editar_licao', licao_id=questao.teste.licao_id) }}#teste-{{ questao.teste_id }}"><i class="fas fa-arrow-left me-1"></i>{{ questao.teste.licao.titulo }} · {{ questao.teste.nome }}</a>
+<h1 class="h4 mt-2 mb-3">Editar questão</h1>
+{% if respondida %}
+<div class="alert alert-warning small">{{ respondida }} aluno(s) já responderam. As respostas e notas já dadas não mudam; a edição vale para quem ainda vai responder.</div>
+{% endif %}
+<form method="post" class="academy-cartao mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label small">Enunciado</label>
+  <textarea class="form-control" name="enunciado" rows="3" maxlength="2000" required>{{ questao.enunciado }}</textarea>
+  <div class="row g-2 mt-1">
+    <div class="col-md-8"><label class="form-label small">Tipo</label>
+      <select class="form-select" name="tipo">{% for k, v in TIPOS_QUESTAO.items() %}<option value="{{ k }}" {% if k == questao.tipo %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="col-md-4"><label class="form-label small">Ordem</label><input class="form-control" type="number" name="ordem" value="{{ questao.ordem }}"></div>
+  </div>
+  <label class="form-label small mt-2">Opções</label>
+  <textarea class="form-control" name="opcoes" rows="5">{{ opcoes_texto }}</textarea>
+  {% include "academy/_ajuda_opcoes.html" %}
+  <button class="btn btn-primary mt-3">Salvar questão</button>
+</form>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if questao.ativa %}
+  <button class="btn btn-outline-danger btn-sm" name="acao" value="desativar">Retirar do teste</button>
+  {% else %}
+  <button class="btn btn-outline-success btn-sm" name="acao" value="reativar">Devolver ao teste</button>
+  {% endif %}
+</form>
+{% endblock %}

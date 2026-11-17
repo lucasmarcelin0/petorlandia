@@ -1,0 +1,97 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'materia' %}
+{% block page_title %}{{ materia.nome }} · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">{{ materia.nome }}</h1>
+    {% if materia.horario %}<div class="text-muted small"><i class="far fa-clock me-1"></i>{{ materia.horario }}</div>{% endif %}
+  </div>
+  {% if materia.link_aula %}
+  <a class="btn btn-success" href="{{ materia.link_aula }}" target="_blank" rel="noopener noreferrer"><i class="fas fa-video me-1"></i>Entrar na aula ao vivo</a>
+  {% endif %}
+</div>
+{% if materia.descricao %}<div class="academy-cartao academy-texto mb-3">{{ materia.descricao }}</div>{% endif %}
+
+<h2 class="h5 mt-4">Lições</h2>
+{% if not licoes %}
+<div class="academy-cartao text-muted">Nenhuma lição publicada ainda.</div>
+{% else %}
+<div class="list-group mb-3">
+  {% for l in licoes %}
+  <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{{ url_for('academy.licao', licao_id=l.id) }}">
+    <span>{{ loop.index }}. {{ l.titulo }}</span>
+    {% if not l.publicada %}<span class="academy-selo">Rascunho</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if professor %}
+<div class="academy-cartao mb-3">
+  <form method="post" action="{{ url_for('academy.criar_licao', materia_id=materia.id) }}" class="d-flex gap-2 flex-wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="form-control" style="max-width:420px" name="titulo" maxlength="150" placeholder="Título da nova lição (ex.: Simple past)" required>
+    <button class="btn btn-outline-primary"><i class="fas fa-plus me-1"></i>Nova lição</button>
+  </form>
+</div>
+
+<h2 class="h5 mt-4" id="turma">Desempenho da turma</h2>
+{% if not turma %}
+<div class="academy-cartao text-muted mb-3">Nenhum aluno matriculado.</div>
+{% else %}
+<div class="table-responsive academy-cartao mb-3 p-0">
+  <table class="table table-sm mb-0 align-middle">
+    <thead><tr><th class="ps-3">Aluno</th><th class="text-center">Respondidas</th><th class="text-center">Certas</th><th class="text-center">Aguardando correção</th></tr></thead>
+    <tbody>
+      {% for v, respondidas, certas, aguardando in turma %}
+      <tr><td class="ps-3">{{ v.user.name or v.user.email }}</td><td class="text-center">{{ respondidas }}</td><td class="text-center">{{ certas }}</td><td class="text-center">{{ aguardando }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2 class="h5 mt-4" id="pessoas">Professores e alunos</h2>
+<div class="academy-cartao mb-3">
+  {% for v in vinculos %}
+  <div class="d-flex justify-content-between align-items-center border-bottom py-2 gap-2">
+    <div><strong>{{ v.user.name or v.user.email }}</strong> <span class="academy-selo ms-1">{{ PAPEIS[v.papel] }}</span>
+      <div class="small text-muted">{{ v.user.email }}</div></div>
+    {% if v.papel == 'aluno' or academy_admin %}
+    <form method="post" action="{{ url_for('academy.revogar', vinculo_id=v.id) }}" onsubmit="return confirm('Encerrar o acesso de {{ (v.user.name or v.user.email)|e }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-danger">Encerrar acesso</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-2">Ninguém vinculado ainda.</p>
+  {% endfor %}
+  <form method="post" action="{{ url_for('academy.adicionar_pessoa', materia_id=materia.id) }}" class="d-flex gap-2 flex-wrap mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="form-control" style="max-width:320px" type="email" name="email" placeholder="E-mail da conta no PetOrlândia" required>
+    {% if academy_admin %}
+    <select class="form-select" style="max-width:160px" name="papel"><option value="aluno">Aluno</option><option value="professor">Professor</option></select>
+    {% else %}<input type="hidden" name="papel" value="aluno">{% endif %}
+    <button class="btn btn-outline-primary"><i class="fas fa-user-plus me-1"></i>Adicionar</button>
+  </form>
+</div>
+
+<h2 class="h5 mt-4" id="editar">Dados da matéria</h2>
+<form method="post" action="{{ url_for('academy.editar_materia', materia_id=materia.id) }}" class="academy-cartao mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col-md-6"><label class="form-label small">Nome</label><input class="form-control" name="nome" maxlength="150" value="{{ materia.nome }}" required></div>
+    <div class="col-md-6"><label class="form-label small">Horário das aulas</label><input class="form-control" name="horario" maxlength="60" value="{{ materia.horario or '' }}" placeholder="Ex.: terças, 19h"></div>
+    <div class="col-12"><label class="form-label small">Link da aula ao vivo (Meet, Zoom…)</label><input class="form-control" name="link_aula" maxlength="300" value="{{ materia.link_aula or '' }}" placeholder="https://meet.google.com/..."></div>
+    <div class="col-12"><label class="form-label small">Descrição</label><textarea class="form-control" name="descricao" rows="3">{{ materia.descricao or '' }}</textarea></div>
+    {% if academy_admin %}
+    <div class="col-md-4"><label class="form-label small">Situação</label>
+      <select class="form-select" name="ativo"><option value="1" {% if materia.ativo %}selected{% endif %}>Ativa</option><option value="0" {% if not materia.ativo %}selected{% endif %}>Desativada (some para alunos e professores)</option></select></div>
+    {% endif %}
+  </div>
+  <button class="btn btn-primary mt-3">Salvar</button>
+</form>
+{% endif %}
+{% endblock %}

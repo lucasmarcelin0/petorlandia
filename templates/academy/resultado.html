@@ -1,0 +1,23 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'resultado' %}
+{% block page_title %}Resultado · {{ teste.nome }} · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<a class="small text-decoration-none" href="{{ url_for('academy.licao', licao_id=teste.licao_id) }}"><i class="fas fa-arrow-left me-1"></i>{{ teste.licao.titulo }}</a>
+<h1 class="h4 mt-2 mb-1">Resultado: {{ teste.nome }}</h1>
+<p class="text-muted">{{ aluno.name or aluno.email }} · {{ certas }} certa(s) de {{ questoes|length }} questão(ões) · {{ respostas|length }} respondida(s)</p>
+{% if questoes %}
+<div class="progress mb-3" role="progressbar" aria-label="Acertos" style="height:10px"><div class="progress-bar bg-success" style="width: {{ (100 * certas / questoes|length)|round|int }}%"></div></div>
+{% endif %}
+{% for q in questoes %}
+{% set r = respostas.get(q.id) %}
+<div class="academy-cartao mb-2">
+  <div class="fw-semibold">{{ loop.index }}. <span class="academy-texto">{{ q.enunciado }}</span></div>
+  {% if not r %}<div class="small text-muted mt-1">Não respondida.</div>
+  {% else %}
+  <div class="academy-texto mt-1">{{ r.texto if q.tipo == 'aberta' else r.opcoes }}</div>
+  <div class="fw-semibold small mt-1 {% if r.nota == 1 %}academy-certa{% elif r.nota == 0 %}academy-errada{% else %}academy-pendente{% endif %}">{% if r.nota == 1 %}Certa{% elif r.nota == 0 %}Errada{% else %}Aguardando correção{% endif %}</div>
+  {% if r.observacao %}<div class="small"><strong>Professor:</strong> {{ r.observacao }}</div>{% endif %}
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

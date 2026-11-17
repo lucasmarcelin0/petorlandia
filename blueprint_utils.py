@@ -39,6 +39,7 @@ def _register_with_alias(app, blueprint):
 
 def register_domain_blueprints(app):
     from blueprints import (
+        academy,
         admin,
         consulta,
         site,
@@ -188,6 +189,10 @@ def register_domain_blueprints(app):
     internacao_bp = internacao.get_blueprint()
     if not _is_blueprint_registered(app, internacao_bp):
         app.register_blueprint(internacao_bp)
+
+    academy_bp = academy.get_blueprint()
+    if not _is_blueprint_registered(app, academy_bp):
+        app.register_blueprint(academy_bp)
 
     limpeza_bp = limpeza_urbana.get_blueprint()
     if not _is_blueprint_registered(app, limpeza_bp):

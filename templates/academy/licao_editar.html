@@ -1,0 +1,64 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'licao' %}
+{% block page_title %}Editar {{ licao.titulo }} · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<a class="small text-decoration-none" href="{{ url_for('academy.materia', materia_id=licao.materia_id) }}"><i class="fas fa-arrow-left me-1"></i>{{ licao.materia.nome }}</a>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2 mb-3">
+  <h1 class="h4 mb-0">Editar lição</h1>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('academy.licao', licao_id=licao.id) }}"><i class="far fa-eye me-1"></i>Ver como aluno</a>
+</div>
+
+<form method="post" class="academy-cartao mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col-md-8"><label class="form-label small">Título</label><input class="form-control" name="titulo" maxlength="150" value="{{ licao.titulo }}" required></div>
+    <div class="col-md-2"><label class="form-label small">Ordem</label><input class="form-control" type="number" name="ordem" value="{{ licao.ordem }}"></div>
+    <div class="col-md-2"><label class="form-label small">Situação</label>
+      <select class="form-select" name="publicada"><option value="0" {% if not licao.publicada %}selected{% endif %}>Rascunho</option><option value="1" {% if licao.publicada %}selected{% endif %}>Publicada</option></select></div>
+    <div class="col-12"><label class="form-label small">Conteúdo da lição</label><textarea class="form-control" name="conteudo" rows="12" placeholder="Explicação, exemplos, vocabulário…">{{ licao.conteudo or '' }}</textarea></div>
+    <div class="col-12"><label class="form-label small">Link de vídeo (opcional)</label><input class="form-control" name="link_video" maxlength="300" value="{{ licao.link_video or '' }}" placeholder="https://youtube.com/..."></div>
+  </div>
+  <button class="btn btn-primary mt-3">Salvar lição</button>
+</form>
+
+<h2 class="h5">Testes</h2>
+{% for teste in testes %}
+<div class="academy-cartao mb-3" id="teste-{{ teste.id }}">
+  <form method="post" action="{{ url_for('academy.renomear_teste', teste_id=teste.id) }}" class="d-flex gap-2 mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="form-control fw-semibold" name="nome" maxlength="150" value="{{ teste.nome }}" required>
+    <button class="btn btn-sm btn-outline-secondary">Renomear</button>
+  </form>
+  {% for q in teste.questoes %}
+  <div class="d-flex justify-content-between align-items-start gap-2 border-bottom py-2 {% if not q.ativa %}opacity-50{% endif %}">
+    <div>
+      <div>{{ q.ordem }}. {{ q.enunciado|truncate(140) }}</div>
+      <div class="small text-muted">{{ TIPOS_QUESTAO[q.tipo] }}{% if q.tipo != 'aberta' %} · {{ q.opcoes|length }} opções · certa: {{ q.opcoes|selectattr('correta')|map(attribute='texto')|join(', ') }}{% endif %}{% if not q.ativa %} · retirada{% endif %}</div>
+    </div>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('academy.editar_questao', questao_id=q.id) }}">Editar</a>
+  </div>
+  {% else %}
+  <p class="text-muted small">Nenhuma questão ainda.</p>
+  {% endfor %}
+  <details class="mt-3" {% if not teste.questoes.count() %}open{% endif %}>
+    <summary class="fw-semibold">Adicionar questão</summary>
+    <form method="post" action="{{ url_for('academy.criar_questao', teste_id=teste.id) }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small">Enunciado</label>
+      <textarea class="form-control" name="enunciado" rows="2" maxlength="2000" required placeholder="Ex.: Yesterday I ___ to the vet."></textarea>
+      <label class="form-label small mt-2">Tipo</label>
+      <select class="form-select" name="tipo">{% for k, v in TIPOS_QUESTAO.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+      <label class="form-label small mt-2">Opções (não precisa para resposta aberta)</label>
+      <textarea class="form-control" name="opcoes" rows="4"></textarea>
+      {% include "academy/_ajuda_opcoes.html" %}
+      <button class="btn btn-success btn-sm mt-2">Adicionar questão</button>
+    </form>
+  </details>
+</div>
+{% endfor %}
+<form method="post" action="{{ url_for('academy.criar_teste', licao_id=licao.id) }}" class="academy-cartao d-flex gap-2 flex-wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input class="form-control" style="max-width:360px" name="nome" maxlength="150" placeholder="Nome do novo teste (ex.: Exercícios 1)" required>
+  <button class="btn btn-outline-primary"><i class="fas fa-plus me-1"></i>Novo teste</button>
+</form>
+{% endblock %}

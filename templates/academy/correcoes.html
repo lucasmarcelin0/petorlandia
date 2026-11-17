@@ -1,0 +1,21 @@
+{% extends "academy/_base.html" %}
+{% set ativo = 'correcoes' %}
+{% block page_title %}Correções · Marcelino Academy{% endblock %}
+{% block conteudo %}
+<h1 class="h4 mb-3">Respostas aguardando correção</h1>
+{% for r in pendentes %}
+<div class="academy-cartao mb-3">
+  <div class="small text-muted">{{ r.questao.teste.licao.materia.nome }} · {{ r.questao.teste.licao.titulo }} · {{ r.questao.teste.nome }}</div>
+  <div class="fw-semibold mt-1 academy-texto">{{ r.questao.enunciado }}</div>
+  <div class="mt-2"><strong>{{ r.user.name or r.user.email }}:</strong> <span class="academy-texto">{{ r.texto }}</span></div>
+  <form method="post" action="{{ url_for('academy.corrigir', resposta_id=r.id) }}" class="mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="form-control form-control-sm mb-2" name="observacao" maxlength="2000" placeholder="Comentário para o aluno (opcional)">
+    <button class="btn btn-sm btn-success" name="nota" value="1"><i class="fas fa-check me-1"></i>Certa</button>
+    <button class="btn btn-sm btn-outline-danger" name="nota" value="0"><i class="fas fa-xmark me-1"></i>Errada</button>
+  </form>
+</div>
+{% else %}
+<div class="academy-cartao text-muted">Nenhuma resposta aberta aguardando correção.</div>
+{% endfor %}
+{% endblock %}
