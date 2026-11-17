@@ -2578,6 +2578,7 @@ function renderPrint() {
       ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<a class="btn" href="${docxUrl(state.printForm)}" title="Baixa o mesmo formulário em Word, com campos editáveis">${icon("file")}Baixar Word editável</a>` : ""}
     </div>
     <p class="small muted no-print" style="margin:-6px 0 14px">Os campos narrativos crescem enquanto voc&ecirc; escreve. Se ultrapassarem a folha, o PDF cria p&aacute;ginas de continua&ccedil;&atilde;o automaticamente. Use <strong>Imprimir P&amp;B</strong> para a via f&iacute;sica e <strong>Gerar PDF colorido</strong> ao salvar digitalmente.</p>
+    ${anexoIAssistant()}
     ${printSheet()}
   `;
 }
@@ -2881,10 +2882,105 @@ function officialClassificationGroup(title, options) {
         option,
         state.establishment.classification,
         [],
-        { path: "establishment.classification", value: option }
+        { path: "establishment.classification", value: withoutAccents(option) }
       )).join("")}
     </div>
   `;
+}
+
+// Os valores gravados no processo sao sem acento; o rotulo impresso segue o
+// texto do Decreto 5.374/2024, com acentuacao.
+function withoutAccents(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Cabecalho da via impressa do Anexo I igual ao modelo publicado no Jornal
+// Oficial de Orlandia (Decreto 5.374/2024, ed. 1871, pags. 14-15): timbre da
+// Prefeitura em todas as folhas e, na primeira, o bloco do SIM com o titulo.
+function jornalOficialLetterhead() {
+  return `
+    <div class="official-do-letterhead">
+      <img src="./assets/timbre-prefeitura-orlandia-jornal-oficial.png" alt="Prefeitura Municipal de Orl&acirc;ndia - Estado de S&atilde;o Paulo - P&ccedil;a. Cel. Orlando, 600 - Cx. Postal 77 - CEP 14620-000 - Fone PABX (16) 3820-8000">
+    </div>
+  `;
+}
+
+function jornalOficialFormHeader(number, title) {
+  return `
+    <header class="official-do-header">
+      ${jornalOficialLetterhead()}
+      <div class="official-do-annex">ANEXO ${number}</div>
+      <div class="official-do-identity">
+        <img src="./assets/brasao-orlandia-pb.png" alt="Bras&atilde;o de Orl&acirc;ndia">
+        <strong>PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA-SP</strong>
+        <strong>SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECON&Ocirc;MICO E TURISMO</strong>
+        <strong>SERVI&Ccedil;O DE INSPE&Ccedil;&Atilde;O MUNICIPAL</strong>
+        <span class="official-do-title">${title}</span>
+      </div>
+    </header>
+  `;
+}
+
+// Campos que o SIM precisa ver preenchidos antes de o Anexo I ser assinado.
+const ANEXO_I_REQUIRED = [
+  ["establishment.legalName", "Nome / raz\u00e3o social"],
+  ["establishment.cnpj", "CNPJ/CPF"],
+  ["establishment.cnae", "Atividade e c\u00f3digo CNAE"],
+  ["establishment.address", "Endere\u00e7o"],
+  ["establishment.district", "Bairro"],
+  ["establishment.email", "E-mail"],
+  ["establishment.phone", "Telefone"],
+  ["legalResponsible.name", "Respons\u00e1vel legal"],
+  ["legalResponsible.cpf", "CPF do respons\u00e1vel legal"],
+  ["technicalResponsible.name", "Respons\u00e1vel t\u00e9cnico (se houver)"],
+  ["technicalResponsible.cpf", "CPF do respons\u00e1vel t\u00e9cnico"],
+  ["technicalResponsible.council", "Inscri\u00e7\u00e3o do RT no conselho"],
+  ["establishment.classification", "Classifica\u00e7\u00e3o do estabelecimento (item 3)"],
+  ["establishment.smallBusiness", "Pequeno porte: Sim ou N\u00e3o"],
+  ["application.actType", "Tipo de solicita\u00e7\u00e3o (item 4)"],
+  ["application.signaturePlaceDate", "Local e data"],
+];
+
+function anexoIMissingFields() {
+  return ANEXO_I_REQUIRED.filter(([path]) => !String(officialPathValue(path) || "").trim());
+}
+
+function anexoIChecklistHtml() {
+  const missing = anexoIMissingFields();
+  if (!missing.length) {
+    return `<strong>Tudo preenchido.</strong> Confira os dados e siga para o PDF e a assinatura.`;
+  }
+  return `<strong>Faltam ${missing.length} ${missing.length === 1 ? "campo" : "campos"}</strong> (destacados em amarelo na folha): ${missing.map(([, label]) => escapeHtml(label)).join("; ")}.`;
+}
+
+function anexoIAssistant() {
+  if (state.printForm !== "anexoI") return "";
+  return `
+    <div class="anexo-i-assistant no-print">
+      <div class="anexo-i-checklist" data-anexo-i-checklist>${anexoIChecklistHtml()}</div>
+      <ol class="anexo-i-govbr-steps">
+        <li><strong>Preencha</strong> direto na folha abaixo. Tudo &eacute; salvo no processo e reaproveitado nos outros anexos.</li>
+        <li><strong>Gere o PDF:</strong> clique em <em>Gerar PDF colorido</em> e, na janela de impress&atilde;o, escolha <em>Salvar como PDF</em>.</li>
+        <li><strong>Assine no gov.br</strong> em <a href="https://assinador.iti.br/" target="_blank" rel="noopener">assinador.iti.br</a> (conta prata ou ouro), posicionando a assinatura sobre a linha do respons&aacute;vel legal. Baixe o arquivo assinado.</li>
+        <li><strong>Respons&aacute;vel t&eacute;cnico:</strong> assina o <em>mesmo arquivo j&aacute; assinado</em>, sobre a linha dele. N&atilde;o gere um PDF novo, sen&atilde;o a primeira assinatura se perde.</li>
+        <li><strong>Envie</strong> o PDF com as duas assinaturas em <a href="#" data-view="documents">Documentos &rsaquo; item 01, Requerimento ao SIM</a>.</li>
+      </ol>
+    </div>
+  `;
+}
+
+function refreshAnexoIAssistant() {
+  const box = document.querySelector("[data-anexo-i-checklist]");
+  if (!box) return;
+  box.innerHTML = anexoIChecklistHtml();
+  const missingPaths = new Set(anexoIMissingFields().map(([path]) => path));
+  box.classList.toggle("is-complete", missingPaths.size === 0);
+  document.querySelectorAll(".official-anexo-i [data-path]").forEach((el) => {
+    el.classList.toggle("official-missing", missingPaths.has(el.dataset.path));
+  });
+  document.querySelectorAll(".official-anexo-i [data-official-cnae]").forEach((el) => {
+    el.classList.toggle("official-missing", missingPaths.has("establishment.cnae"));
+  });
 }
 
 function cnaeParts() {
@@ -2892,6 +2988,11 @@ function cnaeParts() {
   const match = raw.match(/^([0-9.\-/]+)\s*-\s*(.+)$/);
   if (!match) return { code: raw, activity: raw };
   return { code: match[1], activity: match[2] };
+}
+
+function signerIdentity(name, detail) {
+  const parts = [name, detail].map((value) => String(value || "").trim()).filter(Boolean);
+  return parts.length ? `<small class="official-signer-identity">${parts.map(escapeHtml).join(" &middot; ")}</small>` : "";
 }
 
 function printAnexoI() {
@@ -2905,7 +3006,7 @@ function printAnexoI() {
   return `
     <div class="official-form official-anexo-i">
       <section class="official-page official-anexo-i-page official-anexo-i-page-one">
-        ${officialDocumentHeader("I", "SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.")}
+        ${jornalOficialFormHeader("I", "SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.")}
 
         <h3 class="official-section-title">1. INFORMA&Ccedil;&Otilde;ES DO ESTABELECIMENTO</h3>
         <div class="official-grid official-establishment-grid">
@@ -2935,19 +3036,19 @@ function printAnexoI() {
         <h3 class="official-section-title">3. CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
         <div class="official-classification">
           ${officialClassificationGroup("Estabelecimento de carne e derivados", [
-            "Unidade de beneficiamento de carne e produtos carneos",
+            "Unidade de beneficiamento de carne e produtos c\u00e1rneos",
           ])}
           ${officialClassificationGroup("Estabelecimento de pescado e derivados", [
             "Unidade de beneficiamento de pescado e produtos de pescado",
-            "Estacao depuradora de moluscos bivalves",
+            "Esta\u00e7\u00e3o depuradora de moluscos bivalves",
           ])}
           ${officialClassificationGroup("Estabelecimento de ovos e derivados", [
-            "Granja avicola",
+            "Granja av\u00edcola",
             "Unidade de beneficiamento de ovos e derivados",
           ])}
           ${officialClassificationGroup("Estabelecimento de leite e derivados", [
             "Granja leiteira",
-            "Posto de refrigeracao",
+            "Posto de refrigera\u00e7\u00e3o",
             "Unidade de beneficiamento de leite e derivados",
             "Queijaria",
           ])}
@@ -2955,6 +3056,7 @@ function printAnexoI() {
       </section>
 
       <section class="official-page official-anexo-i-page official-anexo-i-page-two">
+        ${jornalOficialLetterhead()}
         <div class="official-classification official-classification-continuation">
           ${officialClassificationGroup("Estabelecimento de produtos de abelha e derivados", [
             "Unidade de beneficiamento de produtos de abelhas",
@@ -2966,7 +3068,7 @@ function printAnexoI() {
               path: "establishment.smallBusiness",
               value: "Sim",
             })}
-            ${officialOption("Nao", state.establishment.smallBusiness, [], {
+            ${officialOption("N&atilde;o", state.establishment.smallBusiness, [], {
               path: "establishment.smallBusiness",
               value: "Nao",
             })}
@@ -2979,27 +3081,27 @@ function printAnexoI() {
             path: "application.actType",
             value: "Registro de estabelecimento",
           })}
-          ${officialOption("Renovacao do titulo de registro", actType, [], {
+          ${officialOption("Renova&ccedil;&atilde;o do t&iacute;tulo de registro", actType, [], {
             path: "application.actType",
             value: "Renovacao do titulo de registro",
           })}
-          ${officialOption("Reforma ou ampliacao", actType, [], {
+          ${officialOption("Reforma ou amplia&ccedil;&atilde;o", actType, [], {
             path: "application.actType",
             value: "Reforma ou ampliacao",
           })}
-          ${officialOption("Transferencia cadastral", actType, [], {
+          ${officialOption("Transfer&ecirc;ncia cadastral", actType, [], {
             path: "application.actType",
             value: "Transferencia cadastral",
           })}
-          ${officialOption("Solicitacao de vistoria in loco", actType, [], {
+          ${officialOption("Solicita&ccedil;&atilde;o de vistoria in loco", actType, [], {
             path: "application.actType",
             value: "Solicitacao de vistoria in loco",
           })}
-          ${officialOption("Paralisacao das atividades", actType, [], {
+          ${officialOption("Paralisa&ccedil;&atilde;o das atividades", actType, [], {
             path: "application.actType",
             value: "Paralisacao das atividades",
           })}
-          ${officialOption("Reinicio das atividades", actType, [], {
+          ${officialOption("Rein&iacute;cio das atividades", actType, [], {
             path: "application.actType",
             value: "Reinicio das atividades",
           })}
@@ -3020,31 +3122,31 @@ function printAnexoI() {
             <span>Outro (especificar): ${officialInput("application.otherAct", { inline: true, label: "Outro tipo de solicitacao" })}</span>
           </label>
           <div class="official-alteration-title">Altera&ccedil;&atilde;o cadastral (assinalar uma das op&ccedil;&otilde;es abaixo):</div>
-          ${officialOption("Alteracao de CNPJ", cadastralChange, [], {
+          ${officialOption("Altera&ccedil;&atilde;o de CNPJ", cadastralChange, [], {
             path: "application.cadastralChangeType",
             value: "Alteracao de CNPJ",
             parentPath: "application.actType",
             parentValue: "Alteracao cadastral",
           })}
-          ${officialOption("Alteracao de razao social", cadastralChange, [], {
+          ${officialOption("Altera&ccedil;&atilde;o de raz&atilde;o social", cadastralChange, [], {
             path: "application.cadastralChangeType",
             value: "Alteracao de razao social",
             parentPath: "application.actType",
             parentValue: "Alteracao cadastral",
           })}
-          ${officialOption("Classificacao do estabelecimento", cadastralChange, [], {
+          ${officialOption("Classifica&ccedil;&atilde;o do estabelecimento", cadastralChange, [], {
             path: "application.cadastralChangeType",
             value: "Classificacao do estabelecimento",
             parentPath: "application.actType",
             parentValue: "Alteracao cadastral",
           })}
-          ${officialOption("Alteracao do endereco", cadastralChange, [], {
+          ${officialOption("Altera&ccedil;&atilde;o do endere&ccedil;o", cadastralChange, [], {
             path: "application.cadastralChangeType",
             value: "Alteracao do endereco",
             parentPath: "application.actType",
             parentValue: "Alteracao cadastral",
           })}
-          ${officialOption("Alteracao de responsavel tecnico", cadastralChange, [], {
+          ${officialOption("Altera&ccedil;&atilde;o de respons&aacute;vel t&eacute;cnico", cadastralChange, [], {
             path: "application.cadastralChangeType",
             value: "Alteracao de responsavel tecnico",
             parentPath: "application.actType",
@@ -3068,8 +3170,8 @@ function printAnexoI() {
             <div>MATR&Iacute;CULA: ${officialInput("application.inspectorRegistration", { inline: true, owner: "sim", label: "Matricula do autuante" })}</div>
           </div>
           <div class="official-signature-people">
-            <div><span class="official-signature-line"></span>ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL</div>
-            <div><span class="official-signature-line"></span>ASSINATURA DO RESPONS&Aacute;VEL T&Eacute;CNICO</div>
+            <div><span class="official-signature-line"></span>ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL${signerIdentity(state.legalResponsible?.name, state.legalResponsible?.cpf ? `CPF ${state.legalResponsible.cpf}` : "")}</div>
+            <div><span class="official-signature-line"></span>ASSINATURA DO RESPONS&Aacute;VEL T&Eacute;CNICO${signerIdentity(state.technicalResponsible?.name, state.technicalResponsible?.council || "")}</div>
           </div>
         </div>
       </section>
@@ -3855,6 +3957,12 @@ function bindEvents() {
       update(el.dataset.officialArrayPath, filtered);
     });
   });
+  const anexoIForm = document.querySelector(".official-anexo-i");
+  if (anexoIForm && document.querySelector("[data-anexo-i-checklist]")) {
+    anexoIForm.addEventListener("input", refreshAnexoIAssistant);
+    anexoIForm.addEventListener("change", refreshAnexoIAssistant);
+    refreshAnexoIAssistant();
+  }
   document.querySelectorAll("[data-official-cnae]").forEach((el) => {
     el.addEventListener("input", () => {
       const code = document.querySelector('[data-official-cnae="code"]')?.value || "";
