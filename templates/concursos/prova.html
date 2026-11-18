@@ -1,0 +1,119 @@
+{% extends "concursos/_base.html" %}
+{% set ativo = 'inicio' %}
+{% block cz_head %}
+<style>
+  .cz-pdf { width: 100%; height: calc(100vh - 170px); min-height: 520px; border: 1px solid #e3e6ef; border-radius: 14px; background: #f8f9fb; }
+  .cz-folha { position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow-y: auto; }
+  .cz-linha { display: flex; align-items: center; gap: .35rem; padding: .2rem 0; border-bottom: 1px dashed #eef0f5; }
+  .cz-num { width: 2rem; font-weight: 600; font-size: .85rem; color: #555; }
+  .cz-bolha { width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 2px solid #c7c9d9; background: #fff;
+              font-weight: 600; font-size: .85rem; color: #555; padding: 0; line-height: 1; }
+  .cz-bolha[aria-pressed="true"] { background: #5b3a8a; border-color: #5b3a8a; color: #fff; }
+  .cz-bolha:focus-visible { outline: 3px solid #c4b5fd; }
+  .cz-salvo { font-size: .75rem; }
+</style>
+{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+  <div>
+    <h1 class="h4 mb-0">{{ prova.titulo }}</h1>
+    <div class="small text-muted">{{ prova.total_questoes }} questões{% if not prova.ativo %} · <span class="cz-selo">Oculta (só gestores veem)</span>{% endif %}</div>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary d-lg-none" href="{{ url_for('concursos.pdf', prova_id=prova.id) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf me-1"></i>Abrir a prova</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8 d-none d-lg-block">
+    <iframe class="cz-pdf" src="{{ url_for('concursos.pdf', prova_id=prova.id) }}#view=FitH" title="Caderno da prova"></iframe>
+  </div>
+  <div class="col-lg-4">
+    <div class="cz-cartao cz-folha">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <strong>Folha de respostas</strong>
+        <span class="small text-muted"><i class="far fa-clock me-1"></i><span id="cz-tempo">00:00</span></span>
+      </div>
+      <div class="small mb-1"><span id="cz-respondidas">{{ tentativa.respondidas }}</span>/{{ prova.total_questoes }} marcadas
+        <span class="cz-salvo text-muted ms-1" id="cz-salvo" role="status" aria-live="polite"></span></div>
+      <div class="cz-barra mb-2"><span id="cz-progresso" style="width: {{ (100 * tentativa.respondidas / prova.total_questoes)|round|int }}%"></span></div>
+      <div id="cz-folha" data-url="{{ url_for('concursos.marcar', tentativa_id=tentativa.id) }}"
+           data-inicio="{{ tentativa.iniciada_em.isoformat() if tentativa.iniciada_em else '' }}">
+        {% for linha in folha %}
+        <div class="cz-linha" role="group" aria-label="Questão {{ linha.numero }}">
+          <span class="cz-num">{{ '%02d' % linha.numero }}</span>
+          {% for l in alternativas %}
+          <button type="button" class="cz-bolha" data-q="{{ linha.numero }}" data-l="{{ l }}"
+                  aria-pressed="{{ 'true' if linha.marcada == l else 'false' }}" aria-label="Questão {{ linha.numero }}, alternativa {{ l }}">{{ l }}</button>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <form method="post" action="{{ url_for('concursos.entregar', tentativa_id=tentativa.id) }}" class="mt-3" id="cz-entregar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-success w-100"><i class="fas fa-flag-checkered me-1"></i>Entregar e ver a nota</button>
+      </form>
+      <p class="small text-muted mt-2 mb-0">As marcações ficam salvas: pode fechar e continuar depois. Clique de novo numa letra para desmarcar.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const folha = document.getElementById('cz-folha');
+  const total = {{ prova.total_questoes }};
+  const csrf = '{{ csrf_token() }}';
+  const salvo = document.getElementById('cz-salvo');
+  const contador = document.getElementById('cz-respondidas');
+  const barra = document.getElementById('cz-progresso');
+
+  function atualizar(n) {
+    contador.textContent = n;
+    barra.style.width = Math.round(100 * n / total) + '%';
+  }
+
+  folha.addEventListener('click', async function (ev) {
+    const botao = ev.target.closest('.cz-bolha');
+    if (!botao) return;
+    const q = botao.dataset.q;
+    const jaMarcada = botao.getAttribute('aria-pressed') === 'true';
+    const letra = jaMarcada ? '' : botao.dataset.l;
+    const irmaos = folha.querySelectorAll('.cz-bolha[data-q="' + q + '"]');
+    const antes = Array.from(irmaos).map(function (b) { return b.getAttribute('aria-pressed'); });
+    irmaos.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.l === letra)); });
+    salvo.textContent = 'salvando…';
+    try {
+      const resp = await fetch(folha.dataset.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ questao: Number(q), letra: letra })
+      });
+      if (!resp.ok) throw new Error(resp.status);
+      const dados = await resp.json();
+      atualizar(dados.respondidas);
+      salvo.textContent = 'salvo';
+    } catch (e) {
+      irmaos.forEach(function (b, i) { b.setAttribute('aria-pressed', antes[i]); });
+      salvo.textContent = 'não salvou — confira a conexão';
+    }
+  });
+
+  document.getElementById('cz-entregar').addEventListener('submit', function (ev) {
+    const faltam = total - Number(contador.textContent);
+    const msg = faltam > 0
+      ? 'Ainda há ' + faltam + ' questão(ões) em branco. Entregar mesmo assim?'
+      : 'Entregar a prova e ver a nota?';
+    if (!window.confirm(msg)) ev.preventDefault();
+  });
+
+  const inicio = folha.dataset.inicio ? new Date(folha.dataset.inicio) : null;
+  const tempo = document.getElementById('cz-tempo');
+  function relogio() {
+    if (!inicio || isNaN(inicio)) return;
+    const s = Math.max(0, Math.floor((Date.now() - inicio.getTime()) / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    tempo.textContent = (h ? h + 'h' : '') + String(m).padStart(2, '0') + 'min';
+  }
+  relogio();
+  setInterval(relogio, 30000);
+})();
+</script>
+{% endblock %}

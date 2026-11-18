@@ -276,8 +276,9 @@ def _viewer_operational_clinic_ids(viewer):
             if clinic_id and clinic_id not in clinic_ids:
                 clinic_ids.append(clinic_id)
 
-    worker_role = (getattr(viewer, 'worker', None) or '').lower()
-    if worker_role == 'colaborador':
+    from helpers import user_has_worker
+
+    if user_has_worker(viewer, 'colaborador'):
         viewer_clinic = getattr(viewer, 'clinica_id', None)
         if viewer_clinic and viewer_clinic not in clinic_ids:
             clinic_ids.append(viewer_clinic)

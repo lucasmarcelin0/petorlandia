@@ -1,4 +1,4 @@
-{% set tutor_history = current_user.id == animal.user_id and current_user.role != 'admin' and current_user.worker not in ['veterinario', 'colaborador'] and not can_act_as_veterinarian(current_user) %}
+{% set tutor_history = current_user.id == animal.user_id and current_user.role != 'admin' and not user_has_worker(current_user, 'veterinario', 'colaborador') and not can_act_as_veterinarian(current_user) %}
 <div>
   <div class="accordion" id="historicoAccordion" data-history-accordion>
     <div class="accordion-item">

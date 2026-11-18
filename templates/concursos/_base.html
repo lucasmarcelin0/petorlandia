@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+{% block page_title %}Corujão dos concursos · PetOrlândia{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+  .cz-pagina { max-width: 1280px; }
+  .cz-cartao { background: #fff; border: 1px solid #e3e6ef; border-radius: 14px; padding: 1rem 1.1rem; }
+  .cz-nav .nav-link { border-radius: 999px; }
+  .cz-nav .nav-pills .nav-link.active { background: #5b3a8a; color: #fff; }
+  .cz-selo { font-size: .75rem; border-radius: 999px; padding: .15rem .55rem; background: #f3e8ff; color: #5b3a8a; }
+  .cz-barra { height: .5rem; border-radius: 999px; background: #eee; overflow: hidden; }
+  .cz-barra > span { display: block; height: 100%; background: linear-gradient(90deg, #8b5cf6, #22c55e); }
+  .cz-certa { background: #dcfce7 !important; color: #166534 !important; }
+  .cz-errada { background: #fee2e2 !important; color: #991b1b !important; }
+  .cz-branco { background: #fef3c7 !important; color: #92400e !important; }
+  .cz-anulada { background: #e5e7eb !important; color: #374151 !important; }
+</style>
+{% block cz_head %}{% endblock %}
+{% endblock %}
+{% block main %}
+<div class="container-fluid cz-pagina py-4">
+  <nav class="cz-nav mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <span class="fs-4" aria-hidden="true">🦉</span>
+    <ul class="nav nav-pills gap-1 flex-wrap small">
+      <li class="nav-item"><a class="nav-link {% if ativo == 'inicio' %}active{% endif %}" href="{{ url_for('concursos.inicio') }}"><i class="fas fa-book-open me-1"></i>Provas</a></li>
+      {% if gestor %}
+      <li class="nav-item"><a class="nav-link {% if ativo == 'acompanhamento' %}active{% endif %}" href="{{ url_for('concursos.acompanhamento') }}"><i class="fas fa-chart-line me-1"></i>Acompanhamento</a></li>
+      <li class="nav-item"><a class="nav-link {% if ativo == 'nova' %}active{% endif %}" href="{{ url_for('concursos.nova') }}"><i class="fas fa-plus me-1"></i>Nova prova</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% block conteudo %}{% endblock %}
+</div>
+{% endblock %}

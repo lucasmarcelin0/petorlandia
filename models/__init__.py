@@ -107,6 +107,7 @@ from .entomologia import (
     EntomologiaSolicitacaoCategoria,
     EntomologiaVisitaDomiciliar,
 )
+from .concursos import ConcursoProva, ConcursoTentativa
 from .academy import (
     AcademyComentario,
     AcademyLicao,
@@ -268,4 +269,6 @@ __all__ = [
     "LojaDfeDocumento",
     "GroomingSessao",
     "LojaMembro",
+    "ConcursoProva",
+    "ConcursoTentativa",
 ]

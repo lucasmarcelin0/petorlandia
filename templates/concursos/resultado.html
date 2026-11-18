@@ -1,0 +1,52 @@
+{% extends "concursos/_base.html" %}
+{% set ativo = 'inicio' %}
+{% block conteudo %}
+<div class="cz-cartao mb-3">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+    <div>
+      <h1 class="h4 mb-1">{{ prova.titulo }}</h1>
+      <div class="small text-muted">
+        {% if tentativa.user_id != current_user.id %}{{ tentativa.user.name }} · {% endif %}entregue em {{ tentativa.entregue_em|format_datetime_brazil if tentativa.entregue_em else '' }}
+      </div>
+    </div>
+    <div class="text-end">
+      <div class="display-6 fw-bold">{{ pct }}%</div>
+      <div class="small text-muted">{{ tentativa.acertos }} de {{ prova.total_questoes }} acertos</div>
+    </div>
+  </div>
+  <div class="cz-barra mt-2"><span style="width: {{ pct }}%"></span></div>
+  <div class="small mt-2">
+    <span class="badge cz-certa">{{ tentativa.acertos }} certas</span>
+    <span class="badge cz-errada">{{ erradas }} erradas</span>
+    <span class="badge cz-branco">{{ brancos }} em branco</span>
+  </div>
+  <p class="mt-3 mb-0">
+    {% if pct >= 80 %}🦉 Coruja sábia! Nota de quem passa em concurso.
+    {% elif pct >= 60 %}Muito bom — revise as erradas e tente bater a sua marca.
+    {% elif pct >= 40 %}No caminho. Anote os temas das erradas para estudar.
+    {% else %}Todo mundo começa em algum lugar. Revise e refaça!{% endif %}
+  </p>
+  {% if tentativa.user_id == current_user.id %}
+  <div class="mt-3 d-flex gap-2 flex-wrap">
+    <a class="btn btn-primary btn-sm" href="{{ url_for('concursos.prova', prova_id=prova.id) }}"><i class="fas fa-rotate me-1"></i>Refazer a prova</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('concursos.pdf', prova_id=prova.id) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf me-1"></i>Abrir o caderno</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="cz-cartao">
+  <h2 class="h6">Correção questão a questão</h2>
+  <div class="d-flex flex-wrap gap-2">
+    {% for l in linhas %}
+    <div class="border rounded px-2 py-1 small cz-{{ l.situacao }}" style="min-width: 116px"
+         title="{% if l.situacao == 'anulada' %}Anulada{% else %}Gabarito {{ l.certa }}{% endif %}">
+      <strong>{{ '%02d' % l.numero }}</strong>
+      {% if l.situacao == 'anulada' %}anulada
+      {% elif l.situacao == 'certa' %}✓ {{ l.marcada }}
+      {% elif l.situacao == 'errada' %}✗ {{ l.marcada }} → {{ l.certa }}
+      {% else %}— → {{ l.certa }}{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

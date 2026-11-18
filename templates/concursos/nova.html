@@ -1,0 +1,35 @@
+{% extends "concursos/_base.html" %}
+{% set ativo = 'nova' %}
+{% block conteudo %}
+<h1 class="h4 mb-3">Nova prova</h1>
+<form method="post" enctype="multipart/form-data" class="cz-cartao" style="max-width: 760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="mb-3">
+    <label class="form-label" for="titulo">Título</label>
+    <input class="form-control" id="titulo" name="titulo" maxlength="200" required placeholder="Ex.: Prefeitura de Jardinópolis 2026 — Médico Veterinário">
+  </div>
+  <div class="row g-2 mb-3">
+    <div class="col-sm-4"><label class="form-label" for="banca">Banca</label><input class="form-control" id="banca" name="banca" maxlength="80" placeholder="VUNESP"></div>
+    <div class="col-sm-5"><label class="form-label" for="cargo">Cargo</label><input class="form-control" id="cargo" name="cargo" maxlength="120" placeholder="Médico Veterinário"></div>
+    <div class="col-sm-3"><label class="form-label" for="ano">Ano</label><input class="form-control" id="ano" name="ano" type="number" min="1990" max="2100"></div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="pdf_prova">PDF da prova</label>
+    <input class="form-control" id="pdf_prova" name="pdf_prova" type="file" accept="application/pdf" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="pdf_gabarito">PDF do gabarito <span class="text-muted small">(opcional)</span></label>
+    <input class="form-control" id="pdf_gabarito" name="pdf_gabarito" type="file" accept="application/pdf">
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="gabarito_texto">…ou cole o gabarito</label>
+    <textarea class="form-control font-monospace" id="gabarito_texto" name="gabarito_texto" rows="4" placeholder="1 - C&#10;2 - D&#10;3 - B   (ou só CDB...; * ou X = anulada)"></textarea>
+  </div>
+  <div class="mb-3" style="max-width: 220px">
+    <label class="form-label" for="total_questoes">Nº de questões <span class="text-muted small">(opcional)</span></label>
+    <input class="form-control" id="total_questoes" name="total_questoes" type="number" min="1" max="200">
+  </div>
+  <p class="small text-muted">Na próxima tela você confere o gabarito lido, completa o que faltar e publica.</p>
+  <button class="btn btn-primary"><i class="fas fa-upload me-1"></i>Enviar</button>
+</form>
+{% endblock %}

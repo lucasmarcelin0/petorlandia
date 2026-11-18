@@ -1,0 +1,47 @@
+{% extends "concursos/_base.html" %}
+{% set ativo = 'inicio' %}
+{% block conteudo %}
+<h1 class="h3 mb-1">Corujão dos concursos</h1>
+<p class="text-muted mb-4">Você achou a sala secreta. 🤫 Resolva provas reais de concurso de Medicina Veterinária, marque as respostas e veja a nota na hora.</p>
+
+{% if not provas %}
+<div class="cz-cartao text-center text-muted">Nenhuma prova disponível ainda.{% if gestor %} Use “Nova prova” para enviar a primeira.{% endif %}</div>
+{% else %}
+<div class="row g-3">
+  {% for p in provas %}
+  {% set r = resumo.get(p.id) %}
+  <div class="col-md-6 col-lg-4">
+    <div class="cz-cartao h-100 d-flex flex-column">
+      <div class="d-flex justify-content-between gap-2 align-items-start">
+        <strong>{{ p.titulo }}</strong>
+        {% if not p.ativo %}<span class="cz-selo">Oculta</span>{% endif %}
+      </div>
+      <div class="small text-muted mt-1">
+        {% for item in [p.banca, p.cargo, p.ano] if item %}{{ item }} · {% endfor %}{{ p.total_questoes }} questões
+      </div>
+      {% if r and r.melhor is not none %}
+      <div class="mt-3 small">Melhor nota: <strong>{{ r.melhor }}%</strong> · {{ r.entregas }} entrega{% if r.entregas != 1 %}s{% endif %}</div>
+      <div class="cz-barra mt-1"><span style="width: {{ r.melhor }}%"></span></div>
+      {% endif %}
+      {% if r and r.aberta %}
+      <div class="small text-muted mt-2">Em andamento: {{ r.aberta.respondidas }}/{{ p.total_questoes }} marcadas</div>
+      {% endif %}
+      <div class="mt-auto pt-3 d-flex gap-2 flex-wrap">
+        {% if p.ativo or gestor %}
+        <a class="btn btn-sm btn-primary" href="{{ url_for('concursos.prova', prova_id=p.id) }}">
+          {% if r and r.aberta %}Continuar{% elif r and r.entregas %}Refazer{% else %}Começar{% endif %}
+        </a>
+        {% endif %}
+        {% if r and r.ultima %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('concursos.resultado', tentativa_id=r.ultima.id) }}">Último resultado</a>
+        {% endif %}
+        {% if gestor %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('concursos.gabarito', prova_id=p.id) }}">Gabarito</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

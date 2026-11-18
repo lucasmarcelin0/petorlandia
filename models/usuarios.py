@@ -123,6 +123,10 @@ class User(UserMixin, db.Model):
     test_label = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='adotante', nullable=True)
+    # Papeis adicionais ao ``role`` principal, separados por virgula. Ex.: uma
+    # estagiaria que tambem vacina tem role='vacinador' e roles_extras='estagiario'.
+    # Leia sempre por ``has_role``/``all_roles``: comparar ``role`` direto ignora isto.
+    roles_extras = db.Column(db.String(255), nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=True)
     last_login = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -154,6 +158,27 @@ class User(UserMixin, db.Model):
     rg = db.Column(db.String(20), nullable=True)               # Ex: 12.345.678-9
     date_of_birth = db.Column(db.Date, nullable=True)          # Armazenado como data
     worker = db.Column(db.String(50), nullable=True)
+    # Perfis internos adicionais ao ``worker`` principal (mesma regra de ``roles_extras``).
+    workers_extras = db.Column(db.String(255), nullable=True)
+
+    @staticmethod
+    def _papeis(principal, extras):
+        valores = [principal or ''] + (extras or '').split(',')
+        return frozenset(v.strip().lower() for v in valores if v and v.strip())
+
+    @property
+    def all_roles(self):
+        return self._papeis(self.role, self.roles_extras)
+
+    @property
+    def all_workers(self):
+        return self._papeis(self.worker, self.workers_extras)
+
+    def has_role(self, *nomes):
+        return bool(self.all_roles & {n.lower() for n in nomes})
+
+    def has_worker(self, *nomes):
+        return bool(self.all_workers & {n.lower() for n in nomes})
     # dentro da classe User
     veterinario = db.relationship(
         'Veterinario',

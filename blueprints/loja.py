@@ -9,6 +9,7 @@ import logging
 import re
 import subprocess
 import sys
+from helpers import user_has_worker
 from datetime import datetime, timedelta
 from decimal import Decimal
 from security.redact import redact_sensitive_text
@@ -695,7 +696,7 @@ def warmup_pesquisa_racoes_whatsapp():
 @bp.route("/orders/new", methods=["GET", "POST"])
 @login_required
 def create_order():
-    if current_user.worker != 'delivery':
+    if not user_has_worker(current_user, 'delivery'):
         abort(403)
 
     order_id = session.get('current_order')
@@ -732,7 +733,7 @@ def create_order():
 @bp.route("/orders/<int:order_id>/request_delivery", methods=["POST"])
 @login_required
 def request_delivery(order_id):
-    if current_user.worker != 'delivery':      # só entregadores podem solicitar
+    if not user_has_worker(current_user, 'delivery'):      # só entregadores podem solicitar
         abort(403)
 
     order = Order.query.get_or_404(order_id)
@@ -800,7 +801,7 @@ def admin_delivery_detail(req_id):
 @login_required
 def worker_delivery_detail(req_id):
     # garante que o usuário é entregador e dono da entrega
-    if current_user.worker != "delivery":
+    if not user_has_worker(current_user, 'delivery'):
         abort(403)
     req = DeliveryRequest.query.get_or_404(req_id)
     if req.worker_id and req.worker_id != current_user.id:
@@ -812,7 +813,7 @@ def worker_delivery_detail(req_id):
 @login_required
 def accept_delivery(req_id):
     try:
-        if current_user.worker != 'delivery' and not _is_admin():
+        if not user_has_worker(current_user, 'delivery') and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = (
             DeliveryRequest.query
@@ -859,7 +860,7 @@ def accept_delivery(req_id):
 @login_required
 def complete_delivery(req_id):
     try:
-        if current_user.worker != 'delivery' and not _is_admin():
+        if not user_has_worker(current_user, 'delivery') and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
@@ -889,7 +890,7 @@ def complete_delivery(req_id):
 @login_required
 def cancel_delivery(req_id):
     try:
-        if current_user.worker != 'delivery' and not _is_admin():
+        if not user_has_worker(current_user, 'delivery') and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
@@ -963,7 +964,7 @@ def delivery_detail(req_id):
 
     if _is_admin():
         role = "admin"
-    elif current_user.worker == "delivery":
+    elif user_has_worker(current_user, 'delivery'):
         if req.worker_id and req.worker_id != current_user.id:
             abort(403)
         role = "worker"
@@ -1355,7 +1356,7 @@ def delivery_archive_user():
         )
         .order_by(DeliveryRequest.id.desc())
     )
-    if current_user.worker == "delivery":
+    if user_has_worker(current_user, 'delivery'):
         reqs = base.filter_by(worker_id=current_user.id).all()
     else:
         reqs = base.filter_by(requested_by_id=current_user.id).all()

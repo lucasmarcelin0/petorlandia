@@ -99,6 +99,28 @@ class _UnidadesSinanField(SelectMultipleField):
         super().process_formdata([valor for valor in valuelist if str(valor).strip()])
 
 
+#: Papeis que podem ser acumulados ao principal. Ficam de fora os que mudam a
+#: conta inteira (administrador, master e as contas so de Notificacao SINAN).
+EXTRA_ROLE_CHOICES = [(v, r) for v, r in USER_ROLE_CHOICES if v != 'admin']
+EXTRA_WORKER_CHOICES = [
+    (v, r) for v, r in USER_WORKER_CHOICES
+    if v and v not in {'master', 'unidade_saude', 'master_notificacao'}
+]
+
+
+class _PapeisExtrasField(SelectMultipleField):
+    """Caixas de marcar para papeis adicionais; o principal continua no select de cima."""
+
+    widget = _CaixasDeUnidades()
+
+    def process_formdata(self, valuelist):
+        super().process_formdata([valor for valor in valuelist if str(valor).strip()])
+
+    def pre_validate(self, form):
+        validos = {valor for valor, _ in self.choices}
+        self.data = [valor for valor in (self.data or []) if valor in validos]
+
+
 ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
 ADMIN_IMAGE_ACCEPT = ','.join(f'image/{extension}' for extension in ADMIN_IMAGE_EXTENSIONS)
 
@@ -759,6 +781,19 @@ class UserAdminView(MyModelView):
             description='Preencha apenas para redefinir a senha do usuário '
                         '(mínimo 6 caracteres). Deixe em branco para manter a atual.',
         ),
+        'roles_extras_escolha': _PapeisExtrasField(
+            'Roles adicionais',
+            choices=EXTRA_ROLE_CHOICES,
+            default=list,
+            description='Marque outros papéis que a conta também exerce, além do "Role" acima '
+                        '(ex.: Vacinador PMO que também é Estagiário(a)).',
+        ),
+        'workers_extras_escolha': _PapeisExtrasField(
+            'Workers adicionais',
+            choices=EXTRA_WORKER_CHOICES,
+            default=list,
+            description='Marque outros perfis internos que a conta também tem, além do "Worker" acima.',
+        ),
         # As opções (unidades cadastradas) entram em create_form/edit_form.
         'unidade_sinan': _UnidadesSinanField(
             'Unidades de saúde (Notificação SINAN)',
@@ -796,7 +831,9 @@ class UserAdminView(MyModelView):
         'profile_photo': lambda v, c, m, p: Markup(
             f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100">'
         ) if m.profile_photo else '',
-        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
+        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—',
+        'role': lambda v, c, m, p: ' + '.join(x for x in [m.role or ''] + (m.roles_extras or '').split(',') if x),
+        'worker': lambda v, c, m, p: ' + '.join(x for x in [m.worker or ''] + (m.workers_extras or '').split(',') if x),
     }
 
     # "Ver como" (services.ver_como): o administrador vê o site como a conta, só lendo.
@@ -810,7 +847,8 @@ class UserAdminView(MyModelView):
         'worker': {'choices': USER_WORKER_CHOICES},
     }
     form_columns = (
-        'name', 'email', 'new_password', 'role', 'worker', 'unidade_sinan',
+        'name', 'email', 'new_password', 'role', 'roles_extras_escolha', 'worker', 'workers_extras_escolha',
+        'unidade_sinan',
         'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica', 'profile_photo_upload'
     )
     column_details_list = column_list
@@ -819,7 +857,26 @@ class UserAdminView(MyModelView):
         return self._preparar_unidade_sinan(super().create_form(obj))
 
     def edit_form(self, obj=None):
-        return self._preparar_unidade_sinan(super().edit_form(obj))
+        form = self._preparar_unidade_sinan(super().edit_form(obj))
+        if obj is not None and request.method != 'POST':
+            for campo, coluna in (('roles_extras_escolha', 'roles_extras'), ('workers_extras_escolha', 'workers_extras')):
+                field = getattr(form, campo, None)
+                if field is not None:
+                    field.data = [v.strip() for v in (getattr(obj, coluna, None) or '').split(',') if v.strip()]
+        return form
+
+    @staticmethod
+    def _gravar_papeis_extras(form, model):
+        """Grava os extras marcados; so mexe quando o campo veio no envio (outras telas nao o enviam)."""
+        for campo, coluna, principal in (('roles_extras_escolha', 'roles_extras', 'role'),
+                                         ('workers_extras_escolha', 'workers_extras', 'worker')):
+            field = getattr(form, campo, None)
+            if field is None or (field.name not in request.form
+                                 and f'{field.name}{_MARCADOR_UNIDADES}' not in request.form):
+                continue
+            base = (getattr(model, principal, None) or '').strip().lower()
+            valores = [v for v in dict.fromkeys(field.data or []) if v and v != base]
+            setattr(model, coluna, ','.join(valores) or None)
 
     @staticmethod
     def _preparar_unidade_sinan(form):
@@ -903,6 +960,7 @@ class UserAdminView(MyModelView):
 
     def on_model_change(self, form, model, is_created):
         model.worker = (model.worker or '').strip() or None
+        self._gravar_papeis_extras(form, model)
         password_field = getattr(form, 'new_password', None)
         new_password = ((password_field.data if password_field else '') or '').strip()
         if new_password:

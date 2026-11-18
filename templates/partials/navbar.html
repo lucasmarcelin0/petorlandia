@@ -165,7 +165,7 @@
         {# Ações de trabalho vêm primeiro para perfis que usam a plataforma profissionalmente. #}
         {% set primary_is_clinical_or_delivery = user_experience.primary_workspace and user_experience.primary_workspace.key in ['professional', 'delivery'] %}
         {% if not primary_is_clinical_or_delivery %}{% include 'partials/workspace_nav.html' %}{% endif %}
-        {% if current_user.worker == 'delivery' %}
+        {% if user_has_worker(current_user, 'delivery') %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('list_delivery_requests') }}">
             <i class="fas fa-truck me-1 nav-ico--operacao"></i> Solicitações
@@ -199,7 +199,7 @@
             {% endif %}
           </ul>
         </li>
-        {% elif current_user.worker == 'colaborador' or is_active_intern(current_user) or is_supervised_intern(current_user) %}
+        {% elif user_has_worker(current_user, 'colaborador') or is_active_intern(current_user) or is_supervised_intern(current_user) %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
             <i class="fas fa-calendar-alt me-1 nav-ico--gestao"></i> Agenda
@@ -241,7 +241,7 @@
           </a>
         </li>
 
-        {% if current_user.worker != 'delivery' %}
+        {% if not user_has_worker(current_user, 'delivery') %}
         <li class="nav-item">
           <a class="nav-link{{ ' nav-link--active' if nav_services_active else '' }}" href="{{ url_for('servicos') }}"{% if nav_services_active %} aria-current="page"{% endif %}>
             <i class="fas fa-paw me-1 nav-ico--saude"></i> Serviços
@@ -361,7 +361,7 @@
             <li><a class="dropdown-item" href="{{ url_for('petsitter_routes.indicacao') }}"
                    data-cta="nav_indicacao">
                 <i class="fas fa-gift me-2 text-danger"></i> Indique e ganhe</a></li>
-            {% if current_user.role == 'parceiro' %}
+            {% if user_has_role(current_user, 'parceiro') %}
             <li><a class="dropdown-item" href="{{ url_for('parceiro_dashboard') }}">
                 <i class="fa-solid fa-handshake me-2 text-primary"></i> Área do parceiro</a></li>
             {% endif %}

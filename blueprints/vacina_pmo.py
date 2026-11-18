@@ -1,4 +1,5 @@
 """Views do domínio vacina_pmo_routes (migrado do app.py)."""
+from helpers import user_has_role
 from flask import Blueprint
 import hashlib, os, re, requests, threading as _pmo_threading, unicodedata, uuid
 from datetime import date, datetime
@@ -309,7 +310,7 @@ def _mensagem_falha_solicitacao(exc: Exception) -> str:
 @bp.route('/vacina-pmo')
 @login_required
 def vacina_pmo():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     # datetime resolvido via módulo app em tempo de request: testes congelam a
     # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
@@ -528,7 +529,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
 @bp.route('/vacina-pmo/sync', methods=['POST'])
 @login_required
 def vacina_pmo_sync():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import persist_vacina_pmo_rows, sync_vacina_pmo_sheet
@@ -574,7 +575,7 @@ def vacina_pmo_sync():
 @bp.route('/vacina-pmo/avaliacoes', methods=['GET'])
 @login_required
 def vacina_pmo_avaliacoes():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import get_all_vacina_pmo_evaluations
@@ -588,7 +589,7 @@ def vacina_pmo_avaliacoes():
 @bp.route('/vacina-pmo/criar-dia', methods=['POST'])
 @login_required
 def vacina_pmo_criar_dia():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import criar_dia_vacinacao
@@ -714,7 +715,7 @@ def vacina_pmo_cobertura_atlas():
 
 
 def _pmo_painel_guard():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
 
 
@@ -947,7 +948,7 @@ def _pmo_print_visits(date_str, sheet_title, shift_key):
 @bp.route('/vacina-pmo/imprimir/<date_str>/<turno>')
 @login_required
 def vacina_pmo_imprimir(date_str, turno):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     sheet_title = date_str.replace('-', '/')
     shift_key = "Manha" if turno.lower().startswith("man") else "Tarde"
@@ -972,7 +973,7 @@ def vacina_pmo_imprimir(date_str, turno):
 @bp.route('/vacina-pmo/sheets', methods=['GET'])
 @login_required
 def vacina_pmo_sheets():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import list_vacina_pmo_sheets
@@ -986,7 +987,7 @@ def vacina_pmo_sheets():
 @bp.route('/vacina-pmo/state', methods=['GET'])
 @login_required
 def vacina_pmo_state():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import get_saved_vacina_pmo_rows, get_vacina_pmo_video_items
@@ -1022,7 +1023,7 @@ def vacina_pmo_state():
 @bp.route('/vacina-pmo/route/optimize', methods=['POST'])
 @login_required
 def vacina_pmo_route_optimize():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import optimize_vacina_pmo_route
@@ -1045,7 +1046,7 @@ def vacina_pmo_route_optimize():
 @bp.route('/vacina-pmo/route/preview', methods=['POST'])
 @login_required
 def vacina_pmo_route_preview():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import preview_vacina_pmo_route
@@ -1067,7 +1068,7 @@ def vacina_pmo_route_preview():
 @bp.route('/vacina-pmo/route/undo', methods=['POST'])
 @login_required
 def vacina_pmo_route_undo():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import undo_last_vacina_pmo_route_optimization
@@ -1090,7 +1091,7 @@ def vacina_pmo_route_undo():
 @bp.route('/vacina-pmo/updates', methods=['GET'])
 @login_required
 def vacina_pmo_updates():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.pmo_realtime import get_pmo_events_since
@@ -1114,7 +1115,7 @@ def vacina_pmo_updates():
 @bp.route('/vacina-pmo/animal/<int:animal_id>/status', methods=['POST'])
 @login_required
 def vacina_pmo_animal_status(animal_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import update_vacina_pmo_animal_status
@@ -1149,7 +1150,7 @@ def vacina_pmo_animal_status(animal_id):
 @bp.route('/vacina-pmo/animal/<int:animal_id>/name', methods=['POST'])
 @login_required
 def vacina_pmo_animal_name(animal_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import update_vacina_pmo_animal_name
@@ -1180,7 +1181,7 @@ def vacina_pmo_animal_photo(animal_id):
     # Resposta em JSON (e nao `abort(403)` em HTML): a tela envia a foto por
     # fetch e so sabe o que aconteceu se o corpo vier legivel. Sem isso o
     # vacinador ficava com o selo vermelho e nenhuma explicacao.
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         return jsonify({
             'success': False,
             'retryable': False,
@@ -1345,7 +1346,7 @@ def vacina_pmo_diagnostico_foto():
 @bp.route('/vacina-pmo/animal/<int:animal_id>/photo-src')
 @login_required
 def vacina_pmo_animal_photo_src(animal_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
 
     from models import PmoVaccinationAnimal
@@ -1414,7 +1415,7 @@ def vacina_pmo_animal_photo_src(animal_id):
 @bp.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
 @login_required
 def vacina_pmo_visit_attended_by(visit_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import update_vacina_pmo_visit_attended_by
@@ -1441,7 +1442,7 @@ def vacina_pmo_visit_attended_by(visit_id):
 @bp.route('/vacina-pmo/visit', methods=['POST'])
 @login_required
 def vacina_pmo_visit_create():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import create_vacina_pmo_visit
@@ -1467,7 +1468,7 @@ def vacina_pmo_visit_create():
 @bp.route('/vacina-pmo/visit/<int:visit_id>/animal', methods=['POST'])
 @login_required
 def vacina_pmo_visit_add_animal(visit_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import add_vacina_pmo_visit_animal
@@ -1497,7 +1498,7 @@ def vacina_pmo_visit_add_animal(visit_id):
 @bp.route('/vacina-pmo/visit/<int:visit_id>/losses', methods=['POST'])
 @login_required
 def vacina_pmo_visit_losses(visit_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import update_vacina_pmo_visit_losses
@@ -1524,7 +1525,7 @@ def vacina_pmo_visit_losses(visit_id):
 @bp.route('/vacina-pmo/doses/compilar', methods=['POST'])
 @login_required
 def vacina_pmo_doses_compilar():
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import compile_controle_de_doses
@@ -1543,7 +1544,7 @@ def vacina_pmo_doses_compilar():
 @bp.route('/vacina-pmo/visit/<int:visit_id>/note', methods=['POST'])
 @login_required
 def vacina_pmo_visit_note(visit_id):
-    if current_user.role not in ('admin', 'vacinador'):
+    if not user_has_role(current_user, 'admin', 'vacinador'):
         abort(403)
     try:
         from services.vacina_pmo_service import append_vacina_pmo_visit_note

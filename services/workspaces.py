@@ -37,12 +37,11 @@ class Experience:
 def resolve_experience(user, *, active_vet=False, accounting=False, store=None, clinic_access=False, dengue=False,
                        sinan=False, loja_operada=None, limpeza=frozenset(), limpeza_aberta=False,
                        academy=False):
-    from helpers import active_internship_staff, can_start_consulta
+    from helpers import active_internship_staff, can_start_consulta, user_has_role, user_has_worker
 
     if not getattr(user, 'is_authenticated', False):
         return Experience()
     role = (getattr(user, 'role', None) or '').lower()
-    worker = (getattr(user, 'worker', None) or '').lower()
     admin = role == 'admin'
     internship = active_internship_staff(user)
     capabilities = set()
@@ -60,13 +59,13 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
              action('Painel de operação', 'painel_admin.index', 'fa-gauge'),
              action('Alertas', 'admin_notifications', 'fa-bell'),
              action('Funil do produto', 'admin_routes.product_analytics_dashboard', 'fa-chart-line'))
-    if active_vet or worker == 'colaborador' or admin or (internship and internship.can_view_full_calendar):
+    if active_vet or user_has_worker(user, 'colaborador') or admin or (internship and internship.can_view_full_calendar):
         area('professional', 'Área profissional', 'fa-stethoscope',
              action('Agenda', 'appointments', 'fa-calendar-check'),
              action('Animais', 'novo_animal', 'fa-paw'),
              action('Tutores', 'tutores', 'fa-users'),
              action('Minha clínica', 'minha_clinica', 'fa-hospital'))
-    elif getattr(user, 'clinicas', None) or (clinic_access and worker in {'staff', 'assistente'}):
+    elif getattr(user, 'clinicas', None) or (clinic_access and user_has_worker(user, 'staff', 'assistente')):
         area('clinic', 'Minha clínica', 'fa-hospital',
              action('Gerenciar clínica', 'minha_clinica', 'fa-hospital'))
     elif getattr(user, 'veterinario', None):
@@ -99,14 +98,14 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
             action('Produtos', 'casa_de_racao_produtos', 'fa-box-open', casa_id=loja_operada.id),
         ]
         area('store_operator', loja_operada.nome, 'fa-cash-register', *acoes_loja)
-    if worker == 'delivery' or admin:
+    if user_has_worker(user, 'delivery') or admin:
         area('delivery', 'Área de Entregas', 'fa-truck',
              action('Solicitações', 'list_delivery_requests', 'fa-truck'))
-    if role in {'parceiro', 'admin'}:
+    if user_has_role(user, 'parceiro', 'admin'):
         area('partner', 'Área do Parceiro', 'fa-handshake',
              action('Painel do parceiro', 'parceiro_dashboard', 'fa-handshake'),
              action('Cadastrar estabelecimento', 'parceiro_novo_estabelecimento', 'fa-plus'))
-    if role in {'vacinador', 'admin'}:
+    if user_has_role(user, 'vacinador', 'admin'):
         area('vaccinator', 'Área do Vacinador', 'fa-syringe',
              action('Vacinação', 'vacina_pmo', 'fa-syringe'))
     if dengue or admin:
@@ -135,7 +134,7 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
         area('internship', 'Estágio supervisionado', 'fa-user-graduate',
              action('Minha clínica de estágio', 'student_internship_clinic', 'fa-hospital',
                     clinica_id=internship.clinic_id))
-    if worker == 'estudante' or role == 'estagiario':
+    if user_has_worker(user, 'estudante') or user_has_role(user, 'estagiario'):
         area('student', 'Estudar', 'fa-graduation-cap',
              action('Biblioteca educacional', 'student_hub', 'fa-book'),
              action('Prática simulada', 'student_practice', 'fa-graduation-cap'))
@@ -191,6 +190,7 @@ def _limpeza_aberta(consulta):
 def home_next_actions(user, experience, pets, overdue, appointments):
     """Only query operational data for the workspaces visible to this user."""
     from models import CasaDeRacao, DeliveryRequest, Order, Payment, PaymentStatus, Product, StorePaymentAccount
+    from helpers import user_has_role, user_has_worker
 
     actions = []
 
@@ -215,7 +215,7 @@ def home_next_actions(user, experience, pets, overdue, appointments):
                 add('Acompanhar ativação da loja',
                     'Cadastro em análise.' if store.status == 'pendente' else 'Loja suspensa. Consulte a situação do cadastro.',
                     'casa_de_racao_dashboard', 'fa-store', casa_id=store.id)
-    if 'delivery' in experience.capabilities and user.worker == 'delivery':
+    if 'delivery' in experience.capabilities and user_has_worker(user, 'delivery'):
         delivery = (DeliveryRequest.query.filter_by(worker_id=user.id, status='em_andamento', archived=False)
                     .order_by(DeliveryRequest.accepted_at, DeliveryRequest.id).first())
         if delivery:
@@ -236,7 +236,7 @@ def home_next_actions(user, experience, pets, overdue, appointments):
     if 'accounting' in experience.capabilities:
         add('Revisar recebimentos', 'Pagamentos em aberto e movimento da clínica.',
             'contabilidade_financeiro', 'fa-chart-line')
-    if 'partner' in experience.capabilities and user.role == 'parceiro':
+    if 'partner' in experience.capabilities and user_has_role(user, 'parceiro'):
         add('Ativar estabelecimentos', 'Acompanhe os cadastros e as pendências das lojas.',
             'parceiro_dashboard', 'fa-handshake')
     for pet in pets:

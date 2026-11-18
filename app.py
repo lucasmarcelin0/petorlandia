@@ -1990,6 +1990,8 @@ from helpers import (
     can_edit_animal_record,
     internship_supervisor,
     is_supervised_intern,
+    user_has_role,
+    user_has_worker,
     pessoa_no_documento,
     acting_clinic_id,
     veterinarian_denial_message,
@@ -3126,6 +3128,8 @@ app.jinja_env.globals['is_active_intern'] = is_active_intern
 app.jinja_env.globals['can_act_as_veterinarian'] = can_act_as_veterinarian
 app.jinja_env.globals['can_edit_animal_record'] = can_edit_animal_record
 app.jinja_env.globals['is_supervised_intern'] = is_supervised_intern
+app.jinja_env.globals['user_has_role'] = user_has_role
+app.jinja_env.globals['user_has_worker'] = user_has_worker
 app.jinja_env.globals['pessoa_no_documento'] = pessoa_no_documento
 app.jinja_env.globals['get_responsible_veterinarian'] = get_responsible_veterinarian
 
