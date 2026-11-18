@@ -84,7 +84,7 @@ class Servidor:
 
     def __init__(self, html):
         self.html = html
-        self.modo = "ok"          # ok | recusa | queda
+        self.modo = "ok"          # ok | recusa | queda | pendurado
         self.atraso = 0.0         # segundos de espera em cada envio (rede lenta)
         self.recebidas = 0
         self._trava = threading.Lock()
@@ -98,6 +98,8 @@ class Servidor:
                 tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
                 return route.fulfill(status=200, body=arquivo.read_bytes(), content_type=tipo)
             return route.fulfill(status=404, body="")
+        if caminho == "/limpeza-urbana/comunicar" and self.modo == "pendurado":
+            return None  # sinal fraco: o celular diz que tem internet, mas nada responde
         if caminho == "/limpeza-urbana/comunicar" and pedido.method == "GET":
             return route.fulfill(status=200, body=self.html, content_type="text/html; charset=utf-8")
         if caminho == "/limpeza-urbana/comunicar" and pedido.method == "POST":
@@ -199,6 +201,9 @@ def test_recusa_do_servidor_aparece_na_frente_com_caminho_para_corrigir(tela):
     assert aba.is_visible("text=Corrigir agora")
     aba.click("text=Corrigir agora")
     aba.wait_for_selector("#limpeza-parabens", state="hidden")
+    # A pendência é carregada do armazenamento do aparelho (assíncrono).
+    aba.wait_for_function("document.getElementById('limpeza-pendencias').textContent.includes('Motivo da recusa')",
+                          timeout=5000)
     assert "Motivo da recusa" in aba.text_content("#limpeza-pendencias")
 
 
@@ -242,3 +247,22 @@ def test_envio_novo_durante_outro_ainda_recebe_resposta(tela):
     assert aba.text_content("#lp-titulo") == "Parabéns, deu certo!"
     aba.wait_for_timeout(2500)
     assert servidor.recebidas == 1  # um envio por vez, sem duplicar
+
+
+def test_sinal_fraco_responde_em_ate_10_segundos_e_segue_enviando(tela):
+    aba, servidor, foto, _ = tela
+    servidor.modo = "pendurado"
+    _preencher(aba, foto)
+    ms, titulo, sub = _enviar_e_esperar_popup(aba, limite_ms=14000)
+    # Antes, o botão ficava 20 s ou mais em "Enviando…" sem nenhum retorno.
+    assert titulo == "Comunicação guardada!"
+    assert "lenta" in sub
+    assert ms < 12500, f"retorno levou {ms:.0f} ms"
+    assert aba.text_content("form[data-offline-comunicacao] button[type=submit]").strip() == "Enviar comunicação"
+    # A conexão melhora: a pendência sai sozinha e o pop-up vira parabéns.
+    servidor.modo = "ok"
+    _fechar_popup(aba)
+    aba.click("#limpeza-sincronizar")
+    aba.wait_for_selector("#limpeza-parabens:not([hidden])", timeout=30000)
+    assert aba.text_content("#lp-titulo") == "Parabéns, deu certo!"
+    assert servidor.recebidas == 1
