@@ -3,7 +3,7 @@
 {% set admin_view_mode = admin_selected_view|default('') %}
 {% set vet_options = vets|default([]) %}
 {% set is_collaborator_view = current_user.is_authenticated and (
-  current_user.worker == 'colaborador'
+  user_has_worker(current_user, 'colaborador')
   or (current_user.role == 'admin' and admin_view_mode == 'colaborador')
 ) %}
 {% set collaborator_select_default = 'clinic' if clinic_id else 'user' %}

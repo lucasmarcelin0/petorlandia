@@ -374,6 +374,31 @@ def get_responsible_veterinarian(*candidates, fallback=None):
     return fallback
 
 
+def _papeis_de(user, principal, extras):
+    valores = []
+    for coluna in (principal, extras):
+        valor = getattr(user, coluna, None)
+        if isinstance(valor, str):
+            valores.extend(valor.split(','))
+    return {v.strip().lower() for v in valores if v.strip()}
+
+
+def user_has_role(user, *nomes) -> bool:
+    """``role`` principal ou adicional (``roles_extras``). Aceita anonimo/``None``."""
+
+    if not user or not getattr(user, 'is_authenticated', True):
+        return False
+    return bool(_papeis_de(user, 'role', 'roles_extras') & {n.lower() for n in nomes})
+
+
+def user_has_worker(user, *nomes) -> bool:
+    """``worker`` principal ou adicional (``workers_extras``). Aceita anonimo/``None``."""
+
+    if not user or not getattr(user, 'is_authenticated', True):
+        return False
+    return bool(_papeis_de(user, 'worker', 'workers_extras') & {n.lower() for n in nomes})
+
+
 #: Valor de ``User.role`` que marca a conta como estagiaria. Diferente de
 #: ``worker``, ``role`` so e definido pelo admin -- e o marcador confiavel.
 INTERN_ROLE = 'estagiario'
@@ -398,9 +423,7 @@ def is_intern_account(user=None) -> bool:
     if not user:
         return False
 
-    if (getattr(user, 'role', None) or '').lower() == INTERN_ROLE:
-        return True
-    return (getattr(user, 'worker', None) or '').lower() == INTERN_WORKER
+    return user_has_role(user, INTERN_ROLE) or user_has_worker(user, INTERN_WORKER)
 
 
 def active_internship_staff(user=None):
@@ -465,7 +488,7 @@ def can_start_consulta(user=None) -> bool:
     if not user:
         return False
 
-    if (getattr(user, 'worker', None) or '').lower() == 'colaborador':
+    if user_has_worker(user, 'colaborador'):
         return True
 
     if is_veterinarian(user):
@@ -668,7 +691,7 @@ def is_parceiro(user=None) -> bool:
     if not user:
         return False
 
-    return (getattr(user, 'role', None) or '').lower() == 'parceiro'
+    return user_has_role(user, 'parceiro')
 
 
 def parceiro_required(view=None):

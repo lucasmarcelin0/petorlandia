@@ -6,6 +6,7 @@
 import hmac
 import json
 import re
+from helpers import user_has_worker
 from datetime import date, datetime, timedelta
 from typing import Optional, Set
 from urllib.parse import parse_qs, urlparse
@@ -2250,7 +2251,7 @@ def api_my_appointments():
             if clinic_id_value and clinic_id_value not in clinic_ids:
                 clinic_ids.append(clinic_id_value)
         context['clinic_ids'] = clinic_ids
-    elif current_user.worker == 'colaborador' and current_user.clinica_id:
+    elif user_has_worker(current_user, 'colaborador') and current_user.clinica_id:
         query = query.filter(
             or_(
                 Appointment.clinica_id == current_user.clinica_id,

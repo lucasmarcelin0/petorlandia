@@ -58,5 +58,9 @@
     <div class="card border-0 bg-light"><div class="card-body text-muted">Nenhum caso foi atribuído ainda.</div></div>
     {% endif %}
   </section>
+{% if pode_estudar_concursos is defined and pode_estudar_concursos() %}
+  <a href="{{ url_for('concursos.inicio') }}" class="cz-coruja" title="Psiu…" aria-label="Simulados de concurso">🦉</a>
+  <style>.cz-coruja{position:fixed;right:14px;bottom:84px;z-index:1030;font-size:1.6rem;opacity:.35;text-decoration:none;transition:opacity .2s,transform .2s}.cz-coruja:hover,.cz-coruja:focus{opacity:1;transform:scale(1.25) rotate(-8deg)}</style>
+  {% endif %}
 </main>
 {% endblock %}

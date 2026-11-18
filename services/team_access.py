@@ -8,6 +8,7 @@ permissões (o dono vê na hora o que falta) e a
 from dataclasses import dataclass
 
 from authz import ROLE_PERMISSION_MATRIX, _user_roles, _viewer_operational_clinic_ids
+from helpers import user_has_role
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,6 @@ def access_report(user, clinic):
     add('equipe', 'Gerenciar equipe e permissões', is_admin or is_owner,
         denied='Só o dono da clínica.')
     add('vacinacao_pmo', 'Vacinação antirrábica (PMO)',
-        (getattr(user, 'role', None) or '').lower() in {'admin', 'vacinador'},
+        user_has_role(user, 'admin', 'vacinador'),
         denied='Precisa do papel "Vacinador PMO" (definido pelo administrador).')
     return items

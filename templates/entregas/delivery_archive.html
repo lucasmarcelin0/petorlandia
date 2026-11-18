@@ -8,7 +8,7 @@
       <li class="list-group-item d-flex justify-content-between flex-column flex-md-row align-items-start align-items-md-center">
         <div class="me-3">
           <div class="fw-semibold">
-            {% if current_user.worker == 'delivery' or (current_user.role or '')|lower == 'admin' %}
+            {% if user_has_worker(current_user, 'delivery') or (current_user.role or '')|lower == 'admin' %}
               Pedido #{{ r.order_id }}
             {% else %}
               Compra {{ ord.public_reference }}

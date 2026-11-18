@@ -1,0 +1,44 @@
+{% extends "concursos/_base.html" %}
+{% set ativo = 'acompanhamento' %}
+{% block conteudo %}
+<h1 class="h4 mb-1">Acompanhamento</h1>
+<p class="text-muted">Progresso de quem está resolvendo as provas{% if current_user.role != 'admin' %} na sua equipe{% endif %}.</p>
+
+{% if not linhas %}
+<div class="cz-cartao text-center text-muted">Ninguém começou uma prova ainda.</div>
+{% endif %}
+
+{% for linha in linhas %}
+<div class="cz-cartao mb-3">
+  <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+    <div>
+      <strong>{{ linha.user.name }}</strong>
+      <div class="small text-muted">Última atividade: {{ linha.ultima_atividade|format_datetime_brazil }}</div>
+    </div>
+    <div class="text-end small">
+      {% if linha.media is not none %}
+      Média <strong>{{ linha.media }}%</strong> · melhor <strong>{{ linha.melhor }}%</strong> · {{ linha.entregues }} entrega{% if linha.entregues != 1 %}s{% endif %}
+      {% else %}Nenhuma prova entregue ainda{% endif %}
+    </div>
+  </div>
+  <div class="table-responsive mt-2">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Prova</th><th>Situação</th><th class="text-end">Nota</th><th></th></tr></thead>
+      <tbody>
+        {% for t in linha.tentativas %}
+        <tr>
+          <td>{{ t.prova.titulo }}</td>
+          <td class="small">
+            {% if t.entregue_em %}Entregue {{ t.entregue_em|format_datetime_brazil }}
+            {% else %}Em andamento · {{ t.respondidas }}/{{ t.prova.total_questoes }} marcadas{% endif %}
+          </td>
+          <td class="text-end">{% if t.entregue_em %}<strong>{{ percentual(t.acertos, t.prova.total_questoes) }}%</strong> <span class="small text-muted">({{ t.acertos }}/{{ t.prova.total_questoes }})</span>{% else %}—{% endif %}</td>
+          <td class="text-end">{% if t.entregue_em %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('concursos.resultado', tentativa_id=t.id) }}">Ver correção</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

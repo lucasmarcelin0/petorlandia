@@ -12,7 +12,7 @@
 {%- set e_gato = 'gat' in especie|lower -%}
 {%- set e_femea = animal.sex == 'Fêmea' -%}
 {%- set eh_tutor = animal.user_id == current_user.id -%}
-{%- set eh_profissional = current_user.role == 'admin' or (current_user.worker in ['veterinario', 'colaborador'] or can_act_as_veterinarian(current_user)) -%}
+{%- set eh_profissional = current_user.role == 'admin' or (user_has_worker(current_user, 'veterinario', 'colaborador') or can_act_as_veterinarian(current_user)) -%}
 {%- set pode_consultar = can_start_consulta(current_user) -%}
 {%- set pode_editar_cadastro = can_edit_animal_record(current_user, animal) -%}
 {%- set nome_tutor = (tutor.name or '')|trim if tutor else '' -%}
