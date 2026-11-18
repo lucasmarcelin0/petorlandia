@@ -5,10 +5,17 @@
   if (!form) return;
   var usuario = form.dataset.usuario, info = document.getElementById('limpeza-pendencias');
   var botao = form.querySelector('button[type=submit]'), aviso = form.querySelector('.limpeza-aviso-foto');
-  var foto = null, db, enviando = false, deNovo = false, gravando = Promise.resolve(), pendenteEditada = null;
+  var foto = null, db, gravando = Promise.resolve(), pendenteEditada = null;
+  var textoBotao = botao ? botao.innerHTML : '';
   var acoesPendentes = document.getElementById('limpeza-pendentes-acoes');
   var draftId = 'rascunho:' + usuario;
   function status(msg) { info.textContent = msg; info.classList.remove('d-none'); }
+  // O andamento aparece no próprio botão, onde a pessoa está olhando.
+  function botaoOcupado(texto) {
+    botao.disabled = true;
+    botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' + texto;
+  }
+  function botaoLivre() { botao.disabled = false; botao.innerHTML = textoBotao; }
   function semPendencias() { info.textContent = ''; info.classList.add('d-none'); }
   function parabens(dados) { if (window.limpezaParabens) window.limpezaParabens(dados); }
   function erro(msg) { aviso.textContent = msg; aviso.classList.remove('d-none'); }
@@ -66,17 +73,26 @@
       (comErro ? ' (' + comErro + ' precisa(m) de correção: toque em "Editar primeira pendente").' : '.'));
     return itens;
   }
-  /* Devolve {enviadas, recusadas, falhou}; null quando não tentou (sem internet ou outro envio em curso). */
-  async function sincronizar() {
-    if (!db || !navigator.onLine) return null;
-    if (enviando) { deNovo = true; return null; }
-    enviando = true;
+  // Toda espera de rede tem limite: conexão lenta vira "guardada no celular", nunca uma tela parada.
+  var LIMITE_PAGINA_MS = 20000, LIMITE_ENVIO_MS = 90000;
+  function buscar(url, opcoes, limite) {
+    var controle = ('AbortController' in window) ? new AbortController() : null;
+    var relogio = controle ? setTimeout(function () { controle.abort(); }, limite) : null;
+    if (controle) opcoes.signal = controle.signal;
+    return fetch(url, opcoes).catch(function (e) {
+      throw new Error(e && e.name === 'AbortError' ? 'A conexão está lenta.' : 'Sem conexão no momento.');
+    }).finally(function () { if (relogio) clearTimeout(relogio); });
+  }
+  function esperar(promessa, limite) {
+    return Promise.race([promessa, new Promise(function (r) { setTimeout(r, limite); })]);
+  }
+  async function enviarPendentes() {
     var enviadas = 0, ultimo = null, recusadas = [];
     try {
       var itens = (await atualizarStatus()).filter(function (item) { return item.id !== pendenteEditada && !item.erro; });
       if (!itens.length) return {enviadas: 0, recusadas: 0, falhou: false};
-      status('Enviando ' + itens.length + ' comunicação(ões) pendente(s)…');
-      var resposta = await fetch(form.action || location.pathname, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      status('Enviando ' + itens.length + ' comunicação(ões)…');
+      var resposta = await buscar(form.action || location.pathname, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}}, LIMITE_PAGINA_MS);
       if (!resposta.ok || resposta.redirected) throw new Error('Entre novamente na mesma conta para enviar as pendências.');
       var pagina = new DOMParser().parseFromString(await resposta.text(), 'text/html');
       var novoForm = pagina.querySelector('[data-offline-comunicacao]');
@@ -86,23 +102,23 @@
         var body = new FormData();
         Object.keys(item.campos).forEach(function (k) { var v = item.campos[k]; (Array.isArray(v) ? v : [v]).forEach(function (x) { body.append(k, x); }); });
         body.set('csrf_token', token); body.set('chave_envio', item.id); body.append('foto', item.foto, item.foto.name || 'foto.jpg');
-        var respostaEnvio = await fetch(form.action || location.pathname, {method: 'POST', body: body, credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}});
+        var respostaEnvio = await buscar(form.action || location.pathname, {method: 'POST', body: body, credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}}, LIMITE_ENVIO_MS);
         var resultado = await respostaEnvio.json().catch(function () { return {}; });
         if (respostaEnvio.status === 400 && resultado.erro) {
           // Recusada pelo conteúdo (ex.: foto sem localização): fica guardada para correção
           // e não impede o envio das próximas.
           item.erro = resultado.erro; await salvar(item); recusadas.push(resultado.erro); continue;
         }
-        if (!respostaEnvio.ok || !resultado.destino) throw new Error(resultado.erro || 'Envio não confirmado. As fotos continuam guardadas neste aparelho.');
+        if (!respostaEnvio.ok || !resultado.destino) throw new Error(resultado.erro || 'O envio não foi confirmado.');
         await apagar(item.id);
         enviadas += 1; ultimo = resultado;
       }
       await atualizarStatus();
       if (recusadas.length) {
         status(recusadas.length + ' comunicação(ões) precisa(m) de correção: ' + recusadas[0] + ' Toque em "Editar primeira pendente".');
-        info.scrollIntoView({behavior: 'smooth', block: 'center'});
-      }
-      if (enviadas) {
+        // Aviso na frente da pessoa, com o caminho para corrigir.
+        parabens({tipo: 'erro', texto: recusadas[0]});
+      } else if (enviadas) {
         // Confirmado pelo servidor: comemora (com a conquista calculada lá).
         var dados = Object.assign({tipo: 'comunicacao'}, (ultimo && ultimo.parabens) || {});
         dados.enviadas = enviadas;
@@ -111,13 +127,19 @@
       }
       return {enviadas: enviadas, recusadas: recusadas.length, falhou: false};
     } catch (e) {
-      status((e.message || 'Sem conexão.') + ' Pendências continuam guardadas neste celular.');
-      return {enviadas: enviadas, recusadas: recusadas.length, falhou: true};
+      await atualizarStatus().catch(function () {});
+      status((e.message || 'Sem conexão.') + ' As comunicações continuam guardadas neste celular e serão enviadas sozinhas.');
+      return {enviadas: enviadas, recusadas: recusadas.length, falhou: true, motivo: e.message || ''};
     }
-    finally {
-      enviando = false;
-      if (deNovo) { deNovo = false; setTimeout(sincronizar, 0); }
-    }
+  }
+  /* Um envio por vez. Quem chega durante um envio espera ele acabar e roda de novo, para a
+     comunicação nova não ficar sem resposta. Devolve {enviadas, recusadas, falhou}; null sem internet. */
+  var emCurso = null;
+  function sincronizar() {
+    if (!db || !navigator.onLine) return Promise.resolve(null);
+    if (emCurso) return emCurso.then(function () { return sincronizar(); });
+    emCurso = enviarPendentes().finally(function () { emCurso = null; });
+    return emCurso;
   }
   form.addEventListener('limpeza:foto', function () {
     var campos = form.querySelectorAll('input[type=file][name=foto]');
@@ -132,11 +154,13 @@
     if (!form.querySelector('[name=categoria]:checked')) { erro('Marque o que precisa de atenção.'); return; }
     if (form.querySelector('[name=categoria][value=outro]:checked') && !form.querySelector('[name=descricao]').value.trim()) { erro('Descreva o que precisa de atenção quando marcar Outro.'); return; }
     if (!foto) { erro('Tire a foto do local antes de salvar.'); return; }
-    botao.disabled = true;
+    botaoOcupado('Registrando a localização…');
     try {
       if (form.limpezaLocalPronto) {
-        status('Registrando a localização da foto…');
-        await form.limpezaLocalPronto();
+        // Com uma leitura recente do GPS já preenchida, espera pouco pela leitura nova;
+        // sem nenhuma, dá mais tempo para o GPS responder.
+        var temLocal = !!(form.querySelector('[name=latitude]') || {}).value;
+        await esperar(form.limpezaLocalPronto(), temLocal ? 3000 : 20000);
       }
       await agendarRascunho();
       await salvar({id: pendenteEditada || uuid(), usuario: usuario, foto: foto, campos: dados()});  // sem .erro: volta à fila
@@ -145,17 +169,19 @@
       await atualizarStatus();
       var resultado = null;
       if (navigator.onLine) {
-        status('Enviando sua comunicação…');
+        botaoOcupado('Enviando…');
         resultado = await sincronizar();
       }
       // Sem internet (ou o envio falhou): avisa com clareza que ficou guardada e segue sozinha.
-      if (!navigator.onLine || (resultado && resultado.falhou && !resultado.enviadas)) parabens({tipo: 'guardada'});
+      if (!resultado || (resultado.falhou && !resultado.enviadas)) {
+        parabens({tipo: 'guardada', motivo: resultado ? resultado.motivo : 'Sem internet agora.'});
+      }
     } catch (e) { erro('Não foi possível guardar a comunicação. Sua foto permanece no formulário.'); }
-    finally { botao.disabled = false; }
+    finally { botaoLivre(); }
   });
   document.getElementById('limpeza-sincronizar').addEventListener('click', sincronizar);
   document.getElementById('limpeza-recuperar').addEventListener('click', async function () {
-    if (!db || enviando) return;
+    if (!db || emCurso) return;
     if (foto) { erro('Salve a foto atual antes de editar uma pendência.'); return; }
     var itens = await atualizarStatus();
     if (!itens.length) { status('Nenhuma comunicação pendente para editar.'); return; }
@@ -166,7 +192,9 @@
     status((item.erro ? 'Motivo da recusa: ' + item.erro + ' ' : '') +
       'Pendência carregada. Corrija os dados (ou tire a foto de novo) e toque em salvar.');
   });
-  window.addEventListener('online', sincronizar);
-  if ('serviceWorker' in navigator && 'caches' in window) navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) { return cache.addAll(['/static/js/limpeza_foto.js?v=8', '/static/js/limpeza_offline.js?v=3', '/static/bootstrap.min.css']); }).catch(function () {});
+  window.addEventListener('online', function () { sincronizar(); });
+  // Pendências guardadas seguem sozinhas: tenta de novo a cada minuto com a tela aberta.
+  setInterval(function () { if (!document.hidden && !emCurso) sincronizar(); }, 60000);
+  if ('serviceWorker' in navigator && 'caches' in window) navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) { return cache.addAll(['/static/js/limpeza_foto.js?v=9', '/static/js/limpeza_offline.js?v=4', '/static/bootstrap.min.css']); }).catch(function () {});
   abrir().then(async function (banco) { db = banco; var r = await operar('readonly', function (s) { return s.get(draftId); }); await atualizarStatus(); if (r) restaurar(r); sincronizar(); }).catch(function () { status('Armazenamento do aparelho indisponível. Verifique o espaço e as configurações do navegador.'); });
 })();

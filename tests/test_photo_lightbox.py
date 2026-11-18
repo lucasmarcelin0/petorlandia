@@ -188,3 +188,15 @@ def test_foto_que_chega_depois_tambem_amplia(pagina):
     pagina.wait_for_function("document.getElementById('nova').classList.contains('photo-zoomable')")
     pagina.click("#nova")
     assert _aberto(pagina)
+
+
+def test_foto_ampliada_ocupa_a_tela_mesmo_com_arquivo_pequeno():
+    """Foto de perfil em baixa resolução abria minúscula: o visualizador ajusta à área livre."""
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / 'static/js/photo_lightbox.js').read_text(encoding='utf-8')
+    assert 'function ajustarTamanho' in js
+    assert "imagem.addEventListener('load', ajustarTamanho)" in js
+    assert "window.addEventListener('resize', ajustarTamanho)" in js
+    layout = (Path(__file__).resolve().parents[1] / 'templates/layout.html').read_text(encoding='utf-8')
+    assert "js/photo_lightbox.js', v='20261027'" not in layout

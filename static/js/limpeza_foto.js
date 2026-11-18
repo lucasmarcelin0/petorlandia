@@ -240,7 +240,10 @@
         botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enviando foto…';
       }
       try {
-        await localPronto;
+        // Sem posição ainda: espera o GPS. Com uma leitura recente já preenchida, espera no
+        // máximo 3 s pela leitura nova (parado, o aparelho pode demorar a mandar outra).
+        if (!lat.value) await localPronto;
+        else await Promise.race([localPronto, new Promise(function (r) { setTimeout(r, 3000); })]);
         var resposta = await fetch(form.action || window.location.href, {
           method: 'POST', body: new FormData(form), credentials: 'same-origin',
           headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
