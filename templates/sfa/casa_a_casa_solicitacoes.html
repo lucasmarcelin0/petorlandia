@@ -125,6 +125,7 @@
             <dt>Endereço</dt><dd>{{ s.endereco }}{% if s.quarteirao %} · Quarteirão {{ s.quarteirao }}{% endif %}{% if s.setor %} · SC {{ s.setor }}{% endif %}</dd>
             <dt>Local</dt><dd>{% if s.mapa %}<a href="{{ s.mapa }}" target="_blank" rel="noopener">{{ '%.5f'|format(s.lat) }}, {{ '%.5f'|format(s.lng) }}</a>{% if s.precisao %} (± {{ s.precisao|round|int }} m){% endif %}{% else %}Sem coordenadas{% endif %}</dd>
             <dt>Para</dt><dd>{{ s.destino or 'A definir' }}</dd>
+            <dt>Prefeitura integrada</dt><dd>{% if s.prefeitura %}<a href="{{ s.prefeitura.url }}" target="_blank" rel="noopener">Comunicação nº {{ s.prefeitura.numero }}</a> · {{ s.prefeitura.status_nome }}{% elif s.foto and s.mapa %}Não enviada{% else %}Vai para o mapa quando tiver foto e local{% endif %}</dd>
             <dt>Problema</dt><dd class="descricao">{{ s.descricao }}</dd>
             <dt>Registro</dt><dd>{{ s.agente or 'Equipe' }} · {{ s.quando }}</dd>
             {% if s.atualizado_por %}<dt>Atualizado</dt><dd>{{ s.atualizado_por }}</dd>{% endif %}

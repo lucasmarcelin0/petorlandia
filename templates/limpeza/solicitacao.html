@@ -28,9 +28,11 @@
         <dl class="limpeza-meta row mt-3 mb-0">
           <dt class="col-5">Recebida em</dt><dd class="col-7">{{ hora_local(item.criado_em) }}</dd>
           {% if item.foto_capturada_em %}<dt class="col-5">Foto tirada em</dt><dd class="col-7">{{ hora_local(item.foto_capturada_em) }}</dd>{% endif %}
-          <dt class="col-5">Local</dt><dd class="col-7">{{ '%.6f'|format(item.latitude) }}, {{ '%.6f'|format(item.longitude) }}<br><span class="text-muted">{{ 'GPS gravado na foto' if item.origem_local == 'foto' else 'GPS do aparelho' }}{% if item.precisao_m %} · ± {{ item.precisao_m|round|int }} m{% endif %}</span></dd>
+          <dt class="col-5">Local</dt><dd class="col-7">{{ '%.6f'|format(item.latitude) }}, {{ '%.6f'|format(item.longitude) }}<br><span class="text-muted">{{ {'foto': 'GPS gravado na foto', 'imovel': 'Posição do imóvel no mapa'}.get(item.origem_local, 'GPS do aparelho') }}{% if item.precisao_m %} · ± {{ item.precisao_m|round|int }} m{% endif %}</span></dd>
           {% if item.referencia %}<dt class="col-5">Referência</dt><dd class="col-7">{{ item.referencia }}</dd>{% endif %}
           {% if item.descricao %}<dt class="col-5">Detalhes</dt><dd class="col-7">{{ item.descricao }}</dd>{% endif %}
+          {% set origem = item.origem_casa_a_casa %}
+          {% if origem %}<dt class="col-5">Origem</dt><dd class="col-7">Casa a Casa (visita de campo){% if origem.imovel %} · imóvel {{ origem.imovel }}{% endif %}<br><span class="text-muted">O andamento aqui atualiza a solicitação do Casa a Casa.</span></dd>{% endif %}
           {% if pode_fiscalizar %}<dt class="col-5">Comunicada por</dt><dd class="col-7">{{ item.autor.name or item.autor.email }}</dd>{% endif %}
         </dl>
       </div>
