@@ -30,9 +30,9 @@
         </div>
         <div class="row g-2">
           <div class="col-6"><img class="limpeza-previa w-100" style="height:130px;object-fit:cover" src="{{ s.foto_url }}" alt="Foto da comunicação" loading="lazy"></div>
-          <div class="col-6">{% if c %}<img class="limpeza-previa w-100" style="height:130px;object-fit:cover" src="{{ c.foto_url }}" alt="Foto da limpeza" loading="lazy">{% else %}<div class="h-100 d-flex align-items-center justify-content-center text-muted small border rounded-3">Aguardando a foto da limpeza</div>{% endif %}</div>
+          <div class="col-6">{% if c %}<img class="limpeza-previa w-100" style="height:130px;object-fit:cover" src="{{ c.foto_url }}" alt="Foto do atendimento" loading="lazy">{% else %}<div class="h-100 d-flex align-items-center justify-content-center text-muted small border rounded-3">Aguardando a foto do atendimento</div>{% endif %}</div>
         </div>
-        <div class="limpeza-meta mt-2">Comunicada em {{ hora_local(s.criado_em) }}{% if c %} · limpa em {{ hora_local(c.criado_em) }}{% endif %}</div>
+        <div class="limpeza-meta mt-2">Comunicada em {{ hora_local(s.criado_em) }}{% if c %} · atendida em {{ hora_local(c.criado_em) }}{% endif %}</div>
       </a>
     </div>
     {% endfor %}

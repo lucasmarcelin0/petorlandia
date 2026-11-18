@@ -305,8 +305,8 @@ WORKSPACE_THEMES: dict[str, dict[str, Any]] = {
     },
     "limpeza": {
         "label": "Prefeitura integrada",
-        "emoji": "🧹",
-        "icon": "fa-broom",
+        "emoji": "🏛️",
+        "icon": "fa-building-columns",
         "area": "#3f6212",
         "tone2": "#4d7c0f",
         "tone3": "#a3c76d",

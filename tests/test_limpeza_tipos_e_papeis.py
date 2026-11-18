@@ -323,7 +323,7 @@ def test_admin_ve_como_cada_papel_sem_gravar_nada(client, uploads):
     assert client.get(f'/limpeza-urbana/solicitacao/{lixo.id}').status_code in NEGADO
     assert client.get('/limpeza-urbana/relatorio.csv').status_code in NEGADO
     ficha = client.get(f'/limpeza-urbana/solicitacao/{galhos.id}').get_data(as_text=True)
-    assert 'Comprovar limpeza' in ficha and 'disabled' in ficha
+    assert 'Comprovar atendimento' in ficha and 'disabled' in ficha
     # Nada é gravado em nome do papel simulado.
     assert comprovar(client, galhos.id).status_code == 302
     assert db.session.get(LimpezaSolicitacao, galhos.id).status == 'aberta'

@@ -76,6 +76,7 @@ def _contexto_base():
         STATUS=servico.STATUS, hora_local=servico.hora_local,
         rotulo_categorias=servico.rotulo_categorias,
         DISTANCIA_ALERTA_M=servico.DISTANCIA_ALERTA_M,
+        parabens=session.pop(servico.SESSAO_PARABENS, None),
     )
 
 
@@ -147,7 +148,7 @@ def comunicar():
         try:
             categorias = servico.normalizar_categorias(form.getlist("categoria"))
             if not categorias:
-                raise LimpezaErro("Marque o que precisa ser limpo (pode marcar mais de um).")
+                raise LimpezaErro("Marque o que precisa de atenção (pode marcar mais de um).")
             if "outro" in categorias.split(",") and not (form.get("descricao") or "").strip():
                 raise LimpezaErro("Descreva o que precisa de atenção quando marcar Outro.")
             data, exif, nome = servico.ler_foto(request.files.getlist("foto"))
@@ -179,10 +180,12 @@ def comunicar():
             flash(str(exc), "danger")
             return render_template("limpeza/comunicar.html", form=form, selecionadas=form.getlist("categoria"),
                                    **_contexto_base()), 400
+        parabens = dict(servico.conquista(servico.total_comunicacoes(current_user.id)),
+                        tipo="comunicacao", numero=solicitacao.num)
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            flash(f"Comunicação nº {solicitacao.num} registrada. Obrigado por colaborar!", "success")
-            return jsonify(destino=url_for(".minhas"), id=solicitacao.id, numero=solicitacao.num)
-        flash(f"Comunicação nº {solicitacao.num} registrada. Obrigado por colaborar!", "success")
+            # A tela de comunicar continua aberta: o próprio script mostra o parabéns.
+            return jsonify(destino=url_for(".minhas"), id=solicitacao.id, numero=solicitacao.num, parabens=parabens)
+        session[servico.SESSAO_PARABENS] = parabens
         return redirect(url_for(".minhas"))
     return render_template("limpeza/comunicar.html", form={}, selecionadas=[], **_contexto_base())
 
@@ -270,12 +273,12 @@ def comprovar(solicitacao_id):
     item = _solicitacao_visivel(solicitacao_id)
     destino = url_for(".solicitacao", solicitacao_id=item.id)
     if item.status != "aberta":
-        flash("Esta comunicação não está aguardando limpeza.", "warning")
+        flash("Esta comunicação não está aguardando atendimento.", "warning")
         return redirect(destino)
     try:
         data, exif, nome = servico.ler_foto(request.files.getlist("foto"))
         if servico.foto_antiga(exif.capturada_em):
-            raise LimpezaErro("A foto da comprovação é antiga. Tire a foto agora, no local, depois da limpeza.")
+            raise LimpezaErro("A foto da comprovação é antiga. Tire a foto agora, no local, depois do serviço.")
         lat, lon, precisao, origem = servico.escolher_local(request.form, exif)
         distancia = round(servico.distancia_m(item.latitude, item.longitude, lat, lon), 1)
         foto_url = servico.guardar_foto(data, nome, "limpeza/comprovacoes", upload_to_s3)
@@ -297,11 +300,12 @@ def comprovar(solicitacao_id):
             return jsonify(erro=str(exc)), 400
         flash(str(exc), "danger")
         return redirect(destino)
+    parabens = dict(servico.conquista(servico.total_comprovacoes(current_user.id), "comprovacao"),
+                    tipo="comprovacao", numero=item.num)
     if distancia > servico.DISTANCIA_ALERTA_M:
-        flash(f"Limpeza registrada, mas a foto foi tirada a {distancia:.0f} m do ponto comunicado. "
-              "A fiscalização vai conferir.", "warning")
-    else:
-        flash("Limpeza comprovada. Obrigado!", "success")
+        parabens["alerta"] = (f"A foto foi tirada a {distancia:.0f} m do ponto comunicado. "
+                              "A fiscalização vai conferir.")
+    session[servico.SESSAO_PARABENS] = parabens
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return jsonify(destino=destino)
     return redirect(destino)
@@ -331,7 +335,7 @@ def recusar_comprovacao(comprovacao_id):
         item.status, item.concluida_em = "aberta", None
     servico.registrar_evento("comprovacao_recusada", item.id, current_user, motivo)
     db.session.commit()
-    flash("Comprovação recusada. A comunicação voltou para a fila de limpeza.", "info")
+    flash("Comprovação recusada. A comunicação voltou para a fila de atendimento.", "info")
     return redirect(destino)
 
 
@@ -346,7 +350,7 @@ def descartar(solicitacao_id):
         flash("Informe o motivo do descarte (duplicada, fora da área, foto sem relação…).", "danger")
         return redirect(destino)
     if item.status != "aberta":
-        flash("Só comunicações aguardando limpeza podem ser descartadas.", "warning")
+        flash("Só comunicações aguardando atendimento podem ser descartadas.", "warning")
         return redirect(destino)
     item.status, item.descartada_em = "descartada", utcnow()
     item.descartada_por, item.motivo_descarte = servico.nome_da_conta(current_user), motivo[:300]
@@ -366,7 +370,7 @@ def relatorio():
     escritor.writerow([
         "nº", "tipos", "situação", "comunicada em", "latitude", "longitude", "origem do ponto",
         "precisão (m)", "foto da comunicação", "referência", "descrição", "comunicada por",
-        "limpeza comprovada em", "horas até a limpeza", "distância da comprovação (m)",
+        "atendimento comprovado em", "horas até o atendimento", "distância da comprovação (m)",
         "foto da comprovação", "comprovada por", "comprovações recusadas", "motivo do descarte",
     ])
     for s in itens:
@@ -607,7 +611,7 @@ def comunicacao_aberta():
     servico.registrar_evento("comunicacao_aberta" if ligar else "comunicacao_restrita", None, current_user,
                              f"por {servico.nome_da_conta(current_user)}")
     SiteFlag.set(servico.FLAG_COMUNICACAO_ABERTA, ligar,
-                 label="Limpeza urbana: qualquer conta pode comunicar pontos para limpeza")
-    flash("Agora qualquer conta pode comunicar pontos para limpeza." if ligar
+                 label="Prefeitura integrada: qualquer conta pode comunicar problemas")
+    flash("Agora qualquer conta pode comunicar problemas na cidade." if ligar
           else "Somente quem tem papel atribuído pode comunicar.", "info")
     return redirect(url_for(".acessos"))

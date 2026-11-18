@@ -1,0 +1,163 @@
+{# Parabéns depois de comunicar ou comprovar. Aberto pelo servidor (``parabens`` na sessão,
+   depois de um redirecionamento) ou pelo script da tela (``window.limpezaParabens``). #}
+<style>
+  .lp-fundo { position: fixed; inset: 0; z-index: 2000; background: rgba(15, 23, 42, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .lp-fundo[hidden] { display: none; }
+  .lp-caixa { position: relative; width: 100%; max-width: 400px; background: #fff; border-radius: 22px; padding: 28px 22px 20px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.25); overflow: hidden; animation: lp-entra .35s cubic-bezier(.2,1.4,.4,1); }
+  .lp-icone { font-size: 3.4rem; line-height: 1; margin-bottom: 8px; animation: lp-pula .9s ease .2s; }
+  .lp-titulo { font-size: 1.45rem; font-weight: 800; margin: 0 0 4px; color: #14532d; }
+  .lp-caixa.guardada .lp-titulo { color: #1e3a8a; }
+  .lp-sub { font-weight: 600; color: #334155; margin-bottom: 6px; }
+  .lp-texto { color: #475569; font-size: .95rem; margin-bottom: 14px; }
+  .lp-alerta { background: #fef3c7; color: #78350f; border-radius: 12px; padding: 8px 10px; font-size: .88rem; margin-bottom: 12px; text-align: left; }
+  .lp-selo { background: linear-gradient(135deg, #ecfdf5, #f0f9ff); border: 1px solid #bbf7d0; border-radius: 16px; padding: 12px; margin-bottom: 16px; }
+  .lp-selo-topo { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; color: #14532d; }
+  .lp-selo-topo span:first-child { font-size: 1.6rem; }
+  .lp-novo { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: #f59e0b; color: #fff; border-radius: 999px; padding: 2px 8px; margin-bottom: 4px; }
+  .lp-frase { font-size: .85rem; color: #475569; margin-top: 2px; }
+  .lp-barra { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+  .lp-barra > div { height: 100%; background: linear-gradient(90deg, #22c55e, #16a34a); border-radius: 999px; width: 0; transition: width .9s ease .3s; }
+  .lp-falta { font-size: .78rem; color: #64748b; margin-top: 4px; }
+  .lp-acoes { display: grid; gap: 8px; }
+  .lp-confete { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: .9; animation: lp-cai 1.8s ease-in forwards; pointer-events: none; }
+  @keyframes lp-entra { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes lp-pula { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-12px) rotate(-8deg); } 70% { transform: translateY(0) rotate(6deg); } }
+  @keyframes lp-cai { to { transform: translateY(520px) rotate(540deg); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .lp-caixa, .lp-icone, .lp-confete { animation: none; } .lp-confete { display: none; } }
+</style>
+<div class="lp-fundo" id="limpeza-parabens" hidden
+     data-url-comunicar="{{ url_for('limpeza_urbana.comunicar') if pode_comunicar is defined and pode_comunicar else '' }}"
+     data-url-minhas="{{ url_for('limpeza_urbana.minhas') if pode_comunicar is defined and pode_comunicar else '' }}"
+     data-url-pontos="{{ url_for('limpeza_urbana.mapa') if pode_mapa is defined and pode_mapa else '' }}">
+  <div class="lp-caixa" role="dialog" aria-modal="true" aria-labelledby="lp-titulo" aria-describedby="lp-texto">
+    <div class="lp-icone" aria-hidden="true"></div>
+    <h2 class="lp-titulo" id="lp-titulo"></h2>
+    <div class="lp-sub"></div>
+    <p class="lp-texto" id="lp-texto"></p>
+    <div class="lp-alerta" hidden></div>
+    <div class="lp-selo" hidden>
+      <div class="lp-novo" hidden>Nova conquista</div>
+      <div class="lp-selo-topo"><span></span><span></span></div>
+      <div class="lp-frase"></div>
+      <div class="lp-barra" role="progressbar" aria-label="Progresso até a próxima conquista" aria-valuemin="0" aria-valuemax="100"><div></div></div>
+      <div class="lp-falta"></div>
+    </div>
+    <div class="lp-acoes"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var fundo = document.getElementById('limpeza-parabens');
+  if (!fundo || window.limpezaParabens) return;
+  var caixa = fundo.querySelector('.lp-caixa'), anterior = null;
+  function q(sel) { return fundo.querySelector(sel); }
+  function texto(sel, valor) { var el = q(sel); el.textContent = valor || ''; el.hidden = !valor; return el; }
+  function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
+  function fechar() {
+    fundo.hidden = true;
+    document.removeEventListener('keydown', teclado);
+    if (anterior && anterior.focus) anterior.focus();
+  }
+  function teclado(ev) { if (ev.key === 'Escape') fechar(); }
+  function noComunicar() {
+    var url = fundo.dataset.urlComunicar;
+    return url && location.pathname === new URL(url, location.href).pathname;
+  }
+  function botao(rotulo, classe, acao) {
+    var b = document.createElement(acao.href ? 'a' : 'button');
+    b.className = 'btn btn-lg ' + classe;
+    b.textContent = rotulo;
+    if (acao.href) b.href = acao.href; else { b.type = 'button'; b.addEventListener('click', acao.click); }
+    return b;
+  }
+  function confete() {
+    var cores = ['#22c55e', '#f59e0b', '#3b82f6', '#ec4899', '#a855f7', '#14b8a6'];
+    for (var i = 0; i < 36; i++) {
+      var p = document.createElement('span');
+      p.className = 'lp-confete';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = cores[i % cores.length];
+      p.style.animationDelay = (Math.random() * .5) + 's';
+      p.style.animationDuration = (1.4 + Math.random() * 1.2) + 's';
+      caixa.appendChild(p);
+      setTimeout(p.remove.bind(p), 3200);
+    }
+  }
+  function outra() {
+    if (noComunicar()) {
+      fechar();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (fundo.dataset.urlComunicar) {
+      location.href = fundo.dataset.urlComunicar;
+    }
+  }
+  /* dados: {tipo: 'comunicacao' | 'comprovacao' | 'guardada', numero, enviadas, total, emoji, nivel, frase,
+     novo_nivel, proximo_nivel, faltam, progresso, alerta} */
+  window.limpezaParabens = function (dados) {
+    dados = dados || {};
+    var tipo = dados.tipo || 'comunicacao', acoes = q('.lp-acoes');
+    caixa.classList.toggle('guardada', tipo === 'guardada');
+    acoes.innerHTML = '';
+    var selo = q('.lp-selo');
+    selo.hidden = true;
+    if (tipo === 'guardada') {
+      q('.lp-icone').textContent = '📲';
+      texto('.lp-titulo', 'Comunicação guardada!');
+      texto('.lp-sub', 'Falta só a internet');
+      texto('.lp-texto', 'Ela ficou salva neste celular e será enviada sozinha quando a conexão voltar. Volte a abrir esta tela quando tiver internet.');
+    } else if (tipo === 'comprovacao') {
+      q('.lp-icone').textContent = '✅';
+      texto('.lp-titulo', 'Parabéns, atendimento comprovado!');
+      texto('.lp-sub', dados.numero ? 'Comunicação nº ' + dados.numero + ' resolvida' : '');
+      texto('.lp-texto', 'Obrigado! Quem comunicou já pode ver o antes e o depois.');
+    } else {
+      var varias = (dados.enviadas || 1) > 1;
+      q('.lp-icone').textContent = '🎉';
+      texto('.lp-titulo', 'Parabéns, deu certo!');
+      texto('.lp-sub', varias ? plural(dados.enviadas, 'comunicação enviada', 'comunicações enviadas')
+        : (dados.numero ? 'Comunicação nº ' + dados.numero + ' enviada' : 'Comunicação enviada'));
+      texto('.lp-texto', 'A prefeitura recebeu a foto e a localização. Acompanhe o andamento em "Minhas comunicações".');
+    }
+    texto('.lp-alerta', dados.alerta);
+    if (dados.nivel) {
+      selo.hidden = false;
+      q('.lp-novo').hidden = !dados.novo_nivel;
+      var topo = q('.lp-selo-topo').children;
+      topo[0].textContent = dados.emoji || '⭐';
+      topo[1].textContent = dados.nivel;
+      var conta = tipo === 'comprovacao' ? plural(dados.total, 'atendimento comprovado', 'atendimentos comprovados')
+        : plural(dados.total, 'comunicação feita', 'comunicações feitas');
+      q('.lp-frase').textContent = dados.novo_nivel ? dados.frase : 'Você já tem ' + conta + '.';
+      var barra = q('.lp-barra > div');
+      barra.style.width = '0';
+      q('.lp-barra').setAttribute('aria-valuenow', dados.progresso || 0);
+      requestAnimationFrame(function () { requestAnimationFrame(function () { barra.style.width = (dados.progresso || 0) + '%'; }); });
+      q('.lp-falta').textContent = dados.proximo_nivel
+        ? 'Faltam ' + dados.faltam + ' para “' + dados.proximo_nivel + '”' : 'Você chegou ao nível máximo!';
+    }
+    if (tipo === 'comprovacao') {
+      if (fundo.dataset.urlPontos) acoes.appendChild(botao('Ir para o próximo ponto', 'btn-success', { href: fundo.dataset.urlPontos }));
+      acoes.appendChild(botao('Fechar', 'btn-outline-secondary', { click: fechar }));
+    } else {
+      if (fundo.dataset.urlComunicar) acoes.appendChild(botao('Comunicar outro problema', 'btn-success', { click: outra }));
+      if (fundo.dataset.urlMinhas && tipo !== 'guardada' && location.pathname !== new URL(fundo.dataset.urlMinhas, location.href).pathname) {
+        acoes.appendChild(botao('Ver minhas comunicações', 'btn-outline-primary', { href: fundo.dataset.urlMinhas }));
+      }
+      acoes.appendChild(botao('Fechar', 'btn-link text-secondary', { click: fechar }));
+    }
+    anterior = document.activeElement;
+    fundo.hidden = false;
+    document.addEventListener('keydown', teclado);
+    if (tipo !== 'guardada') confete();
+    if (navigator.vibrate) { try { navigator.vibrate(tipo === 'guardada' ? 60 : [60, 40, 90]); } catch (e) {} }
+    var primeiro = acoes.querySelector('a, button');
+    if (primeiro) primeiro.focus();
+  };
+  fundo.addEventListener('click', function (ev) { if (ev.target === fundo) fechar(); });
+  {% if parabens is defined and parabens %}
+  var inicial = {{ parabens|tojson }};
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window.limpezaParabens(inicial); });
+  else window.limpezaParabens(inicial);
+  {% endif %}
+})();
+</script>
