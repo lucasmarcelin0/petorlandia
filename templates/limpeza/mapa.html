@@ -72,7 +72,7 @@
     <span><i style="background:#22c55e"></i>Atendimento comprovado</span>
     <span><i style="background:#a855f7"></i>Comprovada longe do ponto (&gt; {{ DISTANCIA_ALERTA_M|int }} m)</span>
     <span><i style="background:#9ca3af"></i>Descartada</span>
-    <span><i style="background:#2563eb;box-shadow:0 0 0 2px #fff inset"></i>Você está aqui (botão de mira no mapa)</span>
+    <span><i style="background:#2563eb;box-shadow:0 0 0 2px #fff inset"></i>Você (botão de mira no mapa)</span>
   </div>
   {% endif %}
 </div>
@@ -147,8 +147,13 @@
     const precisao = Math.min(pos.coords.accuracy || 0, 2000);
     if (!marcaVoce) {
       raioVoce = L.circle(minhaPosicao, { radius: precisao, color: '#2563eb', weight: 1, fillColor: '#3b82f6', fillOpacity: .12, interactive: false }).addTo(mapa);
-      marcaVoce = L.circleMarker(minhaPosicao, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
-        .bindTooltip('Você está aqui').addTo(mapa);
+      // Camada própria acima dos pontos: as comunicações redesenhadas a cada atualização não a cobrem.
+      if (!mapa.getPane('limpezaVoce')) mapa.createPane('limpezaVoce').style.zIndex = 640;
+      marcaVoce = L.marker(minhaPosicao, {
+        pane: 'limpezaVoce', keyboard: false, title: 'Você está aqui',
+        icon: L.divIcon({ className: 'limpeza-voce', iconSize: [22, 22], iconAnchor: [11, 11],
+          html: '<span class="pulso"></span><span class="ponto"></span><span class="rotulo">Você</span>' }),
+      }).addTo(mapa);
     } else {
       marcaVoce.setLatLng(minhaPosicao);
       raioVoce.setLatLng(minhaPosicao).setRadius(precisao);
