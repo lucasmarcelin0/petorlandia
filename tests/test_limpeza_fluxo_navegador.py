@@ -285,13 +285,20 @@ def test_toque_extra_logo_apos_enviar_nao_some_com_o_parabens_e_confirmacao_fica
 def test_foto_enviada_nao_reaparece_ao_abrir_a_tela_de_novo(tela):
     aba, servidor, foto, _ = tela
     # GPS chegando atrasado durante o envio (antes, regravava o rascunho com a foto já enviada).
-    aba.evaluate("""window.__gps = setInterval(function () {
-        var lat = document.querySelector('[name=latitude]');
-        lat.value = '-20.7205'; lat.dispatchEvent(new Event('change', {bubbles: true}));
-    }, 2)""")
     _preencher(aba, foto)
+    # A leitura do GPS chega no instante em que o rascunho é apagado (a janela em que ele voltava).
+    aba.evaluate("""(function () {
+        var apagar = IDBObjectStore.prototype.delete;
+        IDBObjectStore.prototype.delete = function (chave) {
+            var req = apagar.apply(this, arguments);
+            if (String(chave).indexOf('rascunho:') === 0) {
+                var lat = document.querySelector('[name=latitude]');
+                lat.value = '-20.7205'; lat.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            return req;
+        };
+    })()""")
     _enviar_e_esperar_popup(aba)
-    aba.evaluate("clearInterval(window.__gps)")
     aba.wait_for_timeout(500)
     aba.reload()
     aba.wait_for_function("window.limpezaParabens && document.querySelector('[data-offline-comunicacao]')")
