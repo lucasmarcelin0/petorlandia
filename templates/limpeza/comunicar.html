@@ -46,6 +46,7 @@
       <input class="form-control" id="referencia" name="referencia" maxlength="200" value="{{ form.get('referencia', '') }}" placeholder="Ex.: em frente ao nº 1200, canteiro central da avenida">
     </div>
     <button type="submit" class="btn btn-success btn-lg w-100" {{ 'disabled title="Modo ver como: só visualização"'|safe if ver_como }}><i class="fas fa-paper-plane me-2"></i>Enviar comunicação</button>
+    <div id="limpeza-confirmacao" class="d-none" role="status" aria-live="polite"></div>
     <p class="small text-muted mt-2 mb-0">Evite fotografar rostos e placas de veículos. A foto é vista pela equipe de campo e pela fiscalização.</p>
   </form>
   <div class="d-none" id="limpeza-pendentes-acoes">
@@ -73,6 +74,6 @@
   atualizar(false);
 })();
 </script>
-<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='9') }}"></script>
-<script src="{{ url_for('static', filename='js/limpeza_offline.js', v='5') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='10') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_offline.js', v='6') }}"></script>
 {% endblock %}
