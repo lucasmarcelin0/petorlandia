@@ -4,7 +4,8 @@ Papéis (adicionais, concedidos por um administrador, com período opcional) sã
 criados, editados e excluídos pelo administrador na tabela ``limpeza_papel``.
 Cada papel diz o que a pessoa pode fazer (``PERMISSOES``: comunicar, ver o
 mapa, comprovar com foto, recusar, descartar, exportar) e quais tipos de
-problema vê (vazio = todos). Os papéis iniciais são Colaborador, Equipe de
+problema vê (vazio = todos). Com "só as próprias", o mapa do papel mostra só
+o que a própria pessoa comunicou. Os papéis iniciais são Colaborador, Equipe de
 limpeza e Fiscalização.
 
 Os tipos de problema (lixo, entulho…) também são cadastrados pelo
@@ -29,6 +30,7 @@ from time_utils import now_in_brazil, utcnow
 PERMISSOES = {
     "comunicar": "Comunicar problemas",
     "mapa": "Ver o mapa",
+    "proprias": "Só as próprias comunicações",
     "comprovar": "Comprovar com foto",
     "recusar": "Recusar comprovação",
     "descartar": "Descartar comunicação",
@@ -36,7 +38,7 @@ PERMISSOES = {
 }
 FISCALIZACAO = ("recusar", "descartar", "exportar")
 # Quem comprova ou fiscaliza trabalha a partir do mapa.
-EXIGEM_MAPA = ("comprovar",) + FISCALIZACAO
+EXIGEM_MAPA = ("proprias", "comprovar") + FISCALIZACAO
 
 # Papéis iniciais (a migration grava estes na tabela). Valem enquanto a tabela estiver vazia.
 PAPEIS = {
@@ -190,15 +192,17 @@ def nome_do_papel(chave) -> str:
 
 def resumo_do_papel(papel) -> str:
     """"Comunicar problemas, ver o mapa · Galhos e poda" para a lista do administrador."""
-    perms = [PERMISSOES[k] for k in PERMISSOES if k in papel["permissoes"]]
+    perms = [PERMISSOES[k] for k in PERMISSOES if k in papel["permissoes"] and k != "proprias"]
     texto = ", ".join(perms[:1] + [x[0].lower() + x[1:] for x in perms[1:]])
     if papel["permissoes"] & set(("mapa",) + EXIGEM_MAPA):
         texto += " · " + (rotulo_categorias(",".join(papel["tipos"])) if papel["tipos"] else "todos os tipos")
+        if "proprias" in papel["permissoes"]:
+            texto += " (só as próprias)"
     return texto
 
 
 def _vinculos(user):
-    """(chaves vigentes, permissões, tipos visíveis ou None = todos); memorizado por requisição."""
+    """(chaves vigentes, permissões, tipos visíveis ou None = todos, só as próprias); memorizado por requisição."""
     cache = g.setdefault("_limpeza_papeis", {}) if has_request_context() else {}
     if user.id not in cache:
         from models.limpeza import LimpezaAcesso
@@ -217,7 +221,9 @@ def _vinculos(user):
             tipos = None
         else:
             tipos = frozenset(t for papel in do_mapa for t in papel["tipos"])
-        cache[user.id] = (frozenset(papel["chave"] for papel in papeis), permissoes, tipos)
+        # Basta um papel com o mapa completo para ver tudo; o recorte vale só se todos o têm.
+        so_proprias = bool(do_mapa) and all("proprias" in papel["permissoes"] for papel in do_mapa)
+        cache[user.id] = (frozenset(papel["chave"] for papel in papeis), permissoes, tipos, so_proprias)
     return cache[user.id]
 
 
@@ -264,8 +270,25 @@ def tipos_visiveis(user):
     return _vinculos(user)[2]
 
 
+def so_proprias(user) -> bool:
+    """O mapa (e o que se comprova ou fiscaliza nele) mostra só o que a pessoa comunicou."""
+    if not getattr(user, "id", None):
+        return False
+    if eh_admin(user):
+        simulado = papel_simulado(user)
+        return bool(simulado and "proprias" in simulado["permissoes"])
+    return _vinculos(user)[3]
+
+
+def autor_do_recorte(user):
+    """``autor_id`` para ``consultar``: a própria conta com "só as próprias", senão ``None``."""
+    return user.id if so_proprias(user) else None
+
+
 def ve_solicitacao_do_mapa(user, solicitacao) -> bool:
     if not pode_ver_mapa(user):
+        return False
+    if so_proprias(user) and solicitacao.autor_id != user.id:
         return False
     tipos = tipos_visiveis(user)
     return tipos is None or bool(tipos & set(solicitacao.lista_categorias))

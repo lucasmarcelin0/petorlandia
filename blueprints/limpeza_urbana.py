@@ -74,6 +74,7 @@ def _contexto_base():
         CATEGORIAS_FILTRO=servico.em_ordem_alfabetica(
             {c: r for c, r in todos.items() if tipos is None or c in tipos}),
         tipos_recortados=tipos is not None,
+        so_proprias=servico.so_proprias(current_user),
         STATUS=servico.STATUS, hora_local=servico.hora_local,
         rotulo_categorias=servico.rotulo_categorias,
         DISTANCIA_ALERTA_M=servico.DISTANCIA_ALERTA_M,
@@ -230,7 +231,8 @@ POR_PAGINA = 10
 def mapa_dados():
     _exigir(servico.pode_ver_mapa(current_user))
     filtros = _filtros()
-    itens = servico.consultar(**filtros, tipos=servico.tipos_visiveis(current_user))
+    itens = servico.consultar(**filtros, tipos=servico.tipos_visiveis(current_user),
+                              autor_id=servico.autor_do_recorte(current_user))
     ver_autor = servico.pode_fiscalizar(current_user)
     dados = {"indicadores": servico.indicadores(itens), "limite": len(itens) >= 2000, "total": len(itens)}
     if request.args.get("pagina"):
@@ -365,7 +367,8 @@ def descartar(solicitacao_id):
 @login_required
 def relatorio():
     _exigir(servico.pode_exportar(current_user))
-    itens = servico.consultar(**_filtros(), tipos=servico.tipos_visiveis(current_user))
+    itens = servico.consultar(**_filtros(), tipos=servico.tipos_visiveis(current_user),
+                              autor_id=servico.autor_do_recorte(current_user))
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";")
     escritor.writerow([

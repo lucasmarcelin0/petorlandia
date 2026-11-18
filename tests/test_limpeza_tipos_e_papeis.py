@@ -346,3 +346,38 @@ def test_admin_ve_como_cada_papel_sem_gravar_nada(client, uploads):
     with client.session_transaction() as s:
         s[servico.SESSAO_VER_COMO] = 'fiscal'
     assert client.get('/limpeza-urbana/relatorio.csv').status_code in NEGADO
+
+
+def test_mapa_so_com_as_proprias_comunicacoes(client, uploads):
+    alheia = _comunicar_como(client, 'vizinho@example.test', 'lixo')
+    morador = conta('morador@example.test')
+    _admin(client)
+    client.get('/limpeza-urbana/acessos')
+    _papel(client, 'Morador com mapa', ['comunicar', 'proprias'])
+    papel = LimpezaPapel.query.filter_by(nome='Morador com mapa').one()
+    # "Só as próprias" exige o mapa: a permissão entra sozinha.
+    assert papel.permissoes == 'comunicar,mapa,proprias'
+    pagina = client.get('/limpeza-urbana/acessos').get_data(as_text=True)
+    assert 'Só as próprias comunicações' in pagina and 'todos os tipos (só as próprias)' in pagina
+    _atribuir(client, morador.email, papel.chave)
+
+    entrar(client, morador)
+    assert comunicar(client, categoria='galhos').status_code == 302
+    minha = LimpezaSolicitacao.query.order_by(LimpezaSolicitacao.id.desc()).first()
+    assert 'Mostrando só as comunicações que você fez' in client.get('/limpeza-urbana/mapa').get_data(as_text=True)
+    pontos = {p['id'] for p in client.get('/limpeza-urbana/mapa/dados').get_json()['pontos']}
+    assert pontos == {minha.id}
+    assert client.get(f'/limpeza-urbana/solicitacao/{alheia.id}').status_code in NEGADO
+
+    # Um outro papel com o mapa completo vale mais que o recorte.
+    entrar(client, User.query.filter_by(email='admin@example.test').one())
+    _atribuir(client, morador.email, 'equipe')
+    entrar(client, morador)
+    limpar_g()
+    pontos = {p['id'] for p in client.get('/limpeza-urbana/mapa/dados').get_json()['pontos']}
+    assert pontos == {minha.id, alheia.id}
+
+    # O admin vendo como o papel também vê só as próprias (nenhuma).
+    entrar(client, User.query.filter_by(email='admin@example.test').one())
+    client.post(f'/limpeza-urbana/papeis/{papel.chave}/ver-como')
+    assert client.get('/limpeza-urbana/mapa/dados').get_json()['pontos'] == []
