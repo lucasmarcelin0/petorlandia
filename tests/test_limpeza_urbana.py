@@ -523,8 +523,11 @@ def test_tela_offline_guarda_as_mesmas_versoes_dos_scripts_que_a_pagina_carrega(
     offline = (raiz / 'static/js/limpeza_offline.js').read_text(encoding='utf-8')
     pedidos = re.findall(r"filename='js/(limpeza_(?:foto|offline)\.js)', v='(\d+)'", pagina)
     assert len(pedidos) == 2
-    for nome, versao in pedidos:
-        assert f"/static/js/{nome}?v={versao}" in offline, nome
+    # A lista vem dos próprios <script src> da página (com ?v=), então não fica velha;
+    # e a página se guarda já na primeira visita (antes, só da 2ª em diante).
+    assert "querySelectorAll('script[src], link[rel=stylesheet][href]')" in offline
+    assert "searchParams.has('v')" in offline
+    assert 'cache.put(location.pathname' in offline
 
 
 def test_gps_da_foto_e_do_instante_da_captura_e_nao_desliga_sozinho():

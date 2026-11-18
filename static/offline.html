@@ -15,6 +15,15 @@
     <h1>Você está sem conexão</h1>
     <p>Os dados clínicos não são armazenados offline. Conecte-se à internet para salvar alterações com segurança.</p>
     <p><a href="/">Tentar novamente</a></p>
+    <p id="limpeza-offline" hidden><a href="/limpeza-urbana/comunicar">Comunicar um problema na cidade</a><br>
+      <small>Funciona sem internet: a comunicação fica guardada no celular e segue sozinha depois.</small></p>
   </main>
+  <script>
+    // Mostra o atalho só quando a tela de comunicar já está guardada neste aparelho.
+    if ('caches' in window) caches.open('petorlandia-limpeza-offline-v1')
+      .then(function (c) { return c.match('/limpeza-urbana/comunicar'); })
+      .then(function (r) { if (r) document.getElementById('limpeza-offline').hidden = false; })
+      .catch(function () {});
+  </script>
 </body>
 </html>

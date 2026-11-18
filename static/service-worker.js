@@ -1,5 +1,5 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v10';
+const CACHE_NAME = 'petorlandia-cache-v11';
 // Casa a casa (combate à dengue): a tela de campo precisa abrir sem internet. A própria página guarda aqui a
 // sua casca e os arquivos de que precisa (static/js/casa_a_casa.js); os dados ficam no segundo cache.
 const CASA_A_CASA = '/sfa/entomologia/casa-a-casa';
@@ -94,8 +94,12 @@ self.addEventListener('fetch', event => {
   }
 
   if (event.request.mode === 'navigate') {
+    // Sem internet, a entrada da Prefeitura integrada abre a tela de comunicar guardada.
+    const entradaLimpeza = ['/limpeza-urbana', '/limpeza-urbana/'].includes(new URL(event.request.url).pathname);
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request).then(cached => cached || caches.match('/static/offline.html')))
+      fetch(event.request).catch(() => caches.match(event.request)
+        .then(cached => cached || (entradaLimpeza ? caches.open(CACHE_LIMPEZA).then(cache => cache.match(LIMPEZA_COMUNICAR)) : null))
+        .then(cached => cached || caches.match('/static/offline.html')))
     );
     return;
   }

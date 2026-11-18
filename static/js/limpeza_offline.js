@@ -74,7 +74,13 @@
     return itens;
   }
   // Toda espera de rede tem limite: conexão lenta vira "guardada no celular", nunca uma tela parada.
-  var LIMITE_PAGINA_MS = 20000, LIMITE_ENVIO_MS = 90000;
+  // A foto vai inteira (o servidor usa a localização gravada nela); em rede móvel fraca uma
+  // foto de 5 MB leva minutos, então o limite do envio cresce com o tamanho (~20 KB/s).
+  var LIMITE_PAGINA_MS = 12000, LIMITE_ENVIO_MS = 90000;
+  // Depois disto a pessoa já recebe o retorno "guardada"; o envio segue por trás e, se der
+  // certo, o pop-up vira "Parabéns".
+  var LIMITE_RETORNO_MS = 10000;
+  function limiteEnvio(arquivo) { return Math.max(LIMITE_ENVIO_MS, Math.ceil(((arquivo && arquivo.size) || 0) / 20)); }
   function buscar(url, opcoes, limite) {
     var controle = ('AbortController' in window) ? new AbortController() : null;
     var relogio = controle ? setTimeout(function () { controle.abort(); }, limite) : null;
@@ -102,7 +108,7 @@
         var body = new FormData();
         Object.keys(item.campos).forEach(function (k) { var v = item.campos[k]; (Array.isArray(v) ? v : [v]).forEach(function (x) { body.append(k, x); }); });
         body.set('csrf_token', token); body.set('chave_envio', item.id); body.append('foto', item.foto, item.foto.name || 'foto.jpg');
-        var respostaEnvio = await buscar(form.action || location.pathname, {method: 'POST', body: body, credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}}, LIMITE_ENVIO_MS);
+        var respostaEnvio = await buscar(form.action || location.pathname, {method: 'POST', body: body, credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}}, limiteEnvio(item.foto));
         var resultado = await respostaEnvio.json().catch(function () { return {}; });
         if (respostaEnvio.status === 400 && resultado.erro) {
           // Recusada pelo conteúdo (ex.: foto sem localização): fica guardada para correção
@@ -163,25 +169,35 @@
         await esperar(form.limpezaLocalPronto(), temLocal ? 3000 : 20000);
       }
       await agendarRascunho();
+      // Sem localização do aparelho a comunicação só passa se a foto tiver o GPS gravado.
+      var semLocal = !(form.querySelector('[name=latitude]') || {}).value;
       await salvar({id: pendenteEditada || uuid(), usuario: usuario, foto: foto, campos: dados()});  // sem .erro: volta à fila
       await apagar(draftId);
       foto = null; pendenteEditada = null; form.reset(); form.querySelector('.limpeza-previa').classList.add('d-none'); aviso.classList.add('d-none');
       await atualizarStatus();
-      var resultado = null;
+      var resultado = null, demorou = false;
       if (navigator.onLine) {
         botaoOcupado('Enviando…');
-        resultado = await sincronizar();
+        // Sinal fraco: o celular diz que tem internet, mas nada chega. A pessoa não fica
+        // esperando: em 10 s recebe "guardada" e o envio continua por trás.
+        resultado = await Promise.race([sincronizar(), new Promise(function (r) {
+          setTimeout(function () { demorou = true; r(null); }, LIMITE_RETORNO_MS);
+        })]);
       }
       // Sem internet (ou o envio falhou): avisa com clareza que ficou guardada e segue sozinha.
       if (!resultado || (resultado.falhou && !resultado.enviadas)) {
-        parabens({tipo: 'guardada', motivo: resultado ? resultado.motivo : 'Sem internet agora.'});
+        parabens({tipo: 'guardada',
+          motivo: demorou ? 'A internet está lenta. Continuamos enviando…' : (resultado ? resultado.motivo : 'Sem internet agora.'),
+          alerta: semLocal ? 'A localização do aparelho não foi registrada. Se a foto não tiver a localização gravada, ' +
+            'a prefeitura vai pedir para corrigir. Se puder, permita a localização e tire a foto de novo no local.' : ''});
       }
     } catch (e) { erro('Não foi possível guardar a comunicação. Sua foto permanece no formulário.'); }
     finally { botaoLivre(); }
   });
   document.getElementById('limpeza-sincronizar').addEventListener('click', sincronizar);
   document.getElementById('limpeza-recuperar').addEventListener('click', async function () {
-    if (!db || emCurso) return;
+    if (!db) return;
+    if (emCurso) { status('Aguarde: terminando o envio em andamento…'); await emCurso.catch(function () {}); }
     if (foto) { erro('Salve a foto atual antes de editar uma pendência.'); return; }
     var itens = await atualizarStatus();
     if (!itens.length) { status('Nenhuma comunicação pendente para editar.'); return; }
@@ -193,8 +209,30 @@
       'Pendência carregada. Corrija os dados (ou tire a foto de novo) e toque em salvar.');
   });
   window.addEventListener('online', function () { sincronizar(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && !emCurso) sincronizar(); });
   // Pendências guardadas seguem sozinhas: tenta de novo a cada minuto com a tela aberta.
   setInterval(function () { if (!document.hidden && !emCurso) sincronizar(); }, 60000);
-  if ('serviceWorker' in navigator && 'caches' in window) navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) { return cache.addAll(['/static/js/limpeza_foto.js?v=9', '/static/js/limpeza_offline.js?v=4', '/static/bootstrap.min.css']); }).catch(function () {});
+  /* Guarda esta tela e os arquivos dela para abrir sem internet, já na primeira visita (antes,
+     a cópia só era feita a partir da 2ª abertura, e quem ficava sem sinal via "sem conexão").
+     Só arquivos com versão (?v=): os sem versão seguiriam velhos nas outras telas. */
+  function guardarTela() {
+    if (!('serviceWorker' in navigator && 'caches' in window) || !navigator.onLine) return;
+    navigator.serviceWorker.ready.then(function () { return caches.open('petorlandia-limpeza-offline-v1'); }).then(function (cache) {
+      var arquivos = ['/static/bootstrap.min.css'];
+      document.querySelectorAll('script[src], link[rel=stylesheet][href]').forEach(function (el) {
+        var url = new URL(el.src || el.href, location.href);
+        if (url.origin === location.origin && url.pathname.indexOf('/static/') === 0 && url.searchParams.has('v')) arquivos.push(url.pathname + url.search);
+      });
+      arquivos.forEach(function (a) { cache.match(a).then(function (tem) { if (!tem) return cache.add(a); }).catch(function () {}); });
+      // Com o service worker no controle, ele mesmo renova a cópia a cada abertura.
+      return cache.match(location.pathname).then(function (tem) {
+        if (tem && navigator.serviceWorker.controller) return;
+        return fetch(location.pathname, {credentials: 'same-origin', cache: 'no-store'}).then(function (r) {
+          if (r.ok && !r.redirected && (r.headers.get('content-type') || '').indexOf('text/html') === 0) return cache.put(location.pathname, r);
+        });
+      });
+    }).catch(function () {});
+  }
+  guardarTela();
   abrir().then(async function (banco) { db = banco; var r = await operar('readonly', function (s) { return s.get(draftId); }); await atualizarStatus(); if (r) restaurar(r); sincronizar(); }).catch(function () { status('Armazenamento do aparelho indisponível. Verifique o espaço e as configurações do navegador.'); });
 })();
