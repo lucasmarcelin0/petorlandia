@@ -6,6 +6,12 @@
   var usuario = form.dataset.usuario, info = document.getElementById('limpeza-pendencias');
   var botao = form.querySelector('button[type=submit]'), aviso = form.querySelector('.limpeza-aviso-foto');
   var foto = null, db, gravando = Promise.resolve(), pendenteEditada = null;
+  // Durante o envio pelo botão o rascunho não é regravado: a leitura do GPS que chegava
+  // atrasada regravava a foto já enviada, e ela reaparecia na próxima abertura da tela.
+  var enviandoForm = false, rascunhoCriado = 0;
+  // Rascunho antigo é de outro lugar e outra hora: não volta para a tela.
+  var RASCUNHO_VALIDO_MS = 6 * 3600 * 1000;
+  var confirmacao = document.getElementById('limpeza-confirmacao');
   var textoBotao = botao ? botao.innerHTML : '';
   var acoesPendentes = document.getElementById('limpeza-pendentes-acoes');
   var draftId = 'rascunho:' + usuario;
@@ -39,9 +45,41 @@
     });
     return campos;
   }
+  // Confirmação que fica na tela, perto do botão, mesmo depois de fechar o pop-up.
+  function confirmar(texto, tom) {
+    if (!confirmacao) return;
+    confirmacao.className = 'alert alert-' + (tom || 'success') + ' mt-3 mb-0';
+    confirmacao.textContent = texto;
+  }
+  function limparConfirmacao() { if (confirmacao) { confirmacao.className = 'd-none'; confirmacao.textContent = ''; } }
+  function hora() { var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function avisoRascunho(mostrar, quando) {
+    var caixa = form.querySelector('.limpeza-rascunho');
+    if (!mostrar) { if (caixa) caixa.remove(); return; }
+    if (!caixa) {
+      caixa = document.createElement('div');
+      caixa.className = 'limpeza-rascunho alert alert-warning small mt-2 mb-0';
+      caixa.innerHTML = '<div></div><button type="button" class="btn btn-sm btn-outline-danger mt-2">Descartar esta foto</button>';
+      caixa.querySelector('button').addEventListener('click', descartarRascunho);
+      form.querySelector('.limpeza-previa').insertAdjacentElement('afterend', caixa);
+    }
+    caixa.firstChild.textContent = 'Esta foto ficou de um preenchimento anterior que não foi enviado' +
+      (quando ? ' (' + quando + ')' : '') + '. Envie se ainda for o mesmo problema, ou descarte e tire outra.';
+  }
+  async function descartarRascunho() {
+    foto = null; pendenteEditada = null; rascunhoCriado = 0;
+    form.reset();
+    form.querySelectorAll('input[type=file][name=foto]').forEach(function (c) { c.value = ''; });
+    form.querySelector('.limpeza-previa').classList.add('d-none');
+    avisoRascunho(false);
+    await gravando.catch(function () {});
+    await apagar(draftId).catch(function () {});
+    await atualizarStatus().catch(function () {});
+  }
   function agendarRascunho() {
-    if (!db || !foto) return gravando;
-    var item = {id: draftId, usuario: usuario, foto: foto, campos: dados(), pendenteEditada: pendenteEditada};
+    if (!db || !foto || enviandoForm) return gravando;
+    if (!rascunhoCriado) rascunhoCriado = Date.now();
+    var item = {id: draftId, usuario: usuario, foto: foto, campos: dados(), pendenteEditada: pendenteEditada, criado: rascunhoCriado};
     gravando = gravando.catch(function () {}).then(function () { return salvar(item); }).catch(function () { erro('Não foi possível guardar a foto neste aparelho. Mantenha a tela aberta e verifique o espaço disponível.'); throw new Error('Falha ao guardar no aparelho'); });
     return gravando;
   }
@@ -56,8 +94,13 @@
         else if (el.type !== 'file') el.value = valor;
       });
     });
+    rascunhoCriado = item.criado || Date.now();
     var previa = form.querySelector('.limpeza-previa'); previa.src = URL.createObjectURL(foto); previa.classList.remove('d-none');
-    status('Foto e dados recuperados neste aparelho. Termine o preenchimento e toque em salvar.');
+    if (!pendenteEditada) {
+      var d = new Date(rascunhoCriado);
+      avisoRascunho(true, 'de ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') +
+        ' às ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'));
+    }
   }
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -129,6 +172,9 @@
         var dados = Object.assign({tipo: 'comunicacao'}, (ultimo && ultimo.parabens) || {});
         dados.enviadas = enviadas;
         if (enviadas === 1 && ultimo && ultimo.numero) dados.numero = ultimo.numero;
+        confirmar('✅ ' + (enviadas > 1 ? enviadas + ' comunicações enviadas' :
+          'Comunicação' + (dados.numero ? ' nº ' + dados.numero : '') + ' enviada') +
+          ' às ' + hora() + '. Acompanhe em "Minhas comunicações".');
         parabens(dados);
       }
       return {enviadas: enviadas, recusadas: recusadas.length, falhou: false};
@@ -148,6 +194,8 @@
     return emCurso;
   }
   form.addEventListener('limpeza:foto', function () {
+    // Foto nova: começa um rascunho novo e some o aviso da foto anterior.
+    rascunhoCriado = Date.now(); avisoRascunho(false); limparConfirmacao();
     var campos = form.querySelectorAll('input[type=file][name=foto]');
     for (var campo of campos) if (campo.files && campo.files.length) foto = campo.files[0];
     agendarRascunho().catch(function () {});
@@ -161,6 +209,7 @@
     if (form.querySelector('[name=categoria][value=outro]:checked') && !form.querySelector('[name=descricao]').value.trim()) { erro('Descreva o que precisa de atenção quando marcar Outro.'); return; }
     if (!foto) { erro('Tire a foto do local antes de salvar.'); return; }
     botaoOcupado('Registrando a localização…');
+    enviandoForm = true;
     try {
       if (form.limpezaLocalPronto) {
         // Com uma leitura recente do GPS já preenchida, espera pouco pela leitura nova;
@@ -168,12 +217,13 @@
         var temLocal = !!(form.querySelector('[name=latitude]') || {}).value;
         await esperar(form.limpezaLocalPronto(), temLocal ? 3000 : 20000);
       }
-      await agendarRascunho();
+      enviandoForm = false; await agendarRascunho(); enviandoForm = true;
       // Sem localização do aparelho a comunicação só passa se a foto tiver o GPS gravado.
       var semLocal = !(form.querySelector('[name=latitude]') || {}).value;
       await salvar({id: pendenteEditada || uuid(), usuario: usuario, foto: foto, campos: dados()});  // sem .erro: volta à fila
       await apagar(draftId);
-      foto = null; pendenteEditada = null; form.reset(); form.querySelector('.limpeza-previa').classList.add('d-none'); aviso.classList.add('d-none');
+      foto = null; pendenteEditada = null; rascunhoCriado = 0; avisoRascunho(false);
+      form.reset(); form.querySelector('.limpeza-previa').classList.add('d-none'); aviso.classList.add('d-none');
       await atualizarStatus();
       var resultado = null, demorou = false;
       if (navigator.onLine) {
@@ -186,13 +236,14 @@
       }
       // Sem internet (ou o envio falhou): avisa com clareza que ficou guardada e segue sozinha.
       if (!resultado || (resultado.falhou && !resultado.enviadas)) {
+        confirmar('📲 Comunicação guardada neste celular às ' + hora() + '. Ela será enviada sozinha quando a internet permitir.', 'info');
         parabens({tipo: 'guardada',
           motivo: demorou ? 'A internet está lenta. Continuamos enviando…' : (resultado ? resultado.motivo : 'Sem internet agora.'),
           alerta: semLocal ? 'A localização do aparelho não foi registrada. Se a foto não tiver a localização gravada, ' +
             'a prefeitura vai pedir para corrigir. Se puder, permita a localização e tire a foto de novo no local.' : ''});
       }
     } catch (e) { erro('Não foi possível guardar a comunicação. Sua foto permanece no formulário.'); }
-    finally { botaoLivre(); }
+    finally { enviandoForm = false; botaoLivre(); }
   });
   document.getElementById('limpeza-sincronizar').addEventListener('click', sincronizar);
   document.getElementById('limpeza-recuperar').addEventListener('click', async function () {
@@ -234,5 +285,11 @@
     }).catch(function () {});
   }
   guardarTela();
-  abrir().then(async function (banco) { db = banco; var r = await operar('readonly', function (s) { return s.get(draftId); }); await atualizarStatus(); if (r) restaurar(r); sincronizar(); }).catch(function () { status('Armazenamento do aparelho indisponível. Verifique o espaço e as configurações do navegador.'); });
+  abrir().then(async function (banco) {
+    db = banco;
+    var r = await operar('readonly', function (s) { return s.get(draftId); });
+    // Rascunho sem data (versão anterior) ou de mais de 6 h: foto de outro momento, descarta.
+    if (r && !r.pendenteEditada && (!r.criado || Date.now() - r.criado > RASCUNHO_VALIDO_MS)) { await apagar(draftId); r = null; }
+    await atualizarStatus(); if (r) restaurar(r); sincronizar();
+  }).catch(function () { status('Armazenamento do aparelho indisponível. Verifique o espaço e as configurações do navegador.'); });
 })();

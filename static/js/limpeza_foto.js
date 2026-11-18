@@ -106,6 +106,12 @@
       });
       return localPronto;
     }
+    // Formulário limpo depois de enviar ou descartar: a posição registrada era da foto anterior.
+    form.addEventListener('reset', function () {
+      localFoto = false;
+      if (localAtual) guardar({ coords: { latitude: +localAtual.latitude, longitude: +localAtual.longitude, accuracy: localAtual.precisao }, timestamp: localAtual.quando });
+      else mostrar('Procurando sua localização…', 'muted');
+    });
     // O envio (aqui ou em limpeza_offline.js) espera a posição da foto ficar pronta.
     form.limpezaLocalPronto = function () { return localPronto; };
 
@@ -196,9 +202,10 @@
       if (!alvo) return;
       var acao = alvo.getAttribute('data-limpeza-acao');
       if (acao === 'camera') {
-        // Celular: a câmera do próprio aparelho (capture). Computador: câmera dentro da página.
+        // Celular: o app de câmera do próprio aparelho (capture), com zoom, foco e qualidade
+        // total. Computador: câmera dentro da página.
         var temCamera = navigator.mediaDevices && navigator.mediaDevices.getUserMedia && video;
-        if (!temCamera) { campoCamera.click(); return; }
+        if (celular || !temCamera) { campoCamera.click(); return; }
         abrirCameraNaPagina().catch(function () {
           fecharCamera();
           avisar('Não foi possível abrir a câmera deste aparelho. Permita o acesso à câmera no navegador ' +

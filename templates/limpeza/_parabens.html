@@ -50,7 +50,7 @@
 (function () {
   var fundo = document.getElementById('limpeza-parabens');
   if (!fundo || window.limpezaParabens) return;
-  var caixa = fundo.querySelector('.lp-caixa'), anterior = null;
+  var caixa = fundo.querySelector('.lp-caixa'), anterior = null, abertoEm = 0;
   function q(sel) { return fundo.querySelector(sel); }
   function texto(sel, valor) { var el = q(sel); el.textContent = valor || ''; el.hidden = !valor; return el; }
   function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
@@ -157,6 +157,7 @@
       acoes.appendChild(botao('Fechar', 'btn-link text-secondary', { click: fechar }));
     }
     anterior = document.activeElement;
+    abertoEm = Date.now();
     fundo.hidden = false;
     document.addEventListener('keydown', teclado);
     var festa = tipo === 'comunicacao' || tipo === 'comprovacao';
@@ -165,7 +166,10 @@
     var primeiro = acoes.querySelector('a, button');
     if (primeiro) primeiro.focus();
   };
-  fundo.addEventListener('click', function (ev) { if (ev.target === fundo) fechar(); });
+  /* Quem está esperando costuma tocar de novo em "Enviar". Se o pop-up abre nesse instante,
+     o toque caía no fundo escuro e o fechava: o celular vibrava e nada aparecia. Nos primeiros
+     2 s, toque fora da caixa não fecha. */
+  fundo.addEventListener('click', function (ev) { if (ev.target === fundo && Date.now() - abertoEm > 2000) fechar(); });
   {% if parabens is defined and parabens %}
   var inicial = {{ parabens|tojson }};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window.limpezaParabens(inicial); });

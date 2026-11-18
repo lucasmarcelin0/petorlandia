@@ -266,3 +266,94 @@ def test_sinal_fraco_responde_em_ate_10_segundos_e_segue_enviando(tela):
     aba.wait_for_selector("#limpeza-parabens:not([hidden])", timeout=30000)
     assert aba.text_content("#lp-titulo") == "Parabéns, deu certo!"
     assert servidor.recebidas == 1
+
+
+def test_toque_extra_logo_apos_enviar_nao_some_com_o_parabens_e_confirmacao_fica(tela):
+    aba, servidor, foto, _ = tela
+    _preencher(aba, foto)
+    _enviar_e_esperar_popup(aba)
+    # O segundo toque em "Enviar" (impaciência) cai no fundo escuro do pop-up.
+    aba.mouse.click(195, 820)
+    assert aba.is_visible("#limpeza-parabens"), "toque acidental fechou o parabéns"
+    _fechar_popup(aba)
+    # Depois de fechar, a confirmação continua na tela, perto do botão.
+    texto = aba.text_content("#limpeza-confirmacao")
+    assert "Comunicação nº 1 enviada" in texto
+    assert aba.is_visible("#limpeza-confirmacao")
+
+
+def test_foto_enviada_nao_reaparece_ao_abrir_a_tela_de_novo(tela):
+    aba, servidor, foto, _ = tela
+    # GPS chegando atrasado durante o envio (antes, regravava o rascunho com a foto já enviada).
+    _preencher(aba, foto)
+    # A leitura do GPS chega no instante em que o rascunho é apagado (a janela em que ele voltava).
+    aba.evaluate("""(function () {
+        var apagar = IDBObjectStore.prototype.delete;
+        IDBObjectStore.prototype.delete = function (chave) {
+            var req = apagar.apply(this, arguments);
+            if (String(chave).indexOf('rascunho:') === 0) {
+                var lat = document.querySelector('[name=latitude]');
+                lat.value = '-20.7205'; lat.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            return req;
+        };
+    })()""")
+    _enviar_e_esperar_popup(aba)
+    aba.wait_for_timeout(500)
+    aba.reload()
+    aba.wait_for_function("window.limpezaParabens && document.querySelector('[data-offline-comunicacao]')")
+    aba.wait_for_timeout(800)
+    assert aba.eval_on_selector(".limpeza-previa", "e => e.classList.contains('d-none')")
+    assert aba.query_selector(".limpeza-rascunho") is None
+    assert servidor.recebidas == 1
+
+
+def _rascunho(aba, idade_ms):
+    aba.evaluate("""idade => new Promise((ok, falha) => {
+        const usuario = document.querySelector('[data-offline-comunicacao]').dataset.usuario;
+        const req = indexedDB.open('petorlandia-limpeza', 1);
+        req.onsuccess = () => {
+            const tx = req.result.transaction('registros', 'readwrite');
+            tx.objectStore('registros').put({id: 'rascunho:' + usuario, usuario, criado: Date.now() - idade,
+                foto: new File([new Uint8Array([255, 216, 255, 217])], 'velha.jpg', {type: 'image/jpeg'}),
+                campos: {categoria: ['lixo']}, pendenteEditada: null});
+            tx.oncomplete = ok; tx.onerror = falha;
+        };
+    })""", idade_ms)
+    aba.reload()
+    aba.wait_for_function("window.limpezaParabens && document.querySelector('[data-offline-comunicacao]')")
+    aba.wait_for_timeout(800)
+
+
+def test_rascunho_recente_avisa_de_onde_veio_a_foto_e_pode_ser_descartado(tela):
+    aba, _, _, _ = tela
+    _rascunho(aba, 10 * 60 * 1000)
+    assert aba.is_visible(".limpeza-rascunho")
+    assert "preenchimento anterior que não foi enviado" in aba.text_content(".limpeza-rascunho")
+    aba.click(".limpeza-rascunho button")
+    aba.wait_for_selector(".limpeza-rascunho", state="detached")
+    assert aba.eval_on_selector(".limpeza-previa", "e => e.classList.contains('d-none')")
+    aba.reload()
+    aba.wait_for_timeout(800)
+    assert aba.query_selector(".limpeza-rascunho") is None
+
+
+def test_rascunho_antigo_nao_volta_para_a_tela(tela):
+    aba, _, _, _ = tela
+    _rascunho(aba, 7 * 3600 * 1000)
+    assert aba.query_selector(".limpeza-rascunho") is None
+    assert aba.eval_on_selector(".limpeza-previa", "e => e.classList.contains('d-none')")
+
+
+def test_no_celular_tirar_foto_abre_o_app_de_camera_do_aparelho(tela):
+    aba, _, _, _ = tela
+    # Câmera disponível no navegador (o Chromium do teste não tem uma): antes, o celular abria
+    # a câmera dentro da página, sem o zoom e a qualidade do app de câmera.
+    aba.evaluate("""navigator.mediaDevices.getUserMedia = () => {
+        const c = document.createElement('canvas'); c.width = 64; c.height = 48;
+        c.getContext('2d').fillRect(0, 0, 64, 48); return Promise.resolve(c.captureStream());
+    }""")
+    with aba.expect_file_chooser(timeout=3000) as escolha:
+        aba.click("[data-limpeza-acao=camera]")
+    assert escolha.value.element.get_attribute("capture") == "environment"
+    assert not aba.is_visible(".limpeza-camera video")
