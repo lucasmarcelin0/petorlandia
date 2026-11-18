@@ -70,8 +70,9 @@ def _contexto_base():
         pode_descartar=servico.pode_descartar(current_user),
         pode_exportar=servico.pode_exportar(current_user),
         eh_admin=servico.eh_admin(current_user) and simulado is None,
-        CATEGORIAS=servico.catalogo(),
-        CATEGORIAS_FILTRO={c: r for c, r in todos.items() if tipos is None or c in tipos},
+        CATEGORIAS=servico.em_ordem_alfabetica(servico.catalogo()),
+        CATEGORIAS_FILTRO=servico.em_ordem_alfabetica(
+            {c: r for c, r in todos.items() if tipos is None or c in tipos}),
         tipos_recortados=tipos is not None,
         STATUS=servico.STATUS, hora_local=servico.hora_local,
         rotulo_categorias=servico.rotulo_categorias,

@@ -84,6 +84,20 @@ def catalogo(incluir_inativos: bool = False) -> dict:
     return {chave: rotulo for chave, rotulo, ativo, _ in linhas if ativo or incluir_inativos}
 
 
+def em_ordem_alfabetica(tipos: dict) -> dict:
+    """Mesmo {chave: rótulo} para exibir: A-Z sem diferenciar acento ou maiúscula, "Outro" por último.
+
+    Só a tela usa esta ordem; a gravação continua na ordem do catálogo.
+    """
+    import unicodedata
+
+    def chave_ordem(item):
+        chave, rotulo = item
+        texto = unicodedata.normalize("NFKD", rotulo or "").encode("ascii", "ignore").decode().casefold()
+        return (chave == CHAVE_OUTRO, texto)
+    return dict(sorted(tipos.items(), key=chave_ordem))
+
+
 def normalizar_categorias(valores, *, incluir_inativos: bool = False) -> str:
     """Chaves válidas, sem repetição, na ordem do catálogo."""
     escolhidas = set(valores or [])
@@ -570,7 +584,9 @@ def tipos_cadastrados():
     """Linhas para a tela do administrador (inclui os desativados)."""
     from models.limpeza import LimpezaTipo
     _semear_tipos()
-    return LimpezaTipo.query.order_by(LimpezaTipo.ordem, LimpezaTipo.id).all()
+    linhas = LimpezaTipo.query.order_by(LimpezaTipo.ordem, LimpezaTipo.id).all()
+    ordem = list(em_ordem_alfabetica({t.chave: t.rotulo for t in linhas}))
+    return sorted(linhas, key=lambda t: ordem.index(t.chave))
 
 
 def sugestoes_outro(limite: int = 12):

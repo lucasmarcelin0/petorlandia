@@ -103,3 +103,43 @@ def test_tela_de_comunicar_explica_os_passos_e_esconde_pendencias_vazias(client)
     assert "tipo: 'guardada'" in offline and 'parabens(dados)' in offline
     assert 'Comunicações enviadas e confirmadas pelo servidor' not in offline
     assert User.query.count() == 1
+
+
+def test_mapa_tem_onde_estou_e_rota_no_gps(client, uploads):
+    equipe = conta('equipe@example.test')
+    dar(equipe, 'equipe')
+    entrar(client, equipe)
+    comunicar(client)
+    limpar_g()
+    pagina = client.get('/limpeza-urbana/mapa').get_data(as_text=True)
+    assert 'Mostrar onde estou' in pagina and 'watchPosition' in pagina and 'Você está aqui' in pagina
+    assert 'Rota no GPS' in pagina and 'google.com/maps/dir/?api=1&destination=' in pagina
+    assert '>Abrir</a>' in pagina and 'Atendimentos comprovados' in pagina
+    item = base.LimpezaSolicitacao.query.one()
+    limpar_g()
+    ficha = client.get(f'/limpeza-urbana/solicitacao/{item.id}').get_data(as_text=True)
+    assert f'destination={item.latitude},{item.longitude}&amp;travelmode=driving' in ficha or \
+        f'destination={item.latitude},{item.longitude}&travelmode=driving' in ficha
+
+
+def test_tipos_aparecem_em_ordem_alfabetica_com_outro_no_fim(client):
+    admin = conta('admin@example.test', role='admin')
+    entrar(client, admin)
+    client.get('/limpeza-urbana/acessos')
+    for rotulo in ('Animal morto', 'Buraco', 'Esgoto', 'Mato alto'):
+        client.post('/limpeza-urbana/tipos', data={'rotulo': rotulo})
+    limpar_g()
+    pagina = client.get('/limpeza-urbana/comunicar').get_data(as_text=True)
+    rotulos = re.findall(r'name="categoria" value="[^"]+"[^>]*><span>([^<]+)</span>', pagina)
+    assert rotulos[-1] == 'Outro'
+    import unicodedata
+    def chave(t):
+        return unicodedata.normalize('NFKD', t).encode('ascii', 'ignore').decode().casefold()
+    assert rotulos[:-1] == sorted(rotulos[:-1], key=chave) and rotulos[0] == 'Animal morto'
+    # O filtro do mapa: "Todos" primeiro, depois A-Z, "Outro" no fim.
+    limpar_g()
+    mapa = client.get('/limpeza-urbana/mapa').get_data(as_text=True)
+    opcoes = re.findall(r'<option value="([^"]*)"', mapa[mapa.index('name="categoria"'):])
+    assert opcoes[0] == '' and opcoes[1] == 'animal-morto' and opcoes[-1] == 'outro'
+    # Gravação continua na ordem do catálogo (dados e relatórios não mudam).
+    assert servico.normalizar_categorias(['galhos', 'moveis']) == 'moveis,galhos'
