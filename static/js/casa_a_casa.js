@@ -1349,6 +1349,7 @@
           h('strong', {}, s.categoria_nome),
           h('small', {}, [s.pendente ? 'ainda não enviada' : s.status_nome, s.quando, s.pendente ? '' : s.agente].filter(Boolean).join(' · ')),
           h('span', {}, s.descricao),
+          s.prefeitura ? h('small', {}, `🏛️ Prefeitura integrada nº ${s.prefeitura.numero} · ${s.prefeitura.status_nome}`) : null,
           s.historico && s.historico.length ? h('small', {}, `${s.historico[0].acao} por ${s.historico[0].por} em ${s.historico[0].quando}`) : null),
         h('div', { class: 'cac-solicitacao-botoes' },
           h('button', { type: 'button', class: 'cac-botao', onclick: () => corrigir(s) }, '✏️ Corrigir'),
@@ -1438,7 +1439,8 @@
       const fila = S.solicitacoes.concat(registro);
       if (!salvarLocal(SOLICITACOES, fila)) { apagarFoto(registro.uuid); avisar('Não foi possível guardar a solicitação: o aparelho está sem espaço.', 'ruim'); return; }
       S.solicitacoes = fila;
-      avisar(`Solicitação guardada${foto ? ' com a foto' : ''}. Vai para o escritório assim que houver internet ✔`, 'bom');
+      avisar(foto ? 'Solicitação guardada com a foto. Vai para o escritório e para o mapa da Prefeitura integrada assim que houver internet ✔'
+        : 'Solicitação guardada. Vai para o escritório assim que houver internet; com foto, vai também para o mapa da Prefeitura integrada ✔', 'bom');
       limpar();
       desenharConexao();
       ciclo();
@@ -1451,7 +1453,9 @@
         h('div', { class: 'cac-foto-botoes' },
           h('button', { type: 'button', class: 'cac-botao', onclick: () => camera.click() }, '📷 Tirar foto'),
           h('button', { type: 'button', class: 'cac-botao', onclick: () => galeria.click() }, '🖼️ Da galeria')),
-        camera, galeria, previa, local, h('div', { class: 'cac-foto-botoes' }, cancelar, botaoGuardar)));
+        camera, galeria, previa, local,
+        h('p', { class: 'cac-nota' }, '🏛️ Com foto, a solicitação também abre uma comunicação no mapa da Prefeitura integrada; quando a equipe comprovar o serviço, ela fica Resolvida aqui.'),
+        h('div', { class: 'cac-foto-botoes' }, cancelar, botaoGuardar)));
     caixa.addEventListener('toggle', () => { if (caixa.open && !posicao) localizar(); });
     desenharLocal();
     desenharLista();

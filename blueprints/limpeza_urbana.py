@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from datetime import date
 
-from flask import (Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session,
+from flask import (Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, session,
                    url_for)
 from flask_login import current_user, login_required
 
@@ -257,6 +257,18 @@ def _solicitacao_visivel(solicitacao_id):
     return solicitacao
 
 
+def _avisar_casa_a_casa(item):
+    """Comunicação vinda do Casa a Casa: o andamento vale também lá (Resolvida, Encaminhada, Aberta)."""
+    if item.entomologia_solicitacao_id is None:
+        return
+    from services import integracao_casa_a_casa_prefeitura as integracao
+    try:
+        with db.session.begin_nested():
+            integracao.apos_mudanca_na_prefeitura(item, current_user)
+    except Exception:  # noqa: BLE001 - o atendimento da Prefeitura vale mesmo se a outra ponta falhar
+        current_app.logger.exception("Prefeitura integrada → Casa a Casa: andamento não levado")
+
+
 @bp.route("/solicitacao/<int:solicitacao_id>")
 @login_required
 def solicitacao(solicitacao_id):
@@ -296,6 +308,7 @@ def comprovar(solicitacao_id):
         item.status, item.concluida_em = "concluida", utcnow()
         servico.registrar_evento("comprovada", item.id, current_user,
                                  f"Foto a {distancia:.0f} m do ponto comunicado ({origem})")
+        _avisar_casa_a_casa(item)
         db.session.commit()
     except LimpezaErro as exc:
         db.session.rollback()
@@ -337,6 +350,7 @@ def recusar_comprovacao(comprovacao_id):
     if item.status == "concluida" and item.comprovacao_valida is None:
         item.status, item.concluida_em = "aberta", None
     servico.registrar_evento("comprovacao_recusada", item.id, current_user, motivo)
+    _avisar_casa_a_casa(item)
     db.session.commit()
     flash("Comprovação recusada. A comunicação voltou para a fila de atendimento.", "info")
     return redirect(destino)
@@ -358,6 +372,7 @@ def descartar(solicitacao_id):
     item.status, item.descartada_em = "descartada", utcnow()
     item.descartada_por, item.motivo_descarte = servico.nome_da_conta(current_user), motivo[:300]
     servico.registrar_evento("descartada", item.id, current_user, motivo)
+    _avisar_casa_a_casa(item)
     db.session.commit()
     flash("Comunicação descartada. Ela continua no histórico.", "info")
     return redirect(destino)

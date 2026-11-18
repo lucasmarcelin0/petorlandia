@@ -128,8 +128,12 @@ class LimpezaSolicitacao(db.Model):
     descartada_em = db.Column(db.DateTime(timezone=True))
     descartada_por = db.Column(db.String(160))
     motivo_descarte = db.Column(db.String(300))
+    # Veio de uma solicitação do Casa a Casa (entomologia): o andamento das duas anda junto.
+    entomologia_solicitacao_id = db.Column(
+        db.Integer, db.ForeignKey("entomologia_solicitacao.id"), unique=True, nullable=True)
 
     autor = db.relationship("User", foreign_keys=[autor_id])
+    origem_casa_a_casa = db.relationship("EntomologiaSolicitacao", foreign_keys=[entomologia_solicitacao_id])
     comprovacoes = db.relationship(
         "LimpezaComprovacao", back_populates="solicitacao",
         order_by="LimpezaComprovacao.criado_em", cascade="all, delete-orphan",

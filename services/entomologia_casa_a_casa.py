@@ -1314,7 +1314,22 @@ def registrar_solicitacao(dados: dict, foto_url: str | None, usuario):
     solicitacao = So(**dados, foto_url=foto_url, status="ABERTA", agente_id=usuario.id, agente=nome_da_conta(usuario))
     db.session.add(solicitacao)
     db.session.flush()
+    _integrar_com_prefeitura(lambda integracao: integracao.enviar(solicitacao, usuario))
     return solicitacao, True
+
+
+def _integrar_com_prefeitura(acao) -> None:
+    """Executa ``acao(integracao)`` sem deixar uma falha da Prefeitura integrada perder o registro de campo."""
+    import logging
+
+    from extensions import db
+    from services import integracao_casa_a_casa_prefeitura as integracao
+
+    try:
+        with db.session.begin_nested():
+            acao(integracao)
+    except Exception:  # noqa: BLE001 - a solicitação do Casa a Casa vale mesmo se a outra ponta falhar
+        logging.getLogger(__name__).exception("Casa a Casa → Prefeitura integrada: vínculo não gravado")
 
 
 def _data_hora_br(momento) -> str:
@@ -1333,8 +1348,12 @@ def data_por_extenso(dia: date) -> str:
     return f"{dia.day} de {MESES[dia.month - 1]} de {dia.year}"
 
 
-def solicitacao_dict(s, nomes: dict | None = None) -> dict:
+def solicitacao_dict(s, nomes: dict | None = None, prefeitura: dict | None = None) -> dict:
+    """``prefeitura``: {id: resumo} já consultado para a lista; sem ele, consulta só esta."""
     nomes = nomes if nomes is not None else nomes_das_categorias()
+    if prefeitura is None:
+        from services import integracao_casa_a_casa_prefeitura as integracao
+        prefeitura = integracao.vinculos([s.id])
     endereco = ", ".join(parte for parte in (s.logradouro, s.numero) if parte) + (f" · {s.complemento}" if s.complemento else "")
     mapa = (f"https://www.google.com/maps?q={s.latitude:.6f},{s.longitude:.6f}"
             if s.latitude is not None and s.longitude is not None else "")
@@ -1349,13 +1368,14 @@ def solicitacao_dict(s, nomes: dict | None = None) -> dict:
         "atualizado_por": s.atualizado_por or "", "agente_id": s.agente_id,
         "excluida": s.excluida_em is not None, "excluida_por": s.excluida_por or "",
         "historico": historico_da_solicitacao(s, nomes),
+        "prefeitura": prefeitura.get(s.id),
     }
 
 
 ACOES_SOLICITACAO = {"corrigida": "Corrigida", "andamento": "Andamento", "excluida": "Excluída",
                      "restaurada": "Restaurada"}
 _CAMPOS_HISTORICO = {"categoria": "tipo", "descricao": "descrição", "destino": "para", "foto_url": "foto",
-                     "status": "andamento", "oficio": "ofício"}
+                     "status": "andamento", "oficio": "ofício", "prefeitura": "Prefeitura integrada"}
 
 
 def historico_da_solicitacao(s, nomes: dict | None = None) -> list[dict]:
@@ -1410,8 +1430,12 @@ def solicitacoes(status: str | None = None, limite: int = 300, imovel: str | Non
             consulta = consulta.filter(So.status == status)
     if imovel:
         consulta = consulta.filter(So.imovel == imovel)
+    from services import integracao_casa_a_casa_prefeitura as integracao
+
     nomes = nomes_das_categorias()
-    return [solicitacao_dict(s, nomes) for s in consulta.order_by(So.id.desc()).limit(limite).all()]
+    linhas = consulta.order_by(So.id.desc()).limit(limite).all()
+    prefeitura = integracao.vinculos([s.id for s in linhas])
+    return [solicitacao_dict(s, nomes, prefeitura) for s in linhas]
 
 
 def _solicitacao(solicitacao_id: int):
@@ -1456,6 +1480,9 @@ def atualizar_solicitacao(solicitacao_id: int, dados, usuario, foto_url: str | N
             setattr(solicitacao, campo, depois)
         conteudo = set(mudou) & {"categoria", "descricao", "destino", "foto_url"}
         _anotar(solicitacao, usuario, "corrigida" if conteudo else "andamento", mudou)
+        if "foto_url" in mudou:
+            # Ganhou foto depois: agora pode ir para o mapa da Prefeitura integrada.
+            _integrar_com_prefeitura(lambda integracao: integracao.enviar(solicitacao, usuario))
     return solicitacao_dict(solicitacao)
 
 
@@ -1467,9 +1494,11 @@ def excluir_solicitacao(solicitacao_id: int, usuario, admin: bool = False, resta
     if restaurar and solicitacao.excluida_em is not None:
         solicitacao.excluida_em = solicitacao.excluida_por = None
         _anotar(solicitacao, usuario, "restaurada")
+        _integrar_com_prefeitura(lambda integracao: integracao.apos_exclusao_no_casa_a_casa(solicitacao, usuario, True))
     elif not restaurar and solicitacao.excluida_em is None:
         solicitacao.excluida_em, solicitacao.excluida_por = datetime.now(FUSO), nome_da_conta(usuario)
         _anotar(solicitacao, usuario, "excluida")
+        _integrar_com_prefeitura(lambda integracao: integracao.apos_exclusao_no_casa_a_casa(solicitacao, usuario, False))
     return solicitacao_dict(solicitacao)
 
 
