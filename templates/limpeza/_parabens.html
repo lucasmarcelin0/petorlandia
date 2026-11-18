@@ -7,6 +7,7 @@
   .lp-icone { font-size: 3.4rem; line-height: 1; margin-bottom: 8px; animation: lp-pula .9s ease .2s; }
   .lp-titulo { font-size: 1.45rem; font-weight: 800; margin: 0 0 4px; color: #14532d; }
   .lp-caixa.guardada .lp-titulo { color: #1e3a8a; }
+  .lp-caixa.erro .lp-titulo { color: #9a3412; }
   .lp-sub { font-weight: 600; color: #334155; margin-bottom: 6px; }
   .lp-texto { color: #475569; font-size: .95rem; margin-bottom: 14px; }
   .lp-alerta { background: #fef3c7; color: #78350f; border-radius: 12px; padding: 8px 10px; font-size: .88rem; margin-bottom: 12px; text-align: left; }
@@ -97,14 +98,20 @@
     dados = dados || {};
     var tipo = dados.tipo || 'comunicacao', acoes = q('.lp-acoes');
     caixa.classList.toggle('guardada', tipo === 'guardada');
+    caixa.classList.toggle('erro', tipo === 'erro');
     acoes.innerHTML = '';
     var selo = q('.lp-selo');
     selo.hidden = true;
-    if (tipo === 'guardada') {
+    if (tipo === 'erro') {
+      q('.lp-icone').textContent = '⚠️';
+      texto('.lp-titulo', 'Falta um detalhe');
+      texto('.lp-sub', 'A comunicação ainda não foi aceita');
+      texto('.lp-texto', dados.texto || 'Confira os dados e envie de novo.');
+    } else if (tipo === 'guardada') {
       q('.lp-icone').textContent = '📲';
       texto('.lp-titulo', 'Comunicação guardada!');
-      texto('.lp-sub', 'Falta só a internet');
-      texto('.lp-texto', 'Ela ficou salva neste celular e será enviada sozinha quando a conexão voltar. Volte a abrir esta tela quando tiver internet.');
+      texto('.lp-sub', dados.motivo || 'Falta só a internet');
+      texto('.lp-texto', 'Ela ficou salva neste celular e será enviada sozinha assim que a conexão permitir. Pode continuar comunicando; mantenha esta tela aberta ou volte a ela depois.');
     } else if (tipo === 'comprovacao') {
       q('.lp-icone').textContent = '✅';
       texto('.lp-titulo', 'Parabéns, atendimento comprovado!');
@@ -135,7 +142,11 @@
       q('.lp-falta').textContent = dados.proximo_nivel
         ? 'Faltam ' + dados.faltam + ' para “' + dados.proximo_nivel + '”' : 'Você chegou ao nível máximo!';
     }
-    if (tipo === 'comprovacao') {
+    if (tipo === 'erro') {
+      var corrigir = document.getElementById('limpeza-recuperar');
+      if (corrigir) acoes.appendChild(botao('Corrigir agora', 'btn-warning', { click: function () { fechar(); corrigir.click(); } }));
+      acoes.appendChild(botao('Fechar', 'btn-outline-secondary', { click: fechar }));
+    } else if (tipo === 'comprovacao') {
       if (fundo.dataset.urlPontos) acoes.appendChild(botao('Ir para o próximo ponto', 'btn-success', { href: fundo.dataset.urlPontos }));
       acoes.appendChild(botao('Fechar', 'btn-outline-secondary', { click: fechar }));
     } else {
@@ -148,8 +159,9 @@
     anterior = document.activeElement;
     fundo.hidden = false;
     document.addEventListener('keydown', teclado);
-    if (tipo !== 'guardada') confete();
-    if (navigator.vibrate) { try { navigator.vibrate(tipo === 'guardada' ? 60 : [60, 40, 90]); } catch (e) {} }
+    var festa = tipo === 'comunicacao' || tipo === 'comprovacao';
+    if (festa) confete();
+    if (navigator.vibrate) { try { navigator.vibrate(festa ? [60, 40, 90] : 120); } catch (e) {} }
     var primeiro = acoes.querySelector('a, button');
     if (primeiro) primeiro.focus();
   };
