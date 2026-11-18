@@ -81,6 +81,8 @@
         fecharVisualizador();
       }
     });
+    imagem.addEventListener('load', ajustarTamanho);
+    window.addEventListener('resize', ajustarTamanho);
     document.addEventListener('keydown', function (evento) {
       if (evento.key === 'Escape' && overlay.classList.contains('is-open')) {
         evento.preventDefault();
@@ -89,12 +91,30 @@
     });
   }
 
+  // A foto ocupa a área livre da tela, mesmo quando o arquivo é pequeno (ex.: foto de perfil
+  // salva em baixa resolução). Antes ela aparecia no tamanho do arquivo, minúscula no centro.
+  function ajustarTamanho() {
+    if (!overlay || !overlay.classList.contains('is-open') || !imagem.naturalWidth) {
+      return;
+    }
+    var largura = Math.min(overlay.clientWidth - 48, 900 - 16);
+    var altura = window.innerHeight - 192;
+    var escala = Math.min(largura / imagem.naturalWidth, altura / imagem.naturalHeight);
+    if (!(escala > 0)) {
+      return;
+    }
+    imagem.style.width = Math.floor(imagem.naturalWidth * escala) + 'px';
+    imagem.style.height = Math.floor(imagem.naturalHeight * escala) + 'px';
+  }
+
   function abrir(src, texto, origem) {
     if (!src) {
       return;
     }
     montar();
     focoAnterior = origem || document.activeElement;
+    imagem.style.width = '';
+    imagem.style.height = '';
     imagem.src = src;
     imagem.alt = texto || 'Foto ampliada';
     legenda.textContent = texto || '';
@@ -105,6 +125,9 @@
     overlay.classList.add('is-open');
     document.documentElement.classList.add('photo-lightbox-aberto');
     fechar.focus({ preventScroll: true });
+    if (imagem.complete) {
+      ajustarTamanho();
+    }
   }
 
   function fecharVisualizador() {
