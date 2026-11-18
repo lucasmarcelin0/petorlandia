@@ -121,7 +121,7 @@
     <div class="col-lg-7">
       <div class="limpeza-cartao mb-3">
         <h2 class="h5">Comunicação aberta à população</h2>
-        <p class="mb-2">{% if comunicacao_aberta %}<span class="limpeza-selo concluida">Ligada</span> Qualquer pessoa com conta no PetOrlândia pode comunicar pontos para limpeza. O mapa continua restrito à equipe e à fiscalização.
+        <p class="mb-2">{% if comunicacao_aberta %}<span class="limpeza-selo concluida">Ligada</span> Qualquer pessoa com conta no PetOrlândia pode comunicar problemas na cidade. O mapa continua restrito à equipe e à fiscalização.
           {% else %}<span class="limpeza-selo descartada">Desligada</span> Só quem tem papel atribuído aqui pode comunicar.{% endif %}</p>
         <form method="post" action="{{ url_for('limpeza_urbana.comunicacao_aberta') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

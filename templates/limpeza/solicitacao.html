@@ -39,7 +39,7 @@
       <div class="limpeza-cartao h-100">
         <h2 class="h6 text-uppercase text-muted">Depois · comprovação da equipe</h2>
         {% if c %}
-        <a href="{{ c.foto_url }}" target="_blank" rel="noopener"><img class="limpeza-foto-grande" src="{{ c.foto_url }}" alt="Foto da limpeza"></a>
+        <a href="{{ c.foto_url }}" target="_blank" rel="noopener"><img class="limpeza-foto-grande" src="{{ c.foto_url }}" alt="Foto do atendimento"></a>
         <dl class="limpeza-meta row mt-3 mb-0">
           <dt class="col-5">Comprovada em</dt><dd class="col-7">{{ hora_local(c.criado_em) }}</dd>
           {% if c.foto_capturada_em %}<dt class="col-5">Foto tirada em</dt><dd class="col-7">{{ hora_local(c.foto_capturada_em) }}</dd>{% endif %}
@@ -55,25 +55,25 @@
             <input class="form-control" id="motivo-recusa" name="motivo" maxlength="300" placeholder="Motivo (ex.: lixo continua no canteiro)" required>
             <button class="btn btn-outline-danger" type="submit" {{ 'disabled' if ver_como }}>Recusar</button>
           </div>
-          <div class="form-text">A comunicação volta para a fila de limpeza. A foto recusada fica no histórico.</div>
+          <div class="form-text">A comunicação volta para a fila de atendimento. A foto recusada fica no histórico.</div>
         </form>
         {% endif %}
         {% elif item.status == 'aberta' and pode_comprovar %}
         <form method="post" enctype="multipart/form-data" action="{{ url_for('limpeza_urbana.comprovar', solicitacao_id=item.id) }}" data-limpeza-foto novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% with prefixo='comprovacao', rotulo_foto='Foto do local depois da limpeza', galeria=false %}{% include "limpeza/_foto_local.html" %}{% endwith %}
+          {% with prefixo='comprovacao', rotulo_foto='Foto do local depois do serviço', galeria=false %}{% include "limpeza/_foto_local.html" %}{% endwith %}
           <div class="mb-3">
             <label class="form-label" for="observacao">Observação <span class="text-muted">(opcional)</span></label>
             <input class="form-control" id="observacao" name="observacao" maxlength="500">
           </div>
-          <button type="submit" class="btn btn-success w-100" {{ 'disabled' if ver_como }}><i class="fas fa-check me-2"></i>Comprovar limpeza</button>
+          <button type="submit" class="btn btn-success w-100" {{ 'disabled' if ver_como }}><i class="fas fa-check me-2"></i>Comprovar atendimento</button>
           <p class="small text-muted mt-2 mb-0">Tire a foto agora, do mesmo ângulo da foto da comunicação. A distância até o ponto comunicado fica registrada.</p>
         </form>
         {% elif item.status == 'descartada' %}
         <p class="mb-1">Descartada em {{ hora_local(item.descartada_em) }}{% if pode_fiscalizar and item.descartada_por %} por {{ item.descartada_por }}{% endif %}.</p>
         <p class="text-muted mb-0">Motivo: {{ item.motivo_descarte }}</p>
         {% else %}
-        <p class="text-muted mb-0">Aguardando a equipe de limpeza.</p>
+        <p class="text-muted mb-0">Aguardando a equipe de campo.</p>
         {% endif %}
       </div>
     </div>
@@ -83,7 +83,7 @@
   <div class="limpeza-cartao mt-3">
     <div id="limpeza-mini-mapa" data-lat="{{ item.latitude }}" data-lon="{{ item.longitude }}"
          {% if c %}data-clat="{{ c.latitude }}" data-clon="{{ c.longitude }}"{% endif %}></div>
-    <p class="small text-muted mt-2 mb-0">Vermelho: ponto comunicado. Verde: onde a foto da limpeza foi tirada.
+    <p class="small text-muted mt-2 mb-0">Vermelho: ponto comunicado. Verde: onde a foto do atendimento foi tirada.
       <a href="https://www.google.com/maps/dir/?api=1&destination={{ item.latitude }},{{ item.longitude }}" target="_blank" rel="noopener">Como chegar</a></p>
   </div>
   {% endif %}
@@ -143,5 +143,5 @@
 })();
 </script>
 {% endif %}
-<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='7') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='8') }}"></script>
 {% endblock %}

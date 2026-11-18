@@ -183,7 +183,7 @@ def test_equipe_ve_mapa_e_comprova_no_local(client, uploads):
     assert [p['id'] for p in dados['pontos']] == [item.id]
     assert 'autor' not in dados['pontos'][0]  # a equipe não precisa saber quem comunicou
     assert dados['indicadores']['abertas'] == 1
-    assert 'Comprovar limpeza' in client.get(f'/limpeza-urbana/solicitacao/{item.id}').get_data(as_text=True)
+    assert 'Comprovar atendimento' in client.get(f'/limpeza-urbana/solicitacao/{item.id}').get_data(as_text=True)
 
     resposta = comprovar(client, item.id, lat=PONTO[0] + 0.0001, lon=PONTO[1])
     assert resposta.status_code == 302
@@ -249,7 +249,7 @@ def test_fiscal_recusa_comprovacao_e_comunicacao_volta_para_fila(client, uploads
     csv = client.get('/limpeza-urbana/relatorio.csv')
     assert csv.status_code == 200 and 'attachment' in csv.headers['Content-Disposition']
     texto = csv.get_data(as_text=True)
-    assert 'Móveis e objetos grandes' in texto and 'Aguardando limpeza' in texto
+    assert 'Móveis e objetos grandes' in texto and 'Aguardando atendimento' in texto
 
     client.post(f'/limpeza-urbana/solicitacao/{item.id}/descartar', data={'motivo': 'Duplicada'})
     item = db.session.get(LimpezaSolicitacao, item.id)
@@ -371,7 +371,7 @@ def test_comunicacao_com_varios_tipos_e_foto_da_galeria(client, uploads):
     assert 'Móveis e objetos grandes, Galhos e poda' in pagina
 
     sem_tipo = comunicar(client, categoria=[])
-    assert sem_tipo.status_code == 400 and 'Marque o que precisa ser limpo' in sem_tipo.get_data(as_text=True)
+    assert sem_tipo.status_code == 400 and 'Marque o que precisa de atenção' in sem_tipo.get_data(as_text=True)
     sem_foto = client.post('/limpeza-urbana/comunicar', data={
         'categoria': 'lixo', 'foto': [(io.BytesIO(b''), ''), (io.BytesIO(b''), '')],
         'latitude': str(PONTO[0]), 'longitude': str(PONTO[1])}, content_type='multipart/form-data')

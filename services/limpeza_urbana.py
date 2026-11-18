@@ -41,7 +41,7 @@ EXIGEM_MAPA = ("comprovar",) + FISCALIZACAO
 # Papéis iniciais (a migration grava estes na tabela). Valem enquanto a tabela estiver vazia.
 PAPEIS = {
     "colaborador": ("Colaborador", ("comunicar",)),
-    "equipe": ("Equipe de limpeza", ("comunicar", "mapa", "comprovar")),
+    "equipe": ("Equipe de campo", ("comunicar", "mapa", "comprovar")),
     "fiscal": ("Fiscalização", ("comunicar", "mapa", "recusar", "descartar", "exportar")),
 }
 
@@ -103,7 +103,7 @@ def filtro_tipo(coluna, chave):
                coluna.like(f"%,{chave},%"))
 
 
-STATUS = {"aberta": "Aguardando limpeza", "concluida": "Limpeza comprovada", "descartada": "Descartada"}
+STATUS = {"aberta": "Aguardando atendimento", "concluida": "Atendimento comprovado", "descartada": "Descartada"}
 
 FLAG_COMUNICACAO_ABERTA = "limpeza_comunicacao_aberta"
 
@@ -303,6 +303,55 @@ def _limpar_cache():
         g.pop("_limpeza_papeis_cat", None)
         g.pop("_limpeza_tipos", None)
         g.pop("user_experience", None)
+
+
+# Conquistas mostradas no "parabéns" depois de comunicar ou comprovar: só incentivo
+# na tela, nada é gravado além das próprias comunicações e comprovações.
+NIVEIS_COMUNICACAO = [
+    (1, "🌱", "Olho vivo", "Sua primeira comunicação! A cidade agradece."),
+    (3, "🔎", "Vizinho atento", "Você já ajudou em vários pontos da cidade."),
+    (10, "🛡️", "Guardião do bairro", "Dez pontos comunicados: o bairro está em boas mãos."),
+    (25, "🏅", "Cidadão exemplar", "Sua participação faz diferença de verdade."),
+    (50, "🏆", "Herói da cidade", "Cinquenta comunicações! Orlândia agradece."),
+]
+NIVEIS_COMPROVACAO = [
+    (1, "🙌", "Mão na massa", "Primeiro atendimento comprovado!"),
+    (10, "⭐", "Equipe nota 10", "Dez atendimentos comprovados."),
+    (50, "🚀", "Ritmo forte", "Cinquenta pontos resolvidos."),
+    (100, "🏆", "Referência da cidade", "Cem atendimentos comprovados!"),
+]
+SESSAO_PARABENS = "limpeza_parabens"
+
+
+def conquista(total: int, tipo: str = "comunicacao") -> dict:
+    """Nível atual, se o total acabou de alcançá-lo e quanto falta para o próximo."""
+    niveis = NIVEIS_COMPROVACAO if tipo == "comprovacao" else NIVEIS_COMUNICACAO
+    atual = None
+    proximo = None
+    for nivel in niveis:
+        if total >= nivel[0]:
+            atual = nivel
+        elif proximo is None:
+            proximo = nivel
+    dados = {"total": total, "novo_nivel": bool(atual and atual[0] == total)}
+    if atual:
+        dados.update(emoji=atual[1], nivel=atual[2], frase=atual[3])
+    if proximo:
+        dados.update(proximo_nivel=proximo[2], faltam=proximo[0] - total,
+                     progresso=int(100 * (total - (atual[0] if atual else 0)) / (proximo[0] - (atual[0] if atual else 0))))
+    else:
+        dados["progresso"] = 100
+    return dados
+
+
+def total_comunicacoes(autor_id: int) -> int:
+    from models.limpeza import LimpezaSolicitacao
+    return LimpezaSolicitacao.query.filter_by(autor_id=autor_id).count()
+
+
+def total_comprovacoes(autor_id: int) -> int:
+    from models.limpeza import LimpezaComprovacao
+    return LimpezaComprovacao.query.filter_by(autor_id=autor_id, status="valida").count()
 
 
 def proximo_numero() -> int:

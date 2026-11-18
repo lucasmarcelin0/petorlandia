@@ -219,7 +219,7 @@
       ev.preventDefault();
       var categorias = form.querySelectorAll('input[name=categoria]');
       if (categorias.length && !form.querySelector('input[name=categoria]:checked')) {
-        avisar('Marque o que precisa ser limpo antes de enviar. Sua foto continua selecionada.');
+        avisar('Marque o que precisa de atenção antes de enviar. Sua foto continua selecionada.');
         categorias[0].focus();
         return;
       }

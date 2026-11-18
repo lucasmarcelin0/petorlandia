@@ -15,6 +15,9 @@
   .limpeza-meta dt { font-weight: 600; color: #374151; }
   .limpeza-nav { flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 2px; }
   .limpeza-nav .btn { width: auto !important; flex: 0 0 auto; white-space: nowrap; }
+  .limpeza-passos { padding-left: 0; list-style: none; counter-reset: passo; display: grid; gap: 6px; }
+  .limpeza-passos li { counter-increment: passo; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; }
+  .limpeza-passos li::before { content: counter(passo); flex: 0 0 28px; height: 28px; border-radius: 50%; background: #16a34a; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; }
   .limpeza-categorias { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
   .limpeza-categorias label { border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; gap: 8px; align-items: center; margin: 0; }
   .limpeza-categorias input:checked + span { font-weight: 700; color: #3f6212; }

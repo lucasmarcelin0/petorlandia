@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Comunicar limpeza · Prefeitura integrada{% endblock %}
+{% block page_title %}Comunicar problema · Prefeitura integrada{% endblock %}
 {% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block head %}
@@ -12,13 +12,19 @@
 <div class="container limpeza-pagina py-4">
   {% set ativo = 'comunicar' %}
   {% include "limpeza/_nav.html" %}
-  <h1 class="h3 mb-1">Comunicar ponto para limpeza</h1>
-  <p class="text-muted">Abra esta página com internet antes de sair. Tire a foto no local; a posição do aparelho é registrada ao capturar. Sem internet, a comunicação fica neste aparelho até ser enviada ao reconectar.</p>
+  <h1 class="h3 mb-1">Comunicar um problema na cidade</h1>
+  <p class="text-muted mb-2">Lixo, entulho, buraco, bueiro, animal solto… Avise a prefeitura em 3 passos:</p>
+  <ol class="limpeza-passos mb-3">
+    <li><span><strong>Marque</strong> o que você está vendo.</span></li>
+    <li><span><strong>Tire a foto</strong> no local. A localização vai junto, sozinha.</span></li>
+    <li><span>Toque em <strong>Enviar comunicação</strong>.</span></li>
+  </ol>
+  <p class="small text-muted mb-3"><i class="fas fa-wifi me-1"></i>Sem internet? Pode enviar assim mesmo: a comunicação fica guardada no celular e segue sozinha quando a conexão voltar.</p>
 
   <form method="post" enctype="multipart/form-data" class="limpeza-cartao" data-limpeza-foto data-offline-comunicacao data-usuario="{{ current_user.id }}" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="alert alert-info" id="limpeza-pendencias" role="status">Preparando armazenamento no aparelho…</div>
+    <div class="alert alert-info d-none" id="limpeza-pendencias" role="status"></div>
     <fieldset class="mb-3">
       <legend class="form-label fw-semibold fs-6 mb-1">O que precisa de atenção?</legend>
       <p class="small text-muted mb-2">Marque tudo o que tem no local.</p>
@@ -39,11 +45,13 @@
       <label class="form-label" for="referencia">Ponto de referência <span class="text-muted">(opcional)</span></label>
       <input class="form-control" id="referencia" name="referencia" maxlength="200" value="{{ form.get('referencia', '') }}" placeholder="Ex.: em frente ao nº 1200, canteiro central da avenida">
     </div>
-    <button type="submit" class="btn btn-success btn-lg w-100" {{ 'disabled title="Modo ver como: só visualização"'|safe if ver_como }}><i class="fas fa-paper-plane me-2"></i>Salvar comunicação</button>
-    <p class="small text-muted mt-2 mb-0">Evite fotografar rostos e placas de veículos. A foto é vista pela equipe de limpeza e pela fiscalização.</p>
+    <button type="submit" class="btn btn-success btn-lg w-100" {{ 'disabled title="Modo ver como: só visualização"'|safe if ver_como }}><i class="fas fa-paper-plane me-2"></i>Enviar comunicação</button>
+    <p class="small text-muted mt-2 mb-0">Evite fotografar rostos e placas de veículos. A foto é vista pela equipe de campo e pela fiscalização.</p>
   </form>
-  <button type="button" class="btn btn-outline-primary mt-3" id="limpeza-sincronizar">Enviar pendentes</button>
-  <button type="button" class="btn btn-outline-secondary mt-3" id="limpeza-recuperar">Editar primeira pendente</button>
+  <div class="d-none" id="limpeza-pendentes-acoes">
+    <button type="button" class="btn btn-outline-primary mt-3" id="limpeza-sincronizar">Enviar pendentes</button>
+    <button type="button" class="btn btn-outline-secondary mt-3" id="limpeza-recuperar">Editar primeira pendente</button>
+  </div>
 </div>
 <script>
 (function () {
@@ -65,6 +73,6 @@
   atualizar(false);
 })();
 </script>
-<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='7') }}"></script>
-<script src="{{ url_for('static', filename='js/limpeza_offline.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_foto.js', v='8') }}"></script>
+<script src="{{ url_for('static', filename='js/limpeza_offline.js', v='3') }}"></script>
 {% endblock %}
