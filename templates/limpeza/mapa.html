@@ -63,6 +63,7 @@
     <button class="btn btn-sm btn-outline-success" type="button" data-pagina="proxima">Mais antigas<i class="fas fa-chevron-right ms-1"></i></button>
   </nav>
   {% else %}
+  <div class="alert alert-warning small d-none mb-2" id="limpeza-local-aviso" role="status"></div>
   <div id="limpeza-mapa" role="region" aria-label="Mapa das comunicações"></div>
   <div class="limpeza-legenda mt-2" id="limpeza-legenda">
     <span><i style="background:#ef4444"></i>Aguardando atendimento</span>
@@ -70,6 +71,7 @@
     <span><i style="background:#22c55e"></i>Atendimento comprovado</span>
     <span><i style="background:#a855f7"></i>Comprovada longe do ponto (&gt; {{ DISTANCIA_ALERTA_M|int }} m)</span>
     <span><i style="background:#9ca3af"></i>Descartada</span>
+    <span><i style="background:#2563eb;box-shadow:0 0 0 2px #fff inset"></i>Você está aqui (botão de mira no mapa)</span>
   </div>
   {% endif %}
 </div>
@@ -111,8 +113,80 @@
       ${p.referencia ? `Referência: ${esc(p.referencia)}<br>` : ''}
       ${c ? `Atendida em ${esc(c.criado_local)} (${p.horas_ate_limpeza} h) · ${Math.round(c.distancia_m)} m do ponto<br>` : ''}
       ${p.recusas ? `<span class="text-danger">${p.recusas} comprovação(ões) recusada(s)</span><br>` : ''}
-      <a href="${DETALHE}${p.id}">Abrir</a>
+      ${distanciaDeVoce(p)}
+      <div class="limpeza-popup-acoes">
+        <a class="btn btn-sm btn-primary" href="${DETALHE}${p.id}"><i class="fas fa-up-right-from-square me-1"></i>Abrir</a>
+        ${rota(p) ? `<a class="btn btn-sm btn-success" href="${rota(p)}" target="_blank" rel="noopener"><i class="fas fa-route me-1"></i>Rota no GPS</a>` : ''}
+      </div>
     </div>`;
+  }
+
+  // Rota até o ponto no aplicativo de mapas do celular (Google Maps parte da posição atual).
+  function rota(p) {
+    const lat = Number(p.lat), lon = Number(p.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
+  }
+
+  // "Onde estou": posição do aparelho no mapa, só depois que a pessoa toca no botão.
+  let minhaPosicao = null, vigiaPosicao = null, marcaVoce = null, raioVoce = null, centralizar = false;
+  function distanciaDeVoce(p) {
+    if (!minhaPosicao || !mapa) return '';
+    const m = mapa.distance(minhaPosicao, [p.lat, p.lon]);
+    return `<div class="limpeza-voce-dist"><i class="fas fa-location-crosshairs me-1"></i>A ${m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'} de você</div>`;
+  }
+  function avisoLocal(msg) {
+    const aviso = el('limpeza-local-aviso');
+    if (!aviso) return;
+    aviso.textContent = msg || '';
+    aviso.classList.toggle('d-none', !msg);
+  }
+  function posicaoAtualizada(pos) {
+    minhaPosicao = L.latLng(pos.coords.latitude, pos.coords.longitude);
+    const precisao = Math.min(pos.coords.accuracy || 0, 2000);
+    if (!marcaVoce) {
+      raioVoce = L.circle(minhaPosicao, { radius: precisao, color: '#2563eb', weight: 1, fillColor: '#3b82f6', fillOpacity: .12, interactive: false }).addTo(mapa);
+      marcaVoce = L.circleMarker(minhaPosicao, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
+        .bindTooltip('Você está aqui').addTo(mapa);
+    } else {
+      marcaVoce.setLatLng(minhaPosicao);
+      raioVoce.setLatLng(minhaPosicao).setRadius(precisao);
+    }
+    if (centralizar) { mapa.setView(minhaPosicao, Math.max(mapa.getZoom(), 16)); centralizar = false; }
+    avisoLocal('');
+    const botao = document.querySelector('.limpeza-onde-estou');
+    if (botao) botao.classList.add('ativo');
+  }
+  function localFalhou(erro) {
+    centralizar = false;
+    avisoLocal(erro && erro.code === 1
+      ? 'Para ver onde você está, permita o acesso à localização para este site nas configurações do navegador.'
+      : 'Não foi possível obter sua localização agora. Confira se o GPS do celular está ligado e tente de novo.');
+  }
+  function ondeEstou() {
+    if (!('geolocation' in navigator)) { avisoLocal('Este navegador não informa a localização.'); return; }
+    centralizar = true;
+    if (minhaPosicao) { mapa.setView(minhaPosicao, Math.max(mapa.getZoom(), 16)); centralizar = false; }
+    if (vigiaPosicao === null) {
+      vigiaPosicao = navigator.geolocation.watchPosition(posicaoAtualizada, localFalhou,
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+    }
+  }
+  if (mapa) {
+    const Controle = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd() {
+        const b = L.DomUtil.create('button', 'limpeza-onde-estou leaflet-bar');
+        b.type = 'button';
+        b.title = 'Mostrar onde estou';
+        b.setAttribute('aria-label', 'Mostrar onde estou');
+        b.innerHTML = '<i class="fas fa-location-crosshairs"></i>';
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, 'click', ondeEstou);
+        return b;
+      },
+    });
+    new Controle().addTo(mapa);
   }
 
   function numero(n, rotulo, tom) {
@@ -162,7 +236,7 @@
       el('limpeza-indicadores').innerHTML = [
         numero(i.abertas, 'Aguardando atendimento', 'text-danger'),
         numero(i.abertas_48h, 'Aguardando > 48 h', 'text-warning'),
-        numero(i.concluidas, 'Limpezas comprovadas', 'text-success'),
+        numero(i.concluidas, 'Atendimentos comprovados', 'text-success'),
         numero(i.mediana_horas == null ? null : `${i.mediana_horas} h`, 'Tempo mediano até o atendimento'),
         numero(i.comprovacoes_longe, 'Comprovações longe do ponto'),
         numero(i.comprovacoes_recusadas, 'Comprovações recusadas'),
@@ -177,7 +251,7 @@
       if (mapa) d.pontos.forEach((p) => {
         const c = cor(p);
         L.circleMarker([p.lat, p.lon], { radius: 8, color: '#1f2937', weight: 1, fillColor: c, fillOpacity: .9 })
-          .bindPopup(popup(p), { maxWidth: 280 }).addTo(camada);
+          .bindPopup(() => popup(p), { maxWidth: 280 }).addTo(camada);
         limites.push([p.lat, p.lon]);
       });
       el('limpeza-sub').textContent = d.total
@@ -212,7 +286,11 @@
   el('limpeza-atualizar').addEventListener('click', carregar);
   // Acompanhamento em tempo real: recarrega sozinho a cada minuto com a aba visível.
   const intervalo = setInterval(() => { if (!document.hidden) carregar(); }, 60000);
-  window.addEventListener('limpeza:saida', () => { clearInterval(intervalo); if (mapa) mapa.remove(); }, { once: true });
+  window.addEventListener('limpeza:saida', () => {
+    clearInterval(intervalo);
+    if (vigiaPosicao !== null) navigator.geolocation.clearWatch(vigiaPosicao);
+    if (mapa) mapa.remove();
+  }, { once: true });
   carregar();
 })();
 </script>

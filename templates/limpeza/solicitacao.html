@@ -83,8 +83,8 @@
   <div class="limpeza-cartao mt-3">
     <div id="limpeza-mini-mapa" data-lat="{{ item.latitude }}" data-lon="{{ item.longitude }}"
          {% if c %}data-clat="{{ c.latitude }}" data-clon="{{ c.longitude }}"{% endif %}></div>
-    <p class="small text-muted mt-2 mb-0">Vermelho: ponto comunicado. Verde: onde a foto do atendimento foi tirada.
-      <a href="https://www.google.com/maps/dir/?api=1&destination={{ item.latitude }},{{ item.longitude }}" target="_blank" rel="noopener">Como chegar</a></p>
+    <p class="small text-muted mt-2 mb-2">Vermelho: ponto comunicado. Verde: onde a foto do atendimento foi tirada.</p>
+    <a class="btn btn-success w-100" href="https://www.google.com/maps/dir/?api=1&destination={{ item.latitude }},{{ item.longitude }}&travelmode=driving" target="_blank" rel="noopener"><i class="fas fa-route me-1"></i>Rota no GPS até este ponto</a>
   </div>
   {% endif %}
 
