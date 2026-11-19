@@ -317,6 +317,10 @@ migrate.init_app(app, db, compare_type=True)
 from services.appointment_notifications import register_appointment_notifications
 
 register_appointment_notifications(db)
+# Prefeitura integrada: aviso aos responsáveis por tarefa nova, concluída ou devolvida.
+from services.limpeza_avisos import registrar as registrar_avisos_limpeza
+
+registrar_avisos_limpeza(db)
 mail.init_app(app)
 login.init_app(app)
 if str(app.config.get("SESSION_TYPE", "")).lower() == "redis":

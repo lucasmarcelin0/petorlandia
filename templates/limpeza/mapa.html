@@ -53,6 +53,12 @@
     </div>
   </form>
 
+  {% if (pode_comprovar or pode_fiscalizar) and not eh_admin and not ver_como %}
+  <div class="alert alert-info d-none d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 small" id="limpeza-avisos" role="status">
+    <div><i class="fas fa-bell me-1"></i><span data-avisos-texto>Receba no celular cada tarefa nova e cada tarefa concluída. Os avisos também chegam por e-mail.</span></div>
+    <button class="btn btn-sm btn-primary flex-shrink-0" type="button" data-avisos-ativar>Ativar avisos neste aparelho</button>
+  </div>
+  {% endif %}
   <div class="row g-2 mb-3" id="limpeza-indicadores"></div>
   <div class="alert alert-danger d-none" id="limpeza-erro"></div>
 
@@ -78,6 +84,46 @@
 </div>
 
 <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
+<script>
+// Avisos de tarefas: mostra o convite só enquanto este aparelho não estiver inscrito.
+(() => {
+  const caixa = document.getElementById('limpeza-avisos');
+  if (!caixa || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  const texto = caixa.querySelector('[data-avisos-texto]');
+  const botao = caixa.querySelector('[data-avisos-ativar]');
+  async function inscrito() {
+    if (Notification.permission !== 'granted') return false;
+    try { const reg = await navigator.serviceWorker.ready; return !!(await reg.pushManager.getSubscription()); }
+    catch (e) { return false; }
+  }
+  async function iniciar() {
+    try {
+      const cfg = await fetch('/push/vapid-public-key', { headers: { Accept: 'application/json' } }).then((r) => r.json());
+      if (!cfg.enabled || await inscrito()) return;
+    } catch (e) { return; }
+    if (Notification.permission === 'denied') {
+      texto.textContent = 'As notificações estão bloqueadas neste navegador. Libere nas configurações do site para receber as tarefas no celular; enquanto isso, elas chegam por e-mail.';
+      botao.classList.add('d-none');
+    }
+    caixa.classList.remove('d-none');
+  }
+  botao.addEventListener('click', async () => {
+    botao.disabled = true;
+    const ok = window.PetPush ? await window.PetPush.subscribe().catch(() => false) : false;
+    if (ok) {
+      texto.textContent = 'Pronto: este aparelho vai avisar cada tarefa nova e cada tarefa concluída.';
+      botao.classList.add('d-none');
+      setTimeout(() => caixa.classList.add('d-none'), 6000);
+    } else {
+      texto.textContent = Notification.permission === 'denied'
+        ? 'As notificações foram bloqueadas. Libere nas configurações do site; enquanto isso, os avisos chegam por e-mail.'
+        : 'Não foi possível ativar agora. Tente de novo; os avisos continuam chegando por e-mail.';
+      botao.disabled = false;
+    }
+  });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+</script>
 <script>
 (() => {
   const DADOS = {{ url_for('limpeza_urbana.mapa_dados')|tojson }};
