@@ -512,6 +512,9 @@ def registrar_evento(tipo, solicitacao_id, user, detalhe=""):
     from models.limpeza import LimpezaEvento
     db.session.add(LimpezaEvento(tipo=tipo, solicitacao_id=solicitacao_id,
                                  user_id=getattr(user, "id", None), detalhe=(detalhe or "")[:500]))
+    # Tarefa nova, concluída ou de volta à fila: os responsáveis recebem aviso depois do commit.
+    from services import limpeza_avisos
+    limpeza_avisos.ao_registrar(tipo, solicitacao_id, user, detalhe)
 
 
 # ---------------------------------------------------------------------------
