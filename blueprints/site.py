@@ -1011,6 +1011,9 @@ WAITLIST_FEATURES = {
 
 
 @bp.route('/lista-de-espera', methods=['POST'])
+# O pedido de demonstração dispara e-mail ao dono e ao contato informado: sem
+# limite, o formulário viraria um canhão de e-mails.
+@limiter.limit("5 per minute; 20 per hour", methods=["POST"])
 def waitlist_signup():
     """Registra interesse numa funcionalidade ainda não publicada.
 
@@ -1050,6 +1053,18 @@ def waitlist_signup():
             # Corrida entre dois envios simultâneos: o contato já está salvo,
             # que é exatamente o resultado desejado.
             db.session.rollback()
+            lead = None
+        if lead is not None and feature == 'demo_clinica':
+            # Pedido de demonstração é o lead mais quente que existe: avisa o
+            # dono na hora e confirma ao lead. Falha aqui nunca derruba o pedido.
+            try:
+                from services.acquisition import notify_demo_lead
+
+                base_url = (os.environ.get('FRONTEND_URL') or request.host_url).rstrip('/')
+                notify_demo_lead(lead, base_url=base_url)
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                current_app.logger.exception('Falha ao notificar pedido de demonstração')
 
     track_event('waitlist_joined', channel=feature)
 

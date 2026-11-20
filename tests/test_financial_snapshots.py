@@ -21,6 +21,9 @@ from models import (  # noqa: E402
     OrcamentoItem,
     Order,
     OrderItem,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
     PJPayment,
     Product,
     ServicoClinica,
@@ -63,6 +66,9 @@ def _create_clinic_with_data():
     product = Product(name="Ração", price=50.0, stock=10)
     db.session.add(product)
     db.session.commit()
+    # A venda é da clínica (produto dela) — quem compra não define o vendedor.
+    product.clinica_id = clinic.id
+    db.session.commit()
 
     servico = ServicoClinica(descricao="Consulta", valor=Decimal('120.50'), clinica=clinic)
     db.session.add(servico)
@@ -80,6 +86,15 @@ def _create_clinic_with_data():
         unit_price=Decimal('50.00'),
     )
     db.session.add(item)
+    # Só pedido pago é venda; carrinho aberto não entra no faturamento.
+    db.session.add(
+        Payment(
+            order_id=order.id,
+            user_id=buyer.id,
+            method=list(PaymentMethod)[0],
+            status=PaymentStatus.COMPLETED,
+        )
+    )
 
     orcamento = Orcamento(
         clinica_id=clinic.id,

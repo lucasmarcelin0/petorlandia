@@ -40,6 +40,8 @@ from models import (
     OrcamentoItem,
     Order,
     OrderItem,
+    Payment,
+    PaymentStatus,
     PJPayment,
     Product,
     ServicoClinica,
@@ -238,51 +240,142 @@ def _classified_sum_for_range(
     return _ensure_decimal(total)
 
 
-def _service_revenue_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
-    item_date = func.coalesce(
+#: Status de orçamento que nunca viram receita: o tutor recusou ou a clínica
+#: cancelou. A clínica marca isso na tela do orçamento.
+NON_REVENUE_BUDGET_STATUSES = ("rejected", "canceled", "cancelled")
+
+
+def _paid_budget_keys(clinic_id: int) -> set[str]:
+    """Orçamentos/blocos cujo pagamento já está lançado como receita.
+
+    O pagamento entra uma vez, pelo total, em ``origin='orcamento_payment'``
+    (ver ``_sync_orcamento_payment_classification``). Os itens desses
+    orçamentos não podem ser somados de novo, item a item — era isso que
+    fazia um orçamento pago de R$ 100 aparecer como R$ 200 de faturamento.
+    """
+
+    rows = (
+        db.session.query(ClassifiedTransaction.raw_id)
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.origin == "orcamento_payment")
+        .filter(ClassifiedTransaction.category == "receita_servico")
+        .all()
+    )
+    return {raw_id for (raw_id,) in rows if raw_id}
+
+
+def _service_item_rows(clinic_id: int, start_dt: datetime, end_dt: datetime) -> list:
+    """Itens de serviço da clínica que contam como receita no período.
+
+    Regra única para o painel, o snapshot, a DRE e a planilha do contador:
+
+    * entra o que foi lançado em consulta, orçamento ou bloco de orçamento
+      (a clínica que cobra no balcão não tem outro registro de recebimento);
+    * não entra item de orçamento recusado ou cancelado;
+    * não entra item de orçamento/bloco cujo pagamento já foi lançado pelo
+      total, para não contar duas vezes.
+    """
+
+    item_date_expr = func.coalesce(
         Orcamento.created_at,
         Consulta.created_at,
         BlocoOrcamento.data_criacao,
     )
-    total = (
-        db.session.query(func.coalesce(func.sum(OrcamentoItem.valor), 0))
+    query = (
+        db.session.query(
+            OrcamentoItem.id.label('item_id'),
+            OrcamentoItem.orcamento_id.label('orcamento_id'),
+            OrcamentoItem.bloco_id.label('bloco_id'),
+            item_date_expr.label('item_date'),
+            OrcamentoItem.descricao.label('descricao'),
+            OrcamentoItem.valor.label('valor'),
+            ServicoClinica.descricao.label('servico_nome'),
+        )
         .outerjoin(Orcamento, Orcamento.id == OrcamentoItem.orcamento_id)
         .outerjoin(Consulta, Consulta.id == OrcamentoItem.consulta_id)
         .outerjoin(BlocoOrcamento, BlocoOrcamento.id == OrcamentoItem.bloco_id)
+        .outerjoin(ServicoClinica, ServicoClinica.id == OrcamentoItem.servico_id)
         .filter(OrcamentoItem.clinica_id == clinic_id)
-        .filter(item_date >= start_dt, item_date < end_dt)
-        .scalar()
+        .filter(item_date_expr >= start_dt, item_date_expr < end_dt)
+        .filter(
+            or_(
+                Orcamento.id.is_(None),
+                func.lower(func.coalesce(Orcamento.status, '')).notin_(NON_REVENUE_BUDGET_STATUSES),
+            )
+        )
+    )
+    paid_keys = _paid_budget_keys(clinic_id)
+    rows = []
+    for row in query.all():
+        if row.orcamento_id and f"orcamento:{row.orcamento_id}" in paid_keys:
+            continue
+        if row.bloco_id and f"bloco_orcamento:{row.bloco_id}" in paid_keys:
+            continue
+        rows.append(row)
+    return rows
+
+
+def _service_revenue_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
+    total = sum(
+        (_ensure_decimal(row.valor) for row in _service_item_rows(clinic_id, start_dt, end_dt)),
+        ZERO,
     )
     return _ensure_decimal(total)
 
 
 def _order_clinic_filters(clinic_id: int):
-    order_clinic_column = None
-    if hasattr(Order, 'clinica_id'):
-        order_clinic_column = Order.clinica_id
-    elif hasattr(Order, 'clinic_id'):
-        order_clinic_column = Order.clinic_id
+    """Itens de pedido vendidos por esta clínica.
 
-    if order_clinic_column is not None:
-        return [order_clinic_column == clinic_id]
-    return [User.clinica_id == clinic_id]
+    Antes o vínculo era o ``clinica_id`` de quem COMPROU: qualquer compra de
+    um funcionário ou tutor ligado à clínica — de qualquer vendedor — virava
+    receita dela. O vendedor do item é quem recebe a receita.
+    """
+
+    return [
+        or_(
+            and_(OrderItem.seller_type == 'clinica', OrderItem.seller_id == clinic_id),
+            and_(OrderItem.seller_type.is_(None), Product.clinica_id == clinic_id),
+        )
+    ]
 
 
-def _product_revenue_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
-    price_expr = func.coalesce(
+def _paid_order_filter():
+    """Pedido com pagamento concluído. Carrinho aberto ou recusado não é venda."""
+
+    paid_orders = (
+        db.session.query(Payment.order_id)
+        .filter(Payment.order_id.isnot(None))
+        .filter(Payment.status == PaymentStatus.COMPLETED)
+    )
+    return Order.id.in_(paid_orders)
+
+
+def _product_sale_unit_value_expr():
+    """Valor unitário que a clínica recebe pelo item.
+
+    ``seller_unit_amount`` é o snapshot do repasse no momento da compra (o
+    preço público inclui a taxa da plataforma, que não é receita da clínica).
+    Pedidos antigos sem o snapshot caem no preço cobrado.
+    """
+
+    return func.coalesce(
+        OrderItem.seller_unit_amount,
         OrderItem.unit_price,
         cast(Product.price, Numeric(10, 2)),
         0,
     )
+
+
+def _product_revenue_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
     quantity_expr = func.coalesce(OrderItem.quantity, 0)
-    total_expr = func.sum(price_expr * quantity_expr)
+    total_expr = func.sum(_product_sale_unit_value_expr() * quantity_expr)
 
     query = (
         db.session.query(func.coalesce(total_expr, 0))
         .join(Order, Order.id == OrderItem.order_id)
         .outerjoin(Product, Product.id == OrderItem.product_id)
-        .outerjoin(User, User.id == Order.user_id)
         .filter(Order.created_at >= start_dt, Order.created_at < end_dt)
+        .filter(_paid_order_filter())
     )
     for clause in _order_clinic_filters(clinic_id):
         query = query.filter(clause)
@@ -440,42 +533,35 @@ def _upsert_classified_transaction(
     return record, changed
 
 
+def _delete_stale_classifications(existing_records: dict, seen_raw_ids: set[str]) -> bool:
+    """Apaga lançamentos cuja origem sumiu (item apagado, venda que deixou de
+    contar). Sem isso, um item excluído continuava somado no faturamento."""
+
+    removed = False
+    for raw_id, record in existing_records.items():
+        if raw_id not in seen_raw_ids and record is not None:
+            db.session.delete(record)
+            removed = True
+    return removed
+
+
 def _classify_service_transactions(
     clinic_id: int,
     month_start: date,
     start_dt: datetime,
     end_dt: datetime,
 ) -> Tuple[List[ClassifiedTransaction], bool]:
-    item_date_expr = func.coalesce(
-        Orcamento.created_at,
-        Consulta.created_at,
-        BlocoOrcamento.data_criacao,
-    )
-
-    query = (
-        db.session.query(
-            OrcamentoItem.id.label('item_id'),
-            item_date_expr.label('item_date'),
-            OrcamentoItem.descricao.label('descricao'),
-            OrcamentoItem.valor.label('valor'),
-            ServicoClinica.descricao.label('servico_nome'),
-        )
-        .outerjoin(Orcamento, Orcamento.id == OrcamentoItem.orcamento_id)
-        .outerjoin(Consulta, Consulta.id == OrcamentoItem.consulta_id)
-        .outerjoin(BlocoOrcamento, BlocoOrcamento.id == OrcamentoItem.bloco_id)
-        .outerjoin(ServicoClinica, ServicoClinica.id == OrcamentoItem.servico_id)
-        .filter(OrcamentoItem.clinica_id == clinic_id)
-        .filter(item_date_expr >= start_dt, item_date_expr < end_dt)
-    )
     records: List[ClassifiedTransaction] = []
     changed = False
+    seen: set[str] = set()
     existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "service")
-    for row in query.all():
+    for row in _service_item_rows(clinic_id, start_dt, end_dt):
         occurred_at = _ensure_datetime(row.item_date, month_start)
         value = _ensure_decimal(row.valor)
         description = _prepare_description(row.descricao, "Serviço")
         subcategory = _prepare_subcategory(row.servico_nome or row.descricao)
         raw_id = f"service:{row.item_id}"
+        seen.add(raw_id)
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
@@ -494,6 +580,8 @@ def _classify_service_transactions(
             "[Contabilidade] Classificado: Serviço -> receita_servico (%s)",
             _format_currency(value),
         )
+    if _delete_stale_classifications(existing_records, seen):
+        changed = True
     return records, changed
 
 
@@ -510,29 +598,35 @@ def _classify_product_sales(
             OrderItem.item_name.label('item_name'),
             OrderItem.quantity.label('quantity'),
             OrderItem.unit_price.label('unit_price'),
+            OrderItem.seller_unit_amount.label('seller_unit_amount'),
             Product.name.label('product_name'),
             Product.price.label('product_price'),
             Product.mp_category_id.label('product_category'),
         )
         .join(Order, Order.id == OrderItem.order_id)
         .outerjoin(Product, Product.id == OrderItem.product_id)
-        .outerjoin(User, User.id == Order.user_id)
         .filter(Order.created_at >= start_dt, Order.created_at < end_dt)
+        .filter(_paid_order_filter())
     )
     for clause in _order_clinic_filters(clinic_id):
         query = query.filter(clause)
 
     records: List[ClassifiedTransaction] = []
     changed = False
+    seen: set[str] = set()
     existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "product_sale")
     for row in query.all():
         occurred_at = _ensure_datetime(row.order_date, month_start)
         quantity = Decimal(row.quantity or 0)
-        unit_price = _ensure_decimal(row.unit_price if row.unit_price is not None else row.product_price)
+        if row.seller_unit_amount is not None:
+            unit_price = _ensure_decimal(row.seller_unit_amount)
+        else:
+            unit_price = _ensure_decimal(row.unit_price if row.unit_price is not None else row.product_price)
         value = unit_price * quantity
         description = _prepare_description(row.item_name or row.product_name, "Venda de produto")
         subcategory = _prepare_subcategory(row.product_category or row.product_name)
         raw_id = f"product:{row.item_id}"
+        seen.add(raw_id)
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
@@ -551,6 +645,8 @@ def _classify_product_sales(
             "[Contabilidade] Classificado: Venda -> receita_produto (%s)",
             _format_currency(value),
         )
+    if _delete_stale_classifications(existing_records, seen):
+        changed = True
     return records, changed
 
 
@@ -1468,7 +1564,12 @@ def register_account(
     kind = (kind or "").strip().lower()
     if kind not in {"receivable", "payable"}:
         raise ValueError("kind must be receivable or payable")
-    gross = _quantize_currency(_ensure_decimal(amount))
+    raw_amount = _ensure_decimal(amount)
+    # Valor inválido nunca entra no livro: um "NaN" envenenaria todas as somas
+    # e um negativo inverteria o sentido da conta.
+    if not raw_amount.is_finite() or raw_amount <= ZERO:
+        raise ValueError("amount must be a positive number")
+    gross = _quantize_currency(raw_amount)
     account = AccountingAccount(
         clinic_id=clinic_id,
         kind=kind,
@@ -1765,14 +1866,15 @@ def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime 
     """Create or refresh the snapshot for ``clinic_id`` in the given ``month``."""
 
     month_start = _normalize_month(month)
-    range_start, range_end = _month_range(month_start)
 
-    service_total = _service_revenue_total(clinic_id, range_start, range_end)
-    product_total = _product_revenue_total(clinic_id, range_start, range_end)
-    manual_total = _manual_entries_total(clinic_id, range_start, range_end)
-
-    # Até que exista um campo próprio, consolide lançamentos manuais em serviços.
-    service_total += manual_total
+    # Uma única fonte da verdade: o snapshot soma os mesmos lançamentos
+    # classificados que alimentam o painel, a DRE, os impostos e a planilha do
+    # contador. Antes ele recalculava por conta própria e o card "Faturamento
+    # do mês" podia mostrar um número diferente do resto da tela.
+    classify_transactions_for_month(clinic_id, month_start)
+    # Lançamentos manuais são classificados como receita_servico.
+    service_total = _quantize_currency(_classified_sum_for_month(clinic_id, month_start, ("receita_servico",)))
+    product_total = _quantize_currency(_classified_sum_for_month(clinic_id, month_start, ("receita_produto",)))
 
     snapshot = (
         ClinicFinancialSnapshot.query
@@ -1789,7 +1891,6 @@ def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime 
     snapshot.refresh_totals()
     db.session.commit()
 
-    classify_transactions_for_month(clinic_id, month_start)
     calculate_clinic_taxes(clinic_id, month_start)
     generate_clinic_notifications(clinic_id, month_start)
     _log(f"[Contabilidade] Snapshot gerado para Clínica {clinic_id} — Mês {month_start:%Y-%m}")

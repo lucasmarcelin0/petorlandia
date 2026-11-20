@@ -8,7 +8,7 @@ testes fazem monkeypatch desses nomes.
 import json
 import os
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from typing import Optional
@@ -61,6 +61,7 @@ from services.finance import (
     build_dre_report,
     build_veterinarian_revenue_report,
     export_accountant_xlsx,
+    generate_financial_snapshot,
     import_bank_statement,
     register_account,
 )
@@ -137,6 +138,36 @@ def classify_transactions_for_month(*args, **kwargs):
     return app_module.classify_transactions_for_month(*args, **kwargs)
 
 
+#: Idade máxima do resumo do mês corrente antes de recalcular ao abrir o painel.
+#: O job noturno continua; isto só evita que o pagamento de hoje apareça como
+#: R$ 0,00 até amanhã — o tipo de divergência que faz o dono duvidar dos números.
+FINANCE_SNAPSHOT_MAX_AGE = timedelta(minutes=10)
+
+
+def _refresh_current_month_snapshot(clinic_id, month_start):
+    """Recalcula o resumo do mês corrente se estiver velho. Devolve o horário
+    do cálculo (ou ``None``). Falha aqui nunca derruba o painel."""
+
+    snapshot = (
+        ClinicFinancialSnapshot.query
+        .filter_by(clinic_id=clinic_id, month=month_start)
+        .one_or_none()
+    )
+    generated_at = getattr(snapshot, 'gerado_em', None)
+    if generated_at is not None and generated_at.tzinfo is None:
+        generated_at = generated_at.replace(tzinfo=timezone.utc)
+    if generated_at is None or generated_at < utcnow() - FINANCE_SNAPSHOT_MAX_AGE:
+        try:
+            snapshot = generate_financial_snapshot(clinic_id, month_start)
+            generated_at = snapshot.gerado_em
+        except Exception:  # noqa: BLE001 - painel mostra o último cálculo válido
+            db.session.rollback()
+            current_app.logger.exception(
+                'Falha ao atualizar o resumo financeiro da clínica %s', clinic_id
+            )
+    return generated_at
+
+
 @bp.route("/contabilidade", methods=["GET"])
 @login_required
 def contabilidade_home():
@@ -193,6 +224,11 @@ def contabilidade_financeiro():
         flash(pj_schema_issue[1], 'warning')
 
     month_reference = date.today().replace(day=1)
+    resumo_atualizado_em = (
+        _refresh_current_month_snapshot(selected_clinic_id, month_reference)
+        if selected_clinic_id
+        else None
+    )
     months = [month_reference - relativedelta(months=offset) for offset in range(11, -1, -1)]
     month_names = [
         'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
@@ -374,6 +410,7 @@ def contabilidade_financeiro():
         has_chart_data=has_chart_data,
         dashboard_metrics=dashboard_metrics,
         vet_report=vet_report,
+        resumo_atualizado_em=resumo_atualizado_em,
     )
 
 
@@ -437,7 +474,7 @@ def contabilidade_contas():
         except Exception as exc:
             db.session.rollback()
             current_app.logger.warning('Falha ao registrar conta: %s', exc, exc_info=exc)
-            flash('Nao foi possivel registrar a conta. Confira os campos.', 'danger')
+            flash('Não foi possível registrar a conta. Confira os campos.', 'danger')
         return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
 
     month_end = selected_month + relativedelta(months=1)
@@ -485,7 +522,7 @@ def contabilidade_conciliacao_importar():
         return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
     content = uploaded.read().decode('utf-8', errors='ignore')
     result = import_bank_statement(selected_clinic.id, content, file_type=(uploaded.filename or '').rsplit('.', 1)[-1])
-    flash(f"Extrato importado: {result['total']} lancamento(s), {result['matched']} conciliado(s).", 'success')
+    flash(f"Extrato importado: {result['total']} lançamento(s), {result['matched']} conciliado(s).", 'success')
     return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
 
 
