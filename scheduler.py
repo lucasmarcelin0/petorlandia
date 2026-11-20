@@ -17,10 +17,12 @@ from app import (
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
     _run_veterinarian_billing_reconciliation_job,
+    enviar_lembretes_ativacao,
     enviar_lembretes_carrinho_abandonado,
     enviar_lembretes_fim_trial,
     enviar_lembretes_recebimento,
     enviar_lembretes_tratamento,
+    enviar_resumo_aquisicao,
     enviar_winback_pos_trial,
     verificar_datas_proximas,
 )
@@ -417,6 +419,10 @@ def register_jobs(scheduler) -> None:
         # "ainda está disponível?".
         ('lembretes-adocao', _run_adoption_reminders, 10, 30),
         ('lembretes-fim-trial', enviar_lembretes_fim_trial, 11, 0),
+        # Aquisição: resumo do dia para o dono antes do expediente e lembrete
+        # de configuração para quem está em avaliação e travou.
+        ('resumo-aquisicao', enviar_resumo_aquisicao, 7, 40),
+        ('lembretes-ativacao', enviar_lembretes_ativacao, 9, 30),
         # Recuperação de receita: quem terminou a avaliação sem assinar e quem
         # montou carrinho e não pagou.
         ('winback-pos-trial', enviar_winback_pos_trial, 11, 30),

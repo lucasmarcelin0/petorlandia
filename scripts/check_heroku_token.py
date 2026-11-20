@@ -39,7 +39,10 @@ COMO_TROCAR = (
 )
 
 
-def _get(caminho: str, token: str, abrir=urllib.request.urlopen):
+def _get(caminho: str, token: str, abrir=None):
+    # Resolvido na chamada, não na definição: assim o monkeypatch dos testes
+    # vale e nenhum teste fala com a API real do Heroku.
+    abrir = abrir or urllib.request.urlopen
     request = urllib.request.Request(
         f"{API_ROOT}{caminho}",
         headers={"Accept": ACCEPT, "Authorization": f"Bearer {token}"},
@@ -48,7 +51,7 @@ def _get(caminho: str, token: str, abrir=urllib.request.urlopen):
         return json.loads(response.read().decode("utf-8"))
 
 
-def dias_para_expirar(token: str, abrir=urllib.request.urlopen):
+def dias_para_expirar(token: str, abrir=None):
     """Dias até o token expirar; ``None`` se não expira ou não dá para saber.
 
     O token criado por ``heroku authorizations:create`` aparece na lista de
@@ -70,7 +73,7 @@ def dias_para_expirar(token: str, abrir=urllib.request.urlopen):
     return None
 
 
-def verificar(token: str, avisar_dias: int = 15, abrir=urllib.request.urlopen) -> tuple[bool, list[str]]:
+def verificar(token: str, avisar_dias: int = 15, abrir=None) -> tuple[bool, list[str]]:
     """``(ok, mensagens)`` sobre o token. Não levanta exceção."""
     token = (token or "").strip()
     if not token:

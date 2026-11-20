@@ -110,18 +110,81 @@
     </div>
   </section>
 
+  <section class="clinic-landing__section" aria-labelledby="clinic-trust-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Confiança</span>
+      <h2 id="clinic-trust-title">Os dados e o dinheiro da clínica, sob o seu controle.</h2>
+    </div>
+    <div class="clinic-landing__outcomes">
+      <article>
+        <i class="fa-solid fa-user-lock" aria-hidden="true"></i>
+        <h3>Cada pessoa vê só o que precisa</h3>
+        <p>Você escolhe o que recepção, veterinários e estagiários podem fazer. O financeiro fica só com o responsável pela clínica.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>
+        <h3>Financeiro que fecha</h3>
+        <p>Pagamento conta uma vez, orçamento recusado fica de fora e cada número mostra de onde veio. Planilha pronta para o contador.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        <h3>Seus dados são seus</h3>
+        <p>Exporte pacientes, tutores, agenda, consultas e orçamentos quando quiser, em arquivo aberto.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+        <h3>Parar não apaga nada</h3>
+        <p>Se a assinatura pausar, os registros continuam guardados e voltam exatamente como estavam.</p>
+      </article>
+    </div>
+  </section>
+
+  {% set clinic_faq = [
+    ('Preciso instalar alguma coisa?', 'Não. Funciona no navegador do computador e do celular. Basta criar a conta.'),
+    ('Como trago meus clientes que estão em planilha ou em outro sistema?', 'Importe a planilha pela própria clínica, ou envie para nós: fazemos a importação e deixamos a agenda pronta junto com você, sem custo.'),
+    ('O que acontece ao fim dos ' ~ pricing.trial_dias_clinica ~ ' dias?', 'Avisamos por e-mail antes. Você só paga se configurar a assinatura; sem ela, o acesso profissional pausa e nada é apagado.'),
+    ('O financeiro substitui o meu contador?', 'Não. Ele organiza faturamento, contas e recebimentos e gera a planilha que o contador precisa. Os impostos mostrados são estimativas para planejamento.'),
+    ('Posso cancelar quando quiser?', 'Sim. Não há fidelidade, taxa de instalação nem comissão sobre consultas.'),
+  ] %}
+  <section class="clinic-landing__section clinic-landing__faq" aria-labelledby="clinic-faq-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Perguntas frequentes</span>
+      <h2 id="clinic-faq-title">O que as clínicas perguntam antes de começar.</h2>
+    </div>
+    {% for question, answer in clinic_faq %}
+    <details class="clinic-landing__faq-item">
+      <summary>{{ question }}</summary>
+      <p>{{ answer }}</p>
+    </details>
+    {% endfor %}
+    {% set faq_entities = [] %}
+    {% for question, answer in clinic_faq %}
+      {% set _ = faq_entities.append({"@type": "Question", "name": question, "acceptedAnswer": {"@type": "Answer", "text": answer}}) %}
+    {% endfor %}
+    <script type="application/ld+json">
+      {{ {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": faq_entities} | tojson }}
+    </script>
+  </section>
+
   <section class="clinic-landing__closing" aria-labelledby="clinic-closing-title">
     <div>
       <span class="landing-section-kicker">Quer ver com seus próprios casos?</span>
       <h2 id="clinic-closing-title">Mostramos o fluxo em 15 minutos.</h2>
       <p>Conte como sua clínica trabalha hoje e focamos a demonstração no que mais toma tempo da equipe.</p>
     </div>
-    <button type="button" class="landing-btn landing-btn--primary"
-       data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
-       data-lead-capture data-lead-feature="demo_clinica"
-       data-cta="clinic_closing_demo">
-      Agendar demonstração
-    </button>
+    <div class="clinic-landing__closing-actions">
+      <button type="button" class="landing-btn landing-btn--primary"
+         data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+         data-lead-capture data-lead-feature="demo_clinica"
+         data-cta="clinic_closing_demo">
+        Agendar demonstração
+      </button>
+      {% if whatsapp_contact_url %}
+      <a class="clinic-landing__whatsapp" href="{{ whatsapp_contact_url }}" target="_blank" rel="noopener" data-cta="clinic_closing_whatsapp">
+        <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> Prefere conversar agora? Chame no WhatsApp
+      </a>
+      {% endif %}
+    </div>
   </section>
 </section>
 {% endblock %}

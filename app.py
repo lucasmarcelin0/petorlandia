@@ -3914,7 +3914,13 @@ def _accounting_accessible_clinics():
 
     accessible_ids = set()
     if current_user.is_authenticated:
-        accessible_ids.update(_collect_clinic_ids(viewer=current_user))
+        # Financeiro é do dono. Antes entravam também as clínicas em que a
+        # pessoa só atende como veterinária associada ou funcionária: quem tinha
+        # a própria clínica via (e exportava) o financeiro da clínica alheia.
+        # Papéis de gestão atribuídos pela plataforma mantêm os vínculos.
+        role = (getattr(current_user, 'role', '') or '').lower()
+        if role in {'gestor', 'master'}:
+            accessible_ids.update(_collect_clinic_ids(viewer=current_user))
         for clinic in getattr(current_user, 'clinicas', []) or []:
             if clinic and clinic.id:
                 accessible_ids.add(clinic.id)
@@ -4127,6 +4133,20 @@ def _sync_orcamento_payment_classification(record):
     classification.category = category
     classification.subcategory = subcategory
     db.session.add(classification)
+
+    if category == 'receita_servico':
+        # O pagamento entra pelo total. Os lançamentos item a item deste
+        # orçamento (de qualquer mês) contariam o mesmo dinheiro duas vezes.
+        items = getattr(record, 'itens' if isinstance(record, BlocoOrcamento) else 'items', None) or []
+        item_raw_ids = [f"service:{item.id}" for item in items if getattr(item, 'id', None)]
+        if item_raw_ids:
+            (
+                ClassifiedTransaction.query
+                .filter(ClassifiedTransaction.clinic_id == clinic_id)
+                .filter(ClassifiedTransaction.origin == 'service')
+                .filter(ClassifiedTransaction.raw_id.in_(item_raw_ids))
+                .delete(synchronize_session=False)
+            )
 
 
 def _delete_pj_payment_classification(payment_id):
@@ -9293,6 +9313,24 @@ def enviar_lembretes_fim_trial() -> None:
         )
 
 
+def enviar_lembretes_ativacao() -> None:
+    """Job diário: durante a avaliação, puxa de volta quem não terminou a
+    configuração essencial (ver services/acquisition.py)."""
+    from services.acquisition import send_activation_nudges
+
+    with app.app_context():
+        send_activation_nudges(base_url=_notification_base_url())
+        db.session.commit()
+
+
+def enviar_resumo_aquisicao() -> None:
+    """Job diário: resumo para o dono com os contatos de venda do dia."""
+    from services.acquisition import send_acquisition_digest
+
+    with app.app_context():
+        send_acquisition_digest(base_url=_notification_base_url())
+
+
 #: Dias depois do fim da avaliação em que tentamos trazer de volta quem não
 #: converteu. Dois toques: um enquanto a decisão é recente, outro depois de a
 #: pessoa sentir falta do sistema. Além disso vira insistência.
@@ -9379,6 +9417,10 @@ def enviar_winback_pos_trial() -> None:
 #: Horas de carrinho parado antes do lembrete. Curto o bastante para a compra
 #: ainda fazer sentido, longo o bastante para não atropelar quem só pausou.
 ABANDONED_CART_HOURS = 24
+#: Carrinho mais velho que isto não recebe lembrete: "está tudo lá, com o mesmo
+#: preço" deixa de ser verdade, e religar o agendador depois de uma pausa não
+#: pode disparar e-mail para carrinhos de meses atrás.
+ABANDONED_CART_MAX_AGE_DAYS = 7
 
 
 def enviar_lembretes_carrinho_abandonado() -> None:
@@ -9402,6 +9444,7 @@ def enviar_lembretes_carrinho_abandonado() -> None:
             .filter(Order.abandoned_reminder_at.is_(None))
             .filter(Order.created_at.isnot(None))
             .filter(Order.created_at <= limite)
+            .filter(Order.created_at >= agora - timedelta(days=ABANDONED_CART_MAX_AGE_DAYS))
             .filter(Order.user_id.isnot(None))
             .order_by(Order.created_at)
             .limit(200)

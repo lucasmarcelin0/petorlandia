@@ -4743,6 +4743,9 @@ body {
 }
 
 .clinic-landing__start ol {
+  /* Contador explícito: com li em display:flex o contador nativo
+     list-item não incrementa e todos os passos apareciam como "0". */
+  counter-reset: clinic-step;
   display: grid;
   gap: 1.2rem;
   list-style: none;
@@ -4751,6 +4754,7 @@ body {
 }
 
 .clinic-landing__start ol li {
+  counter-increment: clinic-step;
   display: flex;
   flex-direction: column;
   padding-left: 2.25rem;
@@ -4762,7 +4766,7 @@ body {
   background: var(--clinic-blue);
   border-radius: 50%;
   color: #fff;
-  content: counter(list-item);
+  content: counter(clinic-step);
   display: inline-flex;
   font-size: .78rem;
   font-weight: 700;
@@ -4857,6 +4861,67 @@ body {
   color: rgba(255, 255, 255, .72);
   margin: 0;
   max-width: 680px;
+}
+
+.clinic-landing__closing-actions {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: .75rem;
+}
+
+.clinic-landing__whatsapp {
+  color: #fff;
+  font-size: .92rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.clinic-landing__whatsapp:hover,
+.clinic-landing__whatsapp:focus-visible {
+  color: #b8f5cf;
+}
+
+.clinic-landing__faq {
+  max-width: 860px;
+}
+
+.clinic-landing__faq-item {
+  border-bottom: 1px solid rgba(20, 33, 61, .12);
+  padding: 1rem 0;
+}
+
+.clinic-landing__faq-item summary {
+  align-items: flex-start;
+  color: var(--clinic-ink);
+  cursor: pointer;
+  display: flex;
+  font-weight: 600;
+  gap: 1rem;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.clinic-landing__faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.clinic-landing__faq-item summary::after {
+  color: var(--clinic-blue);
+  content: "+";
+  flex-shrink: 0;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.clinic-landing__faq-item[open] summary::after {
+  content: "\2212";
+}
+
+.clinic-landing__faq-item p {
+  color: var(--clinic-muted);
+  margin: .6rem 0 0;
 }
 
 .clinic-activation {

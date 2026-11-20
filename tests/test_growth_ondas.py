@@ -547,6 +547,32 @@ def test_carrinho_abandonado_lembra_uma_vez_so(app, monkeypatch):
         assert ProductEvent.query.filter_by(event_name='checkout_abandoned').count() == 1
 
 
+def test_carrinho_antigo_nao_recebe_lembrete_ao_religar_o_agendador(app, monkeypatch):
+    """Carrinho de semanas atrás não recebe "está tudo lá, com o mesmo preço"."""
+    import app as app_module
+
+    enviados = []
+    monkeypatch.setattr(
+        'services.notifications.notify_user',
+        lambda user, assunto, corpo, **kw: enviados.append(assunto),
+    )
+
+    with app.app_context():
+        user = _user(name='Antiga')
+        product = _product()
+        order = Order(user_id=user.id, created_at=utcnow() - timedelta(days=40))
+        db.session.add(order)
+        db.session.commit()
+        db.session.add(OrderItem(
+            order_id=order.id, product_id=product.id, item_name=product.name,
+            quantity=1, unit_price=100,
+        ))
+        db.session.commit()
+
+        app_module.enviar_lembretes_carrinho_abandonado()
+        assert enviados == []
+
+
 def test_carrinho_recente_nao_recebe_lembrete(app, monkeypatch):
     import app as app_module
 
