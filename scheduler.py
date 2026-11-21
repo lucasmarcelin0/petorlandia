@@ -525,10 +525,10 @@ def register_jobs(scheduler, *, in_web: bool = False) -> None:
                 ', '.join(sorted(blocked)),
             )
         current_app.logger.info(
-            'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
+            'Agendador iniciado. Backfill mensal em %s. PMO %s. '
             'Controle de doses em %s. Reconciliação de assinaturas a cada %s minuto(s).',
             trigger,
-            pmo_interval,
+            'fora deste processo' if 'pmo-sheet-sync' in blocked else f'a cada {pmo_interval} minuto(s)',
             doses_trigger,
             billing_interval,
         )
