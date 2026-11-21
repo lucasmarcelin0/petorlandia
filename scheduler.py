@@ -53,13 +53,55 @@ def _release_job_memory() -> None:
         pass
 
 
+def _current_rss_mb() -> float | None:
+    """RSS atual do processo em MB (Linux); ``None`` onde não dá para medir."""
+
+    try:
+        with open("/proc/self/status", encoding="ascii") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+# Crescimento de memória a partir do qual o job é registrado no log: o dyno web
+# tem 512 MB e um job que sobe centenas de MB derruba o site (R14/R15).
+JOB_MEMORY_LOG_THRESHOLD_MB = 50
+
+
+def _log_job_memory(name: str, before: float | None, peak_after: float | None, after: float | None) -> None:
+    if before is None or peak_after is None:
+        return
+    growth = peak_after - before
+    if growth < JOB_MEMORY_LOG_THRESHOLD_MB:
+        return
+    try:
+        current_app.logger.warning(
+            "[Scheduler] Job %s elevou a memória de %.0f MB para %.0f MB (após liberar: %s MB).",
+            name,
+            before,
+            peak_after,
+            f"{after:.0f}" if after is not None else "?",
+        )
+    except RuntimeError:
+        # Fora de app_context: usa o logger do app diretamente.
+        app.logger.warning(
+            "[Scheduler] Job %s elevou a memória de %.0f MB para %.0f MB.", name, before, peak_after
+        )
+
+
 def _memory_bounded_job(func):
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
+        before = _current_rss_mb()
         try:
             return func(*args, **kwargs)
         finally:
+            peak_after = _current_rss_mb()
             _release_job_memory()
+            _log_job_memory(getattr(func, "__name__", "job"), before, peak_after, _current_rss_mb())
 
     return wrapped
 
@@ -299,17 +341,28 @@ def _allowed_job_ids() -> set[str] | None:
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 
+# Jobs que carregam a planilha inteira do PMO (Google Sheets com cores e
+# notas de cada célula) e todas as visitas do banco: no dyno web, de 512 MB,
+# o sync de 10 em 10 minutos levava o processo a 1,2 GB e o Heroku matava o
+# site (R15). Com SCHEDULER_IN_WEB=1 eles ficam de fora por padrão -- como
+# estavam antes de o agendador ser religado no web -- e continuam rodando
+# normalmente no dyno ``scheduler``. Para forçar no web: PMO_JOBS_IN_WEB=1 ou
+# listar o id em SCHEDULER_JOBS.
+WEB_HEAVY_JOB_IDS = frozenset({"pmo-sheet-sync", "pmo-doses-compile"})
+
+
 class _OnlyAllowedJobs:
     """Repassa ao agendador só os ``add_job`` cujo id está liberado."""
 
-    def __init__(self, scheduler, allowed: set[str]):
+    def __init__(self, scheduler, allowed: set[str] | None = None, blocked: frozenset[str] | set[str] = frozenset()):
         self._scheduler = scheduler
         self._allowed = allowed
+        self._blocked = blocked
         self.skipped: list[str] = []
 
     def add_job(self, *args, **kwargs):
         job_id = kwargs.get("id")
-        if job_id not in self._allowed:
+        if (self._allowed is not None and job_id not in self._allowed) or job_id in self._blocked:
             self.skipped.append(job_id)
             return None
         return self._scheduler.add_job(*args, **kwargs)
@@ -318,17 +371,30 @@ class _OnlyAllowedJobs:
         return getattr(self._scheduler, name)
 
 
-def register_jobs(scheduler) -> None:
+def _web_blocked_job_ids(allowed: set[str] | None) -> frozenset[str]:
+    """Jobs pesados que não rodam dentro do web (ver ``WEB_HEAVY_JOB_IDS``)."""
+
+    if _env_bool("PMO_JOBS_IN_WEB", False):
+        return frozenset()
+    if allowed is not None:
+        # Listar o id em SCHEDULER_JOBS é uma escolha explícita: respeita.
+        return frozenset(WEB_HEAVY_JOB_IDS - allowed)
+    return WEB_HEAVY_JOB_IDS
+
+
+def register_jobs(scheduler, *, in_web: bool = False) -> None:
     """Registra todos os jobs no agendador recebido.
 
     Usado pelo dyno dedicado (``main``) e pelo modo dentro do web
-    (``start_in_web``): os dois rodam exatamente o mesmo conjunto de jobs.
+    (``start_in_web``). O dyno dedicado roda todos os jobs; o web deixa de
+    fora os jobs pesados de ``WEB_HEAVY_JOB_IDS``.
     ``SCHEDULER_JOBS`` restringe o conjunto (ver ``_allowed_job_ids``).
     """
 
     allowed = _allowed_job_ids()
-    if allowed is not None:
-        scheduler = _OnlyAllowedJobs(scheduler, allowed)
+    blocked = _web_blocked_job_ids(allowed) if in_web else frozenset()
+    if allowed is not None or blocked:
+        scheduler = _OnlyAllowedJobs(scheduler, allowed, blocked)
 
     trigger = CronTrigger(
         day=_env_int('ACCOUNTING_BACKFILL_DAY', DEFAULT_DAY, 1, 28),
@@ -442,6 +508,12 @@ def register_jobs(scheduler) -> None:
                 len(scheduler.skipped),
                 ', '.join(sorted(filter(None, scheduler.skipped))),
             )
+        if blocked:
+            current_app.logger.warning(
+                '[Scheduler] No processo web os jobs pesados ficam de fora (memória do dyno): %s. '
+                'Eles rodam no dyno scheduler; para forçar no web use PMO_JOBS_IN_WEB=1.',
+                ', '.join(sorted(blocked)),
+            )
         current_app.logger.info(
             'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
             'Controle de doses em %s. Reconciliação de assinaturas a cada %s minuto(s).',
@@ -493,7 +565,7 @@ def start_in_web():
         # segundos não pode fazer um lembrete diário ser pulado.
         job_defaults={"misfire_grace_time": _env_int("SCHEDULER_MISFIRE_GRACE_SECONDS", 300, 1)},
     )
-    register_jobs(scheduler)
+    register_jobs(scheduler, in_web=True)
     scheduler.start()
     _web_scheduler = scheduler
     with app.app_context():

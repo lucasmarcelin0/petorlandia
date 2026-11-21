@@ -38,6 +38,7 @@ def _clean_web_scheduler(monkeypatch):
     monkeypatch.delenv('SCHEDULER_IN_WEB', raising=False)
     monkeypatch.delenv('ENABLE_WEB_SCHEDULER', raising=False)
     monkeypatch.delenv('SCHEDULER_JOBS', raising=False)
+    monkeypatch.delenv('PMO_JOBS_IN_WEB', raising=False)
     _real_stop_in_web()
     yield
     _real_stop_in_web()
@@ -85,8 +86,9 @@ def test_ligado_inicia_uma_vez_e_para(monkeypatch):
     monkeypatch.setitem(scheduler.app.config, 'TESTING', False)
     registered = []
 
-    def fake_register(sched):
+    def fake_register(sched, **kwargs):
         registered.append(sched)
+        assert kwargs == {'in_web': True}
         sched.add_job(lambda: None, 'interval', hours=24, id='dummy')
 
     monkeypatch.setattr(scheduler, 'register_jobs', fake_register)
@@ -105,7 +107,7 @@ def test_nao_duplica_com_o_modo_antigo(monkeypatch):
     monkeypatch.setenv('SCHEDULER_IN_WEB', '1')
     monkeypatch.setenv('ENABLE_WEB_SCHEDULER', '1')
     monkeypatch.setitem(scheduler.app.config, 'TESTING', False)
-    monkeypatch.setattr(scheduler, 'register_jobs', lambda s: pytest.fail('não deveria registrar'))
+    monkeypatch.setattr(scheduler, 'register_jobs', lambda s, **kw: pytest.fail('não deveria registrar'))
     assert scheduler.start_in_web() is None
 
 
@@ -156,3 +158,69 @@ def test_jobs_de_intervalo_caem_em_horarios_fixos_apos_reinicio():
     assert fire_times[0] == fire_times[2] and fire_times[1] == fire_times[3]
     assert fire_times[0][1].minute == 10 and fire_times[0][1].second == 0
     assert fire_times[1][1].minute == 30 and fire_times[1][1].second == 0
+
+
+def test_no_web_jobs_pesados_do_pmo_ficam_de_fora():
+    """O sync do PMO estourava os 512 MB do dyno web (R15) a cada 10 minutos."""
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched, in_web=True)
+    ids = {job.id for job in sched.get_jobs()}
+    assert ids == EXPECTED_JOB_IDS - scheduler.WEB_HEAVY_JOB_IDS
+    assert 'pmo-sheet-sync' not in ids
+
+
+def test_dyno_dedicado_continua_com_o_pmo():
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched)
+    assert scheduler.WEB_HEAVY_JOB_IDS <= {job.id for job in sched.get_jobs()}
+
+
+def test_pmo_jobs_in_web_forca_os_jobs_pesados_no_web(monkeypatch):
+    monkeypatch.setenv('PMO_JOBS_IN_WEB', '1')
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched, in_web=True)
+    assert {job.id for job in sched.get_jobs()} == EXPECTED_JOB_IDS
+
+
+def test_scheduler_jobs_explicito_libera_o_pmo_no_web(monkeypatch):
+    monkeypatch.setenv('SCHEDULER_JOBS', 'pmo-sheet-sync,atlas-artefatos')
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched, in_web=True)
+    assert {job.id for job in sched.get_jobs()} == {'pmo-sheet-sync', 'atlas-artefatos'}
+
+
+def _spy_warnings(monkeypatch):
+    mensagens = []
+    monkeypatch.setattr(
+        scheduler.app.logger, 'warning', lambda msg, *args, **kw: mensagens.append(msg % args)
+    )
+    return mensagens
+
+
+def test_job_que_cresce_memoria_fica_registrado_no_log(monkeypatch):
+    leituras = iter([300.0, 900.0, 320.0])
+    monkeypatch.setattr(scheduler, '_current_rss_mb', lambda: next(leituras))
+    monkeypatch.setattr(scheduler, '_release_job_memory', lambda: None)
+    mensagens = _spy_warnings(monkeypatch)
+
+    def job_pesado():
+        return 'ok'
+
+    with scheduler.app.app_context():
+        assert scheduler._memory_bounded_job(job_pesado)() == 'ok'
+    assert any('job_pesado' in m and '900' in m and '320' in m for m in mensagens)
+
+
+def test_job_leve_nao_polui_o_log(monkeypatch):
+    leituras = iter([300.0, 310.0, 300.0])
+    monkeypatch.setattr(scheduler, '_current_rss_mb', lambda: next(leituras))
+    monkeypatch.setattr(scheduler, '_release_job_memory', lambda: None)
+    mensagens = _spy_warnings(monkeypatch)
+    with scheduler.app.app_context():
+        scheduler._memory_bounded_job(lambda: None)()
+    assert not any('elevou a memória' in m for m in mensagens)
+
+
+def test_medicao_de_memoria_funciona_no_linux():
+    rss = scheduler._current_rss_mb()
+    assert rss is None or rss > 0
