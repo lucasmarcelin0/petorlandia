@@ -9155,6 +9155,10 @@ def enviar_lembretes_recebimento() -> None:
         db.session.commit()
 
 
+#: Doses atrasadas há mais que isto não entram no lembrete diário do tutor.
+TRATAMENTO_ATRASO_LEMBRETE_DIAS = 3
+
+
 def enviar_lembretes_tratamento() -> None:
     """Job diário: resumo das doses de hoje/atrasadas dos tratamentos ativos.
 
@@ -9185,7 +9189,11 @@ def enviar_lembretes_tratamento() -> None:
                         continue
                     prevista = coerce_to_brazil_tz(registro.prevista_para)
                     if prevista.date() < hoje:
-                        doses_atrasadas += 1
+                        # Só atraso recente puxa o tutor de volta. Tratamento
+                        # esquecido como "ativo" não pode virar e-mail diário
+                        # para sempre (nem disparar em massa ao religar o agendador).
+                        if prevista.date() >= hoje - timedelta(days=TRATAMENTO_ATRASO_LEMBRETE_DIAS):
+                            doses_atrasadas += 1
                     elif prevista.date() == hoje:
                         doses_hoje += 1
             if not doses_hoje and not doses_atrasadas:
