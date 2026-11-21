@@ -19,7 +19,7 @@ Nada aqui altera dados de clínica: só lê e notifica.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from flask import current_app, url_for
 
@@ -64,10 +64,14 @@ def _reply_link(contact: str | None, message: str) -> str | None:
 
 
 def _as_aware(value):
+    """Datas da assinatura são gravadas em UTC (``utcnow``). Quando o banco as
+    devolve sem fuso (SQLite), tratar como UTC — igual a
+    ``VeterinarianMembership._as_timezone_aware``. Assumir Brasília deslocava
+    o "dia da avaliação" entre 21h e 0h e pulava o lembrete do dia."""
     if value is None:
         return None
     if value.tzinfo is None:
-        return coerce_to_brazil_tz(value, allow_naive=True)
+        return value.replace(tzinfo=timezone.utc)
     return value
 
 
