@@ -227,3 +227,11 @@ def test_job_leve_nao_polui_o_log(monkeypatch):
 def test_medicao_de_memoria_funciona_no_linux():
     rss = scheduler._current_rss_mb()
     assert rss is None or rss > 0
+
+
+def test_todo_job_mede_e_libera_memoria():
+    """Job novo sem _memory_bounded_job não aparece no log de memória e retém RSS."""
+    sched = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(sched)
+    sem_medicao = [job.id for job in sched.get_jobs() if not hasattr(job.func, '__wrapped__')]
+    assert sem_medicao == []
