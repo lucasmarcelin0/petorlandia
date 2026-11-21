@@ -235,3 +235,34 @@ def test_todo_job_mede_e_libera_memoria():
     scheduler.register_jobs(sched)
     sem_medicao = [job.id for job in sched.get_jobs() if not hasattr(job.func, '__wrapped__')]
     assert sem_medicao == []
+
+
+def _ids_do_main(monkeypatch):
+    captured = {}
+
+    class FakeBlocking(BackgroundScheduler):
+        def start(self, *args, **kwargs):
+            captured['ids'] = {job.id for job in self.get_jobs()}
+
+    monkeypatch.setattr(scheduler, 'BlockingScheduler', FakeBlocking)
+    scheduler.main()
+    return captured['ids']
+
+
+def test_dyno_dedicado_com_web_ligado_roda_so_o_complemento(monkeypatch):
+    """Escalar scheduler=1 com SCHEDULER_IN_WEB=1 não duplica lembretes/e-mails."""
+    monkeypatch.setenv('SCHEDULER_IN_WEB', '1')
+    ids_dyno = _ids_do_main(monkeypatch)
+    assert ids_dyno == set(scheduler.WEB_HEAVY_JOB_IDS)
+
+    web = BackgroundScheduler(timezone='UTC')
+    scheduler.register_jobs(web, in_web=True)
+    ids_web = {job.id for job in web.get_jobs()}
+    assert ids_web.isdisjoint(ids_dyno)
+    assert ids_web | ids_dyno == EXPECTED_JOB_IDS
+
+
+def test_dyno_dedicado_nao_repete_o_que_foi_forcado_no_web(monkeypatch):
+    monkeypatch.setenv('SCHEDULER_IN_WEB', '1')
+    monkeypatch.setenv('PMO_JOBS_IN_WEB', '1')
+    assert _ids_do_main(monkeypatch) == set()

@@ -385,17 +385,22 @@ def _web_blocked_job_ids(allowed: set[str] | None) -> frozenset[str]:
     return WEB_HEAVY_JOB_IDS
 
 
-def register_jobs(scheduler, *, in_web: bool = False) -> None:
-    """Registra todos os jobs no agendador recebido.
+def register_jobs(scheduler, *, in_web: bool = False, web_complement: bool = False) -> None:
+    """Registra os jobs no agendador recebido.
 
     Usado pelo dyno dedicado (``main``) e pelo modo dentro do web
     (``start_in_web``). O dyno dedicado roda todos os jobs; o web deixa de
     fora os jobs pesados de ``WEB_HEAVY_JOB_IDS``.
+    ``web_complement``: o dyno dedicado com SCHEDULER_IN_WEB=1 roda só o que
+    o web deixou de fora -- nenhum job roda duas vezes.
     ``SCHEDULER_JOBS`` restringe o conjunto (ver ``_allowed_job_ids``).
     """
 
     allowed = _allowed_job_ids()
     blocked = _web_blocked_job_ids(allowed) if in_web else frozenset()
+    if web_complement:
+        allowed = set(_web_blocked_job_ids(allowed))
+        blocked = frozenset()
     if allowed is not None or blocked:
         scheduler = _OnlyAllowedJobs(scheduler, allowed, blocked)
 
@@ -511,7 +516,7 @@ def register_jobs(scheduler, *, in_web: bool = False) -> None:
         )
 
     with app.app_context():
-        if allowed is not None:
+        if allowed is not None and not web_complement:
             current_app.logger.info(
                 '[Scheduler] SCHEDULER_JOBS ativo: %s job(s) liberado(s), %s desligado(s): %s',
                 len(allowed),
@@ -521,7 +526,7 @@ def register_jobs(scheduler, *, in_web: bool = False) -> None:
         if blocked:
             current_app.logger.warning(
                 '[Scheduler] No processo web os jobs pesados ficam de fora (memória do dyno): %s. '
-                'Eles rodam no dyno scheduler; para forçar no web use PMO_JOBS_IN_WEB=1.',
+                'Eles rodam no dyno scheduler (escale scheduler=1); para forçar no web use PMO_JOBS_IN_WEB=1.',
                 ', '.join(sorted(blocked)),
             )
         current_app.logger.info(
@@ -538,8 +543,9 @@ def register_jobs(scheduler, *, in_web: bool = False) -> None:
 # Com SCHEDULER_IN_WEB=1 os mesmos jobs rodam numa thread do worker do
 # gunicorn (gunicorn.conf.py chama start_in_web), e o dyno `scheduler` pode
 # ficar em 0 -- economiza um dyno. Desligado (padrão), nada muda: os jobs
-# rodam só no dyno dedicado. NUNCA ligue com o dyno scheduler em 1: os jobs
-# rodariam duas vezes.
+# rodam só no dyno dedicado. Com as duas coisas ligadas (SCHEDULER_IN_WEB=1 e
+# o dyno scheduler em 1), o dyno roda só os jobs pesados que o web deixa de
+# fora (WEB_HEAVY_JOB_IDS): nada roda duas vezes.
 
 _web_scheduler = None
 
@@ -592,7 +598,16 @@ def stop_in_web() -> None:
 
 def main() -> None:
     scheduler = BlockingScheduler(timezone=_scheduler_timezone())
-    register_jobs(scheduler)
+    if web_mode_enabled():
+        # O web já roda os demais jobs (config vars valem para todos os dynos).
+        register_jobs(scheduler, web_complement=True)
+        with app.app_context():
+            current_app.logger.info(
+                '[Scheduler] Dyno dedicado com SCHEDULER_IN_WEB=1: roda só %s.',
+                ', '.join(sorted(job.id for job in scheduler.get_jobs())) or 'nenhum job',
+            )
+    else:
+        register_jobs(scheduler)
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
