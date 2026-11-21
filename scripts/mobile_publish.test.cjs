@@ -52,10 +52,23 @@ test('fork, autor sem escrita, base errada e conflitos não publicam', async () 
   }
   const f = fixture(); f.permission = 'read'; await f.run(); assert.equal(f.calls.merges.length, 0);
 });
-test('teste ausente, pendente, falho ou de outro aplicativo impede publicação', async () => {
-  for (const change of [c => c.pop(), c => {c[0].status = 'in_progress';},
-    c => {c[1].conclusion = 'failure';}, c => {c[0].app.id = 999;}]) {
+test('trava rápida ausente, pendente, falha ou de outro aplicativo impede publicação', async () => {
+  for (const change of [c => c.pop(), c => {c[1].status = 'in_progress';},
+    c => {c[1].conclusion = 'failure';}, c => {c[1].app.id = 999;}]) {
     const f = fixture(); change(f.checks); await f.run(); assert.equal(f.calls.merges.length, 0);
+  }
+});
+test('suíte completa ainda rodando não segura o deploy', async () => {
+  for (const change of [c => {c[0].status = 'in_progress'; c[0].conclusion = null;}, c => c.shift()]) {
+    const f = fixture(); change(f.checks); await f.run();
+    assert.equal(f.calls.merges.length, 1);
+    assert.deepEqual(f.calls.dispatches.map(x => x.workflow_id), ['tests.yml', 'authorization-gate.yml']);
+  }
+});
+test('suíte completa já reprovada impede publicação', async () => {
+  for (const conclusion of ['failure', 'cancelled', 'timed_out']) {
+    const f = fixture(); f.checks[0].conclusion = conclusion; await f.run();
+    assert.equal(f.calls.merges.length, 0);
   }
 });
 test('workflow_run só trata PRs do próprio repositório', async () => {

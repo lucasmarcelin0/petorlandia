@@ -1,5 +1,10 @@
 name: Authorization Gate
 
+# Trava rápida antes do ar (~1 min). É o único teste que segura a publicação:
+# autorização (dados de clínica e tutores), migrations com uma cabeça só e o
+# app montando como o gunicorn monta. A suíte completa roda depois do deploy
+# (tests.yml) e avisa se algo quebrou.
+
 on:
   workflow_dispatch:
   pull_request:
@@ -13,6 +18,7 @@ permissions:
 jobs:
   authorization-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,13 +26,17 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
+
+      - name: Preflight (migrations, imports, Procfile)
+        run: python scripts/preflight_deploy.py
 
       - name: Static route security gate (new sensitive routes)
         run: |

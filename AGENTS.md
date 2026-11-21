@@ -27,9 +27,14 @@
    Preserve o marcador no último commit ao atualizar o PR. Não publique se
    o usuário pedir somente análise, plano, revisão, rascunho ou disser para
    não publicar/aguardar. A instrução específica mais recente prevalece.
-5. O workflow `Publicar correcao solicitada` integra o PR após `pytest` e
-   `authorization-tests` aprovados. A integração GitHub do Heroku publica a
-   `main` depois dos testes. Nenhuma dessas etapas depende do PC do usuário.
+5. **Deploy primeiro, suíte depois.** O workflow `Publicar correcao
+   solicitada` integra o PR assim que a trava rápida `authorization-tests`
+   (~1 min: autorização, migrations, app montando) aprova, sem esperar o
+   `pytest`. A integração GitHub do Heroku publica no push da `main` (~2 min).
+   A suíte completa roda em seguida; se falhar em código já publicado, abre um
+   issue `suite-pos-deploy` e comenta no PR. Se o site não responder HTTP 200
+   após o release, o Heroku volta sozinho ao release anterior. Nenhuma dessas
+   etapas depende do PC do usuário.
 6. Acompanhe checks e o deployment do SHA publicado. Informe links e eventual
    bloqueio concreto. PR integrado não equivale a publicação confirmada.
 
@@ -37,7 +42,11 @@ A publicação faz parte da conclusão dos pedidos de alteração, mesmo que o
 usuário não escreva a palavra "publique". Não pare após criar o PR: acompanhe
 os testes, a integração e a confirmação do release no Heroku. Se houver
 bloqueio, tente uma alternativa uma vez e informe o motivo e o próximo passo.
-Não contorne testes reprovados nem publique alterações alheias ao pedido.
+Rode localmente os testes do que você mudou antes de abrir o PR: é a única
+rede antes do ar. Se o `pytest` reprovar depois do deploy (issue
+`suite-pos-deploy`), corrija imediatamente com novo PR; isso tem prioridade
+sobre trabalho novo. Não contorne testes reprovados nem publique alterações
+alheias ao pedido.
 PRs antigos sem marcador não ficam autorizados automaticamente: avalie o
 contexto do pedido atual. A label `publicar` continua como alternativa explícita.
 
