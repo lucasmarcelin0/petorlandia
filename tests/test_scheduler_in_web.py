@@ -23,6 +23,7 @@ EXPECTED_JOB_IDS = {
     'lembretes-fim-trial',
     'resumo-aquisicao',
     'lembretes-ativacao',
+    'fechamento-contador',
     'winback-pos-trial',
     'carrinho-abandonado',
     'snapshot-financeiro',

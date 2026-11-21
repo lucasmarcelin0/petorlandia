@@ -74,6 +74,8 @@ def resolve_experience(user, *, active_vet=False, accounting=False, store=None, 
     # Contabilidade logo depois da área profissional, antes de loja e entregas.
     if accounting:
         area('accounting', 'Contabilidade', 'fa-chart-line',
+             action('Painel do mês', 'contabilidade_home', 'fa-scale-balanced'),
+             action('Contas e despesas', 'contabilidade_contas', 'fa-file-invoice-dollar'),
              action('Financeiro', 'contabilidade_financeiro', 'fa-chart-line'),
              WorkAction('Pagamentos', '/contabilidade/pagamentos', 'fa-wallet'),
              WorkAction('Obrigações', '/contabilidade/obrigacoes', 'fa-file-invoice'),
@@ -234,8 +236,8 @@ def home_next_actions(user, experience, pets, overdue, appointments):
                 add('Revisar meu plano profissional', 'Confira a avaliação gratuita e as condições de continuidade.',
                     'veterinarian_membership', 'fa-id-card')
     if 'accounting' in experience.capabilities:
-        add('Revisar recebimentos', 'Pagamentos em aberto e movimento da clínica.',
-            'contabilidade_financeiro', 'fa-chart-line')
+        add('Fechar o mês da clínica', 'Resultado, contas a pagar e envio ao contador.',
+            'contabilidade_home', 'fa-scale-balanced')
     if 'partner' in experience.capabilities and user_has_role(user, 'parceiro'):
         add('Ativar estabelecimentos', 'Acompanhe os cadastros e as pendências das lojas.',
             'parceiro_dashboard', 'fa-handshake')

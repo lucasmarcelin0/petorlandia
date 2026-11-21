@@ -256,6 +256,9 @@ class AccountingAccount(db.Model):
     source_type = db.Column(db.String(50), nullable=True)
     source_id = db.Column(db.Integer, nullable=True)
     source_reference = db.Column(db.String(120), nullable=True)
+    #: Categoria contábil da despesa (chave de ``services.finance.EXPENSE_CATEGORIES``).
+    #: Conta a pagar paga entra na DRE e no fluxo de caixa por esta categoria.
+    category = db.Column(db.String(40), nullable=True)
     bank_transaction_id = db.Column(
         db.Integer,
         db.ForeignKey('bank_statement_transactions.id', use_alter=True, name='fk_account_bank_transaction'),
@@ -279,6 +282,58 @@ class AccountingAccount(db.Model):
         self.paid_at = paid_date or date.today()
         if bank_transaction is not None:
             self.bank_transaction_id = bank_transaction.id
+
+    def reopen(self):
+        self.status = 'open'
+        self.paid_at = None
+        self.bank_transaction_id = None
+
+    @property
+    def is_overdue(self) -> bool:
+        return self.status == 'open' and bool(self.due_date) and self.due_date < date.today()
+
+
+class ClinicAccountingSettings(db.Model):
+    """Contador da clínica e preferência de envio do fechamento mensal."""
+
+    __tablename__ = 'clinic_accounting_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, unique=True)
+    contador_nome = db.Column(db.String(120), nullable=True)
+    contador_email = db.Column(db.String(180), nullable=True)
+    #: Envia sozinho o fechamento do mês anterior no dia 5.
+    envio_automatico = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+    )
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('accounting_settings', uselist=False, cascade='all, delete-orphan'),
+    )
+
+
+class AccountingDelivery(db.Model):
+    """Registro de cada fechamento mensal enviado ao contador."""
+
+    __tablename__ = 'accounting_delivery'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False)
+    sent_to = db.Column(db.String(180), nullable=False)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    sent_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    automatic = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('accounting_deliveries', cascade='all, delete-orphan', lazy=True),
+    )
 
 
 class BankStatementTransaction(db.Model):

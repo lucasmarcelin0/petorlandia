@@ -26,12 +26,12 @@ from flask import (
     request,
     url_for,
 )
-from flask_login import login_required
+from flask_login import current_user, login_required
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload
 
-from extensions import db
+from extensions import db, limiter
 from forms import PJPaymentForm, PlantonistaEscalaForm
 from models import (
     AccountingAccount,
@@ -56,10 +56,12 @@ from models import (
 )
 from security.crypto import MissingMasterKeyError, decrypt_text_for_clinic, encrypt_text
 from services.finance import (
+    EXPENSE_CATEGORIES,
     build_accounting_dashboard,
     build_cash_flow_report,
     build_dre_report,
     build_veterinarian_revenue_report,
+    estimated_tax_total,
     export_accountant_xlsx,
     generate_financial_snapshot,
     import_bank_statement,
@@ -78,7 +80,14 @@ from services.nfse_queue import (
     validate_nfse_cancel_request,
 )
 from services.nfse_service import _normalize_municipio
-from time_utils import utcnow
+from time_utils import now_in_brazil, utcnow
+
+
+def _hoje_brasil() -> date:
+    """Data de hoje em Brasília. O servidor roda em UTC: entre 21h e 0h o
+    ``date.today()`` já é amanhã, e no último dia do mês o painel mostrava o
+    mês seguinte zerado."""
+    return now_in_brazil().date()
 
 from app import (
     ACCOUNTING_BUDGET_STATUS_SUMMARY,
@@ -171,6 +180,7 @@ def _refresh_current_month_snapshot(clinic_id, month_start):
 @bp.route("/contabilidade", methods=["GET"])
 @login_required
 def contabilidade_home():
+    """Painel do mês: a contabilidade embutida da clínica numa tela só."""
     _ensure_accounting_access()
     clinics, accessible_ids = _accounting_accessible_clinics()
 
@@ -180,20 +190,31 @@ def contabilidade_home():
         accessible_ids,
         requested_clinic_id=requested_id,
     )
+    selected_month = _parse_month_parameter(request.args.get('mes'))
 
-    current_month = date.today().replace(day=1)
+    current_month = _hoje_brasil().replace(day=1)
     notifications = []
     if selected_clinic and _ensure_clinic_notifications_table():
         notifications = (
             ClinicNotification.query
             .filter_by(
                 clinic_id=selected_clinic.id,
-                month=current_month,
+                month=selected_month,
                 resolved=False,
             )
             .order_by(ClinicNotification.created_at.desc())
             .all()
         )
+
+    overview = None
+    if selected_clinic:
+        from services.accounting_close import month_overview
+
+        try:
+            overview = month_overview(selected_clinic.id, selected_month)
+        except Exception:  # noqa: BLE001 - o painel nunca derruba a tela de contabilidade
+            db.session.rollback()
+            current_app.logger.exception('Falha ao montar o painel contábil da clínica %s', selected_clinic.id)
 
     return render_template(
         'contabilidade/index.html',
@@ -201,7 +222,59 @@ def contabilidade_home():
         selected_clinic=selected_clinic,
         notifications=notifications,
         current_month=current_month,
+        selected_month=selected_month,
+        previous_month=selected_month - relativedelta(months=1),
+        next_month=(selected_month + relativedelta(months=1)) if selected_month < current_month else None,
+        overview=overview,
     )
+
+
+def _accounting_clinic_or_403(clinic_id):
+    _clinics, accessible_ids = _accounting_accessible_clinics()
+    if not clinic_id or clinic_id not in accessible_ids:
+        abort(403)
+    return Clinica.query.get_or_404(clinic_id)
+
+
+@bp.route("/contabilidade/contador", methods=["POST"])
+@login_required
+def contabilidade_contador_salvar():
+    _ensure_accounting_access()
+    clinic = _accounting_clinic_or_403(request.form.get('clinica_id', type=int))
+    email = (request.form.get('contador_email') or '').strip()
+    if email and ('@' not in email or ' ' in email or len(email) > 180):
+        flash('Confira o e-mail do contador.', 'danger')
+    else:
+        from services.accounting_close import save_settings
+
+        save_settings(
+            clinic.id,
+            nome=request.form.get('contador_nome'),
+            email=email,
+            automatico=request.form.get('envio_automatico') == '1',
+        )
+        flash('Dados do contador salvos.', 'success')
+    return redirect(url_for('contabilidade_home', clinica_id=clinic.id, mes=request.form.get('mes')) + '#contador')
+
+
+@bp.route("/contabilidade/fechamento/enviar", methods=["POST"])
+@login_required
+# Cada envio é um e-mail com anexo: clique repetido não vira enxurrada.
+@limiter.limit("10 per hour", methods=["POST"])
+def contabilidade_fechamento_enviar():
+    _ensure_accounting_access()
+    clinic = _accounting_clinic_or_403(request.form.get('clinica_id', type=int))
+    month = _parse_month_parameter(request.form.get('mes'))
+    from services.accounting_close import get_settings, send_month_to_accountant
+
+    settings = get_settings(clinic.id)
+    if not settings or not settings.contador_email:
+        flash('Cadastre o e-mail do contador antes de enviar.', 'warning')
+    elif send_month_to_accountant(clinic, month, sent_by=current_user):
+        flash(f'Fechamento de {month:%m/%Y} enviado para {settings.contador_email}.', 'success')
+    else:
+        flash('Não foi possível enviar agora. Baixe a planilha e envie manualmente, ou tente de novo em instantes.', 'danger')
+    return redirect(url_for('contabilidade_home', clinica_id=clinic.id, mes=month.strftime('%Y-%m')) + '#contador')
 
 
 @bp.route("/contabilidade/financeiro", methods=["GET"])
@@ -223,7 +296,7 @@ def contabilidade_financeiro():
     if pj_schema_issue and selected_clinic_id:
         flash(pj_schema_issue[1], 'warning')
 
-    month_reference = date.today().replace(day=1)
+    month_reference = _hoje_brasil().replace(day=1)
     resumo_atualizado_em = (
         _refresh_current_month_snapshot(selected_clinic_id, month_reference)
         if selected_clinic_id
@@ -334,11 +407,7 @@ def contabilidade_financeiro():
     taxes_for_current = monthly_taxes.get(current_month)
     if taxes_for_current:
         resumo_projecao = Decimal(taxes_for_current.projecao_anual or 0)
-        resumo_impostos = (
-            Decimal(taxes_for_current.iss_total or 0)
-            + Decimal(taxes_for_current.das_total or 0)
-            + Decimal(taxes_for_current.retencoes_pj or 0)
-        )
+        resumo_impostos = estimated_tax_total(taxes_for_current, include_withholding=True)
 
     if selected_clinic_id and pj_payments_available:
         month_end = current_month + relativedelta(months=1)
@@ -462,6 +531,10 @@ def contabilidade_contas():
         due_date_raw = request.form.get('due_date') or request.form.get('vencimento')
         try:
             due_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date()
+            paid_at = None
+            if request.form.get('ja_pago') == '1':
+                paid_raw = request.form.get('paid_at')
+                paid_at = datetime.strptime(paid_raw, '%Y-%m-%d').date() if paid_raw else _hoje_brasil()
             register_account(
                 selected_clinic.id,
                 request.form.get('kind') or request.form.get('tipo') or 'payable',
@@ -469,6 +542,9 @@ def contabilidade_contas():
                 request.form.get('amount') or request.form.get('valor') or '0',
                 due_date,
                 counterparty_name=request.form.get('counterparty_name') or request.form.get('contraparte'),
+                category=request.form.get('category'),
+                paid_at=paid_at,
+                repeat_months=11 if request.form.get('repetir') == '1' else 0,
             )
             flash('Conta registrada com sucesso.', 'success')
         except Exception as exc:
@@ -500,13 +576,86 @@ def contabilidade_contas():
             for account in accounts
         ]
         return jsonify(_decimal_json(payload))
+    month_end_paid = selected_month + relativedelta(months=1)
+    totals = {
+        'pagar_aberto': sum((a.net_amount for a in accounts if a.kind == 'payable' and a.status == 'open'), Decimal('0')),
+        'receber_aberto': sum((a.net_amount for a in accounts if a.kind == 'receivable' and a.status == 'open'), Decimal('0')),
+        'pago_no_mes': sum(
+            (a.net_amount for a in accounts
+             if a.kind == 'payable' and a.status == 'paid' and a.paid_at
+             and selected_month <= a.paid_at < month_end_paid),
+            Decimal('0'),
+        ),
+    }
     return render_template(
         'contabilidade/contas.html',
         clinics=clinics,
         selected_clinic=selected_clinic,
         selected_month=selected_month,
+        previous_month=selected_month - relativedelta(months=1),
+        next_month=selected_month + relativedelta(months=1),
         accounts=accounts,
+        expense_categories=EXPENSE_CATEGORIES,
+        totals=totals,
+        today=_hoje_brasil(),
     )
+
+
+def _account_for_action(account_id):
+    account = AccountingAccount.query.get_or_404(account_id)
+    _accounting_clinic_or_403(account.clinic_id)
+    return account
+
+
+def _back_to_accounts(account):
+    month = request.form.get('mes') or (account.due_date or _hoje_brasil()).strftime('%Y-%m')
+    return redirect(url_for('contabilidade_contas', clinica_id=account.clinic_id, mes=month))
+
+
+@bp.route("/contabilidade/contas/<int:account_id>/baixa", methods=["POST"])
+@login_required
+def contabilidade_conta_baixa(account_id):
+    _ensure_accounting_access()
+    account = _account_for_action(account_id)
+    paid_raw = request.form.get('paid_at')
+    try:
+        paid_at = datetime.strptime(paid_raw, '%Y-%m-%d').date() if paid_raw else _hoje_brasil()
+    except ValueError:
+        flash('Data de pagamento inválida.', 'danger')
+        return _back_to_accounts(account)
+    account.mark_paid(paid_at)
+    db.session.commit()
+    flash(f'Baixa registrada em {paid_at:%d/%m/%Y}.', 'success')
+    return _back_to_accounts(account)
+
+
+@bp.route("/contabilidade/contas/<int:account_id>/reabrir", methods=["POST"])
+@login_required
+def contabilidade_conta_reabrir(account_id):
+    _ensure_accounting_access()
+    account = _account_for_action(account_id)
+    if account.bank_transaction_id:
+        flash('Esta conta foi conciliada com o extrato e não pode ser reaberta aqui.', 'warning')
+        return _back_to_accounts(account)
+    account.reopen()
+    db.session.commit()
+    flash('Conta reaberta.', 'success')
+    return _back_to_accounts(account)
+
+
+@bp.route("/contabilidade/contas/<int:account_id>/excluir", methods=["POST"])
+@login_required
+def contabilidade_conta_excluir(account_id):
+    _ensure_accounting_access()
+    account = _account_for_action(account_id)
+    if (account.source_type or 'manual') != 'manual' or account.bank_transaction_id:
+        flash('Só contas lançadas à mão e não conciliadas podem ser excluídas.', 'warning')
+        return _back_to_accounts(account)
+    response = _back_to_accounts(account)
+    db.session.delete(account)
+    db.session.commit()
+    flash('Conta excluída.', 'success')
+    return response
 
 
 @bp.route("/contabilidade/conciliacao/importar", methods=["POST"])
@@ -1102,7 +1251,7 @@ def contabilidade_pagamentos_novo():
     default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
-        form.data_servico.data = date.today()
+        form.data_servico.data = _hoje_brasil()
         form.prestador_tipo.data = form.prestador_tipo.data or 'servico'
 
         selected_plantao_id = request.args.get('plantao_id', type=int)
@@ -1156,7 +1305,7 @@ def contabilidade_pagamentos_novo():
     cancel_url = url_for(
         'contabilidade_pagamentos',
         clinica_id=default_clinic_id,
-        mes=request.args.get('mes') or _format_month_parameter(date.today()),
+        mes=request.args.get('mes') or _format_month_parameter(_hoje_brasil()),
     )
 
     return render_template(
@@ -1315,7 +1464,7 @@ def contabilidade_pagamentos_marcar_pago(payment_id):
     if payment.status != 'pago':
         payment.status = 'pago'
         if not payment.data_pagamento:
-            payment.data_pagamento = date.today()
+            payment.data_pagamento = _hoje_brasil()
         db.session.flush()
         _sync_pj_payment_classification(payment)
         db.session.commit()
@@ -1344,7 +1493,7 @@ def contabilidade_plantonistas_novo():
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.status.data = 'agendado'
-        default_day = date.today()
+        default_day = _hoje_brasil()
         requested_day = request.args.get('dia')
         if requested_day:
             try:
@@ -1424,7 +1573,7 @@ def contabilidade_plantonistas_novo():
     cancel_url = url_for(
         'contabilidade_pagamentos',
         clinica_id=default_clinic_id,
-        mes=request.args.get('mes') or _format_month_parameter(date.today()),
+        mes=request.args.get('mes') or _format_month_parameter(_hoje_brasil()),
         aba='plantonistas',
     )
 
@@ -1716,7 +1865,7 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
                     nota_fiscal_numero=None,
                     valor=escala.valor_previsto,
                     data_servico=escala.inicio.date(),
-                    data_pagamento=date.today() if escala.status == 'realizado' else None,
+                    data_pagamento=_hoje_brasil() if escala.status == 'realizado' else None,
                     observacoes=escala.observacoes,
                 )
                 payment.status = 'pago' if payment.data_pagamento else 'pendente'
@@ -1762,7 +1911,7 @@ def contabilidade_obrigacoes():
         normalized_month = None
     selected_month = _parse_month_parameter(normalized_month)
 
-    current_month = date.today().replace(day=1)
+    current_month = _hoje_brasil().replace(day=1)
     month_names_pt = [
         'janeiro',
         'fevereiro',
