@@ -241,3 +241,38 @@ def test_lembrete_tratamento_job(app):
     with app.app_context():
         assert Notification.query.filter_by(user_id=tutor_id, kind='treatment_reminder').count() == 0
         db.drop_all()
+
+
+def test_tratamento_esquecido_como_ativo_nao_gera_lembrete_diario(app):
+    """Ciclo de 7 dias que começou há 2 meses e nunca foi encerrado: nada a lembrar."""
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinica = Clinica(nome='Clinica Antiga')
+        db.session.add(clinica)
+        db.session.flush()
+        vet = _user('Vet2', 'vet2@example.com', worker='veterinario', role='admin')
+        db.session.add(Veterinario(user=vet, crmv='SP-2', clinica=clinica))
+        tutor = _user('Tutor2', 'tutor2@example.com')
+        animal = Animal(name='Bidu', owner=tutor, clinica=clinica)
+        db.session.add(animal)
+        db.session.flush()
+        bloco = BlocoPrescricao(animal=animal, saved_by=vet, clinica=clinica)
+        db.session.add(bloco)
+        db.session.flush()
+        db.session.add(Prescricao(
+            animal_id=animal.id, bloco_id=bloco.id,
+            medicamento='Antibiotico', frequencia='BID', duracao='7 dias',
+        ))
+        db.session.commit()
+
+        from services.tratamento import criar_acompanhamento
+        criar_acompanhamento(bloco, vet, now_in_brazil() - timedelta(days=60))
+        db.session.commit()
+        tutor_id = tutor.id
+
+    enviar_lembretes_tratamento()
+
+    with app.app_context():
+        assert Notification.query.filter_by(user_id=tutor_id, kind='treatment_reminder').count() == 0
+        db.drop_all()

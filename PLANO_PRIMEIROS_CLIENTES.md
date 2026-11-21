@@ -45,9 +45,9 @@ só, feito aqui em Orlândia — e a gente configura junto com você."
 ## 2. Preparação (faça uma vez, antes da semana 1)
 
 **Configuração do sistema (Heroku → Settings → Config Vars):**
-- [ ] `SUPPORT_PHONE` = o seu WhatsApp comercial. Ele aparece nos e-mails de
-  ativação, na landing e na tela de boas-vindas. Hoje o padrão é um número fixo
-  no código — confirme que é o seu.
+- [x] `SUPPORT_PHONE` = o seu WhatsApp comercial (31 99950-5748, confirmado em
+  nov/2026). Ele aparece nos e-mails de ativação, na landing e na tela de
+  boas-vindas. Se trocar de número, mude a config var.
 - [ ] Sua conta **admin** com um e-mail que você lê no celular: o alerta de
   demonstração, o aviso de clínica nova e o resumo diário vão para o e-mail
   de todas as contas com papel admin (e ficam também no painel admin).
@@ -99,6 +99,11 @@ Canal (visita, WhatsApp, Instagram, Google, indicação)
 Todo dia 07:40: RESUMO DE AQUISIÇÃO no seu e-mail — leads, clínicas novas,
 avaliações travadas e avaliações acabando, cada um com o link de contato.
 ```
+
+Os lembretes e o resumo dependem do agendador, que roda dentro do dyno web
+(`SCHEDULER_IN_WEB=1`, ligado em nov/2026). Se um dia os e-mails pararem, a
+primeira coisa a conferir é essa chave e a linha `[Scheduler] Rodando dentro do
+processo web` no log depois de cada reinício.
 
 O sistema avisa e lembra; **quem fecha é você**. A regra de ouro: lead de
 demonstração respondido **em até 1 hora** fecha muito mais do que no dia seguinte.

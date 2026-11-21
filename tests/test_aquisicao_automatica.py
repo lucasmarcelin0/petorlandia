@@ -199,3 +199,23 @@ def test_pedido_de_demo_tem_limite_por_ip(app, emails):
     assert 429 in statuses
     # Nenhum e-mail sai além do que o limite deixou passar.
     assert WaitlistLead.query.count() == statuses.count(200)
+
+
+@pytest.mark.parametrize('hora_utc', [1, 2, 3, 13, 23])
+def test_regua_de_ativacao_nao_depende_da_hora_do_dia(app, emails, monkeypatch, hora_utc):
+    """Entre 21h e 0h de Brasília o "dia da avaliação" já pulou um dia por fuso."""
+    from datetime import datetime, timezone as tz
+    from zoneinfo import ZoneInfo
+
+    import services.acquisition as acquisition
+
+    agora = datetime(2026, 11, 21, hora_utc, 30, tzinfo=tz.utc)
+    monkeypatch.setattr(acquisition, 'utcnow', lambda: agora)
+    monkeypatch.setattr(acquisition, 'now_in_brazil', lambda: agora.astimezone(ZoneInfo('America/Sao_Paulo')))
+
+    _user, _clinic, membership = _owner_in_trial(dias=1)
+    membership.started_at = agora - timedelta(days=1)
+    membership.trial_ends_at = agora + timedelta(days=29)
+    db.session.commit()
+
+    assert acquisition.send_activation_nudges(base_url='https://www.petorlandia.com.br') == 1
