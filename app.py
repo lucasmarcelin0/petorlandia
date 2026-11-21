@@ -3960,7 +3960,8 @@ def _select_accounting_clinic(clinics, accessible_ids, requested_clinic_id=None)
 
 
 def _parse_month_parameter(month_value):
-    base_date = date.today().replace(day=1)
+    # Mês de Brasília: o servidor roda em UTC e virava o mês 3 h antes.
+    base_date = now_in_brazil().date().replace(day=1)
     if not month_value:
         return base_date
     try:
@@ -9329,6 +9330,14 @@ def enviar_lembretes_ativacao() -> None:
     with app.app_context():
         send_activation_nudges(base_url=_notification_base_url())
         db.session.commit()
+
+
+def enviar_fechamentos_contador() -> None:
+    """Job diário: no dia 5, o fechamento do mês anterior vai sozinho ao contador."""
+    from services.accounting_close import send_monthly_closings
+
+    with app.app_context():
+        send_monthly_closings()
 
 
 def enviar_resumo_aquisicao() -> None:

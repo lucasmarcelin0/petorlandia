@@ -386,7 +386,9 @@ def test_generate_clinic_notifications_detects_key_alerts(app):
 
         assert "Prestador sem nota fiscal" in titles
         assert "Fator R abaixo do limite" in titles
-        assert "ISS do mês pendente" in titles
+        # Simples Nacional: o ISS vai dentro do DAS. Um aviso de ISS separado
+        # induzia a clínica a recolher o imposto duas vezes.
+        assert "ISS do mês pendente" not in titles
         assert "DAS do mês pendente" in titles
         assert "Receitas negativas ou inconsistentes" in titles
         assert "Projeção anual acima do limite do Simples Nacional" in titles

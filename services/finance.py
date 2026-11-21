@@ -47,7 +47,14 @@ from models import (
     ServicoClinica,
     User,
 )
-from time_utils import utcnow
+from time_utils import now_in_brazil, utcnow
+
+
+def _hoje_brasil() -> date:
+    """Data de hoje em Brasília. O servidor roda em UTC: entre 21h e 0h o
+    ``date.today()`` já é amanhã, e no último dia do mês o painel mostrava o
+    mês seguinte zerado."""
+    return now_in_brazil().date()
 
 ZERO = Decimal("0.00")
 _TABLE_COLUMN_CACHE: dict[str, set[str]] = {}
@@ -106,6 +113,43 @@ def determine_pj_payment_subcategory(raw_value: Optional[str]) -> str:
     return normalized.replace(" ", "_")
 
 REVENUE_CATEGORIES = ("receita_servico", "receita_produto")
+
+#: Categorias de despesa que a clínica escolhe ao lançar uma conta a pagar.
+#: chave -> (rótulo, categoria do livro). A categoria do livro decide onde a
+#: despesa entra: DRE (despesas/custos) e fluxo de caixa. Folha entra também no
+#: Fator R. Imposto pago só entra no caixa: a DRE usa a estimativa de impostos
+#: sobre o faturamento e contaria duas vezes.
+EXPENSE_CATEGORIES = {
+    "aluguel": ("Aluguel, condomínio e IPTU", "despesa_fixa"),
+    "contas_consumo": ("Água, luz, internet e telefone", "despesa_fixa"),
+    "folha": ("Salários, pró-labore e encargos", "folha_pagamento"),
+    "insumos": ("Medicamentos, vacinas e materiais", "despesa_insumo"),
+    "revenda": ("Produtos para revenda (loja)", "custo_produto"),
+    "terceiros": ("Laboratório, contador e outros serviços", "despesa_fixa"),
+    "manutencao": ("Manutenção e equipamentos", "despesa_fixa"),
+    "marketing": ("Marketing e divulgação", "despesa_fixa"),
+    "tarifas": ("Tarifas bancárias e de maquininha", "despesa_fixa"),
+    "impostos": ("Impostos e guias pagas (DAS, ISS)", "imposto_pago"),
+    "outros": ("Outras despesas", "despesa_fixa"),
+}
+DEFAULT_EXPENSE_CATEGORY = "outros"
+#: Categorias do livro que são saída de caixa.
+CASH_OUT_CATEGORIES = (
+    "custo_produto",
+    "despesa_fixa",
+    "despesa_insumo",
+    "folha_pagamento",
+    "pagamento_pj",
+    "imposto_pago",
+)
+
+
+def expense_category_label(key: Optional[str]) -> str:
+    return EXPENSE_CATEGORIES.get(key or DEFAULT_EXPENSE_CATEGORY, EXPENSE_CATEGORIES[DEFAULT_EXPENSE_CATEGORY])[0]
+
+
+def _expense_ledger_category(key: Optional[str]) -> str:
+    return EXPENSE_CATEGORIES.get(key or DEFAULT_EXPENSE_CATEGORY, EXPENSE_CATEGORIES[DEFAULT_EXPENSE_CATEGORY])[1]
 PAYROLL_CATEGORIES = (
     "folha_pagamento",
     "pro_labore",
@@ -168,6 +212,24 @@ def _clinic_is_simples(clinic: Clinica) -> bool:
     return text in {'simples', 'simples_nacional', 'sn', 'anexo_iii', 'anexo_v'}
 
 
+def estimated_tax_total(taxes, *, include_withholding: bool = False) -> Decimal:
+    """Imposto estimado do mês, sem contar o ISS duas vezes.
+
+    No Simples Nacional o ISS é recolhido dentro do DAS (LC 123/2006, art. 13);
+    somar os dois inflava a estimativa. O DAS só é calculado para clínica do
+    Simples, então DAS > 0 identifica o regime. Fora do Simples, vale o ISS.
+    """
+
+    if taxes is None:
+        return ZERO
+    iss = _ensure_decimal(getattr(taxes, 'iss_total', None) or ZERO)
+    das = _ensure_decimal(getattr(taxes, 'das_total', None) or ZERO)
+    total = das if das > ZERO else iss
+    if include_withholding:
+        total += _ensure_decimal(getattr(taxes, 'retencoes_pj', None) or ZERO)
+    return total
+
+
 def _determine_simples_bracket(revenue_12m: Decimal) -> int | None:
     revenue = _ensure_decimal(revenue_12m)
     for idx, (limit, _rate, _deduction) in enumerate(SIMPLIES_ANEXO_III_BRACKETS, start=1):
@@ -186,7 +248,7 @@ def _effective_simples_rate(revenue_12m: Decimal, faixa: int | None) -> Decimal:
 
 def _normalize_month(target: Optional[date | datetime | str]) -> date:
     if target is None:
-        base = date.today()
+        base = _hoje_brasil()
     elif isinstance(target, date) and not isinstance(target, datetime):
         base = target
     elif isinstance(target, datetime):
@@ -891,6 +953,56 @@ def _classify_expenses(
     return records, changed
 
 
+def _classify_paid_payables(
+    clinic_id: int,
+    month_start: date,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> Tuple[List[ClassifiedTransaction], bool]:
+    """Contas a pagar pagas no mês viram despesa no livro (regime de caixa).
+
+    Antes as contas lançadas em "Contas" ficavam fora da DRE e do fluxo de
+    caixa: o aluguel pago não reduzia o resultado.
+    """
+
+    month_end = month_start + relativedelta(months=1)
+    accounts = (
+        AccountingAccount.query
+        .filter(AccountingAccount.clinic_id == clinic_id)
+        .filter(AccountingAccount.kind == "payable")
+        .filter(AccountingAccount.status == "paid")
+        .filter(AccountingAccount.paid_at >= month_start)
+        .filter(AccountingAccount.paid_at < month_end)
+        .all()
+    )
+    records: List[ClassifiedTransaction] = []
+    changed = False
+    seen: set[str] = set()
+    existing_records = _pre_fetch_classified_transactions(clinic_id, month_start, "account_payable")
+    for account in accounts:
+        raw_id = f"payable:{account.id}"
+        seen.add(raw_id)
+        key = account.category if account.category in EXPENSE_CATEGORIES else DEFAULT_EXPENSE_CATEGORY
+        # Sem existing_record: a conta pode ter mudado de mês (baixa com outra
+        # data) e o raw_id é único por clínica, não por mês.
+        record, record_changed = _upsert_classified_transaction(
+            clinic_id,
+            month_start,
+            raw_id=raw_id,
+            date_value=_ensure_datetime(datetime.combine(account.paid_at, datetime.min.time()), month_start),
+            origin="account_payable",
+            description=_prepare_description(account.description, "Despesa"),
+            value=_quantize_currency(_ensure_decimal(account.net_amount)),
+            category=_expense_ledger_category(key),
+            subcategory=_prepare_subcategory(key),
+        )
+        records.append(record)
+        changed = changed or record_changed
+    if _delete_stale_classifications(existing_records, seen):
+        changed = True
+    return records, changed
+
+
 def classify_transactions_for_month(
     clinic_id: int,
     month: Optional[date | datetime | str] = None,
@@ -904,6 +1016,7 @@ def classify_transactions_for_month(
         _classify_manual_entries,
         _classify_veterinarian_payments,
         _classify_expenses,
+        _classify_paid_payables,
     )
 
     records: List[ClassifiedTransaction] = []
@@ -1048,7 +1161,7 @@ def _ensure_pending_plantao_notifications(
         overdue_days = PLANTAO_PENDING_ALERT_DAYS
     overdue_days = max(overdue_days, 1)
     title = "Plantão pendente"
-    today = date.today()
+    today = _hoje_brasil()
     month_end = month_start + relativedelta(months=1)
     threshold = today - timedelta(days=overdue_days)
     query = (
@@ -1227,7 +1340,8 @@ def generate_clinic_notifications(
             )
 
         iss_total = _ensure_decimal(getattr(taxes, 'iss_total', ZERO))
-        if iss_total > ZERO:
+        # No Simples o ISS vai dentro do DAS: um aviso separado induzia a pagar duas vezes.
+        if iss_total > ZERO and not _ensure_decimal(getattr(taxes, 'das_total', ZERO)) > ZERO:
             _add_alert(
                 "ISS do mês pendente",
                 f"Valor estimado de ISS para {month_label} ainda não está registrado como pago.",
@@ -1401,7 +1515,7 @@ def build_dre_report(
         taxes = calculate_clinic_taxes(clinic_id, item_month)
         receitas_servicos = _sum_categories(clinic_id, item_month, ("receita_servico",))
         receitas_produtos = _sum_categories(clinic_id, item_month, ("receita_produto",))
-        impostos = _ensure_decimal(taxes.iss_total) + _ensure_decimal(taxes.das_total)
+        impostos = estimated_tax_total(taxes)
         custos_produtos = _sum_categories(clinic_id, item_month, ("custo_produto",))
         despesas_fixas = _sum_categories(
             clinic_id,
@@ -1447,13 +1561,9 @@ def build_cash_flow_report(
     month_end = month_start + relativedelta(months=1)
     classify_transactions_for_month(clinic_id, month_start)
     entradas = _sum_categories(clinic_id, month_start, REVENUE_CATEGORIES)
-    saidas = _sum_categories(
-        clinic_id,
-        month_start,
-        ("custo_produto", "despesa_fixa", "despesa_insumo", "folha_pagamento", "pagamento_pj"),
-    )
+    saidas = _sum_categories(clinic_id, month_start, CASH_OUT_CATEGORIES)
 
-    today = date.today()
+    today = _hoje_brasil()
     buckets = {
         "30": (today, today + timedelta(days=30)),
         "60": (today + timedelta(days=31), today + timedelta(days=60)),
@@ -1514,7 +1624,7 @@ def sync_receivable_from_nfse(document: FiscalDocument, commit: bool = True) -> 
     cofins_rate = _normalize_percentage(cofins_value if cofins_value is not None else ZERO)
     tax_total = _quantize_currency(gross * (iss_rate + pis_rate + cofins_rate))
     reference_dt = document.authorized_at or document.updated_at or document.created_at or utcnow()
-    issue_date = reference_dt.date() if isinstance(reference_dt, datetime) else date.today()
+    issue_date = reference_dt.date() if isinstance(reference_dt, datetime) else _hoje_brasil()
     due_date = issue_date + timedelta(days=30)
     account = (
         AccountingAccount.query.filter_by(
@@ -1560,6 +1670,9 @@ def register_account(
     issue_date: Optional[date] = None,
     source_type: Optional[str] = "manual",
     source_id: Optional[int] = None,
+    category: Optional[str] = None,
+    paid_at: Optional[date] = None,
+    repeat_months: int = 0,
 ) -> AccountingAccount:
     kind = (kind or "").strip().lower()
     if kind not in {"receivable", "payable"}:
@@ -1570,23 +1683,36 @@ def register_account(
     if not raw_amount.is_finite() or raw_amount <= ZERO:
         raise ValueError("amount must be a positive number")
     gross = _quantize_currency(raw_amount)
-    account = AccountingAccount(
-        clinic_id=clinic_id,
-        kind=kind,
-        status="open",
-        description=_prepare_description(description, "Conta"),
-        counterparty_name=counterparty_name,
-        gross_amount=gross,
-        tax_amount=ZERO,
-        net_amount=gross,
-        issue_date=issue_date or date.today(),
-        due_date=due_date,
-        source_type=source_type,
-        source_id=source_id,
-    )
-    db.session.add(account)
+    if kind == "payable":
+        category = category if category in EXPENSE_CATEGORIES else DEFAULT_EXPENSE_CATEGORY
+    else:
+        category = None
+    # Recorrência simples (aluguel, internet): cria as próximas parcelas em
+    # aberto, uma por mês. Limite para não gerar lixo por engano.
+    repeat_months = max(0, min(int(repeat_months or 0), 11))
+    accounts = []
+    for offset in range(repeat_months + 1):
+        account = AccountingAccount(
+            clinic_id=clinic_id,
+            kind=kind,
+            status="open",
+            description=_prepare_description(description, "Conta"),
+            counterparty_name=counterparty_name,
+            gross_amount=gross,
+            tax_amount=ZERO,
+            net_amount=gross,
+            issue_date=issue_date or _hoje_brasil(),
+            due_date=due_date + relativedelta(months=offset),
+            source_type=source_type,
+            source_id=source_id,
+            category=category,
+        )
+        if offset == 0 and paid_at is not None:
+            account.mark_paid(paid_at)
+        db.session.add(account)
+        accounts.append(account)
     db.session.commit()
-    return account
+    return accounts[0]
 
 
 def _parse_ofx_date(value: str) -> date:
@@ -1696,10 +1822,10 @@ def build_accounting_dashboard(clinic_id: int, month: Optional[date | datetime |
         .filter(AccountingAccount.clinic_id == clinic_id)
         .filter(AccountingAccount.kind == "receivable")
         .filter(AccountingAccount.status == "open")
-        .filter(AccountingAccount.due_date < date.today())
+        .filter(AccountingAccount.due_date < _hoje_brasil())
         .scalar()
     )
-    tax_total = _ensure_decimal(taxes.iss_total) + _ensure_decimal(taxes.das_total) + _ensure_decimal(taxes.retencoes_pj)
+    tax_total = estimated_tax_total(taxes, include_withholding=True)
     top_services = (
         db.session.query(
             ClassifiedTransaction.subcategory,
@@ -1792,30 +1918,71 @@ def _minimal_xlsx(sheets: dict[str, list[list]]) -> bytes:
     return buffer.getvalue()
 
 
+#: Rótulos do livro de lançamentos (planilha do contador e telas).
+LEDGER_ORIGIN_LABELS = {
+    "service": "Atendimento/orçamento",
+    "orcamento_payment": "Pagamento de orçamento",
+    "product_sale": "Venda na loja",
+    "manual": "Ajuste manual",
+    "vet_payment": "Pagamento PJ",
+    "pj_payment": "Pagamento PJ",
+    "expense": "Despesa",
+    "account_payable": "Conta paga",
+}
+LEDGER_CATEGORY_LABELS = {
+    "receita_servico": "Receita de serviços",
+    "receita_produto": "Receita de produtos",
+    "recebivel_orcamento": "A receber (orçamento)",
+    "pagamento_pj": "Pagamento a PJ",
+    "folha_pagamento": "Folha e pró-labore",
+    "despesa_fixa": "Despesa operacional",
+    "despesa_insumo": "Insumos",
+    "custo_produto": "Custo de produtos",
+    "imposto_pago": "Impostos pagos",
+}
+
+
 def export_accountant_xlsx(clinic_id: int, month: Optional[date | datetime | str] = None) -> bytes:
     month_start = _normalize_month(month)
     dre = build_dre_report(clinic_id, month_start, "monthly")
     cash = build_cash_flow_report(clinic_id, month_start)
     dashboard = build_accounting_dashboard(clinic_id, month_start)
     vets = build_veterinarian_revenue_report(clinic_id, month_start)
+    month_end = month_start + relativedelta(months=1)
+    # Contas que vencem, foram pagas ou emitidas no mês.
     accounts = (
         AccountingAccount.query
         .filter(AccountingAccount.clinic_id == clinic_id)
-        .filter(or_(AccountingAccount.issue_date >= month_start, AccountingAccount.due_date >= month_start))
-        .filter(or_(AccountingAccount.issue_date < month_start + relativedelta(months=1), AccountingAccount.due_date < month_start + relativedelta(months=1)))
+        .filter(or_(
+            and_(AccountingAccount.due_date >= month_start, AccountingAccount.due_date < month_end),
+            and_(AccountingAccount.paid_at >= month_start, AccountingAccount.paid_at < month_end),
+            and_(AccountingAccount.issue_date >= month_start, AccountingAccount.issue_date < month_end),
+        ))
         .order_by(AccountingAccount.due_date.asc())
+        .all()
+    )
+    ledger = (
+        ClassifiedTransaction.query
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month == month_start)
+        .order_by(ClassifiedTransaction.date.asc(), ClassifiedTransaction.id.asc())
         .all()
     )
     sheets = {
         "Resumo": [
             ["Indicador", "Valor"],
-            ["Faturamento mes", dashboard["faturamento_mes"]],
-            ["Ticket medio", dashboard["ticket_medio"]],
-            ["Inadimplencia", dashboard["inadimplencia"]],
-            ["Carga tributaria real", dashboard["carga_tributaria_real"]],
+            ["Mês de referência", month_start.strftime("%m/%Y")],
+            ["Faturamento do mês", dashboard["faturamento_mes"]],
+            ["Despesas e custos pagos", (dre["rows"][0]["despesas_fixas"] + dre["rows"][0]["custos_produtos"]) if dre["rows"] else ZERO],
+            ["Impostos estimados", dre["rows"][0]["impostos"] if dre["rows"] else ZERO],
+            ["Resultado estimado", dre["rows"][0]["resultado_liquido"] if dre["rows"] else ZERO],
+            ["Ticket médio", dashboard["ticket_medio"]],
+            ["Inadimplência", dashboard["inadimplencia"]],
+            ["Carga tributária real", dashboard["carga_tributaria_real"]],
+            ["Observação", "Impostos são estimativas para planejamento; a apuração oficial é do contador."],
         ],
         "DRE": [
-            ["Mes", "Receita servicos", "Receita produtos", "Impostos", "Custos produtos", "Despesas fixas", "Resultado liquido"],
+            ["Mês", "Receita serviços", "Receita produtos", "Impostos estimados", "Custos produtos", "Despesas", "Resultado líquido"],
         ] + [
             [
                 row["month"].isoformat(),
@@ -1829,18 +1996,32 @@ def export_accountant_xlsx(clinic_id: int, month: Optional[date | datetime | str
             for row in dre["rows"]
         ],
         "Fluxo Caixa": [
-            ["Tipo", "Entradas", "Saidas", "Saldo"],
+            ["Tipo", "Entradas", "Saídas", "Saldo"],
             ["Realizado", cash["realizado"]["entradas"], cash["realizado"]["saidas"], cash["realizado"]["saldo"]],
         ] + [
-            [f"Projecao {label} dias", values["entradas"], values["saidas"], values["saldo"]]
+            [f"Projeção {label} dias", values["entradas"], values["saidas"], values["saldo"]]
             for label, values in cash["projecoes"].items()
         ],
-        "Contas": [
-            ["Tipo", "Status", "Descricao", "Contraparte", "Vencimento", "Baixa", "Bruto", "Impostos", "Liquido", "Origem"],
+        "Lancamentos": [
+            ["Data", "Origem", "Descrição", "Categoria", "Detalhe", "Valor"],
         ] + [
             [
-                account.kind,
-                account.status,
+                entry.date.strftime("%d/%m/%Y") if entry.date else "",
+                LEDGER_ORIGIN_LABELS.get(entry.origin, entry.origin),
+                entry.description,
+                LEDGER_CATEGORY_LABELS.get(entry.category, entry.category),
+                expense_category_label(entry.subcategory) if entry.origin == "account_payable" else (entry.subcategory or ""),
+                _ensure_decimal(entry.value),
+            ]
+            for entry in ledger
+        ],
+        "Contas": [
+            ["Tipo", "Situação", "Categoria", "Descrição", "Contraparte", "Vencimento", "Pagamento", "Bruto", "Impostos", "Líquido", "Origem"],
+        ] + [
+            [
+                "A pagar" if account.kind == "payable" else "A receber",
+                "Paga" if account.status == "paid" else ("Vencida" if account.is_overdue else "Em aberto"),
+                expense_category_label(account.category) if account.kind == "payable" else "",
                 account.description,
                 account.counterparty_name,
                 account.due_date.isoformat() if account.due_date else "",
@@ -1852,10 +2033,10 @@ def export_accountant_xlsx(clinic_id: int, month: Optional[date | datetime | str
             ]
             for account in accounts
         ],
-        "Top Servicos": [["Servico", "Quantidade", "Total"]] + [
+        "Top Servicos": [["Serviço", "Quantidade", "Total"]] + [
             [item["servico"], item["quantidade"], item["total"]] for item in dashboard["top_servicos"]
         ],
-        "Veterinarios": [["Veterinario", "Faturamento"]] + [
+        "Veterinarios": [["Veterinário", "Faturamento"]] + [
             [row["nome"], row["faturamento"]] for row in vets
         ],
     }

@@ -5,54 +5,100 @@
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
     <div>
       <h2 class="fw-semibold mb-1">Contas a pagar e receber</h2>
-      <p class="text-muted mb-0">Vencimentos, baixas e conciliacao bancaria.</p>
+      <p class="text-muted mb-0">Despesas lançadas aqui entram na DRE e no fluxo de caixa quando você dá baixa.</p>
     </div>
+    {% if selected_clinic %}
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidade_home', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')) }}">
+      <i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Painel do mês
+    </a>
+    {% endif %}
   </div>
 
   {% if selected_clinic %}
+  {% set month_param = selected_month.strftime('%Y-%m') %}
+  <div class="d-flex align-items-center gap-2 mb-3" aria-label="Mês de referência">
+    <a class="btn btn-sm btn-outline-secondary flex-grow-0" style="width:auto" href="{{ url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=previous_month.strftime('%Y-%m')) }}" aria-label="Mês anterior"><i class="fas fa-chevron-left" aria-hidden="true"></i></a>
+    <strong class="px-2">{{ selected_month.strftime('%m/%Y') }}</strong>
+    <a class="btn btn-sm btn-outline-secondary flex-grow-0" style="width:auto" href="{{ url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=next_month.strftime('%Y-%m')) }}" aria-label="Próximo mês"><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+  </div>
+
+  <div class="row row-cols-1 row-cols-md-3 g-3 mb-4">
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">A pagar em aberto (vencem no mês)</p>
+      <h3 class="h5 mb-0">{{ totals.pagar_aberto | currency_br }}</h3>
+    </div></div></div>
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">Despesas pagas no mês</p>
+      <h3 class="h5 mb-0">{{ totals.pago_no_mes | currency_br }}</h3>
+    </div></div></div>
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">A receber em aberto</p>
+      <h3 class="h5 mb-0">{{ totals.receber_aberto | currency_br }}</h3>
+    </div></div></div>
+  </div>
+
   <div class="row g-3 mb-4">
     <div class="col-lg-7">
-      <form class="card border-0 shadow-sm h-100" method="post">
+      <form class="card border-0 shadow-sm h-100" method="post" id="nova-conta">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="card-body">
-          <h5 class="mb-3">Novo lancamento</h5>
+          <h3 class="h5 mb-3">Novo lançamento</h3>
           <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label">Tipo</label>
-              <select class="form-select" name="kind">
-                <option value="payable">A pagar</option>
+            <div class="col-md-5">
+              <label class="form-label" for="conta-kind">Tipo</label>
+              <select class="form-select" name="kind" id="conta-kind" data-account-kind>
+                <option value="payable">A pagar (despesa)</option>
                 <option value="receivable">A receber</option>
               </select>
             </div>
-            <div class="col-md-4">
-              <label class="form-label">Valor</label>
-              <input class="form-control" name="amount" type="number" step="0.01" min="0" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Vencimento</label>
-              <input class="form-control" name="due_date" type="date" required>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Descricao</label>
-              <input class="form-control" name="description" required>
+            <div class="col-md-7" data-expense-only>
+              <label class="form-label" for="conta-category">Categoria</label>
+              <select class="form-select" name="category" id="conta-category">
+                {% for key, item in expense_categories.items() %}
+                <option value="{{ key }}" {% if key == 'outros' %}selected{% endif %}>{{ item[0] }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Plantonista ou veterinário PJ? Lance em <a href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic.id, mes=month_param) }}">Pagamentos PJ e plantões</a> para não contar duas vezes.</div>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Contraparte</label>
-              <input class="form-control" name="counterparty_name">
+              <label class="form-label" for="conta-description">Descrição</label>
+              <input class="form-control" name="description" id="conta-description" maxlength="255" required placeholder="Ex.: aluguel de novembro">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="conta-counterparty">Fornecedor ou cliente <span class="text-muted">(opcional)</span></label>
+              <input class="form-control" name="counterparty_name" id="conta-counterparty" maxlength="150">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="conta-amount">Valor (R$)</label>
+              <input class="form-control" name="amount" id="conta-amount" type="number" step="0.01" min="0.01" inputmode="decimal" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="conta-due">Vencimento</label>
+              <input class="form-control" name="due_date" id="conta-due" type="date" value="{{ today.isoformat() }}" required>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="ja_pago" value="1" id="conta-ja-pago" checked>
+                <label class="form-check-label" for="conta-ja-pago">Já está pago (dar baixa hoje)</label>
+              </div>
+              <div class="form-check" data-expense-only>
+                <input class="form-check-input" type="checkbox" name="repetir" value="1" id="conta-repetir">
+                <label class="form-check-label" for="conta-repetir">Repetir todo mês (cria as próximas 11 em aberto)</label>
+              </div>
             </div>
           </div>
-          <button class="btn btn-primary mt-3" type="submit"><i class="fas fa-plus me-1"></i>Adicionar</button>
+          <button class="btn btn-primary mt-3" type="submit"><i class="fas fa-plus me-1" aria-hidden="true"></i>Adicionar</button>
         </div>
       </form>
     </div>
     <div class="col-lg-5">
-      <form class="card border-0 shadow-sm h-100" method="post" action="{{ url_for('contabilidade_conciliacao_importar', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')) }}" enctype="multipart/form-data">
+      <form class="card border-0 shadow-sm h-100" method="post" action="{{ url_for('contabilidade_conciliacao_importar', clinica_id=selected_clinic.id, mes=month_param) }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="card-body">
-          <h5 class="mb-3">Importar extrato</h5>
-          <input class="form-control" type="file" name="arquivo" accept=".ofx,.csv,.txt,.ret,.cnab" required>
-          <p class="text-muted small mt-2 mb-3">O match automatico usa valor e vencimento em uma janela de dois dias.</p>
-          <button class="btn btn-outline-primary" type="submit"><i class="fas fa-upload me-1"></i>Conciliar</button>
+          <h3 class="h5 mb-3">Importar extrato bancário</h3>
+          <input class="form-control" type="file" name="arquivo" accept=".ofx,.csv,.txt,.ret,.cnab" required aria-label="Arquivo do extrato">
+          <p class="text-muted small mt-2 mb-3">Contas em aberto com o mesmo valor e vencimento até dois dias de diferença recebem baixa automática.</p>
+          <button class="btn btn-outline-primary" type="submit"><i class="fas fa-upload me-1" aria-hidden="true"></i>Conciliar</button>
         </div>
       </form>
     </div>
@@ -62,21 +108,59 @@
     <div class="table-responsive">
       <table class="table align-middle mb-0">
         <thead class="table-light">
-          <tr><th>Tipo</th><th>Status</th><th>Descricao</th><th>Vencimento</th><th>Baixa</th><th>Valor liquido</th><th>Origem</th></tr>
+          <tr><th>Tipo</th><th>Situação</th><th>Descrição</th><th>Vencimento</th><th>Pagamento</th><th class="text-end">Valor</th><th class="text-end">Ações</th></tr>
         </thead>
         <tbody>
           {% for account in accounts %}
           <tr>
-            <td>{{ 'Receber' if account.kind == 'receivable' else 'Pagar' }}</td>
-            <td><span class="badge {{ 'bg-success' if account.status == 'paid' else 'bg-warning text-dark' }}">{{ 'Baixado' if account.status == 'paid' else 'Aberto' }}</span></td>
-            <td>{{ account.description }}</td>
-            <td>{{ account.due_date.strftime('%d/%m/%Y') if account.due_date else '-' }}</td>
-            <td>{{ account.paid_at.strftime('%d/%m/%Y') if account.paid_at else '-' }}</td>
-            <td>{{ account.net_amount | currency_br }}</td>
-            <td>{{ account.source_reference or account.source_type or 'manual' }}</td>
+            <td>
+              {{ 'A receber' if account.kind == 'receivable' else 'A pagar' }}
+              {% if account.kind == 'payable' %}<div class="small text-muted">{{ expense_categories.get(account.category or 'outros', expense_categories['outros'])[0] }}</div>{% endif %}
+            </td>
+            <td>
+              {% if account.status == 'paid' %}
+              <span class="badge bg-success">Paga</span>
+              {% elif account.is_overdue %}
+              <span class="badge bg-danger">Vencida</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Em aberto</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ account.description }}
+              {% if account.counterparty_name %}<div class="small text-muted">{{ account.counterparty_name }}</div>{% endif %}
+              {% if account.source_type and account.source_type != 'manual' %}<div class="small text-muted">Origem: {{ account.source_reference or account.source_type }}</div>{% endif %}
+            </td>
+            <td class="text-nowrap">{{ account.due_date.strftime('%d/%m/%Y') if account.due_date else '-' }}</td>
+            <td class="text-nowrap">{{ account.paid_at.strftime('%d/%m/%Y') if account.paid_at else '-' }}</td>
+            <td class="text-end text-nowrap">{{ account.net_amount | currency_br }}</td>
+            <td class="text-end">
+              <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                {% if account.status != 'paid' %}
+                <form method="post" action="{{ url_for('contabilidade_conta_baixa', account_id=account.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="mes" value="{{ month_param }}">
+                  <button class="btn btn-sm btn-outline-success" type="submit">Dar baixa</button>
+                </form>
+                {% elif not account.bank_transaction_id %}
+                <form method="post" action="{{ url_for('contabilidade_conta_reabrir', account_id=account.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="mes" value="{{ month_param }}">
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">Reabrir</button>
+                </form>
+                {% endif %}
+                {% if (account.source_type or 'manual') == 'manual' and not account.bank_transaction_id %}
+                <form method="post" action="{{ url_for('contabilidade_conta_excluir', account_id=account.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="mes" value="{{ month_param }}">
+                  <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Excluir {{ account.description }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma conta no periodo.</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma conta neste mês. Comece pelo aluguel e pela folha: em um minuto a DRE passa a mostrar o resultado real.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -84,4 +168,19 @@
   </div>
   {% endif %}
 </div>
+<script>
+  (function () {
+    var kind = document.querySelector('[data-account-kind]');
+    if (!kind) return;
+    function sync() {
+      var expense = kind.value === 'payable';
+      document.querySelectorAll('[data-expense-only]').forEach(function (el) {
+        el.hidden = !expense;
+        el.querySelectorAll('input, select').forEach(function (input) { input.disabled = !expense; });
+      });
+    }
+    kind.addEventListener('change', sync);
+    sync();
+  })();
+</script>
 {% endblock %}

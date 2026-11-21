@@ -727,7 +727,7 @@ def _public_profile_data(profile_key: str) -> dict:
             'benefits': [
                 'Agenda compartilhada e lembretes automáticos.',
                 'Prontuário, vacinas, exames e documentos conectados.',
-                'Orçamentos e recebimentos visíveis para quem administra.',
+                'Gestão e contabilidade 2 em 1: o contador recebe o mês fechado.',
             ],
             'primary_label': f'Começar {trial_days} dias grátis',
             'primary_url': url_for('register', next=url_for('minha_clinica')),

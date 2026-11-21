@@ -1,99 +1,234 @@
 {% extends "layout.html" %}
 {% set titulo = "Contabilidade" %}
 {% set subtitulo = "Visão geral" %}
-
 {% block main %}
-<div class="container mt-4">
-
-    <h2 class="mb-3">{{ titulo }}</h2>
-
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Início</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
-      </ol>
-    </nav>
-
-    <div class="card shadow-sm p-4 mt-3">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-            <div>
-                <h5 class="mb-1">{{ subtitulo }}</h5>
-                <p class="text-muted mb-0">Monitoramento automático das pendências contábeis do mês.</p>
-            </div>
-            {% if clinics %}
-            <form method="get" class="ms-md-auto">
-                <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
-                <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
-                    {% for clinic in clinics %}
-                        <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>
-                            {{ clinic.nome or 'Clínica' }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </form>
-            {% endif %}
-        </div>
+{% set month_param = selected_month.strftime('%Y-%m') if selected_month else '' %}
+<div class="container py-4 accounting-hub">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">{{ titulo }}</h2>
+      <p class="text-muted mb-0">Gestão e contabilidade da clínica no mesmo lugar: o que acontece no atendimento já vira lançamento.</p>
     </div>
+    {% if clinics %}
+    <form method="get" class="accounting-hub__clinic">
+      <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
+      <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
+        {% for clinic in clinics %}
+        <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>{{ clinic.nome or 'Clínica' }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="mes" value="{{ month_param }}">
+    </form>
+    {% endif %}
+  </div>
 
-    <div class="card shadow-sm mt-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Início</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+    </ol>
+  </nav>
+
+  {% if not selected_clinic %}
+  <div class="alert alert-info">Nenhuma clínica disponível. A contabilidade fica com o responsável pela clínica.</div>
+  {% else %}
+
+  <div class="d-flex align-items-center gap-2 mb-3" aria-label="Mês de referência">
+    <a class="btn btn-sm btn-outline-secondary flex-grow-0" style="width:auto" href="{{ url_for('contabilidade_home', clinica_id=selected_clinic.id, mes=previous_month.strftime('%Y-%m')) }}" aria-label="Mês anterior"><i class="fas fa-chevron-left" aria-hidden="true"></i></a>
+    <strong class="px-2">{{ selected_month.strftime('%m/%Y') }}</strong>
+    {% if next_month %}
+    <a class="btn btn-sm btn-outline-secondary flex-grow-0" style="width:auto" href="{{ url_for('contabilidade_home', clinica_id=selected_clinic.id, mes=next_month.strftime('%Y-%m')) }}" aria-label="Próximo mês"><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+    {% endif %}
+  </div>
+
+  {% if overview %}
+  <section class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3 mb-4" aria-label="Resultado do mês">
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">Faturamento</p>
+      <h3 class="h4 mb-0 text-success">{{ overview.receita | currency_br }}</h3>
+    </div></div></div>
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">Despesas e custos pagos</p>
+      <h3 class="h4 mb-0">{{ overview.despesas | currency_br }}</h3>
+      <small class="text-muted">{{ overview.despesas_lancadas }} conta(s) paga(s) lançada(s)</small>
+    </div></div></div>
+    <div class="col"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <p class="text-muted small mb-1">Impostos estimados</p>
+      <h3 class="h4 mb-0">{{ overview.impostos | currency_br }}</h3>
+      <small class="text-muted">Estimativa; a apuração é do contador</small>
+    </div></div></div>
+    <div class="col"><div class="card border-0 shadow-sm h-100 accounting-hub__result"><div class="card-body">
+      <p class="text-muted small mb-1">Resultado estimado</p>
+      <h3 class="h4 mb-0 {{ 'text-danger' if overview.resultado < 0 else 'text-success' }}">{{ overview.resultado | currency_br }}</h3>
+      <small class="text-muted">Faturamento − despesas − impostos</small>
+    </div></div></div>
+  </section>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <section class="card border-0 shadow-sm h-100" aria-labelledby="fechamento-title">
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <h5 class="mb-1">Alertas da clínica</h5>
-                    <p class="text-muted mb-0">Referente a {{ current_month.strftime('%m/%Y') if current_month else '' }}</p>
-                </div>
-                <i class="fas fa-bell text-primary fs-4"></i>
-            </div>
-
-            {% set type_classes = {
-                'danger': 'border-danger-subtle bg-danger-subtle text-danger-emphasis',
-                'warning': 'border-warning-subtle bg-warning-subtle text-warning-emphasis',
-                'info': 'border-info-subtle bg-info-subtle text-info-emphasis',
-                'success': 'border-success-subtle bg-success-subtle text-success-emphasis'
-            } %}
-            {% set type_icons = {
-                'danger': 'fa-triangle-exclamation',
-                'warning': 'fa-circle-exclamation',
-                'info': 'fa-circle-info',
-                'success': 'fa-circle-check'
-            } %}
-
-            {% if selected_clinic %}
-                {% if notifications %}
-                    <div class="d-flex flex-column gap-3">
-                        {% for alert in notifications %}
-                            {% set tone_class = type_classes.get(alert.type, 'bg-light border-light text-dark') %}
-                            <div class="border rounded-3 px-3 py-3 {{ tone_class }}">
-                                <div class="d-flex align-items-start gap-3">
-                                    <span class="fs-4"><i class="fas {{ type_icons.get(alert.type, 'fa-circle-info') }}"></i></span>
-                                    <div>
-                                        <h6 class="mb-1">{{ alert.title }}</h6>
-                                        <p class="mb-0 small">{{ alert.message }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">Nenhum alerta para este mês.</p>
-                {% endif %}
-            {% else %}
-                <p class="text-muted mb-0">Nenhuma clínica disponível para exibir alertas.</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="card shadow-sm mt-4">
-        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-            <div>
-                <h5 class="mb-1">Emissões NFS-e</h5>
-                <p class="text-muted mb-0">Acompanhe protocolos, status e downloads das notas fiscais de serviço.</p>
-            </div>
-            <a class="btn btn-outline-primary" href="{{ url_for('contabilidade_nfse', clinica_id=selected_clinic.id) if selected_clinic else url_for('contabilidade_nfse') }}">
-                Ir para emissões
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="h5 mb-0" id="fechamento-title">Fechamento de {{ selected_month.strftime('%m/%Y') }}</h3>
+            <span class="badge rounded-pill {{ 'bg-success' if overview.checklist_done == overview.checklist|length else 'bg-secondary' }}">{{ overview.checklist_done }}/{{ overview.checklist|length }}</span>
+          </div>
+          <ul class="list-unstyled mb-3 accounting-hub__checklist">
+            {% for item in overview.checklist %}
+            <li class="d-flex gap-2 py-2 border-bottom">
+              <i class="fas {{ 'fa-circle-check text-success' if item.done else 'fa-circle text-secondary' }} mt-1" aria-hidden="true"></i>
+              <div>
+                <span class="{{ '' if item.done else 'fw-semibold' }}">{{ item.label }}</span>
+                <span class="visually-hidden">{{ 'concluído' if item.done else 'pendente' }}</span>
+                {% if item.hint and not item.done %}<div class="small text-muted">{{ item.hint }}</div>{% endif %}
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=month_param) }}#nova-conta">
+              <i class="fas fa-plus me-1" aria-hidden="true"></i>Lançar despesa
             </a>
+            <a class="btn btn-outline-success btn-sm" href="{{ url_for('contabilidade_exportar_xlsx', clinica_id=selected_clinic.id, mes=month_param) }}">
+              <i class="fas fa-file-excel me-1" aria-hidden="true"></i>Planilha do contador
+            </a>
+          </div>
         </div>
+      </section>
     </div>
+    <div class="col-lg-5">
+      <section class="card border-0 shadow-sm h-100" aria-labelledby="contas-title">
+        <div class="card-body">
+          <h3 class="h5 mb-3" id="contas-title">Contas</h3>
+          <dl class="row mb-3 small">
+            <dt class="col-7 fw-normal text-muted">A pagar nos próximos 7 dias</dt>
+            <dd class="col-5 text-end mb-2">{{ overview.a_pagar_7_dias | currency_br }}</dd>
+            <dt class="col-7 fw-normal text-muted">A pagar vencido</dt>
+            <dd class="col-5 text-end mb-2 {{ 'text-danger fw-semibold' if overview.a_pagar_vencido > 0 else '' }}">{{ overview.a_pagar_vencido | currency_br }}</dd>
+            <dt class="col-7 fw-normal text-muted">A receber em aberto</dt>
+            <dd class="col-5 text-end mb-2">{{ overview.a_receber | currency_br }}</dd>
+            <dt class="col-7 fw-normal text-muted">A receber vencido</dt>
+            <dd class="col-5 text-end mb-0 {{ 'text-danger fw-semibold' if overview.a_receber_vencido > 0 else '' }}">{{ overview.a_receber_vencido | currency_br }}</dd>
+          </dl>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=month_param) }}">Ver contas a pagar e receber</a>
+        </div>
+      </section>
+    </div>
+  </div>
 
+  <section class="card border-0 shadow-sm mb-4" id="contador" aria-labelledby="contador-title">
+    <div class="card-body">
+      <h3 class="h5 mb-1" id="contador-title"><i class="fas fa-user-tie me-2 text-primary" aria-hidden="true"></i>Seu contador</h3>
+      <p class="text-muted small mb-3">O contador recebe o fechamento do mês por e-mail, com o livro de lançamentos, a DRE, o fluxo de caixa e as contas — sem você montar planilha.</p>
+      {% set settings = overview.settings %}
+      <form method="post" action="{{ url_for('contabilidade_contador_salvar') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+        <input type="hidden" name="mes" value="{{ month_param }}">
+        <div class="col-md-4">
+          <label class="form-label small" for="contador_nome">Nome</label>
+          <input class="form-control" id="contador_nome" name="contador_nome" maxlength="120" value="{{ settings.contador_nome if settings and settings.contador_nome else '' }}" autocomplete="off">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small" for="contador_email">E-mail</label>
+          <input class="form-control" id="contador_email" name="contador_email" type="email" maxlength="180" value="{{ settings.contador_email if settings and settings.contador_email else '' }}" autocomplete="off">
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-outline-primary w-100" type="submit">Salvar</button>
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="envio_automatico" name="envio_automatico" value="1" {% if not settings or settings.envio_automatico %}checked{% endif %}>
+            <label class="form-check-label small" for="envio_automatico">Enviar sozinho todo dia 5 o fechamento do mês anterior</label>
+          </div>
+        </div>
+      </form>
+      <hr>
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <form method="post" action="{{ url_for('contabilidade_fechamento_enviar') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+          <input type="hidden" name="mes" value="{{ month_param }}">
+          <button class="btn btn-success" type="submit" {% if not (settings and settings.contador_email) %}disabled{% endif %}>
+            <i class="fas fa-paper-plane me-1" aria-hidden="true"></i>Enviar fechamento de {{ selected_month.strftime('%m/%Y') }}
+          </button>
+        </form>
+        {% if overview.delivery %}
+        <span class="small text-success"><i class="fas fa-check me-1" aria-hidden="true"></i>Enviado para {{ overview.delivery.sent_to }} em {{ overview.delivery.sent_at | data_br }}{% if overview.delivery.automatic %} (automático){% endif %}</span>
+        {% elif not (settings and settings.contador_email) %}
+        <span class="small text-muted">Cadastre o e-mail do contador para liberar o envio.</span>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="mb-4" aria-labelledby="modulos-title">
+    <h3 class="h5 mb-3" id="modulos-title">Tudo da contabilidade</h3>
+    {% set modules = [
+      ('fa-chart-line', 'Financeiro', 'Faturamento, ticket médio e gráficos', url_for('contabilidade_financeiro', clinica_id=selected_clinic.id)),
+      ('fa-scale-balanced', 'DRE', 'Resultado mensal, trimestral e anual', url_for('contabilidade_dre', clinica_id=selected_clinic.id, mes=month_param)),
+      ('fa-money-bill-transfer', 'Fluxo de caixa', 'Realizado e projeção de 30/60/90 dias', url_for('contabilidade_fluxo_caixa', clinica_id=selected_clinic.id, mes=month_param)),
+      ('fa-file-invoice-dollar', 'Contas a pagar e receber', 'Despesas, baixas e extrato bancário', url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=month_param)),
+      ('fa-user-doctor', 'Pagamentos PJ e plantões', 'Plantonistas, especialistas e notas', url_for('contabilidade_pagamentos', clinica_id=selected_clinic.id, mes=month_param)),
+      ('fa-receipt', 'NFS-e', 'Emissão, protocolos e downloads', url_for('contabilidade_nfse', clinica_id=selected_clinic.id)),
+      ('fa-calendar-check', 'Obrigações', 'Prazos fiscais do mês', url_for('contabilidade_obrigacoes', clinica_id=selected_clinic.id, mes=month_param)),
+    ] %}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
+      {% for icon, title, desc, href in modules %}
+      <div class="col">
+        <a class="card border-0 shadow-sm h-100 text-decoration-none accounting-hub__module" href="{{ href }}">
+          <div class="card-body">
+            <i class="fas {{ icon }} text-primary mb-2" aria-hidden="true"></i>
+            <h4 class="h6 mb-1 text-body">{{ title }}</h4>
+            <p class="small text-muted mb-0">{{ desc }}</p>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card border-0 shadow-sm" aria-labelledby="alertas-title">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h3 class="h5 mb-1" id="alertas-title">Alertas da clínica</h3>
+          <p class="text-muted mb-0 small">Referente a {{ selected_month.strftime('%m/%Y') }}</p>
+        </div>
+        <i class="fas fa-bell text-primary fs-4" aria-hidden="true"></i>
+      </div>
+      {% set type_classes = {
+        'danger': 'border-danger-subtle bg-danger-subtle text-danger-emphasis',
+        'warning': 'border-warning-subtle bg-warning-subtle text-warning-emphasis',
+        'info': 'border-info-subtle bg-info-subtle text-info-emphasis',
+        'success': 'border-success-subtle bg-success-subtle text-success-emphasis'
+      } %}
+      {% set type_icons = {
+        'danger': 'fa-triangle-exclamation',
+        'warning': 'fa-circle-exclamation',
+        'info': 'fa-circle-info',
+        'success': 'fa-circle-check'
+      } %}
+      {% if notifications %}
+      <div class="d-flex flex-column gap-3">
+        {% for alert in notifications %}
+        {% set tone_class = type_classes.get(alert.type, 'bg-light border-light text-dark') %}
+        <div class="border rounded-3 px-3 py-3 {{ tone_class }}">
+          <div class="d-flex align-items-start gap-3">
+            <span class="fs-4"><i class="fas {{ type_icons.get(alert.type, 'fa-circle-info') }}" aria-hidden="true"></i></span>
+            <div>
+              <h4 class="h6 mb-1">{{ alert.title }}</h4>
+              <p class="mb-0 small">{{ alert.message }}</p>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">Nenhum alerta para este mês.</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

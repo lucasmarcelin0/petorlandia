@@ -18,8 +18,9 @@ Ribeirão Preto e capitais vêm depois — comece onde você é conhecido.
 2. *"Quem está marcado amanhã?"* — agenda da equipe inteira, com lembretes.
 3. *"Quanto eu faturei esse mês?"* — financeiro que fecha, sem planilha paralela.
 
-**Frase de uma linha:** "Agenda, prontuário e financeiro da clínica num lugar
-só, feito aqui em Orlândia — e a gente configura junto com você."
+**Frase de uma linha:** "Gestão e contabilidade da clínica, 2 em 1: agenda,
+prontuário e financeiro num lugar só, e o seu contador recebe o mês fechado —
+feito aqui em Orlândia, e a gente configura junto com você."
 
 **A oferta (não mude no meio da campanha):**
 | Item | Condição |
@@ -35,8 +36,13 @@ só, feito aqui em Orlândia — e a gente configura junto com você."
 - Cada pessoa da equipe vê só o que o dono permitir; o financeiro é só do responsável.
 - O financeiro mostra de onde vem cada número: pagamento conta uma vez,
   orçamento recusado/cancelado fica de fora, venda da loja só entra depois de paga.
-- Planilha pronta para o contador (botão no Financeiro). Impostos aparecem como
-  estimativa — a apuração oficial é do contador. **Nunca prometa que substitui o contador.**
+- **Contabilidade embutida (2 em 1):** o atendimento já vira lançamento; as
+  despesas (aluguel, folha, insumos...) entram na DRE e no fluxo de caixa; o
+  Painel do mês (`/contabilidade`) mostra resultado, contas e o checklist de
+  fechamento; o contador cadastrado recebe todo dia 5 o fechamento por e-mail
+  (livro de lançamentos, DRE, fluxo e contas). Impostos aparecem como
+  estimativa, e no Simples o ISS não é contado duas vezes. **Nunca prometa que substitui o contador**:
+  o sistema trabalha *com* ele.
 - Exportação completa dos dados da clínica (pacientes, tutores, agenda,
   consultas, orçamentos) pelo dono.
 
@@ -142,6 +148,10 @@ demonstração respondido **em até 1 hora** fecha muito mais do que no dia segu
 - Ative a indicação: cada clínica ativa recebe o link de `/indicacao` (script 7.6).
 - Contato com professores de faculdade de veterinária da região: o espaço do
   estudante é gratuito e forma os próximos clientes.
+- **Contadores como canal:** cada clínica ativa tem um contador, que costuma
+  atender várias clínicas e pet shops. Depois do primeiro fechamento enviado,
+  ligue para ele (script 7.8): quem recebe o mês organizado indica o sistema
+  para os outros clientes.
 
 ### Semana 4 — Conversão
 
@@ -160,9 +170,11 @@ Mostre **quatro telas**, sempre com a clínica-vitrine:
    Mostre a agenda da equipe e os lembretes.
 2. **Prontuário** (4 min) — "Onde fica o histórico do animal hoje?" Abra um
    paciente: vacinas, exames, prescrições, orçamentos.
-3. **Financeiro** (4 min) — "Você sabe quanto faturou este mês sem calcular?"
-   Abra o Financeiro, clique em **"Como chegamos a estes números"** e mostre o
-   orçamento recusado fora do faturamento. Mostre a planilha do contador.
+3. **Contabilidade 2 em 1** (4 min) — "Você sabe quanto sobrou este mês?"
+   Abra o **Painel do mês** (`/contabilidade`): faturamento, despesas, impostos
+   estimados e resultado. Lance o aluguel na frente da pessoa (30 segundos) e
+   mostre o resultado mudando. Feche com: "e todo dia 5 o seu contador recebe
+   isto por e-mail, sem você montar planilha."
 4. **Segurança** (2 min) — permissões da equipe e a exportação de dados.
 
 Feche com: *"Isso faria diferença na sua rotina?"* → *"São 30 dias grátis, sem
@@ -191,7 +203,8 @@ cartão. Quer que eu crie a conta agora com você e já importe sua lista de cli
 - [ ] Planilha de clientes importada (`Importar planilha` na clínica)
 - [ ] Serviços e preços mais comuns cadastrados (aceleram o orçamento)
 - [ ] Um agendamento real de amanhã criado junto
-- [ ] Mostrar o Financeiro e o botão da planilha para o contador
+- [ ] Lançar as despesas fixas com "Repetir todo mês" (aluguel, internet, folha)
+- [ ] Cadastrar o e-mail do contador no Painel do mês e mandar o primeiro fechamento
 
 ---
 
@@ -232,12 +245,18 @@ Saia com: nome do responsável, WhatsApp e uma data. Deixe o cartão com QR.
 > te impediria de continuar?" → resolva a objeção → "Quer que eu te mostre onde
 > configurar a assinatura? Leva 2 minutos."
 
+**7.8 Contador de uma clínica cliente (depois do 1º fechamento)**
+> "Oi, [nome]! Sou o [nome], da PetOrlândia. A [clínica] passou a te mandar o
+> fechamento do mês pelo nosso sistema. Ficou bom para você? Se atende outras
+> clínicas veterinárias, posso deixar a implantação delas por nossa conta — e
+> você passa a receber todas no mesmo formato."
+
 **Objeções comuns**
 | Objeção | Resposta |
 |---|---|
 | "Meus dados ficam seguros?" | Cada pessoa vê só o que você liberar; o financeiro é só seu; e você exporta tudo quando quiser. |
 | "Já uso outro sistema." | "O que você mais gosta nele e o que mais te irrita?" — mostre só o que resolve a irritação. Ofereça importar a planilha. |
-| "Meu contador cuida disso." | Ótimo — o sistema gera a planilha que ele precisa e você para de mandar papel. Ele continua fazendo a apuração. |
+| "Meu contador cuida disso." | Ótimo — cadastre o e-mail dele e todo dia 5 ele recebe o mês fechado, sem você juntar papel. Ele continua fazendo a apuração; você passa a ver o resultado antes dele. |
 | "Está caro." | São R$ 2 por dia. Uma consulta remarcada por lembrete já paga o mês. |
 | "Não tenho tempo para configurar." | Eu configuro com você em 30 minutos, sem custo. |
 

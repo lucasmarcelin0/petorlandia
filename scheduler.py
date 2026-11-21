@@ -17,6 +17,7 @@ from app import (
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
     _run_veterinarian_billing_reconciliation_job,
+    enviar_fechamentos_contador,
     enviar_lembretes_ativacao,
     enviar_lembretes_carrinho_abandonado,
     enviar_lembretes_fim_trial,
@@ -423,6 +424,9 @@ def register_jobs(scheduler) -> None:
         # de configuração para quem está em avaliação e travou.
         ('resumo-aquisicao', enviar_resumo_aquisicao, 7, 40),
         ('lembretes-ativacao', enviar_lembretes_ativacao, 9, 30),
+        # Contabilidade embutida: no dia 5 o fechamento do mês anterior vai ao
+        # contador de quem pediu envio automático (o job confere o dia).
+        ('fechamento-contador', enviar_fechamentos_contador, 8, 20),
         # Recuperação de receita: quem terminou a avaliação sem assinar e quem
         # montou carrinho e não pagou.
         ('winback-pos-trial', enviar_winback_pos_trial, 11, 30),
