@@ -8,6 +8,7 @@ import math
 import json
 import time
 import secrets
+import threading
 import unicodedata
 import urllib.parse
 from dataclasses import dataclass
@@ -3730,30 +3731,114 @@ def _count_vaccinated_by_species(visit: PmoVaccinationVisit) -> tuple[int, int]:
     return dogs, cats
 
 
-def _pmo_sheet_row_matches_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
-    """Confere a linha atual antes de gravar; nunca adivinha outro destino."""
-    if not title or not visit.source_row or visit.source_row < 1:
-        return False
+def _pmo_sheet_values_identity(row: list[Any]) -> SimpleNamespace:
+    """Nome, endereço e telefones de uma linha crua da aba (colunas A:H)."""
+    offset = _row_column_offset(row)
+    address = ", ".join(_cell(row, i + offset) for i in range(1, 5) if _cell(row, i + offset))
+    return SimpleNamespace(
+        tutor_name=_cell(row, offset), address=address,
+        phone1=_cell(row, 5 + offset), phone2=_cell(row, 6 + offset),
+    )
+
+
+def _pmo_identity_is_visit(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
+    return (_same_person_name(visit.tutor_name, identity.tutor_name)
+            and _pmo_same_household(visit, identity))
+
+
+def _pmo_stored_row_holds_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
     result = service.spreadsheets().values().get(
         spreadsheetId=visit.spreadsheet_id,
         range=f"{_quote_sheet_title(title)}!A{visit.source_row}:H{visit.source_row}",
     ).execute()
     values = result.get("values") or []
-    if not values:
+    return bool(values) and _pmo_identity_is_visit(visit, _pmo_sheet_values_identity(values[0]))
+
+
+# Evita que o realinhamento (que regrava a aba) dispare outro realinhamento.
+_pmo_realign_state = threading.local()
+
+
+def _pmo_realign_moved_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
+    """Linhas da aba trocaram de ordem: realinha a aba e deixa a gravação seguir.
+
+    Em 24/11/2026 a aba do dia foi reordenada depois da última sincronização.
+    A trava recusou (com razão) gravar pelo número antigo da linha, e o que a
+    equipe marcou no painel nunca chegou à planilha, sem aviso. Agora, quando a
+    pessoa está inteira (nome e casa) em exatamente uma outra linha da mesma
+    aba, roda o mesmo sync do botão "Sincronizar", que leva cada registro à
+    linha nova e regrava o que o painel tinha e a aba não.
+
+    Linha editada, pessoa sumida ou duas linhas candidatas continuam recusadas:
+    nesses casos não há como saber o destino sem adivinhar.
+    """
+    if getattr(_pmo_realign_state, "active", False):
         return False
-    row = values[0]
-    offset = _row_column_offset(row)
-    address = ", ".join(_cell(row, i + offset) for i in range(1, 5) if _cell(row, i + offset))
-    identity = SimpleNamespace(
-        tutor_name=_cell(row, offset), address=address,
-        phone1=_cell(row, 5 + offset), phone2=_cell(row, 6 + offset),
+    if not visit.sheet_gid or not visit.spreadsheet_id or _pmo_is_master_sheet(title):
+        return False
+    result = service.spreadsheets().values().get(
+        spreadsheetId=visit.spreadsheet_id,
+        range=f"{_quote_sheet_title(title)}!A:H",
+    ).execute()
+    found = [
+        index
+        for index, row in enumerate(result.get("values") or [], start=1)
+        if index != visit.source_row and row and _pmo_identity_is_visit(visit, _pmo_sheet_values_identity(row))
+    ]
+    if len(found) != 1:
+        return False
+
+    _pmo_realign_state.active = True
+    try:
+        synced = sync_vacina_pmo_sheet(sheet_gid=visit.sheet_gid, sheet_title=title)
+        if synced.spreadsheet_id != visit.spreadsheet_id or str(synced.sheet_gid) != str(visit.sheet_gid):
+            return False
+        persist_vacina_pmo_rows(
+            synced.rows,
+            spreadsheet_id=synced.spreadsheet_id,
+            sheet_gid=synced.sheet_gid,
+            sheet_title=synced.sheet_title,
+        )
+    except Exception:
+        db.session.rollback()
+        current_app.logger.warning(
+            "PMO: falha ao realinhar a aba %s (visita %s)", title, visit.id, exc_info=True
+        )
+        return False
+    finally:
+        _pmo_realign_state.active = False
+
+    current_app.logger.info(
+        "PMO: aba %s reordenada; visita %s realinhada para a linha %s", title, visit.id, visit.source_row
     )
-    matches = (_same_person_name(visit.tutor_name, identity.tutor_name)
-               and _pmo_same_household(visit, identity))
-    if not matches:
-        current_app.logger.warning("PMO: linha %s da aba %s mudou; sincronize antes de gravar (visita %s)",
-                                   visit.source_row, title, visit.id)
-    return matches
+    try:
+        from services.pmo_realtime import record_pmo_event
+        record_pmo_event("sheet_synced", {"sheet_gid": visit.sheet_gid})
+    except Exception:
+        current_app.logger.warning("Falha ao registrar evento sheet_synced no realtime", exc_info=True)
+    return True
+
+
+def _pmo_sheet_row_matches_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
+    """Confere a linha atual antes de gravar; nunca adivinha outro destino.
+
+    Se a pessoa só mudou de linha na mesma aba, realinha antes (ver
+    ``_pmo_realign_moved_visit``) e confere de novo.
+    """
+    if not title or not visit.source_row or visit.source_row < 1:
+        return False
+    if _pmo_stored_row_holds_visit(service, visit, title):
+        return True
+    if (
+        _pmo_realign_moved_visit(service, visit, title)
+        and visit.source_row
+        and visit.source_row > 0
+        and _pmo_stored_row_holds_visit(service, visit, title)
+    ):
+        return True
+    current_app.logger.warning("PMO: linha %s da aba %s mudou; sincronize antes de gravar (visita %s)",
+                               visit.source_row, title, visit.id)
+    return False
 
 
 def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:

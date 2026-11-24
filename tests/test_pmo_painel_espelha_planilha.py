@@ -11,6 +11,8 @@ da aba.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from extensions import db
@@ -379,3 +381,97 @@ def test_resolve_gid_pelo_nome_da_aba(monkeypatch):
     service.spreadsheets().get().execute.return_value = {"sheets": [{"properties": {"title": "09/09/2026", "sheetId": 42}}]}
     result = servico._resolve_sheet_target(service, "https://docs.google.com/spreadsheets/d/planilha123/edit", "A:T", sheet_title="09/09/2026")
     assert result[2:] == ("42", "09/09/2026")
+
+
+class _AbaReordenada:
+    """Aba em memória (A:H) que registra o que foi gravado em cada célula."""
+
+    def __init__(self, linhas_por_numero):
+        self.linhas = linhas_por_numero
+        self.gravacoes = []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    def get(self, *, spreadsheetId, range, **kwargs):
+        from unittest.mock import MagicMock
+        intervalo = range.split("!", 1)[1]
+        if intervalo == "A:H":
+            ultimo = max(self.linhas)
+            valores = [self.linhas.get(n, []) for n in __import__("builtins").range(1, ultimo + 1)]
+        else:
+            numero = int(intervalo.split(":")[0][1:])
+            valores = [self.linhas[numero]] if numero in self.linhas else []
+        resposta = MagicMock()
+        resposta.execute.return_value = {"values": valores}
+        return resposta
+
+    def update(self, *, spreadsheetId, range, valueInputOption, body):
+        from unittest.mock import MagicMock
+        self.gravacoes.append((range, body["values"]))
+        return MagicMock()
+
+    def batchUpdate(self, *, spreadsheetId, body):
+        from unittest.mock import MagicMock
+        return MagicMock()
+
+
+def _crua(tutor, telefone, endereco, animal):
+    rua, numero, bairro = [parte.strip() for parte in endereco.split(",")]
+    return [tutor, rua, numero, "", bairro, telefone, "", "1", "0", animal]
+
+
+def _aba_com(monkeypatch, ordem):
+    aba = _AbaReordenada({numero: _crua(*pessoa) for numero, pessoa in ordem.items()})
+    chamadas = []
+
+    def sync(*, sheet_gid="", sheet_title="", force_ai=False):
+        chamadas.append(sheet_gid)
+        return PmoSyncResult(
+            rows=[_linha(numero, *pessoa) for numero, pessoa in ordem.items()],
+            spreadsheet_id=PLANILHA, sheet_range="", sheet_gid=ABA_GID, sheet_title=ABA_TITULO,
+        )
+
+    monkeypatch.setattr(servico, "_get_sheets_service_rw", lambda: aba)
+    monkeypatch.setattr(servico, "sync_vacina_pmo_sheet", sync)
+    return aba, chamadas
+
+
+def test_marcacao_chega_a_planilha_mesmo_com_a_aba_reordenada(app, monkeypatch):
+    """Caso de 24/11/2026: a aba trocou a ordem das casas e a vacina não chegou à planilha."""
+    _gravar([_linha(3, *ANA), _linha(4, *MARIA), _linha(5, *BRUNO)])
+    maria = _visita_de("Maria Clara")[0]
+    bruno_id = _visita_de("Bruno Lima")[0].id
+    aba, chamadas = _aba_com(monkeypatch, {3: ANA, 4: BRUNO, 5: MARIA})
+
+    servico.update_vacina_pmo_animal_status(maria.animals[0].id, "vacinado")
+
+    assert chamadas == [ABA_GID]
+    assert db.session.get(PmoVaccinationVisit, maria.id).source_row == 5
+    assert db.session.get(PmoVaccinationVisit, bruno_id).source_row == 4
+    linhas_gravadas = {re.search(r"[A-Z]+(\d+)", faixa.split("!")[1]).group(1) for faixa, _ in aba.gravacoes}
+    assert linhas_gravadas == {"5"}, "nada pode cair na linha do Bruno"
+    notas = [valores for faixa, valores in aba.gravacoes if faixa.endswith(f"!{servico.PMO_NOTE_COLUMN}5")]
+    assert notas and "Mel: vacinado" in notas[-1][0][0]
+    contagens = [valores for faixa, valores in aba.gravacoes
+                 if faixa.endswith(f"{servico.PMO_DOGS_VACCINATED_COLUMN}5:{servico.PMO_CATS_VACCINATED_COLUMN}5")]
+    assert contagens[-1] == [[1, 0]]
+
+
+@pytest.mark.parametrize("ordem", [
+    {3: ANA, 4: BRUNO},  # a Maria saiu da aba (ou a linha foi redigitada)
+    {3: ANA, 4: BRUNO, 5: MARIA, 6: MARIA},  # duas linhas candidatas
+])
+def test_sem_destino_unico_a_gravacao_continua_recusada(app, monkeypatch, ordem):
+    _gravar([_linha(3, *ANA), _linha(4, *MARIA)])
+    maria = _visita_de("Maria Clara")[0]
+    aba, chamadas = _aba_com(monkeypatch, ordem)
+
+    servico.update_vacina_pmo_animal_status(maria.animals[0].id, "vacinado")
+
+    assert chamadas == []
+    assert aba.gravacoes == []
+    assert db.session.get(PmoVaccinationVisit, maria.id).source_row == 4
