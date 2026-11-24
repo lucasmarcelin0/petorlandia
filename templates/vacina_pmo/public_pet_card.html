@@ -320,7 +320,7 @@
 
     .note-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -613,6 +613,13 @@
           <div class="note">
             <strong>Procure orientação</strong>
             Em caso de mordida, comportamento estranho ou salivação intensa, procure atendimento veterinário.
+          </div>
+          <div class="note">
+            <strong>Viu um morcego caído ou de dia?</strong>
+            Não toque e chame a Vigilância Sanitária:
+            <a href="tel:{{ visa_phone.tel }}" style="white-space:nowrap">{{ visa_phone.display }}</a>
+            ou WhatsApp <a href="{{ visa_phone.whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="white-space:nowrap">{{ visa_phone.whatsapp_display }}</a>.
+            Se alguém foi mordido ou arranhado, lave com água e sabão e procure a unidade de saúde no mesmo dia: a vacina humana é gratuita no SUS.
           </div>
         </div>
 

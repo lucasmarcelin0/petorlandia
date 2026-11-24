@@ -57,6 +57,19 @@ PMO_VACCINE_LOTE_ANTERIOR = "Fab. 09/2024 - Val. 09/2026"
 PMO_CAMPAIGN_VET_EMAIL = "lukemarki3@gmail.com"
 PMO_EDUCATIONAL_VIDEO_URL_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEO_URL"
 PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
+# Série de vídeos curtos (até 90 s cada) que substitui o vídeo longo quando
+# configurada: uma linha por vídeo, no formato "Título | link do YouTube".
+# Roteiros em docs/roteiros-videos-raiva.md.
+PMO_EDUCATIONAL_VIDEOS_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEOS"
+PMO_EDUCATIONAL_VIDEOS_MAX = 4
+# Telefone fixo da Vigilância Sanitária de Orlândia (timbre dos ofícios).
+PMO_VISA_PHONE = {
+    "display": "(16) 3820-8207",
+    "tel": "+551638208207",
+    # WhatsApp do setor.
+    "whatsapp_display": "(16) 99971-2712",
+    "whatsapp_url": "https://wa.me/5516999712712",
+}
 
 PMO_REQUEST_SHEET_TITLE_ENV = "PMO_VACCINE_REQUEST_SHEET_TITLE"
 # Aba onde caem as solicitações enviadas pelos moradores no site. A busca é
@@ -253,6 +266,37 @@ def get_pmo_educational_video() -> dict[str, str]:
     if not embed_url:
         return {"url": "", "embed_url": ""}
     return {"url": url, "embed_url": embed_url}
+
+
+def get_pmo_educational_videos() -> list[dict[str, str]]:
+    """Vídeos curtos configurados em ``PMO_VACCINE_EDUCATIONAL_VIDEOS``.
+
+    Aceita uma linha (ou ``;``) por vídeo, "Título | link". Linhas sem link
+    válido do YouTube são ignoradas, para um erro de digitação não quebrar a
+    página. Lista vazia faz a página voltar ao vídeo único.
+    """
+    raw = os.getenv(PMO_EDUCATIONAL_VIDEOS_ENV, "") or ""
+    videos: list[dict[str, str]] = []
+    for line in re.split(r"[\n;]+", raw):
+        if not line.strip():
+            continue
+        title, sep, url = line.rpartition("|")
+        if not sep:
+            title, url = "", line
+        url = url.strip()
+        embed_url = _youtube_embed_url(url)
+        if not embed_url:
+            continue
+        videos.append(
+            {
+                "title": title.strip() or f"Vídeo {len(videos) + 1}",
+                "url": url,
+                "embed_url": embed_url,
+            }
+        )
+        if len(videos) >= PMO_EDUCATIONAL_VIDEOS_MAX:
+            break
+    return videos
 
 
 def _strip_accents(value: str) -> str:
