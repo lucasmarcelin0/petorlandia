@@ -335,7 +335,9 @@ def vacina_pmo():
 def vacina_pmo_public(token):
     from services.vacina_pmo_service import (
         format_pmo_phone_for_login,
+        PMO_VISA_PHONE,
         get_pmo_educational_video,
+        get_pmo_educational_videos,
         get_vacina_pmo_public_visit,
         get_vacina_pmo_evaluation_payload,
         save_vacina_pmo_evaluation,
@@ -393,6 +395,8 @@ def vacina_pmo_public(token):
         evaluation_error=evaluation_error,
         evaluation=get_vacina_pmo_evaluation_payload(visit),
         educational_video=get_pmo_educational_video(),
+        educational_videos=get_pmo_educational_videos(),
+        visa_phone=PMO_VISA_PHONE,
         primary_pet_card_url=primary_pet_card_url,
         status_labels=status_labels,
         protected_statuses=_pmo_protected_statuses(),
@@ -403,6 +407,7 @@ def vacina_pmo_public(token):
 @bp.route('/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>')
 def vacina_pmo_public_pet(token, pmo_animal_id):
     from services.vacina_pmo_service import (
+        PMO_VISA_PHONE,
         get_vacina_pmo_public_visit,
         pmo_visit_reference_date,
     )
@@ -522,6 +527,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         booster_days_remaining=booster_days_remaining,
         booster_countdown_label=booster_countdown_label,
         educational_video={"url": "", "embed_url": ""},
+        visa_phone=PMO_VISA_PHONE,
         protocol_label=_pmo_protocol_label(visit),
     )
 

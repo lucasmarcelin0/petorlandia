@@ -1427,6 +1427,87 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
         assert evaluated_state["rows"][0]["evaluationComment"] == "Atendimento excelente"
 
 
+def test_pmo_educational_videos_parse_short_series(monkeypatch):
+    from services.vacina_pmo_service import get_pmo_educational_videos
+
+    monkeypatch.setenv(
+        "PMO_VACCINE_EDUCATIONAL_VIDEOS",
+        "Parabéns | https://youtube.com/shorts/aaaAAA11111\n"
+        "link quebrado | https://exemplo.com/video\n"
+        "https://youtu.be/bbbBBB22222;"
+        "Três | https://www.youtube.com/watch?v=cccCCC33333;"
+        "Quatro | https://youtu.be/dddDDD44444;"
+        "Cinco | https://youtu.be/eeeEEE55555",
+    )
+    videos = get_pmo_educational_videos()
+    assert [v["embed_url"].rsplit("/", 1)[-1] for v in videos] == [
+        "aaaAAA11111", "bbbBBB22222", "cccCCC33333", "dddDDD44444",
+    ]
+    assert videos[0]["title"] == "Parabéns"
+    assert videos[1]["title"] == "Vídeo 2"
+
+    monkeypatch.delenv("PMO_VACCINE_EDUCATIONAL_VIDEOS")
+    assert get_pmo_educational_videos() == []
+
+
+def test_pmo_public_link_shows_bat_guidance_and_short_videos(app, client, monkeypatch):
+    monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://youtu.be/abcDEF12345")
+    monkeypatch.setenv(
+        "PMO_VACCINE_EDUCATIONAL_VIDEOS",
+        "Viu um morcego? | https://youtube.com/shorts/morcEGO1234",
+    )
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 0,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "vacinado"},
+            {"name": "Thor", "species": "cao", "status": "vacinado"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 2,
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+        visit = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first()
+        token = visit.public_token
+        pmo_animal_id = visit.animals[0].id
+
+    html = client.get(f"/vacina-pmo/c/{token}").get_data(as_text=True)
+    assert "Parabéns pela vacinação" in html
+    assert "Lua e Thor estão protegidos" in html
+    assert "Morcegos e acidentes com pessoas" in html
+    assert 'href="tel:+551638208207"' in html
+    assert "(16) 3820-8207" in html
+    assert "vacina antirrábica humana" in html
+    # A série curta substitui o vídeo longo.
+    assert "https://www.youtube.com/embed/morcEGO1234" in html
+    assert "1. Viu um morcego?" in html
+    assert "https://www.youtube.com/embed/abcDEF12345" not in html
+    # Números e fontes ficam recolhidos, sem poluir a tela.
+    assert '<details class="more-info" id="saiba-mais">' in html
+    assert "gov.br/saude/pt-br/assuntos/saude-de-a-a-z/r/raiva/raiva-humana" in html
+
+    pet_html = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}").get_data(as_text=True)
+    assert "Viu um morcego caído ou de dia?" in pet_html
+    assert 'href="tel:+551638208207"' in pet_html
+
+
 def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://www.youtube.com/watch?v=abcDEF12345")
     row = {

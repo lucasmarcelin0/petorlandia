@@ -389,6 +389,127 @@
       border: 0;
     }
 
+    .congrats {
+      border-top: 5px solid var(--green);
+      background: #f3fbf7;
+    }
+
+    .congrats p {
+      margin: 0;
+      color: var(--ink);
+    }
+
+    .alert-card {
+      border-left: 5px solid var(--rose);
+    }
+
+    .alert-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .alert-grid ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .alert-grid li + li {
+      margin-top: 4px;
+    }
+
+    .phone-cta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #fff4ec;
+    }
+
+    .phone-cta .button {
+      flex: 0 0 auto;
+    }
+
+    .phone-cta span {
+      color: var(--ink);
+      font-size: .95rem;
+    }
+
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .video-grid figure {
+      margin: 0;
+    }
+
+    .video-grid figcaption {
+      margin-top: 6px;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
+    .more-info {
+      margin-top: 16px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .more-info summary {
+      cursor: pointer;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: var(--blue-dark);
+    }
+
+    .more-info[open] summary {
+      border-bottom: 1px dashed var(--line);
+    }
+
+    .more-info__body {
+      padding: 12px 14px 14px;
+      font-size: .95rem;
+      color: var(--muted);
+    }
+
+    .more-info__body h3 {
+      margin: 12px 0 4px;
+      font-size: 1rem;
+      color: var(--ink);
+    }
+
+    .more-info__body h3:first-child {
+      margin-top: 0;
+    }
+
+    .more-info__body ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .more-info__body li + li {
+      margin-top: 4px;
+    }
+
+    .more-info__body a {
+      color: #1d4ed8;
+    }
+
+    @media (max-width: 780px) {
+      .alert-grid,
+      .video-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .stars {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -523,6 +644,17 @@
       </p>
     </section>
 
+    {% set vacinados = visit.animals | selectattr('status', 'in', protected_statuses) | map(attribute='name') | list %}
+    {% if vacinados %}
+      <section class="card congrats" style="margin-bottom:16px;" aria-label="Parabéns pela vacinação">
+        <h2>Parabéns pela vacinação! 🎉</h2>
+        <p>
+          {% if vacinados|length == 1 %}{{ vacinados[0] }} está protegido(a){% else %}{{ vacinados[:-1]|join(', ') }} e {{ vacinados[-1] }} estão protegidos{% endif %}
+          contra a raiva por um ano. Cada animal vacinado é uma barreira a menos para o vírus chegar à sua família e aos vizinhos.
+        </p>
+      </section>
+    {% endif %}
+
     <div class="grid">
       <section class="card certificate">
         <h2>Registro da aplicação</h2>
@@ -632,7 +764,53 @@
       </div>
     </section>
 
-    {% if educational_video.embed_url %}
+    <section class="card alert-card" style="margin-top:16px;" aria-label="Morcegos e vacina humana">
+      <h2>Morcegos e acidentes com pessoas</h2>
+      <div class="alert-grid">
+        <article class="education-card">
+          <strong>🦇 Viu um morcego caído, voando de dia ou dentro de casa?</strong>
+          <ul>
+            <li>Não toque nele, nem com luva comum, e não deixe crianças, cães ou gatos chegarem perto.</li>
+            <li>Se der, cubra com um balde ou caixa sem encostar e feche o cômodo.</li>
+            <li>Ligue para a Vigilância Sanitária: a equipe recolhe o animal para exame.</li>
+          </ul>
+        </article>
+        <article class="education-card">
+          <strong>🩹 Alguém foi mordido ou arranhado por um animal, ou tocou em morcego ou sagui?</strong>
+          <ul>
+            <li>Lave o local na hora, com bastante água e sabão.</li>
+            <li>Procure no mesmo dia o pronto-socorro ou a unidade de saúde.</li>
+            <li>O SUS oferece vacina antirrábica humana (e soro, quando indicado) de graça. Não espere sintomas: depois que eles aparecem, a raiva quase sempre é fatal.</li>
+          </ul>
+        </article>
+      </div>
+      <div class="phone-cta">
+        <a class="button" href="tel:{{ visa_phone.tel }}">📞 Ligar {{ visa_phone.display }}</a>
+        <span>Vigilância Sanitária de Orlândia — morcegos, animais suspeitos e dúvidas sobre raiva.</span>
+      </div>
+    </section>
+
+    {% if educational_videos %}
+      <section class="card" style="margin-top:16px;" aria-label="Vídeos curtos sobre raiva">
+        <h2>Vídeos curtos</h2>
+        <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Até um minuto e meio cada. Assista o que quiser, na ordem que preferir.</p>
+        <div class="video-grid">
+          {% for video in educational_videos %}
+            <figure>
+              <div class="video-frame">
+                <iframe
+                  src="{{ video.embed_url }}"
+                  title="{{ video.title }}"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen></iframe>
+              </div>
+              <figcaption>{{ loop.index }}. {{ video.title }}</figcaption>
+            </figure>
+          {% endfor %}
+        </div>
+      </section>
+    {% elif educational_video.embed_url %}
       <section class="card" style="margin-top:16px;" aria-label="Video educativo">
         <h2>Vídeo educativo</h2>
         <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Assista à orientação da campanha antes de guardar sua carteirinha.</p>
@@ -652,6 +830,35 @@
         {% endif %}
       </section>
     {% endif %}
+
+    <details class="more-info" id="saiba-mais">
+      <summary>Quer saber mais? Números recentes da raiva no Brasil e no mundo</summary>
+      <div class="more-info__body">
+        <h3>No Brasil</h3>
+        <ul>
+          <li>Em 2026 o país completou 10 anos sem caso de raiva humana transmitida por cão — resultado de décadas de vacinação de cães e gatos.</li>
+          <li>Hoje o maior risco vem de animais silvestres: de 2010 a junho de 2026 o Brasil registrou 54 casos de raiva humana, e 23 deles foram transmitidos por morcegos.</li>
+          <li>Em 2025 houve 4 casos humanos, todos depois de contato com macacos (3 com a variante de sagui, em PE, CE e PB, e 1 no AP). Em 2026, até junho, 1 caso no Piauí, também por primata.</li>
+        </ul>
+        <h3>No estado de São Paulo</h3>
+        <ul>
+          <li>Em 2026 foram confirmados morcegos com raiva em várias cidades paulistas, como São José do Rio Preto, Sorocaba, Piracicaba e Jundiaí. Por isso morcego caído ou de dia nunca deve ser tocado.</li>
+        </ul>
+        <h3>No mundo</h3>
+        <ul>
+          <li>A Organização Mundial da Saúde estima dezenas de milhares de mortes por ano, quase todas na Ásia e na África e quase sempre por mordida de cão não vacinado. Muitas vítimas são crianças.</li>
+          <li>A raiva é praticamente 100% fatal depois que os sintomas aparecem, mas é 100% evitável com vacina no animal e atendimento rápido da pessoa exposta.</li>
+        </ul>
+        <h3>Fontes</h3>
+        <ul>
+          <li><a href="https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/r/raiva/raiva-humana" target="_blank" rel="noopener noreferrer">Ministério da Saúde — Raiva humana (situação no Brasil)</a></li>
+          <li><a href="https://agenciagov.ebc.com.br/noticias/202608/brasil-completa-10-anos-sem-raiva-humana-transmitida-por-caes-e-reforca-vacinacao-antirrabica-na-fronteira" target="_blank" rel="noopener noreferrer">Agência Gov — Brasil completa 10 anos sem raiva humana transmitida por cães (ago/2026)</a></li>
+          <li><a href="https://www.band.com.br/saude/casos-de-raiva-em-morcegos-urbanos-e-rebanhos-bovinos-disparam-em-sp-e-sc" target="_blank" rel="noopener noreferrer">Band — Casos de raiva em morcegos urbanos em SP (ago/2026)</a></li>
+          <li><a href="https://www.who.int/news-room/fact-sheets/detail/rabies" target="_blank" rel="noopener noreferrer">Organização Mundial da Saúde — Rabies (em inglês)</a></li>
+        </ul>
+        <p style="margin:10px 0 0;font-size:.85rem;">Informações revisadas em novembro de 2026.</p>
+      </div>
+    </details>
 
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>
