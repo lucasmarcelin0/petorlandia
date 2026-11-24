@@ -11,7 +11,7 @@ até 90 segundos (~180 palavras faladas, em ritmo calmo).
 - Quem fala: alguém da equipe da Vigilância, de uniforme, em local real
   (sala da VISA, rua de bairro, carro da campanha). Rosto conhecido gera confiança.
 - Legenda queimada no vídeo (muita gente assiste sem som) e o telefone
-  **(16) 3820-8207** na tela nos últimos 10 segundos dos vídeos 2 e 3.
+  **(16) 3820-8207** e o WhatsApp **(16) 99971-2712** na tela nos últimos 10 segundos dos vídeos 2 e 3.
 - Nada de imagem de animal doente ou de pessoa com raiva: o tom é de cuidado,
   não de medo.
 - Revisar os números com a fonte antes de gravar (ver "Fontes" no fim).
@@ -54,7 +54,7 @@ com 1 ou 2 configurados, só eles aparecem.
 | 0–10 s | Forro/telhado, morcego em foto de arquivo (sem manuseio) | "Morcego é importante para a natureza, mas pode transmitir raiva. E em 2026 já apareceram morcegos com raiva em várias cidades do interior paulista." |
 | 10–30 s | Texto: "caído • voando de dia • dentro de casa" | "Morcego caído no chão, voando de dia ou dentro de casa pode estar doente." |
 | 30–55 s | Mão colocando balde sobre um objeto (sem morcego real) | "Não pegue, nem com luva. Afaste crianças, cães e gatos. Se der, cubra com um balde ou caixa sem encostar e feche o cômodo." |
-| 55–75 s | Telefone grande na tela | "Ligue para a Vigilância Sanitária de Orlândia: (16) 3820-8207. A gente busca o morcego e manda para exame." |
+| 55–75 s | Telefone grande na tela | "Ligue para a Vigilância Sanitária de Orlândia, (16) 3820-8207, ou mande uma foto pelo WhatsApp, (16) 99971-2712. A gente busca o morcego e manda para exame." |
 
 ## Vídeo 3 — "Mordida ou arranhão: o que fazer" (~80 s)
 
@@ -65,7 +65,7 @@ com 1 ou 2 configurados, só eles aparecem.
 | 0–12 s | Pia, mãos sob a torneira com sabão | "Foi mordido ou arranhado por cão, gato, ou teve contato com morcego ou sagui? Primeiro passo: lave o local com bastante água e sabão, na hora." |
 | 12–35 s | Fachada de unidade de saúde / pronto-socorro | "Depois, procure no mesmo dia o pronto-socorro ou a unidade de saúde. Não espere doer, inflamar ou aparecer sintoma." |
 | 35–60 s | Frasco de vacina humana, profissional de saúde | "Existe vacina contra a raiva para pessoas, e o SUS oferece de graça. Em alguns casos também é usado o soro. Quem decide é a equipe de saúde, avaliando o ferimento e o animal." |
-| 60–80 s | Texto + telefone | "Se o animal for seu ou de um vizinho, não sacrifique nem abandone: ele precisa ser observado. A Vigilância orienta: (16) 3820-8207." |
+| 60–80 s | Texto + telefone | "Se o animal for seu ou de um vizinho, não sacrifique nem abandone: ele precisa ser observado. A Vigilância orienta: (16) 3820-8207 ou WhatsApp (16) 99971-2712." |
 
 > Conferir com a Vigilância Epidemiológica municipal qual unidade atende a
 > profilaxia em Orlândia e, se for o caso, citar o nome dela neste vídeo.

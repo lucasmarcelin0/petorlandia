@@ -616,8 +616,9 @@
           </div>
           <div class="note">
             <strong>Viu um morcego caído ou de dia?</strong>
-            Não toque e ligue para a Vigilância Sanitária:
-            <a href="tel:{{ visa_phone.tel }}">{{ visa_phone.display }}</a>.
+            Não toque e chame a Vigilância Sanitária:
+            <a href="tel:{{ visa_phone.tel }}" style="white-space:nowrap">{{ visa_phone.display }}</a>
+            ou WhatsApp <a href="{{ visa_phone.whatsapp_url }}" target="_blank" rel="noopener noreferrer" style="white-space:nowrap">{{ visa_phone.whatsapp_display }}</a>.
             Se alguém foi mordido ou arranhado, lave com água e sabão e procure a unidade de saúde no mesmo dia: a vacina humana é gratuita no SUS.
           </div>
         </div>

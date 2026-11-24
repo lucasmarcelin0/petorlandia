@@ -62,7 +62,13 @@ PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
 PMO_EDUCATIONAL_VIDEOS_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEOS"
 PMO_EDUCATIONAL_VIDEOS_MAX = 4
 # Telefone fixo da Vigilância Sanitária de Orlândia (timbre dos ofícios).
-PMO_VISA_PHONE = {"display": "(16) 3820-8207", "tel": "+551638208207"}
+PMO_VISA_PHONE = {
+    "display": "(16) 3820-8207",
+    "tel": "+551638208207",
+    # WhatsApp do setor.
+    "whatsapp_display": "(16) 99971-2712",
+    "whatsapp_url": "https://wa.me/5516999712712",
+}
 
 PMO_REQUEST_SHEET_TITLE_ENV = "PMO_VACCINE_REQUEST_SHEET_TITLE"
 # Aba onde caem as solicitações enviadas pelos moradores no site. A busca é

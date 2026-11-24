@@ -1494,6 +1494,8 @@ def test_pmo_public_link_shows_bat_guidance_and_short_videos(app, client, monkey
     assert "Morcegos e acidentes com pessoas" in html
     assert 'href="tel:+551638208207"' in html
     assert "(16) 3820-8207" in html
+    assert 'href="https://wa.me/5516999712712"' in html
+    assert "(16) 99971-2712" in html
     assert "vacina antirrábica humana" in html
     # A série curta substitui o vídeo longo.
     assert "https://www.youtube.com/embed/morcEGO1234" in html
@@ -1506,6 +1508,7 @@ def test_pmo_public_link_shows_bat_guidance_and_short_videos(app, client, monkey
     pet_html = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}").get_data(as_text=True)
     assert "Viu um morcego caído ou de dia?" in pet_html
     assert 'href="tel:+551638208207"' in pet_html
+    assert 'href="https://wa.me/5516999712712"' in pet_html
 
 
 def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
