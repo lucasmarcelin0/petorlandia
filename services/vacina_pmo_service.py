@@ -1209,7 +1209,30 @@ _GEMINI_SCHEMA = {
 }
 
 
+# A sincronização ao vivo relê a aba muitas vezes. A mesma célula precisa virar
+# sempre os mesmos animais: um nome que muda a cada leitura solta o vínculo do
+# animal. Só respostas válidas entram aqui.
+_PMO_AI_PARSE_CACHE: dict[tuple[str, int, int], list[dict[str, str]]] = {}
+_PMO_AI_PARSE_CACHE_MAX = 2000
+_PMO_AI_PARSE_CACHE_LOCK = threading.Lock()
+
+
 def _parse_animals_ai(value: Any, dogs: int, cats: int) -> list[dict[str, str]] | None:
+    key = (str(value or "").strip(), int(dogs or 0), int(cats or 0))
+    with _PMO_AI_PARSE_CACHE_LOCK:
+        cached = _PMO_AI_PARSE_CACHE.get(key)
+    if cached is not None:
+        return [dict(item) for item in cached]
+    result = _parse_animals_ai_uncached(value, dogs, cats)
+    if result is not None:
+        with _PMO_AI_PARSE_CACHE_LOCK:
+            if len(_PMO_AI_PARSE_CACHE) >= _PMO_AI_PARSE_CACHE_MAX:
+                _PMO_AI_PARSE_CACHE.clear()
+            _PMO_AI_PARSE_CACHE[key] = [dict(item) for item in result]
+    return result
+
+
+def _parse_animals_ai_uncached(value: Any, dogs: int, cats: int) -> list[dict[str, str]] | None:
     """Parser via Gemini (free tier). Retorna None em qualquer falha → cai no fallback.
 
     Manda SÓ o texto da célula de animais + as contagens dogs/cats — nada de tutor,
@@ -2161,7 +2184,8 @@ def _visit_identity_changed(
     }
     old_name = _strip_accents(visit.tutor_name or "").casefold().strip()
     new_name = _strip_accents(tutor_name or "").casefold().strip()
-    if old_name and new_name and not _same_person_name(old_name, new_name):
+    completed = _pmo_name_extends(old_name, new_name) and bool(old_phones & new_phones)
+    if old_name and new_name and not completed and not _same_person_name(old_name, new_name):
         if not _pmo_close_slugs(_pmo_animal_slug(old_name), _pmo_animal_slug(new_name)):
             return True
     return bool(old_phones and new_phones and old_phones.isdisjoint(new_phones))
@@ -2246,6 +2270,8 @@ def parse_vacina_pmo_rows(
                 "certificateUrl": "",
                 "sourceRow": index + 1,
                 "attendedBy": _cell(row, 14 + offset),
+                "dogsVaccinated": _cell(row, 12 + offset),
+                "catsVaccinated": _cell(row, 13 + offset),
             }
         )
     return parsed
@@ -3379,8 +3405,44 @@ def _pmo_name_key(name: Any) -> tuple[str, str] | None:
     return (tokens[0], tokens[-1]) if tokens else None
 
 
+def _pmo_name_extends(left: Any, right: Any) -> bool:
+    """Um nome só acrescenta partes ao outro ("Maria Clara" → "Maria Clara Souza").
+
+    Mesmo primeiro nome, e o nome curto aparece inteiro e na ordem dentro do
+    longo. Sozinho não prova nada (pai e filho); quem usa exige também o mesmo
+    telefone e o mesmo endereço.
+    """
+    left_tokens, right_tokens = _person_name_tokens(left), _person_name_tokens(right)
+    if not left_tokens or not right_tokens or left_tokens[0] != right_tokens[0]:
+        return False
+    short, long = sorted((left_tokens, right_tokens), key=len)
+    return _is_ordered_subsequence(short, long)
+
+
+def _pmo_same_contacts(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
+    """Mesmo telefone E mesmo endereço."""
+    address = _pmo_address_slug(visit.address)
+    return bool(
+        _pmo_visit_phones(visit) & _pmo_visit_phones(identity)
+        and address
+        and address == _pmo_address_slug(identity.address)
+    )
+
+
+def _pmo_completed_name(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
+    """A equipe completou o nome do tutor na aba, sem trocar de casa nem telefone.
+
+    Sem isto, "Maria Clara" virando "Maria Clara Souza" contava como outra
+    pessoa: o registro com as vacinas do dia saía do painel e uma visita nova,
+    pendente, entrava no lugar.
+    """
+    return _pmo_name_extends(visit.tutor_name, identity.tutor_name) and _pmo_same_contacts(visit, identity)
+
+
 def _pmo_same_row_signal(visit: PmoVaccinationVisit, identity: SimpleNamespace) -> bool:
     """Aceita pequena correção de nome somente com outro dado em comum."""
+    if _pmo_completed_name(visit, identity):
+        return True
     old = _pmo_animal_slug(visit.tutor_name)
     new = _pmo_animal_slug(identity.tutor_name)
     if not (_same_person_name(visit.tutor_name, identity.tutor_name) or _pmo_close_slugs(old, new)):
@@ -3463,6 +3525,22 @@ def _pmo_plan_sheet_visits(
                 ),
             ))
 
+    # Mudou de linha E teve o nome completado: só com um candidato possível,
+    # entre quem estava na lista do dia e perdeu a própria linha.
+    for row in order:
+        if row in plan:
+            continue
+        candidates = [
+            visit
+            for visit in existing
+            if visit.id not in claimed
+            and (visit.source_row or 0) > 0
+            and visit.source_row != row
+            and _pmo_completed_name(visit, identities[row])
+        ]
+        if len(candidates) == 1:
+            claim(row, candidates[0])
+
     for row in order:
         if row in plan:
             continue
@@ -3542,15 +3620,45 @@ def _pmo_same_animal_name(left: Any, right: Any) -> bool:
     return bool(old) and (old == new or _pmo_close_slugs(old, new))
 
 
+def _pmo_as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        from datetime import timezone
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+# Visita criada fora do sync (pedido do site, dia novo) grava os animais no
+# mesmo instante em que nasce; isso não é mexida da equipe no painel.
+_PMO_PANEL_CHANGE_MARGIN = timedelta(seconds=3)
+
+
+def _pmo_changed_in_panel_since(animal: PmoVaccinationAnimal, since: datetime | None) -> bool:
+    """O animal foi mexido no painel depois da última leitura da aba."""
+    changed = _pmo_as_utc(animal.updated_at)
+    since = _pmo_as_utc(since)
+    return bool(animal.id and changed and since and changed > since + _PMO_PANEL_CHANGE_MARGIN)
+
+
 def _pmo_sync_visit_animals(
     visit: PmoVaccinationVisit, parsed_animals: list[dict[str, Any]],
     released_animal_ids: set[int | None] | None = None,
+    *,
+    last_synced_at: datetime | None = None,
 ) -> bool:
     """Aplica os animais da coluna J sem desfazer vacina aplicada no painel.
 
     Animal vacinado (ou dispensado por já estar imune) é fato do campo: a
     planilha não o renomeia, não o troca por outro e não o apaga. Quem foi
     incluído no painel e ainda não aparece na aba fica no fim da lista.
+
+    O mesmo vale para o que o painel mudou depois da última leitura da aba
+    (``last_synced_at``): animal incluído, renomeado ou marcado ausente. A
+    gravação na coluna J pode ter falhado ou ainda não ter chegado; com a
+    sincronização ao vivo, ler a aba nesse intervalo apagaria o que a equipe
+    acabou de registrar. O painel vale, e a aba recebe a versão dele.
+
     Devolve True quando a planilha ficou para trás e precisa receber o painel.
     """
     if released_animal_ids is None:
@@ -3571,6 +3679,10 @@ def _pmo_sync_visit_animals(
                     continue
                 preserved.append(animal)
                 animal = None
+            elif _pmo_changed_in_panel_since(animal, last_synced_at):
+                behind = True
+                ordered.append(animal)
+                continue
             else:
                 released_animal_ids.add(animal.animal_id)
                 _clear_pmo_animal_links(animal)
@@ -3586,7 +3698,7 @@ def _pmo_sync_visit_animals(
         ordered.append(animal)
 
     for animal in existing_by_position.values():
-        if (animal.status or "") in PMO_DONE_STATUSES:
+        if (animal.status or "") in PMO_DONE_STATUSES or _pmo_changed_in_panel_since(animal, last_synced_at):
             preserved.append(animal)
             behind = True
         else:
@@ -3600,6 +3712,20 @@ def _pmo_sync_visit_animals(
         visit.dogs = max(visit.dogs or 0, sum(1 for a in kept if a.species == "cao"))
         visit.cats = max(visit.cats or 0, sum(1 for a in kept if a.species != "cao"))
     return behind
+
+
+def _pmo_vaccinated_counts_behind(visit: PmoVaccinationVisit, row: dict[str, Any]) -> bool:
+    """M/N da aba não batem com as vacinas do painel (gravação que falhou).
+
+    Só conta quando o painel tem vacina aplicada: contagem digitada à mão numa
+    casa sem registro no painel continua sendo da planilha.
+    """
+    if "dogsVaccinated" not in row and "catsVaccinated" not in row:
+        return False
+    dogs, cats = _count_vaccinated_by_species(visit)
+    if not (dogs or cats):
+        return False
+    return (_normalize_text(row.get("dogsVaccinated")), _normalize_text(row.get("catsVaccinated"))) != (str(dogs), str(cats))
 
 
 def _pmo_push_panel_to_sheet(visit: PmoVaccinationVisit) -> None:
@@ -3721,13 +3847,16 @@ def persist_vacina_pmo_rows(
         visit.note = _pmo_merge_sheet_note(sheet_note, "" if identity_changed else visit.note)
         sheet_attended_by = (row.get("attendedBy") or "").strip()
         visit.attended_by = sheet_attended_by or (None if identity_changed else visit.attended_by) or None
+        last_synced_at = None if identity_changed or not visit.id else visit.synced_at
         visit.synced_at = now
         _ensure_visit_public_token(visit)
 
-        sheet_behind = _pmo_sync_visit_animals(visit, row.get("animals") or [], released_animal_ids)
+        sheet_behind = _pmo_sync_visit_animals(
+            visit, row.get("animals") or [], released_animal_ids, last_synced_at=last_synced_at,
+        )
         sheet_behind = sheet_behind or visit.note != sheet_note or bool(
             visit.attended_by and not sheet_attended_by
-        )
+        ) or _pmo_vaccinated_counts_behind(visit, row)
 
         _ensure_visit_records(visit)
 
@@ -3761,6 +3890,13 @@ def persist_vacina_pmo_rows(
     # Depois do laço: um cadastro solto por uma linha pode ter sido religado
     # por outra (o bicho mudou de posição) e aí continua.
     _discard_pmo_phantom_animals(released_animal_ids)
+    # ``synced_at`` marca o instante em que a aba foi lida e aplicada. Carimba
+    # depois de gravar os animais: o que este sync mudou neles não pode contar,
+    # no próximo, como mudança feita no painel.
+    db.session.flush()
+    stamp = utcnow()
+    for visit in saved:
+        visit.synced_at = stamp
     db.session.commit()
     for visit in behind:
         _pmo_push_panel_to_sheet(visit)
@@ -3799,10 +3935,6 @@ def _pmo_stored_row_holds_visit(service, visit: PmoVaccinationVisit, title: str)
     return bool(values) and _pmo_identity_is_visit(visit, _pmo_sheet_values_identity(values[0]))
 
 
-# Evita que o realinhamento (que regrava a aba) dispare outro realinhamento.
-_pmo_realign_state = threading.local()
-
-
 def _pmo_realign_moved_visit(service, visit: PmoVaccinationVisit, title: str) -> bool:
     """Linhas da aba trocaram de ordem: realinha a aba e deixa a gravação seguir.
 
@@ -3816,7 +3948,9 @@ def _pmo_realign_moved_visit(service, visit: PmoVaccinationVisit, title: str) ->
     Linha editada, pessoa sumida ou duas linhas candidatas continuam recusadas:
     nesses casos não há como saber o destino sem adivinhar.
     """
-    if getattr(_pmo_realign_state, "active", False):
+    from services import pmo_sheet_live
+
+    if pmo_sheet_live.in_sync():
         return False
     if not visit.sheet_gid or not visit.spreadsheet_id or _pmo_is_master_sheet(title):
         return False
@@ -3832,25 +3966,23 @@ def _pmo_realign_moved_visit(service, visit: PmoVaccinationVisit, title: str) ->
     if len(found) != 1:
         return False
 
-    _pmo_realign_state.active = True
     try:
-        synced = sync_vacina_pmo_sheet(sheet_gid=visit.sheet_gid, sheet_title=title)
-        if synced.spreadsheet_id != visit.spreadsheet_id or str(synced.sheet_gid) != str(visit.sheet_gid):
-            return False
-        persist_vacina_pmo_rows(
-            synced.rows,
-            spreadsheet_id=synced.spreadsheet_id,
-            sheet_gid=synced.sheet_gid,
-            sheet_title=synced.sheet_title,
-        )
+        with pmo_sheet_live.applying(visit.sheet_gid):
+            synced = sync_vacina_pmo_sheet(sheet_gid=visit.sheet_gid, sheet_title=title)
+            if synced.spreadsheet_id != visit.spreadsheet_id or str(synced.sheet_gid) != str(visit.sheet_gid):
+                return False
+            persist_vacina_pmo_rows(
+                synced.rows,
+                spreadsheet_id=synced.spreadsheet_id,
+                sheet_gid=synced.sheet_gid,
+                sheet_title=synced.sheet_title,
+            )
     except Exception:
         db.session.rollback()
         current_app.logger.warning(
             "PMO: falha ao realinhar a aba %s (visita %s)", title, visit.id, exc_info=True
         )
         return False
-    finally:
-        _pmo_realign_state.active = False
 
     current_app.logger.info(
         "PMO: aba %s reordenada; visita %s realinhada para a linha %s", title, visit.id, visit.source_row
@@ -3880,9 +4012,19 @@ def _pmo_sheet_row_matches_visit(service, visit: PmoVaccinationVisit, title: str
         and _pmo_stored_row_holds_visit(service, visit, title)
     ):
         return True
-    current_app.logger.warning("PMO: linha %s da aba %s mudou; sincronize antes de gravar (visita %s)",
+    current_app.logger.warning("PMO: linha %s da aba %s mudou; sincronizando a aba (visita %s)",
                                visit.source_row, title, visit.id)
+    _pmo_request_tab_resync(visit, title, "gravação recusada")
     return False
+
+
+def _pmo_request_tab_resync(visit: PmoVaccinationVisit, title: str, reason: str) -> None:
+    """A gravação não chegou à aba: o sync dela realinha e regrava o painel."""
+    try:
+        from services import pmo_sheet_live
+        pmo_sheet_live.request_tab_sync(visit.sheet_gid, title or visit.sheet_title or "", reason=reason)
+    except Exception:
+        current_app.logger.warning("PMO: falha ao agendar o sync da aba %s", title, exc_info=True)
 
 
 def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
@@ -3934,6 +4076,7 @@ def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
             )
         except Exception:
             pass
+        _pmo_request_tab_resync(visit, visit.sheet_title, "falha ao gravar")
         return False
 
 
@@ -3980,6 +4123,7 @@ def write_note_to_sheet(visit: PmoVaccinationVisit) -> bool:
             )
         except Exception:
             pass
+        _pmo_request_tab_resync(visit, visit.sheet_title, "falha ao gravar")
         return False
 
 
@@ -4118,6 +4262,7 @@ def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
             )
         except Exception:
             pass
+        _pmo_request_tab_resync(visit, visit.sheet_title, "falha ao gravar")
         return False
 
 
@@ -4167,6 +4312,7 @@ def write_animal_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
             )
         except Exception:
             pass
+        _pmo_request_tab_resync(visit, visit.sheet_title, "falha ao gravar")
         return False
 
 
@@ -4352,6 +4498,7 @@ def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
             )
         except Exception:
             pass
+        _pmo_request_tab_resync(visit, visit.sheet_title, "falha ao gravar")
         return False
 
 
@@ -4737,9 +4884,17 @@ def save_vacina_pmo_evaluation(
     return visit
 
 
-def sync_vacina_pmo_sheet(
-    *, sheet_gid: str = "", sheet_title: str = "", force_ai: bool = False
-) -> PmoSyncResult:
+@dataclass
+class PmoTabValues:
+    values: list[list[Any]]
+    spreadsheet_id: str
+    sheet_range: str
+    sheet_gid: str
+    sheet_title: str
+
+
+def read_vacina_pmo_tab(*, sheet_gid: str = "", sheet_title: str = "") -> PmoTabValues:
+    """Lê as células da aba sem interpretar (o parse pode chamar a IA)."""
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     range_value = os.getenv("PMO_VACCINE_SHEET_RANGE", DEFAULT_SHEET_RANGE)
     service = _get_sheets_service_rw()
@@ -4765,13 +4920,26 @@ def sync_vacina_pmo_sheet(
             .execute()
         )
         values = result.get("values", [])
-    rows = parse_vacina_pmo_rows(values, force_ai=force_ai)
-    return PmoSyncResult(
-        rows=rows,
+    return PmoTabValues(
+        values=values,
         spreadsheet_id=spreadsheet_id,
         sheet_range=sheet_range,
         sheet_gid=resolved_gid,
         sheet_title=resolved_title,
+    )
+
+
+def sync_vacina_pmo_sheet(
+    *, sheet_gid: str = "", sheet_title: str = "", force_ai: bool = False
+) -> PmoSyncResult:
+    tab = read_vacina_pmo_tab(sheet_gid=sheet_gid, sheet_title=sheet_title)
+    rows = parse_vacina_pmo_rows(tab.values, force_ai=force_ai)
+    return PmoSyncResult(
+        rows=rows,
+        spreadsheet_id=tab.spreadsheet_id,
+        sheet_range=tab.sheet_range,
+        sheet_gid=tab.sheet_gid,
+        sheet_title=tab.sheet_title,
     )
 
 
