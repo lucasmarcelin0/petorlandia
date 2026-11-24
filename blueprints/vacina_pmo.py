@@ -549,13 +549,15 @@ def vacina_pmo_sync():
         # O painel precisa ficar igual à aba logo após "Sincronizar": linha que
         # saiu da planilha sai da lista. Só estaciona, nunca apaga — a poda de
         # verdade continua com o sync agendado.
-        rows = persist_vacina_pmo_rows(
-            result.rows,
-            spreadsheet_id=result.spreadsheet_id,
-            sheet_gid=result.sheet_gid,
-            sheet_title=result.sheet_title,
-            park_orphans=True,
-        )
+        from services.pmo_sheet_live import applying
+        with applying(result.sheet_gid or ''):
+            rows = persist_vacina_pmo_rows(
+                result.rows,
+                spreadsheet_id=result.spreadsheet_id,
+                sheet_gid=result.sheet_gid,
+                sheet_title=result.sheet_title,
+                park_orphans=True,
+            )
         try:
             from services.pmo_realtime import record_pmo_event
             record_pmo_event('sheet_synced', {
@@ -1111,6 +1113,14 @@ def vacina_pmo_updates():
                 since_id = None
 
         sheet_gid = (request.args.get('sheet_gid') or '').strip()
+        if sheet_gid:
+            # Painel aberto nesta aba: confere a planilha em segundo plano (no
+            # máximo uma leitura por intervalo) e aplica o que mudou nela.
+            try:
+                from services.pmo_sheet_live import maybe_check_tab
+                maybe_check_tab(sheet_gid)
+            except Exception:
+                current_app.logger.warning("PMO ao vivo: falha ao agendar conferência", exc_info=True)
         result = get_pmo_events_since(since_id=since_id, sheet_gid=sheet_gid)
         return jsonify({'success': True, **result})
     except Exception as exc:
