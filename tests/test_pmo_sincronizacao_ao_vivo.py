@@ -317,3 +317,19 @@ def test_ia_responde_igual_para_a_mesma_celula(monkeypatch):
     assert primeira == segunda
     assert len(chamadas) == 1
     servico._PMO_AI_PARSE_CACHE.clear()
+
+
+def test_sync_que_regrava_o_painel_tambem_pinta_o_nome(aba, monkeypatch):
+    """24/11/2026: as vacinas voltaram para a aba, mas os nomes ficaram sem cor."""
+    pintadas = []
+    monkeypatch.setattr(servico, "write_tutor_name_color_to_sheet", lambda visit: pintadas.append(visit.tutor_name))
+    aba.linhas += [_crua(ANA)]
+    ao_vivo.check_tab_for_changes(ABA_GID)
+    animal = _visita("Ana Souza").animals[0]
+    animal.status = "vacinado"
+    db.session.commit()
+
+    aba.linhas[1][10] = "obs nova"
+    ao_vivo.check_tab_for_changes(ABA_GID)
+
+    assert pintadas == ["Ana Souza"]
