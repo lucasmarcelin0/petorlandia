@@ -4922,6 +4922,199 @@
     return containerMime.includes('mp4') ? 'mp4' : 'webm';
   }
 
+  // O MediaRecorder do Chrome grava MP4 fragmentado (moov + vários moof/mdat)
+  // e deixa a duração do cabeçalho zerada ou com o tempo do primeiro trecho.
+  // O vídeo toca, mas o WhatsApp lê o cabeçalho e mostra "1 segundo". Aqui a
+  // duração real é somada a partir dos fragmentos e gravada em mvhd/tkhd/mdhd
+  // e em um mehd dentro do mvex. Os dados de vídeo não são tocados; qualquer
+  // estrutura inesperada devolve null e o arquivo original segue como está.
+  function fixFragmentedMp4Duration(input) {
+    const bytes = new Uint8Array(input);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'mvex', 'edts', 'moof', 'traf', 'mfra']);
+    const readU64 = (dv, offset) => dv.getUint32(offset) * 2 ** 32 + dv.getUint32(offset + 4);
+    const writeU64 = (dv, offset, value) => {
+      dv.setUint32(offset, Math.floor(value / 2 ** 32));
+      dv.setUint32(offset + 4, value >>> 0);
+    };
+    const typeAt = (offset) => String.fromCharCode(
+      bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7],
+    );
+
+    function parseBoxes(start, end) {
+      const boxes = [];
+      let offset = start;
+      while (offset + 8 <= end) {
+        let size = view.getUint32(offset);
+        let header = 8;
+        if (size === 1) {
+          if (offset + 16 > end) throw new Error('caixa MP4 truncada');
+          size = readU64(view, offset + 8);
+          header = 16;
+        } else if (size === 0) {
+          size = end - offset;
+        }
+        if (size < header || offset + size > end) throw new Error('caixa MP4 inválida');
+        const box = { type: typeAt(offset), start: offset, header, size, end: offset + size };
+        if (CONTAINERS.has(box.type)) box.children = parseBoxes(offset + header, box.end);
+        boxes.push(box);
+        offset += size;
+      }
+      return boxes;
+    }
+
+    const child = (box, type) => (box?.children || []).find((item) => item.type === type);
+    const childrenOf = (box, type) => (box?.children || []).filter((item) => item.type === type);
+    // Caixas "full box": 1 byte de versão + 3 de flags antes do conteúdo.
+    const fullBox = (box) => ({
+      version: bytes[box.start + box.header],
+      flags: view.getUint32(box.start + box.header) & 0xffffff,
+      body: box.start + box.header + 4,
+    });
+    const writeDuration = (version, offset, value) => {
+      if (version === 1) {
+        writeU64(view, offset, value);
+      } else {
+        if (value > 0xffffffff) throw new Error('duração excede o campo de 32 bits');
+        view.setUint32(offset, value);
+      }
+    };
+
+    const top = parseBoxes(0, bytes.byteLength);
+    const moov = top.find((box) => box.type === 'moov');
+    const moofs = top.filter((box) => box.type === 'moof');
+    if (!moov || !moofs.length) return null; // MP4 comum: o cabeçalho já tem a duração.
+
+    const mvhd = child(moov, 'mvhd');
+    if (!mvhd) return null;
+    const mvhdInfo = fullBox(mvhd);
+    const movieTimescaleOffset = mvhdInfo.body + (mvhdInfo.version === 1 ? 16 : 8);
+    const movieTimescale = view.getUint32(movieTimescaleOffset);
+    if (!movieTimescale) return null;
+
+    const mvex = child(moov, 'mvex');
+    const trexDefaults = new Map();
+    childrenOf(mvex, 'trex').forEach((trex) => {
+      const body = fullBox(trex).body;
+      trexDefaults.set(view.getUint32(body), view.getUint32(body + 8));
+    });
+
+    const tracks = new Map();
+    childrenOf(moov, 'trak').forEach((trak) => {
+      const tkhd = child(trak, 'tkhd');
+      const mdhd = child(child(trak, 'mdia'), 'mdhd');
+      if (!tkhd || !mdhd) return;
+      const tk = fullBox(tkhd);
+      const md = fullBox(mdhd);
+      const mediaTimescaleOffset = md.body + (md.version === 1 ? 16 : 8);
+      tracks.set(view.getUint32(tk.body + (tk.version === 1 ? 16 : 8)), {
+        tkhd: tk,
+        mdhd: md,
+        timescale: view.getUint32(mediaTimescaleOffset),
+        mediaDurationOffset: mediaTimescaleOffset + 4,
+        elst: child(child(trak, 'edts'), 'elst'),
+        mediaDuration: 0,
+      });
+    });
+    if (!tracks.size) return null;
+
+    // Offsets absolutos impedem inserir bytes no moov sem quebrar o arquivo.
+    let hasAbsoluteOffsets = top.some((box) => box.type === 'mfra');
+    for (const moof of moofs) {
+      for (const traf of childrenOf(moof, 'traf')) {
+        const tfhd = child(traf, 'tfhd');
+        if (!tfhd) return null;
+        const th = fullBox(tfhd);
+        const track = tracks.get(view.getUint32(th.body));
+        if (!track) return null;
+        let cursor = th.body + 4;
+        if (th.flags & 0x01) {
+          hasAbsoluteOffsets = true;
+          cursor += 8;
+        }
+        if (th.flags & 0x02) cursor += 4;
+        const defaultDuration = (th.flags & 0x08)
+          ? view.getUint32(cursor)
+          : (trexDefaults.get(view.getUint32(th.body)) || 0);
+        for (const trun of childrenOf(traf, 'trun')) {
+          const tr = fullBox(trun);
+          const sampleCount = view.getUint32(tr.body);
+          let position = tr.body + 4;
+          if (tr.flags & 0x01) position += 4;
+          if (tr.flags & 0x04) position += 4;
+          const entrySize = [0x100, 0x200, 0x400, 0x800].filter((flag) => tr.flags & flag).length * 4;
+          if (position + sampleCount * entrySize > trun.end) return null;
+          if (tr.flags & 0x100) {
+            for (let i = 0; i < sampleCount; i += 1) {
+              track.mediaDuration += view.getUint32(position + i * entrySize);
+            }
+          } else {
+            if (!defaultDuration) return null;
+            track.mediaDuration += sampleCount * defaultDuration;
+          }
+        }
+      }
+    }
+
+    let movieDuration = 0;
+    for (const track of tracks.values()) {
+      if (!track.timescale || !track.mediaDuration) continue;
+      const trackMovieDuration = Math.round(track.mediaDuration * movieTimescale / track.timescale);
+      movieDuration = Math.max(movieDuration, trackMovieDuration);
+      writeDuration(track.mdhd.version, track.mediaDurationOffset, track.mediaDuration);
+      writeDuration(track.tkhd.version, track.tkhd.body + (track.tkhd.version === 1 ? 24 : 16), trackMovieDuration);
+      if (track.elst) {
+        const el = fullBox(track.elst);
+        if (view.getUint32(el.body) === 1) writeDuration(el.version, el.body + 4, trackMovieDuration);
+      }
+    }
+    if (!movieDuration) return null;
+    writeDuration(mvhdInfo.version, movieTimescaleOffset + 4, movieDuration);
+
+    const mehd = child(mvex, 'mehd');
+    if (mehd) {
+      const info = fullBox(mehd);
+      writeDuration(info.version, info.body, movieDuration);
+      return bytes;
+    }
+    if (!mvex || hasAbsoluteOffsets) return bytes;
+
+    // Sem mehd, parte dos players soma só o primeiro fragmento. O moof usa
+    // offsets relativos a ele mesmo, então crescer o moov é seguro.
+    const mehdBox = new Uint8Array(20);
+    const mehdView = new DataView(mehdBox.buffer);
+    mehdView.setUint32(0, mehdBox.byteLength);
+    mehdBox.set([0x6d, 0x65, 0x68, 0x64], 4); // 'mehd'
+    mehdBox[8] = 1; // versão 1: duração em 64 bits
+    writeU64(mehdView, 12, movieDuration);
+    for (const box of [moov, mvex]) {
+      if (box.header === 16) {
+        writeU64(view, box.start + 8, box.size + mehdBox.byteLength);
+      } else {
+        if (box.size + mehdBox.byteLength > 0xffffffff) return bytes;
+        view.setUint32(box.start, box.size + mehdBox.byteLength);
+      }
+    }
+    const insertAt = mvex.start + mvex.header;
+    const output = new Uint8Array(bytes.byteLength + mehdBox.byteLength);
+    output.set(bytes.subarray(0, insertAt), 0);
+    output.set(mehdBox, insertAt);
+    output.set(bytes.subarray(insertAt), insertAt + mehdBox.byteLength);
+    return output;
+  }
+
+  async function finalizeRecordedVideo(chunks, containerMime) {
+    const original = new Blob(chunks, { type: containerMime });
+    if (!containerMime.includes('mp4')) return original;
+    try {
+      const fixed = fixFragmentedMp4Duration(await original.arrayBuffer());
+      return fixed ? new Blob([fixed], { type: containerMime }) : original;
+    } catch (error) {
+      console.warn('Não foi possível ajustar a duração do MP4; usando o arquivo original.', error);
+      return original;
+    }
+  }
+
   async function preloadVideoImages(targetItems, onProgress) {
     const loaded = [];
     const failed = [];
@@ -5198,7 +5391,7 @@
 
     const containerMime = videoContainerMime(recorder, mimeType);
     const extension = videoFileExtension(containerMime);
-    const blob = new Blob(chunks, { type: containerMime });
+    const blob = await finalizeRecordedVideo(chunks, containerMime);
     if (blob.size < 1024) {
       throw new Error('Não foi possível finalizar o vídeo. Gere novamente em uma aba ativa do navegador.');
     }

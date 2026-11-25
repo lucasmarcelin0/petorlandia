@@ -126,3 +126,129 @@ def test_new_styles_have_short_bounded_storyboards(source):
     assert "badgeCardDuration" in source
     assert "popPetDuration" in source
     assert "runwayPhotoDuration" in source
+
+
+def test_mp4_header_duration_is_fixed_before_download(source):
+    """O Chrome grava MP4 fragmentado com a duração do cabeçalho zerada; o
+    WhatsApp lê esse campo e mostra o vídeo como se tivesse 1 segundo."""
+    assert 'function fixFragmentedMp4Duration(' in source
+    assert 'const blob = await finalizeRecordedVideo(chunks, containerMime);' in source
+    finalize = re.search(
+        r'async function finalizeRecordedVideo\(chunks, containerMime\) \{(.*?)\n  \}\n',
+        source,
+        re.S,
+    )
+    assert finalize, 'finalizeRecordedVideo nao encontrada'
+    body = finalize.group(1)
+    # Qualquer falha no ajuste precisa cair no arquivo original, nunca em erro.
+    assert 'catch (error)' in body
+    assert 'return original;' in body
+
+
+# --- teste funcional: roda a função real do template no Node --------------
+
+def _box(kind, payload):
+    import struct
+    return struct.pack('>I', 8 + len(payload)) + kind + payload
+
+
+def _full(kind, version, flags, payload):
+    import struct
+    return _box(kind, struct.pack('>I', (version << 24) | flags) + payload)
+
+
+def _fragmented_mp4(sample_durations_per_fragment, media_timescale=30000):
+    """MP4 fragmentado mínimo no formato do Chrome: moov com duração zerada,
+    mvex/trex sem mehd e um moof+mdat por trecho com duração por amostra."""
+    import struct
+    mvhd = _full(b'mvhd', 1, 0, struct.pack('>QQIQ', 0, 0, 1000, 0) + b'\0' * 80)
+    tkhd = _full(b'tkhd', 1, 3, struct.pack('>QQIIQ', 0, 0, 1, 0, 0) + b'\0' * 52)
+    mdhd = _full(b'mdhd', 1, 0, struct.pack('>QQIQ', 0, 0, media_timescale, 1745) + b'\x55\xc4\0\0')
+    trak = _box(b'trak', tkhd + _box(b'mdia', mdhd))
+    trex = _full(b'trex', 0, 0, struct.pack('>IIIII', 1, 1, 0, 0, 0))
+    moov = _box(b'moov', mvhd + trak + _box(b'mvex', trex))
+    fragments = b''
+    for seq, durations in enumerate(sample_durations_per_fragment, start=1):
+        tfhd = _full(b'tfhd', 0, 0x020020, struct.pack('>II', 1, 0x01010000))
+        entries = b''.join(struct.pack('>II', d, 100) for d in durations)
+        trun = _full(b'trun', 1, 0x000301, struct.pack('>Ii', len(durations), 0) + entries)
+        moof = _box(b'moof', _full(b'mfhd', 0, 0, struct.pack('>I', seq)) + _box(b'traf', tfhd + trun))
+        fragments += moof + _box(b'mdat', b'\0' * (100 * len(durations)))
+    return _box(b'ftyp', b'isom\0\0\0\0isomavc1') + moov + fragments
+
+
+def _read_header_durations(data):
+    import struct
+    found = {}
+
+    def walk(offset, end):
+        while offset + 8 <= end:
+            size, kind = struct.unpack('>I4s', data[offset:offset + 8])
+            body = offset + 8
+            if kind in (b'mvhd', b'mdhd'):
+                found[kind.decode()] = struct.unpack('>IQ', data[body + 20:body + 32])
+            elif kind == b'tkhd':
+                found['tkhd'] = struct.unpack('>Q', data[body + 28:body + 36])[0]
+            elif kind == b'mehd':
+                found['mehd'] = struct.unpack('>Q', data[body + 4:body + 12])[0]
+            if kind in (b'moov', b'trak', b'mdia', b'mvex'):
+                walk(body, offset + size)
+            offset += size
+
+    walk(0, len(data))
+    return found
+
+
+def _run_fix(source, data, tmp_path):
+    import shutil
+    import subprocess
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node indisponivel para executar o JavaScript do template')
+    start = source.index('function fixFragmentedMp4Duration(')
+    end = source.index('async function finalizeRecordedVideo(')
+    (tmp_path / 'fix.js').write_text(source[start:end], encoding='utf-8')
+    (tmp_path / 'in.mp4').write_bytes(data)
+    runner = (
+        "const fs = require('fs');"
+        "const fn = new Function(fs.readFileSync(process.argv[1], 'utf8') + '; return fixFragmentedMp4Duration;')();"
+        "const input = fs.readFileSync(process.argv[2]);"
+        "const out = fn(input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength));"
+        "if (out) fs.writeFileSync(process.argv[3], Buffer.from(out));"
+        "process.stdout.write(out ? 'fixed' : 'null');"
+    )
+    result = subprocess.run(
+        [node, '-e', runner, str(tmp_path / 'fix.js'), str(tmp_path / 'in.mp4'), str(tmp_path / 'out.mp4')],
+        capture_output=True, text=True, timeout=60, check=True,
+    )
+    if result.stdout == 'null':
+        return None
+    return (tmp_path / 'out.mp4').read_bytes()
+
+
+def test_fragmented_mp4_gets_real_duration_in_header(source, tmp_path):
+    # 3 trechos a 30 fps (1000/30000 s por quadro): 15 + 15 + 10 quadros = 40
+    # quadros = 1,333 s; o cabeçalho original dizia 0 s.
+    original = _fragmented_mp4([[1000] * 15, [1000] * 15, [1000] * 10])
+    fixed = _run_fix(source, original, tmp_path)
+    assert fixed is not None
+
+    durations = _read_header_durations(fixed)
+    assert durations['mdhd'] == (30000, 40000)
+    assert durations['mvhd'] == (1000, 1333)
+    assert durations['tkhd'] == 1333
+    assert durations['mehd'] == 1333
+
+    # Só o mehd (20 bytes) é inserido; os fragmentos de vídeo ficam intactos.
+    assert len(fixed) == len(original) + 20
+    first_moof = original.index(b'moof') - 4
+    assert fixed[first_moof + 20:] == original[first_moof:]
+
+
+def test_regular_mp4_is_left_untouched(source, tmp_path):
+    """MP4 sem fragmentos já tem a duração certa: a função não deve mexer."""
+    import struct
+    mvhd = _full(b'mvhd', 1, 0, struct.pack('>QQIQ', 0, 0, 1000, 5000) + b'\0' * 80)
+    regular = _box(b'ftyp', b'isom\0\0\0\0isom') + _box(b'moov', mvhd) + _box(b'mdat', b'\0' * 64)
+    assert _run_fix(source, regular, tmp_path) is None
