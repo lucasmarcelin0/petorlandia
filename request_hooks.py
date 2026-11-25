@@ -85,7 +85,11 @@ def _set_request_id_header(response):
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
             "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com "
             "https://www.google-analytics.com https://region1.google-analytics.com; "
+            # O consentimento OAuth responde ao "Autorizar acesso" com um
+            # redirecionamento para o cliente; o navegador aplica form-action a
+            # esse destino. Sem o Claude aqui o clique não fazia nada.
             "form-action 'self' https://chatgpt.com https://chat.openai.com "
+            "https://claude.ai https://claude.com "
             "https://www.mercadopago.com.br",
         )
         if request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":

@@ -3739,6 +3739,9 @@ def _pmo_push_panel_to_sheet(visit: PmoVaccinationVisit) -> None:
     write_vaccinated_counts_to_sheet(visit)
     write_note_to_sheet(visit)
     write_attended_by_to_sheet(visit)
+    # A cor do nome (coluna A) é o que a equipe olha primeiro. Em 24/11/2026 o
+    # sync regravou as vacinas de três casas, mas os nomes ficaram sem cor.
+    write_tutor_name_color_to_sheet(visit)
 
 
 def persist_vacina_pmo_rows(

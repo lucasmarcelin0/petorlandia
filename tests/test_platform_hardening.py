@@ -167,3 +167,15 @@ def test_login_rate_limit_is_enforced_when_enabled(app):
         for _ in range(11)
     ]
     assert 429 in statuses
+
+
+def test_csp_deixa_o_consentimento_oauth_voltar_para_o_claude_e_o_chatgpt(app):
+    """O "Autorizar acesso" responde com redirecionamento para o cliente OAuth.
+
+    O navegador aplica form-action a esse destino: sem o Claude na lista, o
+    clique não fazia nada (24/11/2026) e o conector nunca se ligava.
+    """
+    csp = app.test_client().get('/live').headers['Content-Security-Policy']
+    form_action = next(part.strip() for part in csp.split(';') if part.strip().startswith('form-action'))
+    for origem in ("'self'", 'https://claude.ai', 'https://claude.com', 'https://chatgpt.com'):
+        assert origem in form_action.split()
