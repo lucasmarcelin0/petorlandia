@@ -119,18 +119,75 @@ def test_centro_da_cidade_nao_conta_como_casa_localizada():
     assert vacina_pmo_service._pmo_extract_best_nominatim_coords([centro, casa]) == (-20.71128, -47.87581)
 
 
-def test_painel_so_usa_coordenada_da_geocodificacao_atual(app):
+def _indice_atlas(monkeypatch, *casas):
+    """Índice do atlas já carregado, com (rua, número, bairro, [lng, lat]) do CNEFE."""
+    from services.entomologia_dengue_auto import AddressIndex
+
+    indice = AddressIndex({'cnefe': {'origin': {'type': 'cnefe'}, 'features': [
+        {'type': 'Feature', 'id': f'c{i}', 'geometry': {'type': 'Point', 'coordinates': ponto},
+         'properties': {'street': rua, 'house_number': numero, 'neighborhood': bairro}}
+        for i, (rua, numero, bairro, ponto) in enumerate(casas)
+    ]}})
+    monkeypatch.setattr(vacina_pmo_service, '_pmo_atlas_index_if_ready', lambda: indice)
+    monkeypatch.setattr(vacina_pmo_service, '_PMO_LINK_COORDS_CACHE', {'indice': None, 'coords': {}})
+    return indice
+
+
+def _link(app, endereco, **gravado):
     from models import PmoVaccinationVisit
 
-    endereco = 'Travessa P, 1551, Max defini'
-    atual = vacina_pmo_service._pmo_geocode_cache_key(endereco)
-    casos = [
-        ((-20.70947, -47.86551), atual, (-20.70947, -47.86551)),
-        ((-20.72028, -47.88667), atual, (None, None)),          # centro da cidade
-        ((-20.70947, -47.86551), 'chave antiga|g2', (None, None)),
-    ]
     with app.app_context():
-        for (lat, lng), chave, esperado in casos:
-            visita = PmoVaccinationVisit(address=endereco, geocode_lat=lat, geocode_lng=lng, geocode_address_key=chave)
-            linha = vacina_pmo_service._serialize_visit(visita)
-            assert (linha['lat'], linha['lng']) == esperado
+        linha = vacina_pmo_service._serialize_visit(PmoVaccinationVisit(address=endereco, **gravado))
+    return linha['lat'], linha['lng']
+
+
+def test_link_usa_o_ponto_do_atlas_e_nao_a_coordenada_gravada(app, monkeypatch):
+    # 26/11/2026: "Rua 2, 1336" (Gruta) abria no Jardim Siena, a 3 km; o atlas acha a casa.
+    _indice_atlas(monkeypatch, ('Rua 2', '1336', 'Jardim Nova Orlandia', [-47.89499, -20.72177]))
+    endereco = 'Rua 2, 1336, Gruta'
+    chave = vacina_pmo_service._pmo_geocode_cache_key(endereco)
+    assert _link(app, endereco) == (-20.72177, -47.89499)
+    # Coordenada gravada pela rota (Nominatim) não muda o link.
+    assert _link(app, endereco, geocode_lat=-20.7194, geocode_lng=-47.8667,
+                 geocode_address_key=chave) == (-20.72177, -47.89499)
+
+
+def test_link_sem_casa_no_atlas_segue_por_rua_e_numero(app, monkeypatch):
+    # Alameda 22, 509 ficou a 2 km pelo Nominatim: sem ponto do atlas, nada de coordenada.
+    _indice_atlas(monkeypatch, ('Rua 2', '1336', 'Jardim Nova Orlandia', [-47.89499, -20.72177]))
+    endereco = 'Alameda 22, 509, A, Resid.Paineiras'
+    chave = vacina_pmo_service._pmo_geocode_cache_key(endereco)
+    assert _link(app, endereco, geocode_lat=-20.7168, geocode_lng=-47.8952,
+                 geocode_address_key=chave) == (None, None)
+
+
+def test_link_de_condominio_vai_para_a_portaria(app, monkeypatch):
+    # "Rua 20, 1107" sozinho abre no Jardim Teixeira; o Torino fica no Parque Cecap.
+    _indice_atlas(monkeypatch, ('Rua 20', '1107', 'Parque Cecap', [-47.87110, -20.70932]))
+    endereco = 'Rua 20 - 1107, 45, Condomínio Torino, Morada do Sol'
+    assert _link(app, endereco) == (-20.70932, -47.87110)
+
+
+def test_link_sem_indice_carregado_segue_por_rua_e_numero(app, monkeypatch):
+    monkeypatch.setattr(vacina_pmo_service, '_pmo_atlas_index_if_ready', lambda: None)
+    assert _link(app, 'Rua 2, 1336, Gruta') == (None, None)
+
+
+def test_rota_completa_so_usa_ponto_confiavel(monkeypatch):
+    monkeypatch.setattr(vacina_pmo_service, '_pmo_link_coords',
+                        lambda address: (-20.72177, -47.89499) if address.startswith('Rua 2') else None)
+    visitas = [SimpleNamespace(id=1, address='Rua 2, 1336, Gruta'),
+               SimpleNamespace(id=2, address='Alameda 22, 509, A, Resid.Paineiras')]
+    url = vacina_pmo_service._pmo_build_full_google_maps_route_url(
+        (-20.72, -47.88), visitas, {1: (-20.7194, -47.8667), 2: (-20.7168, -47.8952)})
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert query['waypoints'] == ['-20.72177,-47.89499|Alameda 22, 509, Orlândia - SP']
+
+
+def test_indice_do_atlas_nao_e_montado_durante_a_requisicao(app, monkeypatch):
+    from services import vacina_pmo_mapa
+
+    monkeypatch.setattr(vacina_pmo_mapa, '_indice', {})
+    monkeypatch.setattr(vacina_pmo_mapa, 'indice_enderecos', lambda: pytest.fail('não deveria montar o índice'))
+    with app.app_context():
+        assert vacina_pmo_service._pmo_atlas_index_if_ready() is None   # fora do Heroku: sem artefatos

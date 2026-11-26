@@ -3789,10 +3789,12 @@ def test_merge_ungeocoded_intelligently_clusters_by_bairro():
     assert ids[-1] == 7
 
 
-def test_serialize_visit_and_preview_include_coordinates(app):
+def test_serialize_visit_and_preview_include_coordinates(app, monkeypatch):
     from services.vacina_pmo_service import _serialize_visit, _route_preview_item
     from models.pmo import PmoVaccinationVisit
 
+    # O link do painel usa o ponto confiável (atlas ou conferido) do endereço.
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_link_coords", lambda address: (-21.055, -47.888))
     with app.app_context():
         visit = PmoVaccinationVisit(
             spreadsheet_id="sheet-1",
