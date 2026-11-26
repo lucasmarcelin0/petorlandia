@@ -6013,14 +6013,27 @@
     return normalizeText(text);
   }
 
+  // O Maps só encontra a casa por "rua, número": complemento ("Duas árvores na
+  // frente") e bairro digitado pelo tutor fazem a busca falhar ou cair no lugar
+  // errado. O endereço da linha vem como "rua, número, complemento, bairro".
+  function mapsSearchAddress(address) {
+    const parts = cleanAddressForSearch(address).split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (!parts.length) return '';
+    const street = parts[0];
+    const number = parts.length > 1 ? (parts[1].match(/^\d+/) || [''])[0] : '';
+    return number ? `${street}, ${number}` : street;
+  }
+
   function googleMapsUrl(row) {
     const coords = getRowCoordinates(row);
     if (coords) {
       return `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}&travelmode=driving`;
     }
-    const destination = cleanAddressForSearch(row ? row.address : '');
+    const destination = mapsSearchAddress(row ? row.address : '');
     if (!destination) return '';
-    const full = `${destination}, Orlândia, SP, Brasil`;
+    const full = `${destination}, Orlândia - SP`;
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(full)}&travelmode=driving`;
   }
 
@@ -6029,7 +6042,7 @@
     if (coords) {
       return `https://waze.com/ul?ll=${coords.lat},${coords.lng}&navigate=yes`;
     }
-    const destination = cleanAddressForSearch(row ? row.address : '');
+    const destination = mapsSearchAddress(row ? row.address : '');
     if (!destination) return '';
     const full = `${destination}, Orlândia, SP`;
     return `https://waze.com/ul?q=${encodeURIComponent(full)}&navigate=yes`;
@@ -7169,11 +7182,14 @@
       if (coords) {
         return `${coords.lat},${coords.lng}`;
       }
-      return `${cleanAddressForSearch(r.address)}, Orlândia, SP, Brasil`;
+      return `${mapsSearchAddress(r.address)}, Orlândia - SP`;
     });
 
-    if (stops.length === 1) {
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(stops[0])}&travelmode=driving`;
+    // A equipe sai e volta à Vigilância: com até 9 paradas (limite de waypoints
+    // do link do Maps) a rota termina na base.
+    if (stops.length <= 9) {
+      const waypoints = encodeURIComponent(stops.join('|'));
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(origin)}&waypoints=${waypoints}&travelmode=driving`;
     }
 
     const destination = encodeURIComponent(stops[stops.length - 1]);

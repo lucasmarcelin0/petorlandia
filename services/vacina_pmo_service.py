@@ -489,6 +489,15 @@ def _pmo_clean_address_fragment(value: str) -> str:
     return _normalize_text(text)
 
 
+def _pmo_maps_search_address(address: str) -> str:
+    """Só "rua, número": complemento e bairro digitados fazem o Maps não achar a casa."""
+    parts = [part.strip() for part in _pmo_clean_address_fragment(address).split(",") if part.strip()]
+    if not parts:
+        return ""
+    number = re.match(r"\d+", parts[1]) if len(parts) > 1 else None
+    return f"{parts[0]}, {number.group(0)}" if number else parts[0]
+
+
 def _pmo_unique_queries(queries: list[str]) -> list[str]:
     seen: set[str] = set()
     unique: list[str] = []
@@ -3216,13 +3225,19 @@ def _pmo_build_full_google_maps_route_url(
         if c:
             stops.append(f"{c[0]},{c[1]}")
         else:
-            clean = _pmo_clean_address_fragment(v.address or "")
+            clean = _pmo_maps_search_address(v.address or "")
             if clean:
-                stops.append(f"{clean}, Orlandia, SP, Brasil")
+                stops.append(f"{clean}, Orlândia - SP")
     if not stops:
         return ""
-    if len(stops) == 1:
-        return f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_str)}&destination={urllib.parse.quote(stops[0])}&travelmode=driving"
+    # A equipe sai e volta à Vigilância; o link aceita até 9 paradas intermediárias.
+    if len(stops) <= 9:
+        return (
+            "https://www.google.com/maps/dir/?api=1"
+            f"&origin={urllib.parse.quote(origin_str)}"
+            f"&destination={urllib.parse.quote(origin_str)}"
+            f"&waypoints={urllib.parse.quote('|'.join(stops))}&travelmode=driving"
+        )
     destination = urllib.parse.quote(stops[-1])
     intermediate = stops[:-1][:9]
     waypoints = urllib.parse.quote("|".join(intermediate))
