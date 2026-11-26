@@ -191,3 +191,28 @@ def test_indice_do_atlas_nao_e_montado_durante_a_requisicao(app, monkeypatch):
     monkeypatch.setattr(vacina_pmo_mapa, 'indice_enderecos', lambda: pytest.fail('não deveria montar o índice'))
     with app.app_context():
         assert vacina_pmo_service._pmo_atlas_index_if_ready() is None   # fora do Heroku: sem artefatos
+
+
+def test_painel_guarda_o_ponto_que_o_servidor_manda():
+    # normalizeSyncedRows descartava lat/lng: o link nunca usava o ponto do atlas.
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node indisponivel para executar o JavaScript do template')
+    source = TEMPLATE.read_text(encoding='utf-8')
+    normalize = source[source.index('function normalizeSyncedRows('):source.index('function replaceStateRow(')]
+    helpers = source[source.index('function cleanAddressForSearch('):source.index('function renderAddress(')]
+    script = (
+        "const normalizeText = (v) => String(v || '').replace(/\\s+/g, ' ').trim();\n"
+        "const makePassword = () => 'x';\n"
+        "const window = { location: { origin: 'https://example.test' } };\n"
+        "const getRowCoordinates = (row) => (typeof row.lat === 'number' ? { lat: row.lat, lng: row.lng } : null);\n"
+        + normalize + helpers
+        + "\nconst rows = normalizeSyncedRows([{address: 'Rua 2, 1336, Gruta', lat: -20.72177, lng: -47.89499},"
+          " {address: 'Alameda 22, 509, A', lat: null, lng: null}]);"
+        "\nprocess.stdout.write(JSON.stringify(rows.map((row) => [row.lat, googleMapsUrl(row)])));"
+    )
+    result = subprocess.run([node, '-e', script], capture_output=True, text=True, timeout=60, check=True)
+    (lat1, url1), (lat2, url2) = json.loads(result.stdout)
+    assert lat1 == -20.72177 and lat2 is None
+    assert urllib.parse.parse_qs(urllib.parse.urlparse(url1).query)['destination'] == ['-20.72177,-47.89499']
+    assert urllib.parse.parse_qs(urllib.parse.urlparse(url2).query)['destination'] == ['Alameda 22, 509, Orlândia - SP']

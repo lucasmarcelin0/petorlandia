@@ -6153,6 +6153,10 @@
       status: row.status || 'pendente',
       tutor: row.tutor || '',
       address: row.address || '',
+      // Ponto do atlas (ou conferido) que o servidor manda: sem ele o link do
+      // Maps cai na busca por "rua, número", que erra quando há duas ruas iguais.
+      lat: typeof row.lat === 'number' ? row.lat : null,
+      lng: typeof row.lng === 'number' ? row.lng : null,
       phone1: row.phone1 || '',
       phone2: row.phone2 || '',
       dogs: Number(row.dogs) || 0,
