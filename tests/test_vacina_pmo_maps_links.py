@@ -108,3 +108,29 @@ def test_rota_segue_sem_atlas(app, monkeypatch):
     monkeypatch.setattr(vacina_pmo_mapa, 'indice_enderecos', lambda: None)
     with app.app_context():
         assert vacina_pmo_service._pmo_geocode_atlas('Rua 18, 566') is None
+
+
+def test_centro_da_cidade_nao_conta_como_casa_localizada():
+    centro = {'lat': '-20.72028', 'lon': '-47.88667', 'display_name': 'Orlândia, SP', 'type': 'administrative'}
+    assert vacina_pmo_service._pmo_extract_best_nominatim_coords([centro]) is None
+    centro_sem_tipo = {'lat': '-20.7203', 'lon': '-47.8867', 'display_name': 'Orlândia, SP'}
+    assert vacina_pmo_service._pmo_extract_best_nominatim_coords([centro_sem_tipo]) is None
+    casa = {'lat': '-20.71128', 'lon': '-47.87581', 'display_name': 'Rua 18, Orlândia', 'type': 'house'}
+    assert vacina_pmo_service._pmo_extract_best_nominatim_coords([centro, casa]) == (-20.71128, -47.87581)
+
+
+def test_painel_so_usa_coordenada_da_geocodificacao_atual(app):
+    from models import PmoVaccinationVisit
+
+    endereco = 'Travessa P, 1551, Max defini'
+    atual = vacina_pmo_service._pmo_geocode_cache_key(endereco)
+    casos = [
+        ((-20.70947, -47.86551), atual, (-20.70947, -47.86551)),
+        ((-20.72028, -47.88667), atual, (None, None)),          # centro da cidade
+        ((-20.70947, -47.86551), 'chave antiga|g2', (None, None)),
+    ]
+    with app.app_context():
+        for (lat, lng), chave, esperado in casos:
+            visita = PmoVaccinationVisit(address=endereco, geocode_lat=lat, geocode_lng=lng, geocode_address_key=chave)
+            linha = vacina_pmo_service._serialize_visit(visita)
+            assert (linha['lat'], linha['lng']) == esperado

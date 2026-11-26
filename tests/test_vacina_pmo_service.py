@@ -3804,6 +3804,7 @@ def test_serialize_visit_and_preview_include_coordinates(app):
             password="PMOA1234",
             geocode_lat=-21.055,
             geocode_lng=-47.888,
+            geocode_address_key=vacina_pmo_service._pmo_geocode_cache_key("Rua 1, 100, Centro"),
         )
 
         serialized = _serialize_visit(visit)
