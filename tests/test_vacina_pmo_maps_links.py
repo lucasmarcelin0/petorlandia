@@ -75,3 +75,11 @@ def test_painel_rota_completa_sai_e_volta_a_vigilancia():
     query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
     assert query['origin'] == query['destination'] == [BASE]
     assert query['waypoints'][0].split('|') == [f'{e}, Orlândia - SP' for e in ENDERECOS.values()]
+
+
+def test_rota_sai_da_vigilancia_na_rua_um_12(monkeypatch):
+    # Ponto que o Maps identifica como a Vigilância (CNEFE da Rua Um, 12).
+    monkeypatch.delenv('PMO_ROUTE_ORIGIN_LAT', raising=False)
+    monkeypatch.delenv('PMO_ROUTE_ORIGIN_LNG', raising=False)
+    lat, lng = vacina_pmo_service._pmo_route_origin_coords()
+    assert abs(lat - -20.7216858) < 0.0005 and abs(lng - -47.8818183) < 0.0005

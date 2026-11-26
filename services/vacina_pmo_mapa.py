@@ -23,7 +23,7 @@ import threading
 from collections import Counter
 from typing import Any
 
-ORIGEM = (-47.8838617, -20.7122478)          # Vigilância Sanitária (longitude, latitude)
+ORIGEM = (-47.881998, -20.721681)            # Vigilância Sanitária, Rua Um 12 (longitude, latitude; CNEFE)
 _MX = 111320 * math.cos(math.radians(-20.72))
 _MY = 111320
 _INCLINACAO = math.atan(0.09)                 # as ruas sobem ~9 cm por metro para leste
