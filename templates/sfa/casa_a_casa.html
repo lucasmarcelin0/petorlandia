@@ -47,8 +47,8 @@
         <details class="cac-legenda cac-pi" id="cac-pi">
           <summary>🏛️ Prefeitura</summary>
           <p class="cac-pi-dica">Comunicações da Prefeitura integrada neste mapa:</p>
-          <label><input type="checkbox" data-pi-status="aberta"> <i class="cac-pi-cor aberta"></i> Aguardando atendimento</label>
-          <label><input type="checkbox" data-pi-status="concluida"> <i class="cac-pi-cor concluida"></i> Atendimento comprovado</label>
+          {# As opções são montadas pelo casa_a_casa_prefeitura.js, como os demais controles da tela. #}
+          <div id="cac-pi-opcoes"></div>
           <p class="cac-pi-nota" id="cac-pi-nota" aria-live="polite"></p>
         </details>
         {% endif %}

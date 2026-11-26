@@ -88,7 +88,13 @@
   // ---------------------------------------------------------------- camada no mapa
   const painel = $('cac-pi');
   if (!painel || !cfg.prefeitura_mapa) return;
-  const caixas = Array.from(painel.querySelectorAll('input[data-pi-status]'));
+  const opcoes = $('cac-pi-opcoes');
+  if (!opcoes) return;
+  const caixas = Object.keys(ROTULOS).map(status => {
+    const caixa = el('input', { type: 'checkbox', 'data-pi-status': status });
+    opcoes.append(el('label', {}, caixa, ' ', el('i', { class: 'cac-pi-cor ' + status }), ' ' + ROTULOS[status]));
+    return caixa;
+  });
   const nota = $('cac-pi-nota');
   const prefs = lerPrefs();
   let camada = null, pontos = null, relogio = null, pedindo = false;
