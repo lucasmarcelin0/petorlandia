@@ -1,6 +1,8 @@
 import re
 from datetime import date, timedelta
 from io import BytesIO
+import itertools
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -4740,3 +4742,69 @@ def test_morning_cnefe_reference_overrides_stale_navigation_cache(app, monkeypat
 def test_morning_reference_does_not_match_neighboring_house():
     for address in ["Rua 10, 3720, Boa Vista", "Rua 3, 21170", "Rua 8, 1272, B", "Rua 8, 1272"]:
         assert vacina_pmo_service._pmo_lookup_verified_coords(address) is None
+
+
+@pytest.mark.parametrize(
+    "note, shift, expected",
+    [
+        ("Eu seguro - ir por último. A partir das 10:30", "Manha", ("last", "")),
+        ("Ir primeiro e ligar antes. ", "Tarde", ("first", "")),
+        ("Uma pessoa só segura ", "Tarde", ("", "")),
+        ("A partir das 10:30", "Manha", ("last", "")),
+        ("A partir das 9h", "Manha", ("", "")),
+        ("Só estou em casa até as 9h", "Manha", ("first", "")),
+        ("Só depois das 17h", "Tarde", ("", "horário fora da janela do turno: depois das 17h")),
+    ],
+)
+def test_preferencia_de_horario_e_ordem_vem_da_observacao(note, shift, expected):
+    assert vacina_pmo_service._pmo_visit_route_preference(note, shift) == expected
+
+
+def _rota_26_11():
+    base = (-20.721685, -47.881885)
+    casas = {
+        "Beatriz": (-20.71585, -47.87902),
+        "Maria Jose": (-20.70947, -47.86551),
+        "Adriana": (-20.71745, -47.87562),
+        "Elza": (-20.71128, -47.87581),
+        "Solange": (-20.71071, -47.87377),
+    }
+    items = [(SimpleNamespace(id=i, name=nome), coords) for i, (nome, coords) in enumerate(casas.items(), start=1)]
+    return base, items
+
+
+def test_rota_testa_todas_as_ordens_com_volta_e_respeita_o_ultimo(monkeypatch):
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_driving_matrix", lambda points: None)
+    base, items = _rota_26_11()
+    solange = items[-1][0]
+    # Solange aparece primeiro na lista, mas pediu para ser a última.
+    ordem = vacina_pmo_service._pmo_best_round_trip(base, [items[-1], *items[:-1]], {solange.id: "last"})
+    assert ordem[-1] is solange
+
+    pontos = dict((v.id, c) for v, c in items)
+
+    def volta(seq):
+        caminho = [base, *(pontos[v.id] for v in seq), base]
+        return sum(vacina_pmo_service._pmo_grid_km(a, b) for a, b in zip(caminho, caminho[1:]))
+
+    livres = [v for v, _ in items[:-1]]
+    melhor = min(volta([*p, solange]) for p in itertools.permutations(livres))
+    assert volta(ordem) == pytest.approx(melhor)
+
+
+def test_rota_usa_tempo_de_carro_quando_o_google_responde(monkeypatch):
+    base, items = _rota_26_11()
+    items = items[:3]
+    # Matriz artificial: 0 -> 3 -> 1 -> 2 -> 0 é a única volta barata.
+    caro = 100.0
+    matriz = [[caro] * 4 for _ in range(4)]
+    for a, b in ((0, 3), (3, 1), (1, 2), (2, 0)):
+        matriz[a][b] = 1.0
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_driving_matrix", lambda points: matriz)
+    ordem = vacina_pmo_service._pmo_best_round_trip(base, items, {})
+    assert [v.name for v in ordem] == ["Adriana", "Beatriz", "Maria Jose"]
+
+
+def test_primeiro_e_ultimo_valem_tambem_para_casa_sem_gps():
+    a, b, c = (SimpleNamespace(id=i) for i in (1, 2, 3))
+    assert vacina_pmo_service._pmo_apply_route_positions([a, b, c], {3: "first", 1: "last"}) == [c, b, a]

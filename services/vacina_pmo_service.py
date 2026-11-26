@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import math
+import itertools
 import json
 import time
 import secrets
@@ -566,7 +567,7 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
 # Geração do geocoder: o sufixo invalida caches antigos quando trocamos a fonte de
 # geocodificação. "g2" = Google primário (antes era só Nominatim). Bumpar isto força
 # re-geocodificação de todos os endereços na próxima otimização de rota.
-_PMO_GEOCODE_GENERATION = "g2"
+_PMO_GEOCODE_GENERATION = "g3"  # g3: Google consultado só com rua e número.
 
 
 def _pmo_geocode_cache_key(address: str) -> str:
@@ -671,8 +672,9 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
 
-    # 1. Google (preciso). Já filtra por Orlândia internamente.
-    coords = _pmo_geocode_google(normalized)
+    # 1. Google (preciso). Já filtra por Orlândia internamente. Só "rua, número":
+    # complemento e bairro digitados pelo tutor desviam o resultado.
+    coords = _pmo_geocode_google(_pmo_maps_search_address(normalized) or normalized)
     if coords:
         _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
         return coords
@@ -916,6 +918,176 @@ def _nearest_neighbor_route(
 
     refined_pairs = _two_opt_route(origin, ordered_pairs)
     return [visit for visit, _ in refined_pairs]
+
+
+# Janela de atendimento de cada turno, em minutos desde a meia-noite.
+PMO_SHIFT_WINDOWS = {"Manha": (8 * 60 + 30, 11 * 60 + 30), "Tarde": (14 * 60 + 30, 17 * 60)}
+PMO_ROUTE_EXACT_MAX_STOPS = 8
+
+_RE_PREF_FIRST = re.compile(r"\b(ir|passar|vir|ser)\s+(o\s+|a\s+)?primeir[oa]\b|\bprimeir[oa]\s+(casa|da\s+lista|a\s+ser)", re.IGNORECASE)
+_RE_PREF_LAST = re.compile(r"\bpor\s+[uú]ltimo\b|\b(ir|passar|vir|ser)\s+(o\s+|a\s+)?[uú]ltim[oa]\b|\bno\s+final\b|\bdepois\s+de\s+todos\b", re.IGNORECASE)
+_RE_PREF_AFTER = re.compile(r"\b(?:a\s+partir\s+d[ae]s?|depois\s+d[ae]s?|ap[oó]s\s+[ao]s?)\s+(\d{1,2})(?:\s*(?:h|:)\s*(\d{2})?)?", re.IGNORECASE)
+_RE_PREF_BEFORE = re.compile(r"\b(?:at[eé]\s+[aà]s?|antes\s+d[ae]s?)\s+(\d{1,2})(?:\s*(?:h|:)\s*(\d{2})?)?", re.IGNORECASE)
+
+
+def _pmo_visit_route_preference(note: str, shift: str) -> tuple[str, str]:
+    """Lê a observação do tutor e devolve (posição, alerta).
+
+    posição: "first", "last" ou "" (livre). Horário perto do início da janela
+    puxa a casa para o começo; perto do fim, para o fim. Horário fora da janela
+    não move a casa e vira alerta para quem organiza a rota decidir.
+    """
+    text = _normalize_text(note)
+    if not text:
+        return "", ""
+    window = PMO_SHIFT_WINDOWS.get(shift)
+    position = ""
+    if _RE_PREF_LAST.search(text):
+        position = "last"
+    elif _RE_PREF_FIRST.search(text):
+        position = "first"
+    alert = ""
+    if window:
+        start, end = window
+        middle = (start + end) / 2
+        for regex, kind in ((_RE_PREF_AFTER, "after"), (_RE_PREF_BEFORE, "before")):
+            match = regex.search(text)
+            if not match:
+                continue
+            minute = int(match.group(1)) * 60 + int(match.group(2) or 0)
+            if (kind == "after" and minute >= end) or (kind == "before" and minute <= start):
+                alert = f"horário fora da janela do turno: {match.group(0).strip()}"
+            elif not position:
+                if kind == "after" and minute > middle:
+                    position = "last"
+                elif kind == "before" and minute < middle:
+                    position = "first"
+            break
+    return position, alert
+
+
+def _pmo_grid_km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Distância em "quarteirões": Orlândia é uma malha ortogonal."""
+    return abs(a[0] - b[0]) * 111.0 + abs(a[1] - b[1]) * 104.0
+
+
+def _pmo_driving_matrix(points: list[tuple[float, float]]) -> list[list[float]] | None:
+    """Tempos de carro (s) entre todos os pontos pela Distance Matrix do Google.
+
+    Sem chave, com erro ou com algum par sem rota, devolve None e a rota é
+    calculada pela malha de ruas.
+    """
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY") or os.environ.get("GOOGLE_GEOCODING_API_KEY")
+    if not api_key or len(points) < 2 or len(points) > 10:
+        return None
+    joined = "|".join(f"{lat},{lng}" for lat, lng in points)
+    try:
+        response = requests.get(
+            "https://maps.googleapis.com/maps/api/distancematrix/json",
+            params={"origins": joined, "destinations": joined, "mode": "driving", "key": api_key},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    if data.get("status") != "OK":
+        return None
+    matrix: list[list[float]] = []
+    for row in data.get("rows", []):
+        values = []
+        for element in row.get("elements", []):
+            if element.get("status") != "OK":
+                return None
+            values.append(float((element.get("duration") or {}).get("value", 0)))
+        matrix.append(values)
+    if len(matrix) != len(points) or any(len(row) != len(points) for row in matrix):
+        return None
+    return matrix
+
+
+def _pmo_best_round_trip(
+    origin: tuple[float, float],
+    items: list[tuple[PmoVaccinationVisit, tuple[float, float]]],
+    positions: dict[int, str],
+) -> list[PmoVaccinationVisit]:
+    """Menor volta saindo e voltando à Vigilância, com "primeiro"/"último" fixos.
+
+    Quem pediu para ser o primeiro abre a rota e quem pediu por último fecha;
+    entre eles, todas as ordens são testadas quando cabem (até 8 casas livres)
+    e a mais curta vence. Acima disso, vizinho mais próximo com 2-opt.
+    """
+    if not items:
+        return []
+    points = [origin] + [coords for _, coords in items]
+    matrix = _pmo_driving_matrix(points)
+
+    def cost(i: int, j: int) -> float:
+        return matrix[i][j] if matrix else _pmo_grid_km(points[i], points[j])
+
+    indexes = list(range(1, len(points)))
+    firsts = [i for i in indexes if positions.get(items[i - 1][0].id) == "first"]
+    lasts = [i for i in indexes if positions.get(items[i - 1][0].id) == "last"]
+    free = [i for i in indexes if i not in firsts and i not in lasts]
+
+    def total(order: list[int]) -> float:
+        path = [0, *order, 0]
+        return sum(cost(path[k], path[k + 1]) for k in range(len(path) - 1))
+
+    def best_fixed_block(block: list[int]) -> list[int]:
+        # Vários pedindo a mesma ponta: ordem entre eles pela menor volta também.
+        return block if len(block) < 2 else min(
+            (list(p) for p in itertools.permutations(block)),
+            key=lambda p: total(p),
+        )
+
+    firsts = best_fixed_block(firsts)
+    lasts = best_fixed_block(lasts)
+    if len(free) <= PMO_ROUTE_EXACT_MAX_STOPS:
+        def arrivals(order: list[int]) -> float:
+            # Desempate: com a mesma volta, quem chega antes a cada casa.
+            elapsed, acc, prev = 0.0, 0.0, 0
+            for stop in order:
+                elapsed += cost(prev, stop)
+                acc += elapsed
+                prev = stop
+            return acc
+
+        best = min(
+            (firsts + list(p) + lasts for p in itertools.permutations(free)),
+            key=lambda order: (round(total(order), 6), arrivals(order)),
+            default=firsts + lasts,
+        )
+    else:
+        remaining = list(free)
+        current = firsts[-1] if firsts else 0
+        middle: list[int] = []
+        while remaining:
+            nxt = min(remaining, key=lambda i: cost(current, i))
+            middle.append(nxt)
+            remaining.remove(nxt)
+            current = nxt
+        improved = True
+        while improved:
+            improved = False
+            for a in range(len(middle) - 1):
+                for b in range(a + 1, len(middle)):
+                    candidate = middle[:a] + middle[a : b + 1][::-1] + middle[b + 1 :]
+                    if total(firsts + candidate + lasts) < total(firsts + middle + lasts) - 1e-9:
+                        middle = candidate
+                        improved = True
+        best = firsts + middle + lasts
+    return [items[i - 1][0] for i in best]
+
+
+def _pmo_apply_route_positions(
+    ordered: list[PmoVaccinationVisit], positions: dict[int, str]
+) -> list[PmoVaccinationVisit]:
+    """Casas sem GPS também respeitam "primeiro"/"último"."""
+    firsts = [v for v in ordered if positions.get(v.id) == "first"]
+    lasts = [v for v in ordered if positions.get(v.id) == "last"]
+    middle = [v for v in ordered if not positions.get(v.id)]
+    return firsts + middle + lasts
 
 
 def _pmo_extract_bairro_key(address: str) -> str:
@@ -3181,6 +3353,15 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
         db.session.flush()
     except Exception:
         pass
+    positions: dict[int, str] = {}
+    preference_alerts: list[dict[str, Any]] = []
+    for visit in selected:
+        note = parsed_rows_by_source[visit.source_row].get("note") or ""
+        position, alert = _pmo_visit_route_preference(note, normalized_shift)
+        if position:
+            positions[visit.id] = position
+        if alert:
+            preference_alerts.append({"tutor": visit.tutor_name or "", "note": note, "alert": alert})
     if not geocoded:
         # Fallback gracioso: agrupa os endereços por bairro caso o GPS esteja temporariamente indisponível
         optimized = sorted(
@@ -3188,9 +3369,12 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
             key=lambda v: (_pmo_extract_bairro_key(v.address or ""), v.source_row or 0, v.id),
         )
     else:
-        geocoded_ordered = _nearest_neighbor_route(origin_coords, geocoded)
+        geocoded_ordered = _pmo_best_round_trip(origin_coords, geocoded, positions)
         optimized = _merge_ungeocoded_intelligently(geocoded_ordered, ungeocoded)
+    optimized = _pmo_apply_route_positions(optimized, positions)
     return {
+        "positions": positions,
+        "preference_alerts": preference_alerts,
         "normalized_shift": normalized_shift,
         "spreadsheet_id": spreadsheet_id,
         "sheet_gid": resolved_gid,
@@ -3259,8 +3443,12 @@ def preview_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shif
         "unlocated_count": context["unlocated_count"],
         "geocoded_now": context["geocoded_now"],
         "google_maps_url": maps_url,
+        "preference_alerts": context["preference_alerts"],
         "preview": [
-            _route_preview_item(visit, coords_by_visit_id.get(visit.id), index)
+            {
+                **_route_preview_item(visit, coords_by_visit_id.get(visit.id), index),
+                "position": context["positions"].get(visit.id, ""),
+            }
             for index, visit in enumerate(context["optimized"], start=1)
         ],
     }

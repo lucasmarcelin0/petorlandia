@@ -7160,6 +7160,8 @@
   function routePreviewText(payload) {
     const rows = (payload.preview || []).slice(0, 30).map((item) => (
       `${item.order}. ${item.tutor} - ${item.address}${item.located ? ' 📍' : ' 🏷️ (bairro)'}`
+      + (item.position === 'first' ? ' (pediu para ser a primeira casa)' : '')
+      + (item.position === 'last' ? ' (pediu para ser a última casa)' : '')
     ));
     const extra = (payload.preview || []).length > rows.length
       ? `\n... mais ${(payload.preview || []).length - rows.length} visitas`
@@ -7168,7 +7170,11 @@
     const warning = missed
       ? `\n\nNota: ${missed} endereço${missed === 1 ? '' : 's'} sem GPS exato ${missed === 1 ? 'foi agrupado' : 'foram agrupados'} por bairro.`
       : '';
-    return `Prévia da rota ${payload.shift === 'Manha' ? 'Manhã' : 'Tarde'}:\n\n${rows.join('\n')}${extra}${warning}\n\nAplicar esta ordem na planilha?`;
+    const alerts = (payload.preference_alerts || []).map((item) => `- ${item.tutor}: ${item.alert}`);
+    const alertText = alerts.length
+      ? `\n\nDecida antes de aplicar (a casa não foi movida):\n${alerts.join('\n')}`
+      : '';
+    return `Prévia da rota ${payload.shift === 'Manha' ? 'Manhã' : 'Tarde'} (sai e volta à Vigilância):\n\n${rows.join('\n')}${extra}${warning}${alertText}\n\nAplicar esta ordem na planilha?`;
   }
 
   function buildFullGoogleMapsUrl(rows) {
