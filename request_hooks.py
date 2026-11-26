@@ -41,7 +41,10 @@ def _set_request_id_header(response):
     response.headers["X-Request-ID"] = getattr(g, "request_id", "")
     if current_app.config.get("SECURITY_HEADERS_ENABLED", True):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        # A Prefeitura integrada abre dentro do Casa a Casa (janela por cima do
+        # mapa), então aceita moldura só do próprio site; o resto segue negando.
+        moldura_propria = request.path.startswith("/limpeza-urbana/")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN" if moldura_propria else "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         if request.path == "/surpresa/sala-a-dois.html":
             response.headers.setdefault(
@@ -58,10 +61,11 @@ def _set_request_id_header(response):
             response.headers.setdefault(
                 "Permissions-Policy", "camera=(self), microphone=(), geolocation=(self)"
             )
-        elif request.path.startswith("/limpeza-urbana/"):
+        elif request.path.startswith("/limpeza-urbana/") or request.path.rstrip("/") == "/sfa/entomologia/casa-a-casa":
             # Comunicação e comprovação de limpeza: "Tirar foto agora" abre a
             # câmera dentro da página no computador (no celular é a câmera do
-            # próprio aparelho). Mesmo motivo da rota do PMO acima.
+            # próprio aparelho). Mesmo motivo da rota do PMO acima. O Casa a
+            # Casa abre a comunicação numa janela embutida, que herda a regra.
             response.headers.setdefault(
                 "Permissions-Policy", "camera=(self), microphone=(), geolocation=(self)"
             )
@@ -69,7 +73,8 @@ def _set_request_id_header(response):
             response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
+            "default-src 'self'; base-uri 'self'; "
+            + ("frame-ancestors 'self'; " if moldura_propria else "frame-ancestors 'none'; ") +
             # jsdelivr precisa estar em font-src: o CSS do bootstrap-icons vem
             # de la e referencia a fonte no mesmo host. Sem isso a fonte era
             # bloqueada e todo icone `bi-*` virava um retangulo vazio.

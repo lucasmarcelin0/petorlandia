@@ -1,3 +1,29 @@
+{# Dentro da janela do Casa a Casa a página mostra só o conteúdo, sem cabeçalho e rodapé do site;
+   links abrem em outra aba para a janela continuar onde estava. Fora de moldura nada muda. #}
+<script>
+(function () {
+  var embutida = false;
+  try { embutida = window.self !== window.top; } catch (e) { embutida = true; }
+  if (!embutida) return;
+  document.documentElement.classList.add('limpeza-embutida');
+  document.addEventListener('click', function (evento) {
+    var link = evento.target && evento.target.closest ? evento.target.closest('a[href]') : null;
+    if (!link || link.target || link.hasAttribute('download')) return;
+    var destino = link.getAttribute('href') || '';
+    if (!destino || destino.charAt(0) === '#' || destino.indexOf('javascript:') === 0) return;
+    link.target = '_blank';
+    link.rel = 'noopener';
+  }, true);
+})();
+</script>
+<style>
+  html.limpeza-embutida body { padding-top: 0 !important; background: #fff !important; }
+  html.limpeza-embutida body > .navbar, html.limpeza-embutida .site-footer, html.limpeza-embutida .activation-bar,
+  html.limpeza-embutida #analytics-consent, html.limpeza-embutida .theme-context-header,
+  html.limpeza-embutida .theme-accent-bar, html.limpeza-embutida .limpeza-nav,
+  html.limpeza-embutida .prefeitura-identidade { display: none !important; }
+  html.limpeza-embutida .limpeza-pagina { padding-top: .75rem !important; }
+</style>
 <script defer src="{{ url_for('static', filename='js/limpeza_navegacao.js', v='1') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
 <style>

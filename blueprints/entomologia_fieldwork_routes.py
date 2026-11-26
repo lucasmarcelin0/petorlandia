@@ -66,16 +66,23 @@ def register(bp, require_access):
         response.headers['Content-Disposition'] = f'attachment; filename={nome}'
         return _sem_cache(response)
 
-    def _url_comunicar_prefeitura():
-        """Atalho para comunicar na Prefeitura integrada; vazio para quem não pode (o botão nem aparece)."""
+    def _urls_prefeitura():
+        """Atalhos da Prefeitura integrada no mapa; vazios para quem não pode (o botão e a camada nem aparecem)."""
+        vazio = {'prefeitura': '', 'prefeitura_mapa': '', 'prefeitura_item': ''}
         if 'limpeza_urbana.comunicar' not in current_app.view_functions:
-            return ''
+            return vazio
         try:
-            from services.limpeza_urbana import pode_comunicar
-            return url_for('limpeza_urbana.comunicar') if pode_comunicar(current_user) else ''
-        except Exception:  # o atalho nunca pode impedir o Casa a Casa de abrir
-            current_app.logger.exception('Casa a Casa: atalho da Prefeitura integrada indisponível')
-            return ''
+            from services.limpeza_urbana import pode_comunicar, pode_ver_mapa
+            ve_mapa = pode_ver_mapa(current_user)
+            return {
+                'prefeitura': url_for('limpeza_urbana.comunicar') if pode_comunicar(current_user) else '',
+                'prefeitura_mapa': url_for('limpeza_urbana.mapa_dados') if ve_mapa else '',
+                # O número da comunicação entra no lugar do zero.
+                'prefeitura_item': url_for('limpeza_urbana.solicitacao', solicitacao_id=0) if ve_mapa else '',
+            }
+        except Exception:  # os atalhos nunca podem impedir o Casa a Casa de abrir
+            current_app.logger.exception('Casa a Casa: atalhos da Prefeitura integrada indisponíveis')
+            return vazio
 
     @bp.route('/entomologia/casa-a-casa')
     @require_access
@@ -108,7 +115,7 @@ def register(bp, require_access):
                 'relatorio_csv': url_for('sfa_routes.casa_a_casa_relatorio_csv', token=_token()),
                 'equipe': url_for('sfa_routes.casa_a_casa_equipe'),
                 'painel': url_for('sfa_routes.entomologia', token=_token()),
-                'prefeitura': _url_comunicar_prefeitura(),
+                **_urls_prefeitura(),
                 'entrar': url_for('login_view', next=url_for('sfa_routes.casa_a_casa'))
                 if 'login_view' in current_app.view_functions else '',
                 # Mesmo endereço que templates/layout.html registra: outro endereço reinstalaria o worker.

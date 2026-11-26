@@ -38,10 +38,21 @@
         <a class="cac-icone" id="cac-prefeitura" href="{{ config.urls.prefeitura }}" title="Comunicar à Prefeitura integrada" aria-label="Abrir uma comunicação na Prefeitura integrada">🏛️</a>
         {% endif %}
       </div>
-      <details class="cac-legenda" id="cac-legenda">
-        <summary>Cores</summary>
-        <div id="cac-legenda-itens"></div>
-      </details>
+      <div class="cac-esquerda">
+        <details class="cac-legenda" id="cac-legenda">
+          <summary>Cores</summary>
+          <div id="cac-legenda-itens"></div>
+        </details>
+        {% if config.urls.prefeitura_mapa %}
+        <details class="cac-legenda cac-pi" id="cac-pi">
+          <summary>🏛️ Prefeitura</summary>
+          <p class="cac-pi-dica">Comunicações da Prefeitura integrada neste mapa:</p>
+          <label><input type="checkbox" data-pi-status="aberta"> <i class="cac-pi-cor aberta"></i> Aguardando atendimento</label>
+          <label><input type="checkbox" data-pi-status="concluida"> <i class="cac-pi-cor concluida"></i> Atendimento comprovado</label>
+          <p class="cac-pi-nota" id="cac-pi-nota" aria-live="polite"></p>
+        </details>
+        {% endif %}
+      </div>
       <div class="cac-dica" id="cac-dica" aria-live="polite"></div>
       <button type="button" class="cac-conferir" id="cac-conferir" hidden></button>
     </section>
@@ -66,6 +77,20 @@
     </div>
   </div>
 
+  {% if config.urls.prefeitura or config.urls.prefeitura_mapa %}
+  <div class="cac-folha-fundo" id="cac-pi-janela" hidden>
+    <div class="cac-folha cac-pi-folha" role="dialog" aria-modal="true" aria-labelledby="cac-pi-titulo" tabindex="-1">
+      <header class="cac-folha-topo">
+        <div>
+          <h2 id="cac-pi-titulo">🏛️ Prefeitura integrada</h2>
+          <p><a id="cac-pi-aba" href="{{ config.urls.prefeitura or '#' }}" target="_blank" rel="noopener">Abrir em outra aba ↗</a></p>
+        </div>
+        <button type="button" class="cac-icone" id="cac-pi-fechar" aria-label="Fechar e voltar ao mapa">×</button>
+      </header>
+      <iframe id="cac-pi-moldura" title="Prefeitura integrada" allow="camera; geolocation"></iframe>
+    </div>
+  </div>
+  {% endif %}
   <div class="cac-menu" id="cac-menu" hidden role="menu"></div>
   <div class="cac-avisos" id="cac-avisos" aria-live="polite"></div>
   <section class="cac-impressao" id="cac-impressao" aria-hidden="true"></section>
@@ -77,6 +102,9 @@
   <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261126-toque') }}"></script>
   <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261126-toque') }}"></script>
   <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261126-toque') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261126-toque') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261126-prefeitura') }}"></script>
+  {% if config.urls.prefeitura or config.urls.prefeitura_mapa %}
+  <script src="{{ url_for('static', filename='js/casa_a_casa_prefeitura.js', v='20261126-prefeitura') }}"></script>
+  {% endif %}
 </body>
 </html>
