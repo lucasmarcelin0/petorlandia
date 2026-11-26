@@ -10,7 +10,7 @@
   {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
      dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261118-prefeitura') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261126-gps') }}">
   {% include 'components/destructive_actions_assets.html' %}
 </head>
 <body class="cac" data-modo="rua">
@@ -31,7 +31,7 @@
     <section class="cac-mapa-area">
       <div id="cac-mapa" role="application" aria-label="Mapa em branco dos quarteirões de Orlândia"></div>
       <div class="cac-flutuantes">
-        <button type="button" class="cac-icone" id="cac-onde" title="Onde estou" aria-label="Mostrar onde estou">📍</button>
+        <button type="button" class="cac-icone" id="cac-onde" title="Onde estou (toque de novo para desligar)" aria-label="Mostrar e acompanhar onde estou" aria-pressed="false">📍</button>
         <button type="button" class="cac-icone" id="cac-ruas" title="Ruas ao fundo (precisa de internet)" aria-label="Ligar ou desligar as ruas ao fundo" aria-pressed="false">🗺️</button>
         <button type="button" class="cac-icone" id="cac-cidade" title="Ver a cidade toda" aria-label="Ver a cidade toda">⤢</button>
       </div>
@@ -70,10 +70,10 @@
 
   <script type="application/json" id="cac-config">{{ config | tojson }}</script>
   <script src="{{ url_for('static', filename='leaflet/leaflet.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261118-prefeitura') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261118-prefeitura') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261118-prefeitura') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261118-prefeitura') }}"></script>
-  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261118-prefeitura') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_model.js', v='20261126-gps') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_planejamento.js', v='20261126-gps') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_impressao.js', v='20261126-gps') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa_relatorio.js', v='20261126-gps') }}"></script>
+  <script src="{{ url_for('static', filename='js/casa_a_casa.js', v='20261126-gps') }}"></script>
 </body>
 </html>

@@ -658,15 +658,70 @@
     if (!navigator.onLine) avisar('As ruas ao fundo aparecem quando houver internet.');
   }
 
+  /* "Onde estou": o 📍 liga o acompanhamento do GPS (ponto azul e círculo da precisão, atualizados enquanto a
+     pessoa anda) e centraliza só no primeiro sinal, para não brigar com quem está arrastando o mapa. Tocar de
+     novo com o ponto fora da vista volta a centralizar; com o ponto à vista, desliga. Com a tela escondida o
+     GPS para, para poupar bateria, e volta sozinho quando a pessoa retorna. */
+  function marcarPosicao(posicao) {
+    const ponto = [posicao.coords.latitude, posicao.coords.longitude];
+    const precisao = Math.max(0, Number(posicao.coords.accuracy) || 0);
+    S.posicao = ponto;
+    // Camada SVG própria, por cima do canvas dos quarteirões: o ponto fica nítido e cada parte tem sua classe.
+    if (!S.telaGps) S.telaGps = L.svg({ padding: 0.2 });
+    if (S.euPrecisao) S.euPrecisao.setLatLng(ponto).setRadius(precisao);
+    else S.euPrecisao = L.circle(ponto, { renderer: S.telaGps, className: 'cac-eu-precisao', radius: precisao, color: '#1c7ed6', weight: 1, fillColor: '#1c7ed6', fillOpacity: 0.12, interactive: false }).addTo(S.mapa);
+    if (S.eu) S.eu.setLatLng(ponto);
+    else S.eu = L.circleMarker(ponto, { renderer: S.telaGps, className: 'cac-eu', radius: 8, color: '#fff', weight: 3, fillColor: '#1c7ed6', fillOpacity: 1, interactive: false }).addTo(S.mapa);
+    S.eu.bringToFront();
+    if (S.centralizarNoGps) {
+      S.centralizarNoGps = false;
+      S.mapa.setView(ponto, Math.max(S.mapa.getZoom(), 18));
+    }
+    if (precisao > 80 && !S.avisouPrecisao) {
+      S.avisouPrecisao = true;
+      avisar(`GPS ainda impreciso (cerca de ${Math.round(precisao)} m). Ao ar livre ele melhora em instantes.`);
+    }
+  }
+
+  function ligarGps() {
+    if (S.vigiaGps != null || !navigator.geolocation) return;
+    S.vigiaGps = navigator.geolocation.watchPosition(marcarPosicao, erro => {
+      if (erro && erro.code === 1) {
+        desligarGps();
+        avisar('O navegador não deixou usar a localização. Libere a permissão de localização para este site.');
+      } else if (!S.posicao) {
+        avisar('Ainda sem sinal do GPS. Continuo tentando.');
+      }
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
+  }
+
+  function pausarGps() {
+    if (S.vigiaGps != null) navigator.geolocation.clearWatch(S.vigiaGps);
+    S.vigiaGps = null;
+  }
+
+  function desligarGps() {
+    pausarGps();
+    S.seguindoGps = false;
+    S.centralizarNoGps = false;
+    if (S.eu) { S.mapa.removeLayer(S.eu); S.eu = null; }
+    if (S.euPrecisao) { S.mapa.removeLayer(S.euPrecisao); S.euPrecisao = null; }
+    $('cac-onde').setAttribute('aria-pressed', 'false');
+  }
+
   function ondeEstou() {
     if (!navigator.geolocation) { avisar('Este aparelho não informa a localização.'); return; }
-    navigator.geolocation.getCurrentPosition(posicao => {
-      const ponto = [posicao.coords.latitude, posicao.coords.longitude];
-      S.posicao = ponto;
-      if (S.eu) S.eu.setLatLng(ponto);
-      else S.eu = L.circleMarker(ponto, { radius: 8, color: '#fff', weight: 3, fillColor: '#1c7ed6', fillOpacity: 1, interactive: false }).addTo(S.mapa);
-      S.mapa.setView(ponto, Math.max(S.mapa.getZoom(), 18));
-    }, () => avisar('Não consegui pegar a localização. Confira a permissão do navegador.'), { enableHighAccuracy: true, timeout: 9000, maximumAge: 20000 });
+    if (S.seguindoGps) {
+      if (S.posicao && !S.mapa.getBounds().contains(S.posicao)) { S.mapa.setView(S.posicao, Math.max(S.mapa.getZoom(), 18)); return; }
+      desligarGps();
+      return;
+    }
+    S.seguindoGps = true;
+    S.centralizarNoGps = true;
+    S.avisouPrecisao = false;
+    $('cac-onde').setAttribute('aria-pressed', 'true');
+    if (S.posicao && S.eu) S.mapa.setView(S.posicao, Math.max(S.mapa.getZoom(), 18));
+    ligarGps();
   }
 
   // ---------------------------------------------------------------- ações
@@ -1887,7 +1942,11 @@
     $('cac-conferir').addEventListener('click', () => { S.aba = 'plano'; abrirPainel(true); desenharPainel(); $('cac-conteudo').querySelector('.cac-revisao')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
     window.addEventListener('online', ciclo);
     window.addEventListener('offline', () => { S.aoVivo = false; desenharConexao(); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) ciclo(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { pausarGps(); return; }
+      ciclo();
+      if (S.seguindoGps) ligarGps();
+    });
     window.addEventListener('resize', () => S.mapa && S.mapa.invalidateSize());
     window.addEventListener('beforeprint', () => impressao.preparar());
   }
