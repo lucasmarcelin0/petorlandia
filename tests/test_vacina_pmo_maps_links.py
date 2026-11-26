@@ -83,3 +83,28 @@ def test_rota_sai_da_vigilancia_na_rua_um_12(monkeypatch):
     monkeypatch.delenv('PMO_ROUTE_ORIGIN_LNG', raising=False)
     lat, lng = vacina_pmo_service._pmo_route_origin_coords()
     assert abs(lat - -20.7216858) < 0.0005 and abs(lng - -47.8818183) < 0.0005
+
+
+def test_rota_localiza_a_casa_pela_base_do_atlas_antes_do_google(app, monkeypatch):
+    from services import vacina_pmo_mapa
+    from services.entomologia_dengue_auto import AddressIndex
+
+    casa = [-47.87581, -20.71128]           # Rua 18, 566 no CNEFE
+    indice = AddressIndex({'cnefe': {'origin': {'type': 'cnefe'}, 'features': [
+        {'type': 'Feature', 'id': 'c1', 'geometry': {'type': 'Point', 'coordinates': casa},
+         'properties': {'street': 'Rua 18', 'house_number': '566', 'neighborhood': 'Parque Cecap'}},
+    ]}})
+    monkeypatch.setattr(vacina_pmo_mapa, 'indice_enderecos', lambda: indice)
+    monkeypatch.setattr(vacina_pmo_service, '_PMO_ROUTE_COORDS_CACHE', {})
+    monkeypatch.setattr(vacina_pmo_service, '_pmo_geocode_google', lambda address: pytest.fail('Google não deveria ser chamado'))
+    with app.app_context():
+        coords = vacina_pmo_service._pmo_geocode_address('Rua 18, 566, Duas árvores na frente, J. D boa vista')
+    assert coords == (casa[1], casa[0])
+
+
+def test_rota_segue_sem_atlas(app, monkeypatch):
+    from services import vacina_pmo_mapa
+
+    monkeypatch.setattr(vacina_pmo_mapa, 'indice_enderecos', lambda: None)
+    with app.app_context():
+        assert vacina_pmo_service._pmo_geocode_atlas('Rua 18, 566') is None

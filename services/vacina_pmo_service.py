@@ -569,7 +569,8 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
 # Geração do geocoder: o sufixo invalida caches antigos quando trocamos a fonte de
 # geocodificação. "g2" = Google primário (antes era só Nominatim). Bumpar isto força
 # re-geocodificação de todos os endereços na próxima otimização de rota.
-_PMO_GEOCODE_GENERATION = "g3"  # g3: Google consultado só com rua e número.
+# g3: Google consultado só com rua e número. g4: atlas (CNEFE) antes de tudo.
+_PMO_GEOCODE_GENERATION = "g4"
 
 
 def _pmo_geocode_cache_key(address: str) -> str:
@@ -656,6 +657,27 @@ def _pmo_lookup_verified_coords(address: str) -> tuple[float, float] | None:
     return None
 
 
+def _pmo_geocode_atlas(address: str) -> tuple[float, float] | None:
+    """Casa localizada na base de endereços do atlas, ou None (atlas ausente ou sem a casa)."""
+    try:
+        from services import vacina_pmo_mapa
+        from services.entomologia_dengue_auto import locate, parse_address
+
+        indice = vacina_pmo_mapa.indice_enderecos()
+        if indice is None:
+            return None
+        parts = _pmo_address_parts(address)
+        found = locate(parse_address(_pmo_maps_search_address(address) or address), parts["bairro"], indice)
+    except Exception:
+        current_app.logger.warning("PMO rota: atlas indisponível para %s", address, exc_info=True)
+        return None
+    point = (found.get("geometry") or {}).get("coordinates")
+    if not point or found.get("method") == "sem_posicao":
+        return None
+    coords = (float(point[1]), float(point[0]))
+    return coords if _pmo_coords_in_orlandia(coords) else None
+
+
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     """Geocode a free-text PMO address.
 
@@ -673,6 +695,13 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
         return verified
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
+
+    # 0. Base de endereços do atlas (CNEFE/IBGE 2022 + correções da equipe): a mesma
+    # que o mapa da fila usa, sem serviço externo nem chave de API.
+    coords = _pmo_geocode_atlas(normalized)
+    if coords:
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
 
     # 1. Google (preciso). Já filtra por Orlândia internamente. Só "rua, número":
     # complemento e bairro digitados pelo tutor desviam o resultado.
