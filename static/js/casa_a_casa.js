@@ -410,6 +410,8 @@
     S.engolirCliqueAte = 0;
     area.addEventListener('pointerdown', evento => {
       if (evento.button > 0) return;
+      // Marcas e balões por cima do mapa (Prefeitura integrada) têm o próprio toque.
+      if (evento.target.closest && evento.target.closest('.cac-pi-marca, .leaflet-popup')) return;
       if (S.toque) { S.toque.varios = true; return; }  // pinça: não é toque em casa
       S.toque = { id: evento.pointerId, x: evento.clientX, y: evento.clientY, t: Date.now(), varios: false, andou: false, longo: false };
     }, true);

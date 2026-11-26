@@ -127,6 +127,8 @@ def test_botao_da_prefeitura_no_mapa_so_para_quem_pode_comunicar(client, base, m
     assert 'id="cac-prefeitura" href="/limpeza-urbana/comunicar"' in pagina
     # O botão fica logo abaixo dos três ícones do mapa.
     assert pagina.index('id="cac-cidade"') < pagina.index('id="cac-prefeitura"') < pagina.index('cac-legenda')
+    # Abre numa janela por cima do mapa, com a página da Prefeitura embutida.
+    assert 'id="cac-pi-janela"' in pagina and 'casa_a_casa_prefeitura.js' in pagina
 
     def quebra(_user):
         raise RuntimeError('fora do ar')
@@ -134,3 +136,41 @@ def test_botao_da_prefeitura_no_mapa_so_para_quem_pode_comunicar(client, base, m
     monkeypatch.setattr(servico_limpeza, 'pode_comunicar', quebra)
     resposta = client.get(RAIZ, **HTTPS)
     assert resposta.status_code == 200 and 'id="cac-prefeitura"' not in resposta.get_data(as_text=True)
+
+
+def test_camada_da_prefeitura_so_para_quem_ve_o_mapa(client, base, monkeypatch):
+    from services import limpeza_urbana as servico_limpeza
+    _entrar_agente(client)
+    monkeypatch.setattr(servico_limpeza, 'pode_comunicar', lambda _user: False)
+
+    monkeypatch.setattr(servico_limpeza, 'pode_ver_mapa', lambda _user: False)
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert 'id="cac-pi"' not in pagina and 'id="cac-pi-janela"' not in pagina
+    assert 'casa_a_casa_prefeitura.js' not in pagina and 'id="cac-legenda"' in pagina
+
+    monkeypatch.setattr(servico_limpeza, 'pode_ver_mapa', lambda _user: True)
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    # A camada fica logo abaixo de "Cores".
+    assert pagina.index('id="cac-legenda"') < pagina.index('id="cac-pi"')
+    assert '"prefeitura_mapa": "/limpeza-urbana/mapa/dados"' in pagina
+    assert '"prefeitura_item": "/limpeza-urbana/solicitacao/0"' in pagina
+    assert 'id="cac-prefeitura"' not in pagina   # comunicar continua exigindo a própria permissão
+
+
+def test_prefeitura_abre_embutida_so_no_proprio_site(client, base, monkeypatch):
+    from services import limpeza_urbana as servico_limpeza
+    _entrar_agente(client)
+    monkeypatch.setattr(servico_limpeza, 'pode_comunicar', lambda _user: True)
+    comunicar = client.get('/limpeza-urbana/comunicar', **HTTPS)
+    assert comunicar.status_code == 200
+    assert comunicar.headers['X-Frame-Options'] == 'SAMEORIGIN'
+    assert "frame-ancestors 'self'" in comunicar.headers['Content-Security-Policy']
+    assert "default-src 'self'" in comunicar.headers['Content-Security-Policy']
+    assert 'limpeza-embutida' in comunicar.get_data(as_text=True)
+
+    casa_a_casa = client.get(RAIZ, **HTTPS)
+    assert casa_a_casa.headers['X-Frame-Options'] == 'DENY'
+    assert "frame-ancestors 'none'" in casa_a_casa.headers['Content-Security-Policy']
+    # A janela embutida pode usar câmera e local, como a página da Prefeitura.
+    assert 'camera=(self)' in casa_a_casa.headers['Permissions-Policy']
+    assert 'geolocation=(self)' in casa_a_casa.headers['Permissions-Policy']
