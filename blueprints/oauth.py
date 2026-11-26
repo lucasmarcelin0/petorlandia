@@ -68,10 +68,24 @@ def _oauth_normalize_mcp_resource(resource: str) -> str:
     if not value:
         return ''
     issuer = _oauth_issuer().rstrip('/')
+    if value == issuer:
+        # Conector cadastrado com a URL raiz: POST / é atendido como /mcp.
+        return f'{issuer}/mcp'
     allowed_resources = {f'{issuer}/mcp', f'{issuer}/mcp/v2'}
     if value not in allowed_resources:
         raise ValueError('The requested resource is not a PetOrlandia MCP endpoint.')
     return value
+
+
+def _oauth_redirect_is_claude_mcp(redirect_uri: str) -> bool:
+    """Callback OAuth dos conectores MCP do Claude (claude.ai / claude.com)."""
+    parsed = urlparse(redirect_uri or '')
+    host = (parsed.hostname or '').lower()
+    return (
+        parsed.scheme == 'https'
+        and host in {'claude.ai', 'claude.com'}
+        and parsed.path.rstrip('/') == '/api/mcp/auth_callback'
+    )
 
 
 def get_blueprint():
@@ -84,6 +98,19 @@ from blueprints.mcp import mcp_protected_resource_metadata, mcp_server  # noqa: 
 bp.add_url_rule("/mcp", view_func=mcp_server, methods=["GET", "POST", "OPTIONS"])
 # Versioned endpoint for clients that need a clean capability discovery cycle.
 bp.add_url_rule("/mcp/v2", view_func=mcp_server, methods=["GET", "POST", "OPTIONS"], endpoint="mcp_server_v2")
+
+
+@bp.route("/", methods=["POST"], endpoint="mcp_server_root")
+@csrf.exempt
+def mcp_server_root():
+    """Conector cadastrado só com o domínio: o Claude envia o JSON-RPC para POST /.
+
+    A página inicial continua no GET / (site_routes.index); aqui só entra
+    JSON-RPC, tratado exatamente como /mcp (mesmo resource e metadata).
+    """
+    if not request.is_json:
+        return _oauth_error_response('invalid_request', 'Use o endereço /mcp para o servidor MCP.', 405)
+    return mcp_server()
 # RFC 9396 Protected Resource Metadata — enables OAuth discovery for path-based URLs
 bp.add_url_rule(
     "/.well-known/oauth-protected-resource",
@@ -153,6 +180,9 @@ def oauth_authorize():
         resource = _oauth_normalize_mcp_resource(resource)
     except ValueError as exc:
         return _oauth_error_response('invalid_target', str(exc))
+    if not resource and _oauth_redirect_is_claude_mcp(redirect_uri):
+        # O Claude nem sempre envia "resource"; sem ele o token não abriria o /mcp.
+        resource = f'{_oauth_issuer().rstrip("/")}/mcp'
 
     try:
         scope = _oauth_normalize_scope(scope_raw, client)
@@ -264,7 +294,7 @@ def oauth_token():
             token_resource = _oauth_normalize_mcp_resource(resource_raw)
         except ValueError as exc:
             return _oauth_error_response('invalid_target', str(exc))
-        if auth_code.resource and token_resource != auth_code.resource:
+        if auth_code.resource and token_resource and token_resource != auth_code.resource:
             return _oauth_error_response(
                 'invalid_target',
                 'resource does not match the authorization request.',
