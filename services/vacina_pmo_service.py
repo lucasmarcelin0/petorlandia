@@ -547,11 +547,32 @@ def _pmo_coords_in_orlandia(coords: tuple[float, float]) -> bool:
     )
 
 
+# Ponto que os geocodificadores devolvem para "Orlândia" quando não acham a rua:
+# é o centro da cidade, não a casa. Em 26/11/2026 a Travessa P 1551 e a Alameda 22
+# 509 caíram aqui e a rota tratou as duas como vizinhas da Vigilância.
+_PMO_CITY_CENTROID = (-20.72028, -47.88667)
+_PMO_CITY_WIDE_TYPES = {"city", "town", "municipality", "administrative", "village", "county", "state"}
+
+
+def _pmo_is_city_wide(coords: tuple[float, float] | None) -> bool:
+    return bool(coords) and (
+        abs(coords[0] - _PMO_CITY_CENTROID[0]) < 0.0003 and abs(coords[1] - _PMO_CITY_CENTROID[1]) < 0.0003
+    )
+
+
 def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[float, float] | None:
+    payload = [
+        item for item in payload
+        if str(item.get("type") or "").lower() not in _PMO_CITY_WIDE_TYPES
+        and str(item.get("addresstype") or "").lower() not in _PMO_CITY_WIDE_TYPES
+        and str(item.get("class") or "").lower() not in {"boundary", "place"}
+    ]
     for item in payload:
         try:
             coords = float(item["lat"]), float(item["lon"])
         except (KeyError, TypeError, ValueError):
+            continue
+        if _pmo_is_city_wide(coords):
             continue
         display = _strip_accents(str(item.get("display_name") or "")).lower()
         if "orlandia" in display and _pmo_coords_in_orlandia(coords):
@@ -561,7 +582,7 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
             coords = float(item["lat"]), float(item["lon"])
         except (KeyError, TypeError, ValueError):
             continue
-        if _pmo_coords_in_orlandia(coords):
+        if _pmo_coords_in_orlandia(coords) and not _pmo_is_city_wide(coords):
             return coords
     return None
 
@@ -570,7 +591,8 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
 # geocodificação. "g2" = Google primário (antes era só Nominatim). Bumpar isto força
 # re-geocodificação de todos os endereços na próxima otimização de rota.
 # g3: Google consultado só com rua e número. g4: atlas (CNEFE) antes de tudo.
-_PMO_GEOCODE_GENERATION = "g4"
+# g5: "centro da cidade" deixa de contar como casa localizada.
+_PMO_GEOCODE_GENERATION = "g5"
 
 
 def _pmo_geocode_cache_key(address: str) -> str:
@@ -706,7 +728,7 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     # 1. Google (preciso). Já filtra por Orlândia internamente. Só "rua, número":
     # complemento e bairro digitados pelo tutor desviam o resultado.
     coords = _pmo_geocode_google(_pmo_maps_search_address(normalized) or normalized)
-    if coords:
+    if coords and not _pmo_is_city_wide(coords):
         _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
         return coords
 
@@ -722,7 +744,7 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     except Exception:
         coords = None
 
-    if coords and _pmo_coords_in_orlandia(coords):
+    if coords and _pmo_coords_in_orlandia(coords) and not _pmo_is_city_wide(coords):
         _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
         return coords
 
@@ -3070,7 +3092,17 @@ def _serialize_visit(
         None,
     )
     coords = _pmo_lookup_verified_coords(visit.address or "")
-    lat, lng = coords if coords else (visit.geocode_lat, visit.geocode_lng)
+    if not coords and visit.geocode_lat is not None and visit.geocode_lng is not None:
+        stored = (visit.geocode_lat, visit.geocode_lng)
+        # Só coordenada da geocodificação atual vira link: uma antiga (ou o centro
+        # da cidade) mandava o vacinador para o lugar errado; sem ela o link usa
+        # "rua, número", que o Maps acha.
+        if (
+            visit.geocode_address_key == _pmo_geocode_cache_key(visit.address or "")
+            and not _pmo_is_city_wide(stored)
+        ):
+            coords = stored
+    lat, lng = coords if coords else (None, None)
     return {
         "id": f"visit-{visit.id}",
         "visitId": visit.id,
