@@ -356,12 +356,93 @@
     S.camadaDivisoes = L.layerGroup().addTo(S.mapa);
     S.camadaCasas = L.layerGroup().addTo(S.mapa);
     S.camadaRotulos = L.layerGroup().addTo(S.mapa);
+    instalarToqueDasCasas();
     S.mapa.on('moveend', () => {
       const centro = S.mapa.getCenter();
       S.prefs.vista = [centro.lat, centro.lng, S.mapa.getZoom()];
       salvarLocal(PREFS, S.prefs);
       desenharDetalhes();
     });
+  }
+
+  /* Toque nas casas. Antes cada número tinha o próprio clique e falhava de vez em quando: o mapa refaz os
+     números a cada atualização da equipe (~8 s) e a cada arrasto, um dedo que treme 3 px já virava arrasto
+     para o Leaflet e o ponto pequeno, errado por pouco, abria o quarteirão. Agora o mapa inteiro ouve o
+     dedo: toque curto que andou até 14 px abre a casa cujo número está sob o dedo ou, não havendo, a mais
+     próxima a até 26 px. Segurar um endereço acrescentado em campo continua abrindo o ajuste do local. */
+  const RAIO_TOQUE = 26, TREMOR_TOQUE = 14, TOQUE_LONGO = 650;
+
+  function casaNoPonto(x, y) {
+    if (!S.mapa || S.movendo || !S.alvosCasas || !S.alvosCasas.length) return null;
+    if (S.prefs.modo === 'escritorio' && S.planejando && S.aba === 'plano') return null;
+    const caixa = S.mapa.getContainer().getBoundingClientRect();
+    let melhor = null, menor = Infinity;
+    for (const alvo of S.alvosCasas) {
+      if (alvo.no && alvo.no.isConnected) {
+        const r = alvo.no.firstElementChild.getBoundingClientRect();
+        if (x >= r.left - 3 && x <= r.right + 3 && y >= r.top - 3 && y <= r.bottom + 3) {
+          const d = Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2) - 1000;  // dentro do número vence
+          if (d < menor) { menor = d; melhor = alvo; }
+          continue;
+        }
+      }
+      const p = S.mapa.latLngToContainerPoint(alvo.lugar);
+      const d = Math.hypot(x - caixa.left - p.x, y - caixa.top - p.y);
+      if (d <= RAIO_TOQUE && d < menor) { menor = d; melhor = alvo; }
+    }
+    return melhor;
+  }
+
+  function marcarTocada(alvo) {
+    if (!alvo.no || !alvo.no.isConnected) return;
+    alvo.no.classList.add('tocada');
+    setTimeout(() => alvo.no.classList.remove('tocada'), 350);
+  }
+
+  function soltarDedo() {
+    const toque = S.toque;
+    S.toque = null;
+    if (toque && toque.redesenhar) desenharDetalhes();
+  }
+
+  function instalarToqueDasCasas() {
+    const area = S.mapa.getContainer();
+    S.engolirCliqueAte = 0;
+    area.addEventListener('pointerdown', evento => {
+      if (evento.button > 0) return;
+      if (S.toque) { S.toque.varios = true; return; }  // pinça: não é toque em casa
+      S.toque = { id: evento.pointerId, x: evento.clientX, y: evento.clientY, t: Date.now(), varios: false, andou: false, longo: false };
+    }, true);
+    area.addEventListener('pointermove', evento => {
+      const toque = S.toque;
+      if (toque && toque.id === evento.pointerId && Math.hypot(evento.clientX - toque.x, evento.clientY - toque.y) > TREMOR_TOQUE) toque.andou = true;
+      if (!toque && evento.pointerType === 'mouse') area.classList.toggle('cac-sobre-casa', !!casaNoPonto(evento.clientX, evento.clientY));
+    }, true);
+    area.addEventListener('pointerup', evento => {
+      const toque = S.toque;
+      if (!toque) return;
+      if (toque.id !== evento.pointerId) return;
+      const valeu = !toque.varios && !toque.andou && !toque.longo && Date.now() - toque.t < TOQUE_LONGO * 1.6;
+      const alvo = valeu ? casaNoPonto(toque.x, toque.y) : null;
+      soltarDedo();
+      if (!alvo) return;
+      // O clique que o navegador manda logo depois não pode abrir também o quarteirão nem dar zoom.
+      S.engolirCliqueAte = Date.now() + 450;
+      marcarTocada(alvo);
+      abrirCasa(alvo.casa);
+    }, true);
+    area.addEventListener('pointercancel', soltarDedo, true);
+    // Na página toda: a ficha abre no soltar do dedo e o clique seguinte cairia no fundo dela, fechando-a.
+    window.addEventListener('click', evento => {
+      if (Date.now() < S.engolirCliqueAte) { S.engolirCliqueAte = 0; evento.stopPropagation(); evento.preventDefault(); }
+    }, true);
+    area.addEventListener('contextmenu', evento => {
+      const alvo = casaNoPonto(evento.clientX, evento.clientY);
+      if (!alvo || !podeAjustar(alvo.casa)) return;
+      evento.preventDefault();
+      if (S.toque) S.toque.longo = true;
+      iniciarMover(alvo.casa);
+    }, true);
   }
 
   function verCidade() {
@@ -387,7 +468,7 @@
     S.poligonos.clear();
     for (const bloco of S.blocos) {
       const forma = L.polygon(bloco.g.map(poligono => poligono.map(anel => anel.map(([x, y]) => [y, x]))), estiloDoBloco(bloco));
-      forma.on('click', evento => { L.DomEvent.stopPropagation(evento); tocarBloco(bloco); });
+      forma.on('click', evento => { L.DomEvent.stopPropagation(evento); if (Date.now() < S.engolirCliqueAte) return; tocarBloco(bloco); });
       forma.addTo(S.camadaQuarteiroes);
       S.poligonos.set(bloco.id, forma);
     }
@@ -428,9 +509,12 @@
 
   function desenharDetalhes() {
     if (!S.mapa || !S.base) return;
+    // Com o dedo na tela, não troca os números de lugar debaixo dele: redesenha assim que ele sair.
+    if (S.toque) { S.toque.redesenhar = true; return; }
     const zoom = S.mapa.getZoom(), limites = S.mapa.getBounds().pad(0.08);
     S.camadaRotulos.clearLayers();
     S.camadaCasas.clearLayers();
+    S.alvosCasas = [];
     desenharNomesDeRua(zoom, limites);
     desenharDivisoes();
     const visiveis = S.blocos.filter(bloco => naVista(bloco.caixa, limites));
@@ -460,14 +544,15 @@
       }
       rotulos += 1;
     }
-    $('cac-dica').textContent = S.prefs.modo === 'escritorio' && S.aba === 'plano' ? 'Selecione quarteirões no mapa ou pela busca'
-      : zoom >= ZOOM_NUMEROS ? 'Toque no número da casa para registrar'
-      : (zoom >= ZOOM_CASAS ? 'Aproxime mais um pouco para ver os números' : (S.prefs.modo === 'rua' ? 'Toque em um quarteirão para trabalhar nele' : ''));
-    if (zoom < ZOOM_CASAS) return;
-    // Casas: ponto colorido; bem perto, o número.
     const casas = [];
-    for (const bloco of visiveis) for (const casa of casasDe(bloco)) if (limites.contains([casa.y, casa.x])) casas.push(casa);
+    if (zoom >= ZOOM_CASAS) for (const bloco of visiveis) for (const casa of casasDe(bloco)) if (limites.contains([casa.y, casa.x])) casas.push(casa);
     const comNumero = zoom >= ZOOM_NUMEROS && casas.length <= 420;
+    $('cac-dica').textContent = S.prefs.modo === 'escritorio' && S.aba === 'plano' ? 'Selecione quarteirões no mapa ou pela busca'
+      : comNumero ? 'Toque no número da casa para registrar'
+      : (zoom >= ZOOM_CASAS ? 'Toque no ponto da casa ou aproxime para ver os números' : (S.prefs.modo === 'rua' ? 'Toque em um quarteirão para trabalhar nele' : ''));
+    if (zoom < ZOOM_CASAS) return;
+    // Casas: ponto colorido; bem perto, o número. O toque não fica no marcador (que é refeito a cada
+    // atualização): quem decide qual casa foi tocada é casaNoPonto, pela casa sob o dedo ou a mais próxima.
     const recuo = comNumero ? 13 : 7;
     const centros = new Map();
     for (const casa of casas) {
@@ -480,20 +565,19 @@
       const lugar = distancia > recuo * 2 ? S.mapa.containerPointToLatLng([naTela.x + dx / distancia * recuo, naTela.y + dy / distancia * recuo]) : [casa.y, casa.x];
       if (comNumero) {
         const icone = L.divIcon({ className: 'cac-casa' + (cor.vazia ? ' vazia' : '') + (cor.apagada ? ' apagada' : '') + (S.novas.has(casa.id) ? ' nova' : ''), html: '<span></span>', iconSize: [0, 0] });
-        const marcador = L.marker(lugar, { icon: icone, keyboard: false }).addTo(S.camadaCasas);
+        const marcador = L.marker(lugar, { icon: icone, interactive: false, keyboard: false }).addTo(S.camadaCasas);
         const no = marcador.getElement();
         if (no) {
           const etiqueta = no.querySelector('span');
           etiqueta.textContent = casa.n;
           etiqueta.style.cssText = `background:${cor.fundo};color:${cor.texto};border-color:${cor.cor}`;
-          no.title = casa.rua + ', ' + casa.n;
+          no.dataset.casa = casa.id;
         }
-        marcador.on('click', () => abrirCasa(casa));
-        // Segurar o número de um endereço acrescentado em campo: ajustar o local arrastando.
-        if (podeAjustar(casa)) marcador.on('contextmenu', evento => { if (evento.originalEvent) evento.originalEvent.preventDefault(); iniciarMover(casa); });
+        S.alvosCasas.push({ casa, lugar: L.latLng(lugar), no });
       } else {
-        L.circleMarker(lugar, { renderer: S.tela, radius: 5, color: cor.cor, weight: 1.5, fillColor: cor.fundo, fillOpacity: 1 })
-          .on('click', () => abrirCasa(casa)).addTo(S.camadaCasas);
+        L.circleMarker(lugar, { renderer: S.tela, radius: 6, color: cor.cor, weight: 1.5, fillColor: cor.fundo, fillOpacity: 1, interactive: false })
+          .addTo(S.camadaCasas);
+        S.alvosCasas.push({ casa, lugar: L.latLng(lugar), no: null });
       }
     }
     S.novas.clear();
