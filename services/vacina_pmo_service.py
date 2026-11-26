@@ -592,7 +592,7 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
 # re-geocodificação de todos os endereços na próxima otimização de rota.
 # g3: Google consultado só com rua e número. g4: atlas (CNEFE) antes de tudo.
 # g5: "centro da cidade" deixa de contar como casa localizada.
-_PMO_GEOCODE_GENERATION = "g5"
+_PMO_GEOCODE_GENERATION = "g6"
 
 
 def _pmo_geocode_cache_key(address: str) -> str:
@@ -679,25 +679,113 @@ def _pmo_lookup_verified_coords(address: str) -> tuple[float, float] | None:
     return None
 
 
+def _pmo_atlas_locate(address: str, indice, *, precise_only: bool = False) -> tuple[float, float] | None:
+    """Casa no índice do atlas. Primeiro com o complemento (é ele que acha a portaria
+    de um condomínio, ex.: "Rua 20 - 1107, 45, Condomínio Torino"), depois só rua e número.
+    ``precise_only`` descarta pontos de confiança baixa (vizinho distante, interpolação longa)."""
+    from services.entomologia_dengue_auto import locate, parse_address
+
+    parts = _pmo_address_parts(address)
+    attempts = []
+    if parts["complemento"]:
+        attempts.append(f"{parts['rua']}, {parts['numero']} {parts['complemento']}")
+    attempts.append(_pmo_maps_search_address(address) or address)
+    for text in attempts:
+        found = locate(parse_address(text), parts["bairro"], indice)
+        point = (found.get("geometry") or {}).get("coordinates")
+        if not point or found.get("method") == "sem_posicao":
+            continue
+        # Portaria/casa de condomínio é ponto conferido mesmo com confiança "baixa".
+        if precise_only and found.get("method") != "condominio" and found.get("confidence") not in ("alta", "media"):
+            continue
+        coords = (float(point[1]), float(point[0]))
+        if _pmo_coords_in_orlandia(coords):
+            return coords
+    return None
+
+
 def _pmo_geocode_atlas(address: str) -> tuple[float, float] | None:
     """Casa localizada na base de endereços do atlas, ou None (atlas ausente ou sem a casa)."""
     try:
         from services import vacina_pmo_mapa
-        from services.entomologia_dengue_auto import locate, parse_address
 
         indice = vacina_pmo_mapa.indice_enderecos()
         if indice is None:
             return None
-        parts = _pmo_address_parts(address)
-        found = locate(parse_address(_pmo_maps_search_address(address) or address), parts["bairro"], indice)
+        return _pmo_atlas_locate(address, indice)
     except Exception:
         current_app.logger.warning("PMO rota: atlas indisponível para %s", address, exc_info=True)
         return None
-    point = (found.get("geometry") or {}).get("coordinates")
-    if not point or found.get("method") == "sem_posicao":
+
+
+_PMO_LINK_COORDS_CACHE: dict[str, Any] = {"indice": None, "coords": {}}
+_PMO_ATLAS_WARMUP = {"started": False}
+
+
+def _pmo_atlas_index_if_ready():
+    """Índice do atlas já carregado na memória, sem montar nada durante a requisição.
+
+    Na primeira chamada do dyno o carregamento vai para uma thread; enquanto isso os
+    links seguem por "rua, número" e, na sincronização seguinte do painel, passam ao ponto.
+    """
+    from services import vacina_pmo_mapa
+
+    loaded = list(vacina_pmo_mapa._indice.values())
+    if loaded:
+        return loaded[-1]
+    if _PMO_ATLAS_WARMUP["started"]:
         return None
-    coords = (float(point[1]), float(point[0]))
-    return coords if _pmo_coords_in_orlandia(coords) else None
+    try:
+        from services import entomologia_atlas_artefatos as artefatos
+
+        if not artefatos.ativo():
+            return None
+        app = current_app._get_current_object()
+    except Exception:
+        return None
+    _PMO_ATLAS_WARMUP["started"] = True
+
+    def _warm():
+        with app.app_context():
+            try:
+                vacina_pmo_mapa.indice_enderecos()
+            except Exception:
+                app.logger.warning("PMO: falha ao carregar o índice do atlas", exc_info=True)
+            finally:
+                if not vacina_pmo_mapa._indice:
+                    _PMO_ATLAS_WARMUP["started"] = False
+
+    threading.Thread(target=_warm, name="pmo-atlas-indice", daemon=True).start()
+    return None
+
+
+def _pmo_link_coords(address: str) -> tuple[float, float] | None:
+    """Ponto confiável para o link do Maps/Waze: referência conferida ou casa achada no atlas.
+
+    Coordenada do Nominatim ou da malha não serve: erra centenas de metros a quilômetros
+    (Alameda 22, 509 caiu a 2 km), e "rua, número" leva o Maps à casa. Já o atlas
+    resolve o que o texto não resolve: duas "Rua 2" na cidade, portaria de condomínio.
+    """
+    verified = _pmo_lookup_verified_coords(address or "")
+    if verified:
+        return verified
+    key = _pmo_geocode_cache_key(address or "")
+    if not key:
+        return None
+    indice = _pmo_atlas_index_if_ready()
+    if indice is None:
+        return None
+    if _PMO_LINK_COORDS_CACHE["indice"] is not indice:
+        _PMO_LINK_COORDS_CACHE["indice"] = indice
+        _PMO_LINK_COORDS_CACHE["coords"] = {}
+    cache = _PMO_LINK_COORDS_CACHE["coords"]
+    if key not in cache:
+        try:
+            cache[key] = _pmo_atlas_locate(_normalize_text(address), indice, precise_only=True)
+        except Exception:
+            current_app.logger.warning("PMO link: atlas falhou para %s", address, exc_info=True)
+            return None
+    return cache[key]
 
 
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
@@ -3091,17 +3179,10 @@ def _serialize_visit(
         ),
         None,
     )
-    coords = _pmo_lookup_verified_coords(visit.address or "")
-    if not coords and visit.geocode_lat is not None and visit.geocode_lng is not None:
-        stored = (visit.geocode_lat, visit.geocode_lng)
-        # Só coordenada da geocodificação atual vira link: uma antiga (ou o centro
-        # da cidade) mandava o vacinador para o lugar errado; sem ela o link usa
-        # "rua, número", que o Maps acha.
-        if (
-            visit.geocode_address_key == _pmo_geocode_cache_key(visit.address or "")
-            and not _pmo_is_city_wide(stored)
-        ):
-            coords = stored
+    # Só ponto confiável vira link (conferido ou achado no atlas). A coordenada
+    # gravada pela rota pode ser do Nominatim e mandar o vacinador para longe;
+    # sem ponto confiável o link usa "rua, número", que o Maps acha.
+    coords = _pmo_link_coords(visit.address or "")
     lat, lng = coords if coords else (None, None)
     return {
         "id": f"visit-{visit.id}",
@@ -3468,7 +3549,9 @@ def _pmo_build_full_google_maps_route_url(
     )
     stops: list[str] = []
     for v in optimized_visits:
-        c = coords_by_visit_id.get(v.id)
+        # Parada por coordenada só quando o ponto é confiável; a do Nominatim
+        # (usada para ordenar) pode estar a quilômetros da casa.
+        c = _pmo_link_coords(v.address or "")
         if c:
             stops.append(f"{c[0]},{c[1]}")
         else:
