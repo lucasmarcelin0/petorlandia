@@ -10,7 +10,7 @@
   {# Tela própria, leve e sem dependência de rede externa: o service worker guarda esta página, o Leaflet e os
      dois scripts, e o aparelho guarda quarteirões, imóveis e a fila de visitas. Assim ela abre e registra sem internet. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='leaflet/leaflet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261126-toque') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/casa_a_casa.css', v='20261126-prefeitura') }}">
   {% include 'components/destructive_actions_assets.html' %}
 </head>
 <body class="cac" data-modo="rua">
@@ -34,6 +34,9 @@
         <button type="button" class="cac-icone" id="cac-onde" title="Onde estou (toque de novo para desligar)" aria-label="Mostrar e acompanhar onde estou" aria-pressed="false">📍</button>
         <button type="button" class="cac-icone" id="cac-ruas" title="Ruas ao fundo (precisa de internet)" aria-label="Ligar ou desligar as ruas ao fundo" aria-pressed="false">🗺️</button>
         <button type="button" class="cac-icone" id="cac-cidade" title="Ver a cidade toda" aria-label="Ver a cidade toda">⤢</button>
+        {% if config.urls.prefeitura %}
+        <a class="cac-icone" id="cac-prefeitura" href="{{ config.urls.prefeitura }}" title="Comunicar à Prefeitura integrada" aria-label="Abrir uma comunicação na Prefeitura integrada">🏛️</a>
+        {% endif %}
       </div>
       <details class="cac-legenda" id="cac-legenda">
         <summary>Cores</summary>
