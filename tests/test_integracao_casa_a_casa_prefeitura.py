@@ -112,3 +112,25 @@ def test_falha_na_prefeitura_nao_perde_a_solicitacao_de_campo(client, base, uplo
     resposta = casa.enviar_solicitacao(client, casa.solicitacao(base['a']))
     assert resposta.status_code == 200 and EntomologiaSolicitacao.query.count() == 1
     assert LimpezaSolicitacao.query.count() == 0
+
+
+def test_botao_da_prefeitura_no_mapa_so_para_quem_pode_comunicar(client, base, monkeypatch):
+    from services import limpeza_urbana as servico_limpeza
+    _entrar_agente(client)
+
+    monkeypatch.setattr(servico_limpeza, 'pode_comunicar', lambda _user: False)
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert 'id="cac-cidade"' in pagina and 'id="cac-prefeitura"' not in pagina
+
+    monkeypatch.setattr(servico_limpeza, 'pode_comunicar', lambda _user: True)
+    pagina = client.get(RAIZ, **HTTPS).get_data(as_text=True)
+    assert 'id="cac-prefeitura" href="/limpeza-urbana/comunicar"' in pagina
+    # O botão fica logo abaixo dos três ícones do mapa.
+    assert pagina.index('id="cac-cidade"') < pagina.index('id="cac-prefeitura"') < pagina.index('cac-legenda')
+
+    def quebra(_user):
+        raise RuntimeError('fora do ar')
+
+    monkeypatch.setattr(servico_limpeza, 'pode_comunicar', quebra)
+    resposta = client.get(RAIZ, **HTTPS)
+    assert resposta.status_code == 200 and 'id="cac-prefeitura"' not in resposta.get_data(as_text=True)
