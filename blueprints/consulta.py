@@ -4219,6 +4219,106 @@ def atualizar_realizacao_exames(bloco_id):
     return jsonify(success=True, html=historico_html)
 
 
+LAUDO_BLOCO_EXTENSOES = {'.pdf', '.jpg', '.jpeg', '.png', '.webp'}
+
+
+def _pode_anexar_laudo_exames(user):
+    worker = (getattr(user, 'worker', None) or '').lower()
+    return bool(can_act_as_veterinarian(user) or worker == 'colaborador' or user.role == 'admin')
+
+
+def _ler_data_realizacao_laudo(valor):
+    valor = (valor or '').strip()
+    if not valor:
+        return datetime.now(BR_TZ)
+    return datetime.fromisoformat(valor)
+
+
+def _armazenar_laudo_bloco(arquivo):
+    """Valida e guarda o arquivo integral do laudo. Retorna (url, nome) ou erro."""
+    if not arquivo or not arquivo.filename:
+        return None, None, 'Selecione o arquivo do laudo.'
+    original_filename = secure_filename(arquivo.filename) or 'laudo.pdf'
+    _, ext = os.path.splitext(original_filename)
+    ext = ext.lower()
+    if ext not in LAUDO_BLOCO_EXTENSOES:
+        return None, None, 'Envie o laudo em PDF ou imagem (JPG, PNG ou WEBP).'
+    laudo_url = upload_to_s3(arquivo, f"{uuid.uuid4().hex}{ext}", folder='laudos_exames')
+    if not laudo_url:
+        return None, None, 'Nao foi possivel enviar o arquivo do laudo.'
+    return laudo_url, original_filename, None
+
+
+def _aplicar_laudo_aos_exames(exames, laudo_url, laudo_filename, performed_at):
+    enviado_em = datetime.now(BR_TZ)
+    for exame in exames:
+        exame.laudo_url = laudo_url
+        exame.laudo_filename = laudo_filename
+        exame.laudo_uploaded_at = enviado_em
+        if (exame.status or 'pendente') == 'pendente':
+            exame.status = 'concluido'
+        if not exame.performed_at:
+            exame.performed_at = performed_at
+
+
+@bp.route('/bloco_exames/<int:bloco_id>/laudo', methods=['POST'])
+@login_required
+def anexar_laudo_bloco_exames(bloco_id):
+    """Anexa o laudo completo (um unico arquivo) a todos os exames do bloco."""
+    bloco = BlocoExames.query.get_or_404(bloco_id)
+    ensure_clinic_access(getattr(bloco.animal, 'clinica_id', None))
+    if not _pode_anexar_laudo_exames(current_user):
+        return jsonify({'success': False, 'message': 'Apenas profissionais da clinica podem anexar laudos de exames.'}), 403
+    if not bloco.exames:
+        return jsonify({'success': False, 'message': 'Este bloco nao tem exames para receber o laudo.'}), 400
+    try:
+        performed_at = _ler_data_realizacao_laudo(request.form.get('data_realizacao'))
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Data de realizacao invalida.'}), 400
+
+    laudo_url, laudo_filename, erro = _armazenar_laudo_bloco(request.files.get('laudo'))
+    if erro:
+        return jsonify({'success': False, 'message': erro}), 400
+
+    _aplicar_laudo_aos_exames(bloco.exames, laudo_url, laudo_filename, performed_at)
+    db.session.commit()
+    historico_html = render_template('partials/historico_exames.html', animal=bloco.animal)
+    return jsonify(success=True, html=historico_html, bloco_id=bloco.id)
+
+
+@bp.route('/animal/<int:animal_id>/bloco_exames/laudo', methods=['POST'])
+@login_required
+def registrar_exame_com_laudo(animal_id):
+    """Registra um exame recebido apenas com o arquivo integral do laudo."""
+    animal = get_animal_or_404(animal_id)
+    if not _pode_anexar_laudo_exames(current_user):
+        return jsonify({'success': False, 'message': 'Apenas profissionais da clinica podem anexar laudos de exames.'}), 403
+    try:
+        performed_at = _ler_data_realizacao_laudo(request.form.get('data_realizacao'))
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Data de realizacao invalida.'}), 400
+
+    nomes = [
+        nome.strip()[:120]
+        for nome in re.split(r'[,;\n]+', request.form.get('nomes') or '')
+        if nome.strip()
+    ] or ['Laudo de exame']
+
+    laudo_url, laudo_filename, erro = _armazenar_laudo_bloco(request.files.get('laudo'))
+    if erro:
+        return jsonify({'success': False, 'message': erro}), 400
+
+    observacoes = (request.form.get('observacoes') or '').strip() or None
+    bloco = BlocoExames(animal_id=animal.id, observacoes_gerais=observacoes)
+    db.session.add(bloco)
+    exames = [ExameSolicitado(bloco=bloco, nome=nome, status='pendente') for nome in nomes]
+    db.session.add_all(exames)
+    _aplicar_laudo_aos_exames(exames, laudo_url, laudo_filename, performed_at)
+    db.session.commit()
+    historico_html = render_template('partials/historico_exames.html', animal=animal)
+    return jsonify(success=True, html=historico_html, bloco_id=bloco.id)
+
+
 @bp.route('/novo_atendimento')
 @login_required
 def novo_atendimento():

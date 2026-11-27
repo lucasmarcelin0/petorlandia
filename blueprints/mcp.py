@@ -15,6 +15,7 @@ from models import (
     Clinica,
     CarteirinhaImportacao,
     Consulta,
+    BlocoExames,
     ExameImagem,
     OAuthAccessToken,
     Order,
@@ -40,6 +41,7 @@ from app import (  # noqa: E402
     _integration_build_handoff,
     _integration_build_today_agenda,
     _integration_create_exam_block,
+    _integration_attach_exam_block_laudo,
     _integration_create_exame_imagem,
     _integration_create_or_reuse_tutor_and_pets,
     _integration_download_and_store_carteirinha_file,
@@ -247,6 +249,12 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'scopes': ['exams:write'],
         'annotations': _mcp_annotations(False, idempotent=False),
         'outputSchema': _mcp_object_output_schema('Bloco de exames criado para o paciente.'),
+    },
+    'anexar_laudo_bloco_exames': {
+        'title': 'Anexar laudo integral a exames',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Laudo integral anexado ao bloco de exames.'),
     },
     'criar_exame_imagem': {
         'title': 'Criar exame de imagem',
@@ -2225,6 +2233,30 @@ def mcp_server():
                 },
             },
             {
+                'name': 'anexar_laudo_bloco_exames',
+                'description': (
+                    'Anexa o arquivo integral do laudo laboratorial (PDF ou imagem) ao historico de exames do paciente, '
+                    'sem transcrever resultados. Prefira esta tool a registrar_bloco_exames quando houver o arquivo do laudo. '
+                    'Com bloco_id, o arquivo vale para todos os exames do bloco; sem bloco_id, cria um novo bloco concluido.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome_animal': {'type': 'string'},
+                        'bloco_id': {'type': 'integer', 'description': 'Bloco existente que recebera o laudo.'},
+                        'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
+                        'laudo_url': {'type': 'string', 'description': 'URL HTTPS publica do arquivo, quando nao houver anexo.'},
+                        'nomes_exames': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Nomes dos exames do laudo (opcional).'},
+                        'data_exame': {'type': 'string', 'description': 'Data do exame (AAAA-MM-DD).'},
+                        'observacoes_gerais': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['confirmar_gravacao'],
+                },
+                '_meta': {'openai/fileParams': ['laudo_arquivo']},
+            },
+            {
                 'name': 'criar_exame_imagem',
                 'description': 'Cria exame de imagem com paciente, tutor, clinica requisitante, profissional, CRMV, data e status.',
                 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}, 'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'tipo_exame': {'type': 'string'}, 'data_exame': {'type': 'string'}, 'profissional_nome': {'type': 'string'}, 'profissional_crmv': {'type': 'string'}, 'descricao': {'type': 'string'}, 'impressao_diagnostica': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['tipo_exame', 'data_exame', 'confirmar_gravacao']},
@@ -3119,6 +3151,46 @@ def mcp_server():
                 'animal_id': bloco.animal_id,
                 'observacoes_gerais': bloco.observacoes_gerais,
                 'total_exames': len(bloco.exames or []),
+            }))
+
+        if tool_name == 'anexar_laudo_bloco_exames':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            bloco = None
+            bloco_id = tool_args.get('bloco_id')
+            if bloco_id:
+                try:
+                    bloco = db.session.get(BlocoExames, int(bloco_id))
+                except (TypeError, ValueError):
+                    bloco = None
+                animal = (
+                    _integration_find_accessible_animal(user, animal_id=bloco.animal_id, animal_name=None)
+                    if bloco else None
+                )
+                if not bloco or not animal:
+                    return _mcp_err(req_id, -32004, 'Bloco de exames não encontrado no escopo disponível.')
+            else:
+                animal = _mcp_find_animal_for_tool(user, tool_args)
+                if not animal:
+                    return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            try:
+                bloco = _integration_attach_exam_block_laudo(animal, tool_args, bloco=bloco)
+            except ValueError as exc:
+                db.session.rollback()
+                return _mcp_err(req_id, -32602, str(exc))
+            laudo = bloco.laudo_unico
+            return _mcp_ok(req_id, _mcp_json_content({
+                'bloco_id': bloco.id,
+                'animal_id': bloco.animal_id,
+                'laudo_filename': getattr(laudo, 'laudo_filename', None),
+                'laudo_url': getattr(laudo, 'laudo_url', None),
+                'exames': [exame.nome for exame in bloco.exames],
             }))
 
         if tool_name == 'criar_exame_imagem':

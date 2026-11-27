@@ -6291,6 +6291,57 @@ def _integration_create_exam_block(user: User, animal: Animal, payload: dict):
     return bloco
 
 
+def _integration_attach_exam_block_laudo(animal: Animal, payload: dict, bloco: BlocoExames | None = None):
+    """Anexa o arquivo integral do laudo a um bloco (existente ou novo)."""
+    file_ref = _integration_extract_pdf_file_reference(payload)
+    laudo_url_publica = (payload.get('laudo_url') or '').strip()
+    if not file_ref and laudo_url_publica:
+        file_ref = {
+            'download_url': laudo_url_publica,
+            'file_name': payload.get('file_name') or payload.get('laudo_filename') or 'laudo.pdf',
+            'mime_type': payload.get('mime_type') or 'application/pdf',
+        }
+    if not file_ref:
+        raise ValueError('Envie o arquivo do laudo em laudo_arquivo (ou uma laudo_url HTTPS).')
+
+    data_exame = (payload.get('data_exame') or payload.get('performed_at') or '').strip()
+    try:
+        performed_at = datetime.fromisoformat(data_exame) if data_exame else now_in_brazil()
+    except ValueError as exc:
+        raise ValueError('data_exame invalida. Use o formato AAAA-MM-DD.') from exc
+
+    nomes = payload.get('nomes_exames') or []
+    if isinstance(nomes, str):
+        nomes = re.split(r'[,;\n]+', nomes)
+    nomes = [str(nome).strip()[:120] for nome in nomes if str(nome).strip()]
+
+    laudo_url, laudo_filename = _integration_download_and_store_laudo_file(file_ref)
+
+    if bloco is None:
+        bloco = BlocoExames(
+            animal_id=animal.id,
+            observacoes_gerais=(payload.get('observacoes_gerais') or '').strip() or None,
+        )
+        db.session.add(bloco)
+        for nome in nomes or ['Laudo de exame']:
+            db.session.add(ExameSolicitado(bloco=bloco, nome=nome, status='pendente'))
+        db.session.flush()
+    elif not bloco.exames:
+        raise ValueError('Este bloco nao tem exames para receber o laudo.')
+
+    enviado_em = now_in_brazil()
+    for exame in bloco.exames:
+        exame.laudo_url = laudo_url
+        exame.laudo_filename = laudo_filename
+        exame.laudo_uploaded_at = enviado_em
+        if (exame.status or 'pendente') == 'pendente':
+            exame.status = 'concluido'
+        if not exame.performed_at:
+            exame.performed_at = performed_at
+    db.session.commit()
+    return bloco
+
+
 def _integration_find_or_create_external_clinic(user: User, clinic_data: dict):
     clinic_name = (clinic_data.get('nome') or clinic_data.get('name') or '').strip()
     if not clinic_name:

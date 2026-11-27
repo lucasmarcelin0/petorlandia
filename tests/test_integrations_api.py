@@ -3074,3 +3074,87 @@ def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):
         tutor = User.query.filter_by(name="Nelson Benedito").one()
         assert Animal.query.filter_by(user_id=tutor.id).count() == 2
         assert Consulta.query.count() == 2
+
+
+def test_mcp_anexar_laudo_bloco_exames_cria_bloco_e_anexa_em_existente(app, client, monkeypatch):
+    app_module = sys.modules[app.import_name]
+
+    from security.url_safe import SafeURLResponse
+    monkeypatch.setattr(
+        "security.url_safe.safe_fetch_url",
+        lambda *args, **kwargs: SafeURLResponse(200, {"content-type": "application/pdf"}, b"%PDF-1.4\nlaudo"),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "upload_to_s3",
+        lambda file_storage, filename, folder="uploads": "/static/uploads/laudos_exames/integral.pdf",
+    )
+
+    with app.app_context():
+        clinic = Clinica(nome="Clinica Laudo Integral")
+        professional = User(name="Dr. Integral", email="integral@example.com", role="veterinario", worker="veterinario")
+        professional.set_password("secret123")
+        tutor = User(name="Maria", email="maria-integral@example.com")
+        tutor.set_password("secret123")
+        db.session.add_all([clinic, professional, tutor])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-INT", clinica_id=clinic.id))
+        animal = Animal(name="Barbinha", owner=tutor, clinica=clinic)
+        db.session.add(animal)
+        db.session.flush()
+        bloco = BlocoExames(animal=animal)
+        db.session.add_all([
+            bloco,
+            ExameSolicitado(bloco=bloco, nome="Hemograma", resultado="Texto transcrito"),
+            ExameSolicitado(bloco=bloco, nome="Creatinina"),
+        ])
+        db.session.commit()
+        animal_id, bloco_id = animal.id, bloco.id
+        token_value = _create_token(professional.id, scope="profile exams:write exams:read")
+
+    arquivo = {
+        "download_url": "https://files.example.test/barbinha.pdf",
+        "file_id": "file_barbinha",
+        "mime_type": "application/pdf",
+        "file_name": "Barbinha - Maria.pdf",
+    }
+
+    def chamar(arguments, req_id):
+        resp = client.post(
+            "/mcp",
+            headers={"Authorization": f"Bearer {token_value}"},
+            json={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "method": "tools/call",
+                "params": {"name": "anexar_laudo_bloco_exames", "arguments": arguments},
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert "result" in body, body
+        return json.loads(body["result"]["content"][0]["text"])
+
+    novo = chamar({"confirmar_gravacao": "sim", "animal_id": animal_id, "data_exame": "2026-11-26",
+                   "laudo_arquivo": arquivo}, 51)
+    assert novo["bloco_id"] != bloco_id
+    assert novo["exames"] == ["Laudo de exame"]
+    assert novo["laudo_url"] == "/static/uploads/laudos_exames/integral.pdf"
+
+    existente = chamar({"confirmar_gravacao": "sim", "bloco_id": bloco_id, "laudo_arquivo": arquivo}, 52)
+    assert existente["bloco_id"] == bloco_id
+    assert existente["laudo_filename"] == "Barbinha_-_Maria.pdf"
+
+    with app.app_context():
+        exames = ExameSolicitado.query.filter_by(bloco_id=bloco_id).all()
+        assert {e.laudo_url for e in exames} == {"/static/uploads/laudos_exames/integral.pdf"}
+        assert all(e.status == "concluido" for e in exames)
+        assert any(e.resultado == "Texto transcrito" for e in exames)
+
+    sem_confirmacao = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={"jsonrpc": "2.0", "id": 53, "method": "tools/call",
+              "params": {"name": "anexar_laudo_bloco_exames", "arguments": {"bloco_id": bloco_id, "laudo_arquivo": arquivo}}},
+    )
+    assert "error" in sem_confirmacao.get_json()

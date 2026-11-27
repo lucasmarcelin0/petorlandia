@@ -413,6 +413,21 @@ class BlocoExames(db.Model):
     animal = db.relationship('Animal', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
     exames = db.relationship('ExameSolicitado', backref='bloco', cascade='all, delete-orphan')
 
+    @property
+    def laudo_unico(self):
+        """Exame cujo arquivo de laudo vale para o bloco inteiro.
+
+        Quando o laudo completo do laboratorio e anexado ao bloco, todos os
+        exames apontam para o mesmo arquivo; assim o link aparece uma vez so.
+        """
+        exames = list(self.exames or [])
+        if not exames:
+            return None
+        urls = {exame.laudo_url for exame in exames}
+        if len(urls) != 1 or not exames[0].laudo_url:
+            return None
+        return exames[0]
+
 
 class ExameSolicitado(db.Model):
     id = db.Column(db.Integer, primary_key=True)
