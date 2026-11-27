@@ -107,6 +107,13 @@
                   {% endif %}
                 </div>
                 <div class="card-body pt-0">
+                  {% set laudo_bloco = bloco.laudo_unico %}
+                  {% if laudo_bloco %}
+                    <div class="small mb-2">
+                      <strong>Laudo completo:</strong>
+                      <a href="{{ laudo_bloco.laudo_url }}" target="_blank" rel="noopener">{{ 'Ver laudo' if tutor_history else (laudo_bloco.laudo_filename or 'Abrir laudo') }}</a>
+                    </div>
+                  {% endif %}
                   <ul class="list-group list-group-flush">
                     {% for exame in bloco.exames %}
                       <li class="list-group-item px-0">
@@ -126,7 +133,8 @@
                         {% if exame.resultado %}
                           <div class="small mt-1"><strong>Resultado:</strong> {{ exame.resultado }}</div>
                         {% endif %}
-                        {% if exame.laudo_url %}
+                        {% if laudo_bloco %}
+                        {% elif exame.laudo_url %}
                           <div class="small mt-1">
                             <strong>Laudo:</strong>
                             <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">{{ 'Ver laudo' if tutor_history else (exame.laudo_filename or 'Abrir laudo') }}</a>

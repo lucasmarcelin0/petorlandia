@@ -1,5 +1,34 @@
 <div class="container py-4">
-  <h2 class="mb-4">Historico de Exames</h2>
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h2 class="mb-0">Historico de Exames</h2>
+    <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('anexar-exame-recebido').classList.toggle('d-none')">
+      <i class="bi bi-file-earmark-arrow-up"></i> Anexar exame recebido
+    </button>
+  </div>
+
+  <form id="anexar-exame-recebido" class="border rounded p-3 mb-4 bg-white d-none" onsubmit="enviarExameRecebido(event, {{ animal.id }})">
+    <p class="small text-muted mb-3">Envie o laudo do laboratorio na integra (PDF ou imagem). Nao e preciso digitar os resultados.</p>
+    <div class="mb-2">
+      <label class="form-label" for="exame-recebido-arquivo">Arquivo do laudo</label>
+      <input type="file" id="exame-recebido-arquivo" name="laudo" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.webp" required>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-8 mb-2">
+        <label class="form-label" for="exame-recebido-nomes">Exames (opcional)</label>
+        <input type="text" id="exame-recebido-nomes" name="nomes" class="form-control" placeholder="Ex.: Hemograma, Creatinina, Ureia">
+        <div class="form-text">Separe por virgula. Em branco, fica registrado como "Laudo de exame".</div>
+      </div>
+      <div class="col-md-4 mb-2">
+        <label class="form-label" for="exame-recebido-data">Data do exame</label>
+        <input type="date" id="exame-recebido-data" name="data_realizacao" class="form-control">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="exame-recebido-obs">Observacoes (opcional)</label>
+      <input type="text" id="exame-recebido-obs" name="observacoes" class="form-control" placeholder="Ex.: Laboratorio Biocenter">
+    </div>
+    <button type="submit" class="btn btn-success btn-sm">Salvar exame com laudo</button>
+  </form>
 
   {% for bloco in animal.blocos_exames|reverse %}
   <div class="border p-3 mb-4 bg-light rounded" id="bloco-{{ bloco.id }}">
@@ -29,10 +58,26 @@
         <button type="button" class="btn btn-outline-success btn-sm" onclick="togglePainelExames({{ bloco.id }}, 'realizacao')">
           <i class="bi bi-check2-circle"></i> Registrar realizacao
         </button>
+
+        <label class="btn btn-outline-primary btn-sm mb-0" title="Um unico arquivo com o laudo completo vale para todos os exames deste bloco">
+          <i class="bi bi-paperclip"></i> {{ 'Trocar laudo' if bloco.laudo_unico else 'Anexar laudo' }}
+          <input type="file" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="anexarLaudoBloco({{ bloco.id }}, this)">
+        </label>
       </div>
     </div>
 
     <div id="exames-view-{{ bloco.id }}">
+      {% set laudo_bloco = bloco.laudo_unico %}
+      {% if laudo_bloco %}
+      <div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2 mb-2">
+        <i class="bi bi-file-earmark-pdf text-danger"></i>
+        <strong>Laudo completo:</strong>
+        <a href="{{ laudo_bloco.laudo_url }}" target="_blank" rel="noopener">{{ laudo_bloco.laudo_filename or 'Abrir laudo' }}</a>
+        {% if laudo_bloco.laudo_uploaded_at %}
+        <span class="text-muted small">(anexado em {{ laudo_bloco.laudo_uploaded_at|format_datetime_brazil('%d/%m/%Y %H:%M') }})</span>
+        {% endif %}
+      </div>
+      {% endif %}
       <ul class="list-group list-group-flush">
         {% for exame in bloco.exames %}
         <li class="list-group-item">
@@ -51,7 +96,7 @@
           <div class="mt-2 small">
             {% if exame.resultado %}<div><strong>Resultado:</strong> {{ exame.resultado }}</div>{% endif %}
             {% if exame.performed_at %}<div><strong>Realizado em:</strong> {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>{% endif %}
-            {% if exame.laudo_url %}
+            {% if exame.laudo_url and not laudo_bloco %}
             <div>
               <strong>Laudo:</strong>
               <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">
@@ -325,6 +370,45 @@ function salvarSolicitacaoExames(blocoId) {
       refreshHistoricoExames(data);
     })
     .catch(err => window.showAppToast ? window.showAppToast(err.message || 'Não foi possível salvar a solicitação.', 'danger') : alert(err.message || 'Não foi possível salvar a solicitação.'));
+}
+
+function avisarExames(mensagem, tipo) {
+  if (window.showAppToast) {
+    window.showAppToast(mensagem, tipo);
+  } else {
+    alert(mensagem);
+  }
+}
+
+function enviarLaudoExames(url, formData) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: formData
+  })
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || 'Nao foi possivel anexar o laudo.');
+      refreshHistoricoExames(data);
+      avisarExames('Laudo anexado.', 'success');
+    })
+    .catch(err => avisarExames(err.message || 'Nao foi possivel anexar o laudo.', 'danger'));
+}
+
+function anexarLaudoBloco(blocoId, input) {
+  if (!input.files || !input.files.length) return;
+  const formData = new FormData();
+  formData.append('laudo', input.files[0]);
+  input.disabled = true;
+  enviarLaudoExames(`/bloco_exames/${blocoId}/laudo`, formData).finally(() => { input.disabled = false; input.value = ''; });
+}
+
+function enviarExameRecebido(event, animalId) {
+  event.preventDefault();
+  const form = event.target;
+  const botao = form.querySelector('button[type="submit"]');
+  if (botao) botao.disabled = true;
+  enviarLaudoExames(`/animal/${animalId}/bloco_exames/laudo`, new FormData(form)).finally(() => { if (botao) botao.disabled = false; });
 }
 
 function salvarRealizacaoExames(blocoId) {
